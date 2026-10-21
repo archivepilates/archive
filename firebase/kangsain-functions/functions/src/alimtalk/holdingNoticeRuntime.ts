@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { assertMemberDispatchAllowed, isMemberDispatchDeferred } from "../memberSignup/memberDispatchWindow";
 import { logger } from "firebase-functions";
 import { db } from "../config/firebase";
 import { solapiApiKey, solapiApiSecret } from "../config/secrets";
@@ -10,6 +11,7 @@ import { automaticMemberExclusionReason } from "./recipientExclusion";
 import { normalizeRecipientPhone } from "./testRecipients";
 import { HOLDING_TEMPLATE, holdingProviderHistory, holdingProviderReceipt, holdingProviderTemplateIssue } from "./holdingNoticeProvider";
 import { approveHoldingNotice, candidateKey, dispatchHoldingNotice, holdingAutomationEnabled, holdingMemberFingerprint, queueHoldingNotice,
+  holdingDeferredPretransportIssue,
   HOLDING_NOTICE_SETTINGS, HOLDING_NOTICE_SOURCE_COLLECTION, type HoldingNoticeDependencies } from "./holdingNoticeQueue";
 
 function auth() {
@@ -102,12 +104,21 @@ export async function reconcileHoldingNoticeQueue() {
     }
     const outcomes: Awaited<ReturnType<typeof queueHoldingNotice>>[] = [];
     const completed: string[] = [];
+    let quietPending = false;
     for (const holdId of holdingReadyBatch(holds, source.noticeProgress, source.sourceVersion)) {
       const id = candidateKey(source, holdId);
       const send = await db.doc(`alimtalkSends/${id}`).get();
       const claim = await db.doc(`holdingNoticeClaims/${id}`).get();
       // A prior attempt is terminal for this event, not a reason to stop later events.
-      if (send.exists || claim.exists) { completed.push(holdId); continue; }
+      if (send.exists || claim.exists) {
+        const candidate = (await db.doc(`alimtalkCandidates/${id}`).get()).data();
+        if (candidate && !holdingDeferredPretransportIssue(claim.data(), send.data(), candidate, Infinity)) {
+          if (candidate.payload?.holdingSourceId !== doc.id || candidate.payload?.holdingSourceVersion !== source.sourceVersion)
+            outcomes.push({ status: "blocked", reason: "holding_deferred_source_changed_review_required", candidateId: id });
+          else quietPending = true;
+        } else completed.push(holdId);
+        continue;
+      }
       const outcome = await queueHoldingNotice(dependencies(), doc.id, holdId);
       outcomes.push(outcome);
       if (holdingQueueOutcomeTerminal(outcome)) completed.push(holdId);
@@ -120,8 +131,9 @@ export async function reconcileHoldingNoticeQueue() {
       const prior = current.noticeProgress?.sourceVersion === source.sourceVersion && Array.isArray(current.noticeProgress.completedHoldIds)
         ? current.noticeProgress.completedHoldIds.filter((id: string) => holds.includes(id)) : [];
       const completedHoldIds = [...new Set<string>([...prior, ...completed])];
-      tx.update(doc.ref, { noticeStatus: blocked ? "review" : completedHoldIds.length === holds.length ? "reviewed" : "ready",
-        noticeProgress: { sourceVersion: source.sourceVersion, completedHoldIds }, noticeReason: blocked?.reason || "operator_review_required",
+      tx.update(doc.ref, { noticeStatus: blocked ? "review" : quietPending ? "ready" : completedHoldIds.length === holds.length ? "reviewed" : "ready",
+        noticeProgress: { sourceVersion: source.sourceVersion, completedHoldIds },
+        noticeReason: blocked?.reason || (quietPending ? "holding_quiet_hours_pending" : "operator_review_required"),
         noticeCheckedAt: nowTimestamp() });
     });
     if (outcomes.some(result => !holdingQueueOutcomeTerminal(result))) logger.warn("Holding source needs review", { sourceId: doc.id });
@@ -129,30 +141,38 @@ export async function reconcileHoldingNoticeQueue() {
 }
 
 export async function sendHoldingNotice(candidate: AlimtalkCandidateDoc) {
+  assertMemberDispatchAllowed();
   return dispatchHoldingNotice(dependencies(), candidate, async variables => {
     const phone = normalizeRecipientPhone(candidate.memberPhone);
     const startedAt = new Date(Date.now() - 60_000).toISOString();
-    const response = await fetch("https://api.solapi.com/messages/v4/send-many/detail", {
+    const options = {
       method: "POST", headers: { Authorization: auth(), "Content-Type": "application/json" },
       signal: AbortSignal.timeout(20_000),
       body: JSON.stringify({ messages: [{ to: phone, type: "ATA", kakaoOptions: {
         pfId: HOLDING_TEMPLATE.channelId, templateId: HOLDING_TEMPLATE.templateId, disableSms: true, variables,
       } }], strict: true, allowDuplicates: false, showMessageList: true }),
-    });
-    if (!response.ok) throw new Error(`holding_provider_send_${response.status}`);
-    const receipt = holdingProviderReceipt(await response.json(), phone);
-    if (!receipt.identityProven) {
-      try {
-        const params = new URLSearchParams({ to: phone, startDate: startedAt, endDate: new Date().toISOString(),
-          dateType: "CREATED", type: "ATA", limit: "500" });
-        const data = await providerGet(`https://api.solapi.com/messages/v4/list?${params}`);
-        const row = data?.messageList?.[receipt.messageId];
-        if (!row || row.messageId !== receipt.messageId || row.to !== phone ||
-          row.kakaoOptions?.templateId !== HOLDING_TEMPLATE.templateId) throw new Error("unverified_receipt");
-      } catch {
-        throw Object.assign(new Error("holding_provider_receipt_readback_required"), { holdingReceipt: receipt });
+    };
+    assertMemberDispatchAllowed();
+    try {
+      const response = await fetch("https://api.solapi.com/messages/v4/send-many/detail", options);
+      if (!response.ok) throw new Error(`holding_provider_send_${response.status}`);
+      const receipt = holdingProviderReceipt(await response.json(), phone);
+      if (!receipt.identityProven) {
+        try {
+          const params = new URLSearchParams({ to: phone, startDate: startedAt, endDate: new Date().toISOString(),
+            dateType: "CREATED", type: "ATA", limit: "500" });
+          const data = await providerGet(`https://api.solapi.com/messages/v4/list?${params}`);
+          const row = data?.messageList?.[receipt.messageId];
+          if (!row || row.messageId !== receipt.messageId || row.to !== phone ||
+            row.kakaoOptions?.templateId !== HOLDING_TEMPLATE.templateId) throw new Error("unverified_receipt");
+        } catch {
+          throw Object.assign(new Error("holding_provider_receipt_readback_required"), { holdingReceipt: receipt });
+        }
       }
+      return { messageId: receipt.messageId, groupId: receipt.groupId, variables };
+    } catch (error) {
+      if (isMemberDispatchDeferred(error)) throw new Error("holding_dispatch_error_after_transport_started", { cause: error });
+      throw error;
     }
-    return { messageId: receipt.messageId, groupId: receipt.groupId, variables };
   });
 }

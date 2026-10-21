@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
 import { membershipContractObservationHistory } from "./studiomate-membership-contract-completion-state.mjs";
 import { membershipContractJobKey,normalizeMembershipPhone } from "./studiomate-membership-contract-policy.mjs";
 import { membershipContractMemberGradeDecision } from "./studiomate-membership-contract-native-selection.mjs";
@@ -14,6 +15,14 @@ const fail = diagnostic => {
   throw error;
 };
 const bindingKeys = ["studioId","memberId","userTicketId","productId","selectionJobKey","selectedAt"];
+function safeReminderDeferral(row, id) {
+  const proof = Array.isArray(row?.deferrals) ? row.deferrals.at(-1) : null;
+  return row?.policy === CONTRACT_REMINDER_POLICY && row.key === `contract_signature_reminder_${id}`
+    && typeof row.dispatchToken === "string" && row.dispatchToken.length > 0 && proof != null
+    && row.status === "deferred" && row.attempts === 0 && row.deferredBeforeTransport === true && !row.smsId
+    && proof?.dispatchToken === row.dispatchToken && proof.attemptedAt === row.attemptedAt
+    && proof.fingerprint === row.fingerprint && proof.providerPostCount === 0;
+}
 const preclaimDiagnostics = Object.freeze({
   native_contract_signature_images_unavailable: "전자계약 직인·서명 이미지 로딩을 확인하지 못했습니다.",
   native_contract_center_signature_unverified: "전자계약 화면에서 센터 직인을 확인하지 못했습니다.",
@@ -48,7 +57,7 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
     || !source.memberName?.trim() || !b.title?.trim() || !Number.isFinite(instant(b.selectedAt))) return skip("invalid_source");
   if (source.status !== "waiting" || source.observationStatus !== "waiting" || source.observationHold === true
     || source.completion || source.signatureReceipt || source.invalidatedCompletion) return skip("not_unsigned");
-  if (source.signatureReminder != null) return skip("reminder_already_recorded");
+  if (source.signatureReminder != null && !safeReminderDeferral(source.signatureReminder,id)) return skip("reminder_already_recorded");
   let history;
   try { history = membershipContractObservationHistory(source); } catch { return skip("invalid_history"); }
   if (history.some(row=>["signed","cancelled","expired"].includes(row.status) || row.memberSignaturePresent===true
@@ -69,6 +78,7 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
   const smsMessage = `[아카이브필라테스] ${source.memberName}님, 전달드린 전자계약서 서명이 아직 완료되지 않았습니다.\n아래 링크에서 내용을 확인하고 서명해 주세요.\nhttps://sign.studiomate.kr/${id}`;
   const key = `contract_signature_reminder_${id}`;
   const fingerprint = digest([key,source.memberName,Object.fromEntries(Object.entries(b).filter(([key])=>key!=="previousObservations").sort(([a],[b])=>a.localeCompare(b))),firstConfirmedAt,smsTitle,smsMessage]);
+  if (source.signatureReminder && source.signatureReminder.fingerprint !== fingerprint) return skip("deferred_reminder_binding_changed");
   return {status:"ready",key,contractId:id,memberId:b.memberId,memberPhone:b.memberPhone,memberName:source.memberName,
     studioId:b.studioId,firstConfirmedAt,timingBasis:"first_verified_sent_observation",smsTitle,smsMessage,fingerprint};
 }
@@ -98,7 +108,9 @@ export function assertContractReminderLive(source, plan, live, now = new Date())
 }
 
 /** One irreversible contract-scoped attempt; neither lost responses nor later runs resend. */
-export async function processContractSignatureReminder({db,source,id,readLive,sendSms,now=()=>new Date(),apply=false,scheduled=false}) {
+export async function processContractSignatureReminder({db,source,id,readLive,sendSms,now=()=>new Date(Date.now()),apply=false,scheduled=false}) {
+  const deferred = () => ({...memberDispatchWindow(now()),status:"deferred",contractId:id});
+  if (!memberDispatchWindow(now()).allowed) return deferred();
   const plan = planContractSignatureReminder(source,id,now());
   if (["attempting","review"].includes(source?.signatureReminder?.status))
     return {status:"review",contractId:id,stage:"postclaim",reason:"prior_attempt_requires_reconciliation"};
@@ -106,6 +118,9 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
   if (!apply || !scheduled) return {status:"dry_run",reason:"no_dispatch",contractId:id};
   if (!contractReminderEnabled((await db.doc("systemSettings/membershipContractAutomation").get()).data())) return {status:"disabled"};
   let claimed = false;
+  let dispatchStarted = false;
+  const dispatchToken = randomUUID();
+  let attemptedAt;
   const ref = db.doc(`studiomateMembershipContracts/${id}`);
   const settle = async patch => db.runTransaction(async tx=>{
     const row = (await tx.get(ref)).data()?.signatureReminder;
@@ -115,23 +130,51 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
     return {...row,...patch};
   });
   try {
-    assertContractReminderLive(source,plan,await readLive(),now());
+    const live = await readLive();
+    assertMemberDispatchAllowed(now());
+    assertContractReminderLive(source,plan,live,now());
     const receipt = await sendSms(plan,async()=>{
-      assertContractReminderLive(source,plan,await readLive(),now());
+      assertMemberDispatchAllowed(now());
+      const fresh = await readLive();
+      assertMemberDispatchAllowed(now());
+      assertContractReminderLive(source,plan,fresh,now());
       await db.runTransaction(async tx=>{
         const latest=(await tx.get(ref)).data(),config=(await tx.get(db.doc("systemSettings/membershipContractAutomation"))).data();
+        assertMemberDispatchAllowed(now());
         const current=planContractSignatureReminder(latest,id,now());
         if (!contractReminderEnabled(config) || current.status!=="ready" || current.fingerprint!==plan.fingerprint) fail();
+        assertMemberDispatchAllowed(now());
+        attemptedAt = now().toISOString();
         tx.update(ref,{signatureReminder:{policy:CONTRACT_REMINDER_POLICY,key:plan.key,fingerprint:plan.fingerprint,
           status:"attempting",attempts:1,firstConfirmedAt:plan.firstConfirmedAt,timingBasis:plan.timingBasis,
-          attemptedAt:now().toISOString(),memberId:plan.memberId,updatedAt:now().toISOString()}});
+          dispatchToken,deferrals:latest.signatureReminder?.deferrals || [],
+          attemptedAt,memberId:plan.memberId,updatedAt:now().toISOString()}});
       });
       claimed = true;
+      assertMemberDispatchAllowed(now());
+      return () => { dispatchStarted = true; };
     });
     if (!claimed || !Number.isSafeInteger(receipt?.smsId) || receipt.smsId <= 0) fail();
     const settled = await settle({status:"accepted",smsId:receipt.smsId,acceptedAt:now().toISOString(),deliveryStatus:"not_verified"});
     return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
   } catch (error) {
+    if (isMemberDispatchDeferred(error) && !dispatchStarted) {
+      if (claimed) {
+        const settled = await db.runTransaction(async tx=>{
+          const row = (await tx.get(ref)).data()?.signatureReminder;
+          if (row?.key !== plan.key || row.fingerprint !== plan.fingerprint) fail();
+          if (row.status === "accepted") return row;
+          if (row.status !== "attempting" || row.dispatchToken !== dispatchToken || row.attemptedAt !== attemptedAt) fail();
+          const at = now().toISOString();
+          tx.update(ref,{signatureReminder:{...row,status:"deferred",attempts:0,deferredBeforeTransport:true,
+            reason:memberDispatchWindow(now()).reason,nextAllowedAt:memberDispatchWindow(now()).nextAllowedAt,
+            deferrals:[...(row.deferrals || []),{dispatchToken,attemptedAt,fingerprint:plan.fingerprint,deferredAt:at,providerPostCount:0}],updatedAt:at}});
+          return null;
+        });
+        if (settled?.status === "accepted") return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
+      }
+      return deferred();
+    }
     let reason = claimed ? "send_outcome_unknown" : "source_or_claim_unverified";
     if (claimed) {
       try {

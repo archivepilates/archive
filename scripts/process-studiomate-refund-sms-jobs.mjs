@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import os from "node:os";
 import { readNativeRefundSource, refundNativeMemberPointer } from "./lib/studiomate-refund-native-source.mjs";
 import path from "node:path";
@@ -15,8 +17,6 @@ import {
   staleRefundSmsJobRecoveryStatus,
 } from "./lib/studiomate-refund-sms-contract.mjs";
 
-const require = createRequire(import.meta.url);
-const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
 const args = parseArgs(process.argv.slice(2));
 const apply = Boolean(args.apply);
 const config = {
@@ -34,9 +34,6 @@ const config = {
   staleLeaseMs: Math.max(5 * 60 * 1000, Number(process.env.STUDIOMATE_REFUND_SMS_STALE_LEASE_MS || 15 * 60 * 1000)),
 };
 
-if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });
-const db = admin.firestore();
-const FieldValue = admin.firestore.FieldValue;
 const summary = {
   ok: false,
   mode: apply ? "apply" : "dry-run",
@@ -50,9 +47,23 @@ const summary = {
   jobs: [],
 };
 
-await mkdir(config.profileDir, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 await mkdir(path.dirname(config.lastResultPath), { recursive: true });
+const dispatchWindow = memberDispatchWindow();
+if (!dispatchWindow.allowed) {
+  Object.assign(summary, dispatchWindow, { ok: true, status: "deferred", finishedAt: new Date().toISOString() });
+  await writeFile(config.lastResultPath, `${JSON.stringify(summary, null, 2)}\n`);
+  appendIdleHeartbeatIfDue(config.runLogPath, summary, 30 * 60 * 1000);
+  console.log(JSON.stringify(summary));
+  process.exit(0);
+}
+
+const require = createRequire(import.meta.url);
+const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
+if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });
+const db = admin.firestore();
+const FieldValue = admin.firestore.FieldValue;
+await mkdir(config.profileDir, { recursive: true });
 
 if (apply) await recoverStaleJobs();
 const candidates = await loadCandidates(config.limit);
@@ -86,6 +97,7 @@ try {
   await ensureStudioMateLoggedIn(page, { headless: config.headless, waitForLogin: config.waitForLogin });
 
   for (const candidate of candidates) {
+    if (!memberDispatchWindow().allowed) { Object.assign(summary, memberDispatchWindow(), { status: "deferred" }); break; }
     const claimed = await claimJob(candidate.ref);
     if (!claimed) continue;
     summary.processed += 1;
@@ -97,14 +109,24 @@ try {
       const sendResult = await sendRefundSms(page, job, live.nativeSource.studiomateMemberId, async () => {
         const fresh = await assertLiveRefundSource(job, page);
         if (fresh.nativeSource.studiomateMemberId !== live.nativeSource.studiomateMemberId) throw new Error("발송 직전 회원 원본 ID가 변경되어 문자를 중단했습니다.");
-        finalSendClicked = true;
+        assertMemberDispatchAllowed();
         await markSending(candidate.ref, job);
+        return () => { finalSendClicked = true; };
       });
       await markSent(candidate.ref, job, sendResult);
       item.status = "sent";
       item.evidence = sendResult.evidence;
       summary.sent += 1;
     } catch (error) {
+      if (isMemberDispatchDeferred(error) && !finalSendClicked) {
+        await deferClaim(candidate.ref, claimed);
+        summary.processed -= 1;
+        summary.deferred = (summary.deferred || 0) + 1;
+        Object.assign(summary, memberDispatchWindow(), { status: "deferred" });
+        Object.assign(item, memberDispatchWindow(), { status: "deferred" });
+        summary.jobs.push(item);
+        continue;
+      }
       const message = error instanceof Error ? error.message : String(error);
       const outcome = await markFailure(candidate.ref, claimed, message, finalSendClicked);
       item.status = outcome.status;
@@ -171,9 +193,15 @@ async function claimJob(ref) {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data();
+    if (data.sendClickedAt || data.externalEffectStarted) return null;
+    const caseRef = db.collection("refundCases").doc(String(data.caseId));
+    const caseData = (await transaction.get(caseRef)).data() || {};
+    if (!memberDispatchWindow().allowed) return null;
+    const dispatchToken = randomUUID();
     const attempts = Number(data.attempts || 0) + 1;
     transaction.set(ref, {
       status: "processing",
+      dispatchToken,
       attempts,
       claimedBy: os.hostname(),
       claimedAt: FieldValue.serverTimestamp(),
@@ -185,7 +213,10 @@ async function claimJob(ref) {
       "smsNotice.updatedAt": FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    return { ...data, attempts };
+    return { ...data, attempts, dispatchToken, dispatchUndo: {
+      job: restoreFields(data, ["status", "attempts", "dispatchToken", "claimedBy", "claimedAt", "updatedAt", "lastError", "sendClickedAt"]),
+      case: restoreFields(caseData, ["smsNotice.status", "smsNotice.sendClickedAt", "smsNotice.updatedAt", "updatedAt"]),
+    } };
   });
 }
 
@@ -228,7 +259,8 @@ async function sendRefundSms(page, job, studiomateMemberId, beforeFinalSend) {
 
   await dialog.getByRole("button", { name: "보내기", exact: true }).click();
   const confirmation = await refundSmsConfirmation(page);
-  await beforeFinalSend();
+  const onClick = await beforeFinalSend();
+  assertMemberDispatchAllowed();
   const responsePromise = page.waitForResponse((response) => (
     response.request().method() === "POST"
     && response.url() === "https://api.studiomate.kr/v2/staff/sms"
@@ -238,6 +270,8 @@ async function sendRefundSms(page, job, studiomateMemberId, beforeFinalSend) {
     url: response.url(), status: response.status(), body: await response.json(),
     requestPayload: response.request().postDataJSON(),
   })).then((result) => ({ result }), (error) => ({ error }));
+  assertMemberDispatchAllowed();
+  if (typeof onClick === "function") onClick();
   await confirmation.getByRole("button", { name: "확인", exact: true }).click();
   const { result: relevant, error } = await resultPromise;
   if (error) throw error;
@@ -315,6 +349,26 @@ async function markSending(ref, job) {
     updatedAt: now,
   });
   await batch.commit();
+}
+
+function restoreFields(data, fields) {
+  return Object.fromEntries(fields.map(field => {
+    const value = field.split(".").reduce((row, key) => row?.[key], data);
+    return [field, value === undefined ? FieldValue.delete() : value];
+  }));
+}
+
+async function deferClaim(ref, job) {
+  await db.runTransaction(async tx => {
+    const current = (await tx.get(ref)).data();
+    if (current?.dispatchToken !== job.dispatchToken || !["processing", "sending"].includes(current.status))
+      throw new Error("refund_sms_quiet_claim_changed");
+    const nextAllowedAt = memberDispatchWindow().nextAllowedAt;
+    tx.update(ref, { ...job.dispatchUndo.job, nextAllowedAt,
+      dispatchDeferrals: [...(current.dispatchDeferrals || []), { dispatchToken: job.dispatchToken, claimedAt: current.claimedAt,
+        sendPreparedAt: current.sendClickedAt || null, deferredAt: new Date().toISOString(), providerPostCount: 0, nextAllowedAt }] });
+    tx.update(db.collection("refundCases").doc(String(job.caseId)), job.dispatchUndo.case);
+  });
 }
 
 async function markSent(ref, job, result) {

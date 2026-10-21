@@ -1,5 +1,8 @@
 // StudioMate's existing single-recipient SMS UI; never calls a send API directly.
-export async function sendContractReminderSms(page, plan, beforeFinalSend) {
+import { assertMemberDispatchAllowed } from "./member-dispatch-window.mjs";
+
+export async function sendContractReminderSms(page, plan, beforeFinalSend, { now = Date.now } = {}) {
+  assertMemberDispatchAllowed(now());
   const url=`https://arcpilates.studiomate.kr/users/detail?id=${plan.memberId}`;
   await page.goto(url,{waitUntil:"domcontentloaded",timeout:30000});
   // StudioMate member details have no main landmark and paint the toolbar first.
@@ -38,10 +41,13 @@ export async function sendContractReminderSms(page, plan, beforeFinalSend) {
   const text=await confirmation.innerText(),counts=text.match(/\d+\s*건/g)||[];
   if(await confirmation.count()!==1 || !/^(?:메시지\s*보내기\s*)?1\s*건을\s*즉시\s*발송합니다!/.test(text.trim())
     || !counts.length || counts.some(v=>v.replace(/\s/g,"")!=="1건")) throw new Error("contract_reminder_recipient_count_mismatch");
-  await beforeFinalSend();
+  const onClick = await beforeFinalSend();
+  assertMemberDispatchAllowed(now());
   const resultPromise=page.waitForResponse(r=>r.request().method()==="POST"&&r.url()==="https://api.studiomate.kr/v2/staff/sms",{timeout:20000})
     .then(async r=>({url:r.url(),status:r.status(),body:await r.json(),payload:r.request().postDataJSON()}))
     .then(result=>({result}),error=>({error}));
+  assertMemberDispatchAllowed(now());
+  if (typeof onClick === "function") onClick();
   await confirmation.getByRole("button",{name:"확인",exact:true}).click();
   const {result,error}=await resultPromise;
   if(error) throw error;

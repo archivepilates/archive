@@ -1,3 +1,5 @@
+import { memberDispatchActiveElapsedMs } from "./member-dispatch-window.mjs";
+
 export function healthTimestampMs(value) {
   if (value === null || value === undefined || value === "") return null;
   let ms;
@@ -18,7 +20,7 @@ export function isExplicitlyRetired(data) {
 
 export function classifyQueueDocument(data, {
   nowMs = Date.now(), staleMinutes = 30, staleStatuses = ["processing", "running"],
-  failureStatuses = ["failed", "error"], worker,
+  failureStatuses = ["failed", "error"], worker, memberFacing = false,
 } = {}) {
   const status = String(data?.status || "");
   if (isExplicitlyRetired(data)) return { state: "retired", needsAttention: false };
@@ -30,8 +32,10 @@ export function classifyQueueDocument(data, {
     : data.updatedAt ?? data.startedAt ?? data.createdAt;
   const time = healthTimestampMs(value);
   if (time === null) return { state: "timestamp_unavailable", needsAttention: true };
-  const ageMinutes = (nowMs - time) / 60000;
+  let ageMinutes = (nowMs - time) / 60000;
   if (waiting && ageMinutes < 0) return { state: "future_due", ageMinutes, needsAttention: false };
+  if (memberFacing && waiting && !data.sendClickedAt && !data.externalEffectStarted && Number(data.attempts || 0) === 0)
+    ageMinutes = memberDispatchActiveElapsedMs(time, nowMs) / 60000;
   if (ageMinutes <= staleMinutes) return { state: "within_grace", ageMinutes, needsAttention: false };
   const workerState = worker?.state || "";
   return {

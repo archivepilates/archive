@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 const require = createRequire(new URL('../../firebase/kangsain-functions/functions/package.json', import.meta.url));
 const ts = require('typescript');
 const root = new URL('../../', import.meta.url);
@@ -33,16 +34,15 @@ const welcomePreflightBranches = [
 ];
 
 for (const name of ['processAlimtalkQueue.ts', 'instructorLessonSampleApproval.ts']) {
-  test(`${name}: execution bodies preserve baseline except exact welcome preflight deferral branches`, () => {
+  test(`${name}: execution bodies preserve the reviewed quiet-hours release`, () => {
     const file = prefix + name;
-    let current = read(file);
-    if (name === 'processAlimtalkQueue.ts') {
-      for (const branch of welcomePreflightBranches) {
-        assert.equal(current.split(branch).length - 1, 1, 'Exact typed preflight branch must occur once');
-        current = current.replace(branch, '');
-      }
-    }
-    assert.deepEqual(functions(ast(current, file)), functions(ast(before(file), file)));
+    const audit = JSON.parse(read('scripts/fixtures/member-dispatch-execution-audit.json'));
+    assert.equal(audit.approval, 'user_member_dispatch_quiet_hours_20261022');
+    assert.equal(audit.policy, 'member_dispatch_kst_0900_2300_v1');
+    const current = functions(ast(read(file), file));
+    assert.deepEqual(Object.fromEntries([...current].map(([key, body]) => [key, createHash('sha256').update(body).digest('hex')])), audit.functions[name]);
+    for (const branch of name === 'processAlimtalkQueue.ts' ? welcomePreflightBranches : [])
+      assert.equal(read(file).split(branch).length - 1, 1, 'Existing typed welcome preflight branch remains intact');
     const imports = ast(read(file), file).statements.filter(ts.isImportDeclaration);
     const shared = imports.find(node => node.moduleSpecifier.text === './targetValidationChecks');
     assert.ok(shared);

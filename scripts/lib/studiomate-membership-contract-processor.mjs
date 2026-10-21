@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
 import { acquireStudioMateBrowserLock } from "./studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./studiomate-login.mjs";
 import {
@@ -14,6 +15,7 @@ import { resolveContractCandidateGroups } from "./studiomate-membership-contract
 import { selectNativeMembershipContractCandidate } from "./studiomate-membership-contract-native-selection.mjs";
 import {
   executeStudioMateMembershipContract,
+  buildStudioMateSignatureRequestPayload,
   MEMBERSHIP_CONTRACT_TEMPLATES,
 } from "./studiomate-native-contract-writer.mjs";
 
@@ -27,6 +29,7 @@ export async function runStudioMateMembershipContractCandidates({
   rows,
   discovery,
   sealPath,
+  now = Date.now,
 } = {}) {
   const result = {
     status: "disabled",
@@ -39,7 +42,15 @@ export async function runStudioMateMembershipContractCandidates({
     studioMateWrites: 0,
     alimtalkSends: 0,
   };
+  const deferHints = async (hints) => {
+    const window = memberDispatchWindow(now());
+    for (const hint of hints || []) await markHint(db, hint.hintId, "native_verification_required", window.reason,
+      { nextAllowedAt: window.nextAllowedAt });
+    return { ...result, ...window, status: "deferred" };
+  };
+  if (!memberDispatchWindow(now()).allowed) return deferHints(discovery?.candidateHints);
   const config = (await db.doc(SETTINGS).get()).data();
+  if (!memberDispatchWindow(now()).allowed) return deferHints(discovery?.candidateHints);
   if (
     process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_WRITER !== "enabled" ||
     config?.contractWriterEnabled !== true ||
@@ -96,12 +107,16 @@ export async function runStudioMateMembershipContractCandidates({
     const templateCache = new Map();
     result.status = "checked";
     for (const group of groups) {
+      const remainingHints = discovery.candidateHints?.filter(hint =>
+        groups.slice(groups.indexOf(group)).some(g => g.phoneFingerprint === hint.phoneFingerprint));
+      if (!memberDispatchWindow(now()).allowed) return deferHints(remainingHints);
       result.checked += 1;
       const hint = discovery.candidateHints?.find(
         (item) => item.phoneFingerprint === group.phoneFingerprint,
       );
       try {
         const memberResult = await readExactStudioMateMember(api, group.phone);
+        if (!memberDispatchWindow(now()).allowed) return deferHints(remainingHints);
         if (memberResult.status !== "verified" || memberResult.member.inactive) {
           await markHint(db, hint?.hintId, "review", memberResult.reason || "inactive_member");
           result.review += 1;
@@ -114,6 +129,7 @@ export async function runStudioMateMembershipContractCandidates({
             startDate: config.contractHistoryStartDate || "2023-01-01",
           }),
         ]);
+        if (!memberDispatchWindow(now()).allowed) return deferHints(remainingHints);
         const selected = selectNativeMembershipContractCandidate({
           group,
           member: memberResult.member,
@@ -154,7 +170,7 @@ export async function runStudioMateMembershipContractCandidates({
           id: String(config.contractStaffId || ""),
           name: String(config.contractStaffName || "").trim(),
         };
-        const journal = firestoreJournal(db);
+        const journal = firestoreJournal(db, null, now);
         const outcome = await executeStudioMateMembershipContract({
           api,
           journal,
@@ -165,7 +181,9 @@ export async function runStudioMateMembershipContractCandidates({
           template: loaded.template,
           terms: loaded.terms,
           sealPath,
+          now,
         });
+        if (outcome.status === "deferred") return deferHints(remainingHints);
         if (["waiting", "signed", "existing"].includes(outcome.status)) {
           if (outcome.status !== "existing") result.studioMateWrites += 1;
           if (outcome.status === "waiting") result.waiting += 1;
@@ -187,6 +205,7 @@ export async function runStudioMateMembershipContractCandidates({
           result.review += 1;
         }
       } catch (error) {
+        if (isMemberDispatchDeferred(error) || !memberDispatchWindow(now()).allowed) return deferHints(remainingHints);
         await markHint(
           db,
           hint?.hintId,
@@ -206,7 +225,7 @@ export async function runStudioMateMembershipContractCandidates({
   }
 }
 
-export function firestoreJournal(db, recoveryApproval = null) {
+export function firestoreJournal(db, recoveryApproval = null, now = Date.now) {
   return {
     async claim({ jobKey, payloadHash, selection }) {
       const ref = db.collection(JOBS).doc(jobKey);
@@ -228,8 +247,11 @@ export function firestoreJournal(db, recoveryApproval = null) {
             contractId: data.contractId || "",
             stage: data.stage || "",
             reason: data.reason || "",
+            preparedPayload: data.preparedPayload || "",
+            dispatchDeferrals: data.dispatchDeferrals || [],
           };
         }
+        assertMemberDispatchAllowed(now());
         tx.create(ref, {
           schemaVersion: 1,
           jobKey,
@@ -364,7 +386,20 @@ async function markHint(db, hintId, status, reason, fields = {}) {
 }
 
 function sanitizeJournalFields(fields) {
-  return Object.fromEntries(
+  if (fields.dispatchDeferrals !== undefined && (!Array.isArray(fields.dispatchDeferrals) || fields.dispatchDeferrals.length > 100 ||
+    fields.dispatchDeferrals.some(row => !row || Object.keys(row).some(key => !["stage", "deferredAt", "nextAllowedAt", "providerPostCount"].includes(key)) ||
+      !/^[a-z_]{1,80}$/.test(row.stage || "") || !Number.isFinite(Date.parse(row.deferredAt)) || row.providerPostCount !== 0 ||
+      row.nextAllowedAt !== null && !Number.isFinite(Date.parse(row.nextAllowedAt)))))
+    throw new Error("contract_dispatch_deferral_audit_invalid");
+  if (fields.preparedPayload) {
+    if (typeof fields.preparedPayload !== "string" || fields.preparedPayload.length > 16_384)
+      throw new Error("signature_prepared_payload_invalid");
+    const prepared = JSON.parse(fields.preparedPayload);
+    if (Object.keys(prepared).some(key => !["contract_id_hash", "contractor_name", "studio_name", "contract_link", "title", "message"].includes(key)))
+      throw new Error("signature_prepared_payload_invalid");
+    buildStudioMateSignatureRequestPayload({ prepared, contractId: fields.contractId, memberName: prepared.contractor_name });
+  }
+  return { ...Object.fromEntries(
     Object.entries(fields).filter(
       ([key, value]) =>
         [
@@ -373,10 +408,11 @@ function sanitizeJournalFields(fields) {
           "reason",
           "sealSha256",
           "providerStatus",
+          "preparedPayload",
         ].includes(key) &&
         (typeof value === "string" || value === null),
     ),
-  );
+  ), ...(fields.dispatchDeferrals !== undefined ? { dispatchDeferrals: structuredClone(fields.dispatchDeferrals) } : {}) };
 }
 
 function safeReason(error) {

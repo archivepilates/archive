@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { memberDispatchActiveElapsedMs } from "./memberDispatchWindow";
 
 const EXCLUDED = new Set([
   "trial",
@@ -230,7 +231,7 @@ function evaluate(input: any, approvedRecovery: boolean) {
   const issuedMs = instant(ticket.issuedAt);
   if (!Number.isFinite(issuedMs) || issuedMs > capturedMs) return review("invalid_issuance_timestamp");
   if (issuedMs <= cutoverMs) return result("ignored", "historical_issuance");
-  if (!approvedRecovery && nowMs - issuedMs > policy.maxIssuanceAgeMs) return review("stale_issuance");
+  if (!approvedRecovery && memberDispatchActiveElapsedMs(issuedMs, nowMs) > policy.maxIssuanceAgeMs) return review("stale_issuance");
 
   const delta = baselineDiff(history.previousIssuanceIds, history.currentIssuanceIds);
   if (delta.status === "review") return review(delta.reasons[0]);

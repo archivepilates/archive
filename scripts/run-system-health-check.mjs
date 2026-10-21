@@ -680,6 +680,7 @@ async function checkQueues() {
   });
   await inspectQueue({
     collection: "eformsignInstructorMemberJobs",
+    memberFacing: true,
     area: "instructor_lessons",
     title: "강사회원 가입서 처리 큐",
     activeStatuses: ["pending", "retry", "processing", "sending", "checking_completion"],
@@ -690,6 +691,7 @@ async function checkQueues() {
   });
   await inspectQueue({
     collection: "eformsignRefundJobs",
+    memberFacing: true,
     area: "refunds",
     title: "이폼싸인 환불동의서 발송 큐",
     activeStatuses: ["pending", "retry", "processing", "sending"],

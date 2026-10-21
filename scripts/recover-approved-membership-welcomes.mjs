@@ -16,9 +16,14 @@ import { buildMembershipContractMemberProfilePatch, membershipContractFallbackAl
 import { RECOVERY_TARGETS, RECOVERY_APPROVAL, assertRecoveryEvidence, assertRecoveryHistories,
   claimOperatorRecovery, assertRecoveryReceipt, RECOVERY_APPROVAL_EXPIRES_AT } from "./lib/membership-welcome-operator-recovery.mjs";
 import { sourceReader, sourceRoot } from "./lib/alimtalk-catalog-source.mjs";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 
 const operator = "archive-codex-operator@archive-pilates.iam.gserviceaccount.com";
 async function main() {
+  if (!memberDispatchWindow().allowed) {
+    console.log(JSON.stringify({ ...memberDispatchWindow(), ok:true, status:"deferred", providerPostCount:0 }));
+    return;
+  }
   const args=process.argv.slice(2);
   if (args.length!==3 || args[0]!=="--member-id" || !["--dry-run","--link","--apply","--receipt"].includes(args[2]))
     throw new Error("recovery_invalid_arguments");
@@ -56,7 +61,9 @@ async function main() {
     const apiKey=secret("SOLAPI_API_KEY"), apiSecret=secret("SOLAPI_API_SECRET");
     const signature=createHmac("sha256",apiSecret).update(date+salt).digest("hex");
     if(method==="POST"){
+      assertMemberDispatchAllowed();
       if(!transportEvidenceAt||Date.now()-Date.parse(transportEvidenceAt)>=120000||Date.now()>=Date.parse(RECOVERY_APPROVAL_EXPIRES_AT))throw new Error("recovery_evidence_expired_before_transport");
+      assertMemberDispatchAllowed();
       postCount++;
     }
     const response=await fetch(parsed,{method,redirect:"error",headers:{Authorization:`HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`,
@@ -111,7 +118,13 @@ async function main() {
       console.log(JSON.stringify({memberId:target[0],name:target[2],status:delivered?"delivered":"accepted_pending_delivery",messageId:ledger.solapiMessageId,
         providerStatus:rows[0].status,providerStatusCode:rows[0].statusCode,checkedAt:new Date().toISOString(),providerPostCount:postCount}));
     };
-    if(priorClaim.exists){await receipt();return;}
+    if(priorClaim.exists){
+      if(priorClaim.data()?.status==="deferred" && priorClaim.data()?.providerOutcome==="quiet_deferred_no_transport") {
+        console.log(JSON.stringify({status:"deferred",reason:"recovery_quiet_deferred_operator_review_required",
+          nextAllowedAt:priorClaim.data().nextAllowedAt,providerPostCount:0}));return;
+      }
+      await receipt();return;
+    }
     if(mode==="--receipt")throw new Error("recovery_no_existing_claim");
     const configSnap=await db.doc("systemSettings/membershipContractAutomation").get(),config=configSnap.data();
     release=await acquireStudioMateBrowserLock({owner:`approved-welcome-recovery-${target[0]}`,waitMs:60000});
@@ -178,7 +191,9 @@ async function main() {
     if(mode==="--dry-run"){console.log(JSON.stringify({memberId:target[0],status:"verified_no_send",providerPostCount:0}));return;}
     const evidence={checkedAt,signedAt:signature.receipt.signedAt,nativeReadback:refreshed.nativeReadback,signature:signature.receipt,
       localMemberIds:local.memberIds,localRecords:local.records,providerRecords:provider.records,templateId:template.templateId};
-    const claimed=await claimOperatorRecovery({db,sourceSnap,configSnap,candidateSnap,sendSnap,local,candidateId,evidence,templateCode:template.templateId,profileSnapshots,stamp,now:Date.now});
+    assertMemberDispatchAllowed();
+    const claimed=await claimOperatorRecovery({db,sourceSnap,configSnap,candidateSnap,sendSnap,local,candidateId,evidence,templateCode:template.templateId,profileSnapshots,stamp,
+      now:()=>{ assertMemberDispatchAllowed(); return Date.now(); }});
     transportEvidenceAt=checkedAt;
     postAllowed=true;
     try{
@@ -197,7 +212,29 @@ async function main() {
       await batch.commit();
       console.log(JSON.stringify({memberId:target[0],name:target[2],status:"accepted",messageId,providerPostCount:postCount}));
       await receipt();
-    }catch{
+    }catch(error){
+      if(isMemberDispatchDeferred(error) && postCount===0){
+        await db.runTransaction(async tx=>{
+          const refs=[sourceSnap.ref,candidateSnap.ref,sendSnap.ref,...claimed.claimRefs];
+          const current=await tx.getAll(...refs);
+          if(current.slice(1).some(s=>s.data()?.operatorRecovery?.evidenceHash!==claimed.approval.evidenceHash || s.data()?.solapiMessageId) ||
+            current.slice(3).some(s=>s.data()?.status!=="attempting") || current.slice(1,3).some(s=>s.data()?.status!=="processing") ||
+            current[0].data()?.operatorWelcomeRecovery?.evidenceHash!==claimed.approval.evidenceHash)
+            throw new Error("recovery_quiet_claim_changed");
+          const window=memberDispatchWindow();
+          const proof={evidenceHash:claimed.approval.evidenceHash,deferredAt:new Date().toISOString(),providerPostCount:0,
+            nextAllowedAt:window.nextAllowedAt,reason:window.reason};
+          tx.update(sourceSnap.ref,{welcomeStatus:source.welcomeStatus||"blocked",welcomeReason:"quiet_deferred_operator_review_required",
+            operatorWelcomeRecovery:{...claimed.approval,status:"deferred",...proof},updatedAt:stamp()});
+          for(const [index,ref] of refs.entries()) {
+            if(index===0)continue;
+            tx.update(ref,{status:"deferred",attempts:0,providerOutcome:"quiet_deferred_no_transport",nextAllowedAt:window.nextAllowedAt,
+              dispatchDeferrals:[...(current[index].data().dispatchDeferrals||[]),proof],updatedAt:stamp()});
+          }
+        });
+        console.log(JSON.stringify({...memberDispatchWindow(),ok:true,status:"deferred",providerPostCount:0}));
+        return;
+      }
       const batch=db.batch();
       batch.update(sourceSnap.ref,{welcomeStatus:"review",welcomeReason:"operator_recovery_reconciliation_required",updatedAt:stamp()});
       for(const ref of claimed.claimRefs)batch.update(ref,{status:"unknown_do_not_retry",updatedAt:stamp()});
@@ -208,4 +245,7 @@ async function main() {
     try{await context?.close();}finally{await release?.();secrets.clear();await app.delete();}
   }
 }
-main().catch(error=>{console.error(JSON.stringify({status:"blocked_no_blind_retry",reason:/^[a-z][a-z0-9_]+$/.test(error.message)?error.message:"recovery_failed_no_private_details_logged"}));process.exitCode=1;});
+main().catch(error=>{
+  if(isMemberDispatchDeferred(error)) { console.log(JSON.stringify({...memberDispatchWindow(),ok:true,status:"deferred",providerPostCount:0})); return; }
+  console.error(JSON.stringify({status:"blocked_no_blind_retry",reason:/^[a-z][a-z0-9_]+$/.test(error.message)?error.message:"recovery_failed_no_private_details_logged"}));process.exitCode=1;
+});

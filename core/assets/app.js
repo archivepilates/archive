@@ -3649,6 +3649,11 @@ async function handlePricingInquiryAlimtalkSubmit(event) {
     const data = result?.data || {};
     const status = String(data.status || "");
     const message = String(data.message || "");
+    if (status === "deferred") {
+      setPricingInquiryStatus(message || "회원 발송 제한시간입니다. 오전 9시 이후 재확인 대기 중입니다.", "warn");
+      await refresh();
+      return;
+    }
     if (status === "sent") {
       setPricingInquiryStatus("수강료 안내 알림톡 발송 완료.", "good");
       qs("pricingInquiryPhone").value = "";
@@ -3711,6 +3716,11 @@ async function handleRecommendedMealProgramSubmit(event) {
     const data = result?.data || {};
     const status = String(data.status || "");
     const detail = String(data.message || "");
+    if (status === "deferred") {
+      setRecommendedMealStatus(detail || "회원 발송 제한시간입니다. 오전 9시 이후 재확인 대기 중입니다.", "warn");
+      await refresh();
+      return;
+    }
     if (status === "sent") {
       setRecommendedMealStatus("추천식단 프로그램 설문 알림톡을 발송했습니다.", "good");
       qs("recommendedMealPhone").value = "";

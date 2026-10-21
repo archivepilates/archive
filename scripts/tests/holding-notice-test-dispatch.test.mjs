@@ -121,7 +121,7 @@ function fixture({ failBatches, respond = acceptance } = {}) {
     return respond();
   };
   const run = (patch = {}) => dispatchHoldingNoticeSample({
-    db, stamp: () => STAMP, recipient: { ...RECIPIENT }, date: DATE,
+    db, stamp: () => STAMP, now: () => Date.parse(STAMP), recipient: { ...RECIPIENT }, date: DATE,
     template: approvedTemplate(), request, confirmed: true, ...patch,
   });
   return { db, posts, plan, paths, run };

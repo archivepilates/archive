@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { classifyStudioMateSmsSendEvidence } from "../lib/studiomate-refund-sms-contract.mjs";
+import { assertMemberDispatchAllowed } from "../lib/member-dispatch-window.mjs";
 
 const eformSource = await readFile(new URL("../process-eformsign-refund-jobs.mjs", import.meta.url), "utf8");
 const smsSource = await readFile(new URL("../process-studiomate-refund-sms-jobs.mjs", import.meta.url), "utf8");
@@ -216,13 +217,20 @@ test("SMS composer opens confirmation before final source check, then awaits exa
   };
   const { sendRefundSms } = declarations(smsSource, ["sendRefundSms", ...smsFunctions, "digitsOnly"], {
     URL,
+    assertMemberDispatchAllowed: () => { assertMemberDispatchAllowed("2026-10-22T03:00:00Z"); events.push("dispatch-window-check"); },
     config: { baseUrl: "https://fixture.invalid", headless: true, waitForLogin: false },
     ensureStudioMateLoggedIn: async () => {}, classifyStudioMateSmsSendEvidence,
   });
-  const sent = await sendRefundSms(page, job, nativeId, async () => events.push("source-check-and-intent"));
+  const sent = await sendRefundSms(page, job, nativeId, async () => {
+    events.push("source-check-and-intent");
+    return () => events.push("transport-start");
+  });
   for (const [before, after] of [["composer-send", "confirmation-visible"], ["confirmation-visible", "source-check-and-intent"], ["source-check-and-intent", "response-waiter"], ["response-waiter", "confirm"], ["confirm", "json-read"], ["json-read", "composer-hidden"]]) {
     assert.ok(events.indexOf(before) < events.indexOf(after), `${before} before ${after}`);
   }
+  assert.ok(events.indexOf("response-waiter") < events.lastIndexOf("dispatch-window-check"));
+  assert.ok(events.lastIndexOf("dispatch-window-check") < events.indexOf("transport-start"));
+  assert.ok(events.indexOf("transport-start") < events.indexOf("confirm"));
   assert.equal(sent.smsId, 90001);
   assert.equal(sent.providerMessageId, "90001");
   assert.equal(sent.deliveryStatus, "processing");
@@ -235,5 +243,6 @@ test("SMS stores provider identity and retains native/approval boundaries withou
   assert.match(smsSource, /"smsNotice\.deliveryStatus": result\.deliveryStatus/);
   assert.doesNotMatch(smsSource, /responses\.at\(-1\)|dialogText\.includes/);
   assert.match(smsSource, /fresh\.nativeSource\.studiomateMemberId !== live\.nativeSource\.studiomateMemberId/);
-  assert.match(smsSource, /finalSendClicked = true;\s*await markSending/);
+  assert.match(smsSource, /assertMemberDispatchAllowed\(\);\s*await markSending[\s\S]*?return \(\) => \{ finalSendClicked = true; \}/);
+  assert.match(smsSource, /assertMemberDispatchAllowed\(\);\s*if \(typeof onClick === "function"\) onClick\(\);\s*await confirmation/);
 });

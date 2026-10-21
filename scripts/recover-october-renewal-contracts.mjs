@@ -12,14 +12,15 @@ import { selectNativeMembershipContractCandidate } from "./lib/studiomate-member
 import { buildStudioMateJoinContractPayload, executeStudioMateMembershipContract } from "./lib/studiomate-native-contract-writer.mjs";
 import { firestoreJournal, persistStudioMateMembershipContractSource } from "./lib/studiomate-membership-contract-processor.mjs";
 import { verifyStudioMateOfficialSeal } from "./lib/studiomate-membership-contract-seal.mjs";
+import { memberDispatchWindow } from "./lib/member-dispatch-window.mjs";
 
 // Explicit operator-only recovery. This command is not a scheduler entry point.
 const args = process.argv.slice(2);
 assert(args.every((a) => ["--test", "--apply"].includes(a)), "Unknown recovery option");
 const testOnly = args.includes("--test"), apply = args.includes("--apply");
-if (apply && !testOnly) {
-  const hourKst = new Date(Date.now() + 9 * 3600000).getUTCHours();
-  assert(hourKst >= 9, "Operator instructed genuine recovery sends only after 09:00 KST");
+if (apply && !memberDispatchWindow().allowed) {
+  console.log(JSON.stringify({ status: "deferred", ...memberDispatchWindow(), actualDispatches: 0 }));
+  process.exit(0);
 }
 const require = createRequire(import.meta.url);
 const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");

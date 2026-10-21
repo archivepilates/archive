@@ -20,6 +20,7 @@ import {
   ensureInstructorLessonParkingPreviewShortLink,
 } from "../parking/instructorLessonParkingPreRegistration";
 import { shortUrlForId } from "../utils/shortLinks";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "../memberSignup/memberDispatchWindow";
 
 const APPROVAL_COLLECTION = "instructorLessonAlimtalkApprovals";
 const BOOKING_FRESHNESS_MS = 24 * 60 * 60 * 1000;
@@ -30,6 +31,7 @@ const APPROVAL_FUNCTION_URL =
   `https://${REGION}-archive-pilates.cloudfunctions.net/approveInstructorLessonAlimtalkBatch`;
 
 type InstructorLessonApprovalStatus =
+  | "sample_pending"
   | "sample_sending"
   | "sample_sent"
   | "sample_failed"
@@ -72,6 +74,9 @@ export interface InstructorLessonApprovalDoc {
   sentCount?: number;
   skippedCount?: number;
   failedCount?: number;
+  deferredCount?: number;
+  dispatchDeferredReason?: string | null;
+  nextAllowedAt?: string | null;
   lastError?: string | null;
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt: FirebaseFirestore.Timestamp;
@@ -82,6 +87,7 @@ export interface InstructorLessonSampleApprovalSummary {
   sampleSent: number;
   awaitingApproval: number;
   blocked: number;
+  blockedReasons?: string[];
 }
 
 interface InstructorLessonCandidateGroup {
@@ -157,6 +163,10 @@ export async function prepareInstructorLessonSampleApprovals(input: {
     if (result === "sample_sent") summary.sampleSent += 1;
     if (result === "awaiting_approval") summary.awaitingApproval += 1;
     if (result === "blocked") summary.blocked += 1;
+    if (result === "deferred") {
+      summary.blocked += 1;
+      (summary.blockedReasons ||= []).push(memberDispatchWindow().reason);
+    }
   }
   return summary;
 }
@@ -165,8 +175,9 @@ async function prepareInstructorLessonSampleApproval(input: {
   studioId: string;
   sourceDate: string;
   group: InstructorLessonCandidateGroup;
-}): Promise<"sample_sent" | "awaiting_approval" | "blocked"> {
+}): Promise<"sample_sent" | "awaiting_approval" | "blocked" | "deferred"> {
   const { studioId, sourceDate, group } = input;
+  if (!memberDispatchWindow().allowed) return "deferred";
   const approvalId = instructorLessonApprovalId(studioId, sourceDate, group.managementNumber);
   const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
   const existing = (await ref.get()).data() as InstructorLessonApprovalDoc | undefined;
@@ -180,7 +191,10 @@ async function prepareInstructorLessonSampleApproval(input: {
     }
     if (["sample_sent", "approved"].includes(existing.status)) return "awaiting_approval";
     if (["sending", "sent"].includes(existing.status)) return "awaiting_approval";
-    if (!canRecoverBlockedInstructorLessonSample(existing)) return "blocked";
+    if (existing.status === "sample_pending") {
+      if (existing.sampleSolapiMessageId || existing.sampleSentAt
+        || instructorLessonApprovedCandidatesIssue(existing, group.candidates)) return "blocked";
+    } else if (!canRecoverBlockedInstructorLessonSample(existing)) return "blocked";
     const sourceIssue = await instructorLessonGroupSourceIssue(group);
     const routeIssue = await instructorLessonRouteIssue(group.lessonDate, group.managementNumber);
     if (sourceIssue || routeIssue) return "blocked";
@@ -229,13 +243,20 @@ async function prepareInstructorLessonSampleApproval(input: {
     lessonStartAt: String(representative.payload?.lessonStartAt || ""),
   });
   const sample = buildSampleCandidate(representative, approvalId, testRecipient, parkingLinkId);
+  if (!memberDispatchWindow().allowed) return "deferred";
   const claimed = await db.runTransaction(async (tx) => {
+    if (!memberDispatchWindow().allowed) return null;
     const snap = await tx.get(ref);
     const current = snap.data() as InstructorLessonApprovalDoc | undefined;
-    if (snap.exists && !current) return false;
-    if (current && !canRecoverBlockedInstructorLessonSample(current)) return false;
+    if (snap.exists && !current) return null;
+    if (current && !canRecoverBlockedInstructorLessonSample(current)
+      && !(current.status === "sample_pending" && !current.sampleSolapiMessageId && !current.sampleSentAt
+        && !instructorLessonApprovedCandidatesIssue(current, group.candidates))) return null;
+    const priorSend = await tx.get(refs.alimtalkSend(sample.candidateId));
+    if (priorSend.exists) return null;
     const now = nowTimestamp();
     const next = {
+      ...current,
       approvalId,
       studioId,
       sourceDate,
@@ -253,21 +274,23 @@ async function prepareInstructorLessonSampleApproval(input: {
       lastError: null,
       createdAt: current?.createdAt || now,
       updatedAt: now,
-      ...(current
+      ...(current && current.status === "blocked_source_stale"
         ? {
             sourceRecoveredAt: now,
             sourceRecoveryCount: Number(current.sourceRecoveryCount || 0) + 1,
           }
         : {}),
     } satisfies InstructorLessonApprovalDoc;
+    if (!memberDispatchWindow().allowed) return null;
     if (snap.exists) tx.set(ref, next, { merge: true });
     else tx.create(ref, next);
-    return true;
+    return { previous: current, next };
   });
-  if (!claimed) return "awaiting_approval";
+  if (!claimed) return memberDispatchWindow().allowed ? "awaiting_approval" : "deferred";
 
   try {
-    const issue = await autoSendabilityIssue(sample, sourceDate);
+    const issue = await autoSendabilityIssue(sample, todayKst());
+    assertMemberDispatchAllowed();
     if (issue) throw new Error(issue);
     const result = await sendSolapiAlimtalk(sample);
     await writeSampleAudit(sample, result.messageId, null);
@@ -276,12 +299,27 @@ async function prepareInstructorLessonSampleApproval(input: {
         status: "sample_sent",
         sampleSolapiMessageId: result.messageId,
         sampleSentAt: nowTimestamp(),
+        dispatchDeferredReason: null,
+        nextAllowedAt: null,
         lastError: null,
         updatedAt: nowTimestamp(),
       },
       { merge: true },
     );
   } catch (err) {
+    if (isMemberDispatchDeferred(err)) {
+      const restored = await db.runTransaction(async (tx) => {
+        const current = (await tx.get(ref)).data();
+        const send = await tx.get(refs.alimtalkSend(sample.candidateId));
+        if (!current || stableHash(current) !== stableHash(claimed.next) || send.exists) return false;
+        tx.set(ref, {
+          ...(claimed.previous || { ...claimed.next, status: "sample_pending" }),
+          dispatchDeferredReason: err.message, nextAllowedAt: err.nextAllowedAt,
+        });
+        return true;
+      });
+      return restored ? "deferred" : "blocked";
+    }
     const message = errorText(err);
     await writeSampleAudit(sample, "", message);
     await ref.set(
@@ -393,11 +431,12 @@ export async function sendApprovedInstructorLessonAlimtalks(
     studioId?: string;
     sourceDate?: string;
   } = {},
-): Promise<{ batches: number; sent: number; skipped: number; failed: number; blocked: number }> {
+): Promise<{ batches: number; sent: number; skipped: number; failed: number; blocked: number; blockedReasons?: string[] }> {
   const sourceDate = input.sourceDate || todayKst();
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
   const approvals = await approvalsForSourceDate(studioId, sourceDate);
-  const summary = { batches: approvals.length, sent: 0, skipped: 0, failed: 0, blocked: 0 };
+  const summary: { batches: number; sent: number; skipped: number; failed: number; blocked: number; blockedReasons?: string[] } =
+    { batches: approvals.length, sent: 0, skipped: 0, failed: 0, blocked: 0 };
   logger.info("instructor_lesson_approved_id_send started", {
     studioId, sourceDate, batches: approvals.length,
     approvedCandidateCount: approvals.filter((approval) => approval.status === "approved")
@@ -408,6 +447,12 @@ export async function sendApprovedInstructorLessonAlimtalks(
   for (const approval of approvals) {
     const ref = db.collection(APPROVAL_COLLECTION).doc(approval.approvalId);
     if (["sent", "failed", "no_targets"].includes(approval.status)) continue;
+    const window = memberDispatchWindow();
+    if (!window.allowed) {
+      summary.blocked += 1;
+      (summary.blockedReasons ||= []).push(window.reason);
+      continue;
+    }
     if (approval.status !== "approved") {
       if (approval.status !== "sending") {
         await ref.set(
@@ -431,16 +476,19 @@ export async function sendApprovedInstructorLessonAlimtalks(
 
     // Claim before preflight so a competing invocation cannot overwrite an active batch's outcome.
     const claimed = await db.runTransaction(async (tx) => {
+      if (!memberDispatchWindow().allowed) return false;
       const snap = await tx.get(ref);
       const current = snap.data() as InstructorLessonApprovalDoc | undefined;
       if (!current || current.status !== "approved" || approvalTargetFingerprint(current) !== approvalTargetFingerprint(approval)) return false;
+      if (!memberDispatchWindow().allowed) return false;
       tx.set(ref, {
-        status: "sending", liveSendStartedAt: nowTimestamp(), lastError: null, updatedAt: nowTimestamp(),
+        status: "sending", liveSendStartedAt: current.liveSendStartedAt || nowTimestamp(), lastError: null, updatedAt: nowTimestamp(),
       }, { merge: true });
       return true;
     });
     if (!claimed) {
       summary.blocked += 1;
+      if (!memberDispatchWindow().allowed) (summary.blockedReasons ||= []).push(memberDispatchWindow().reason);
       continue;
     }
 
@@ -466,16 +514,24 @@ export async function sendApprovedInstructorLessonAlimtalks(
       managementNumber: approval.managementNumber,
       candidates: candidates.filter((candidate) => ["candidate", "reviewed"].includes(candidate.status)),
     };
+    const priorSent = Math.max(Number(approval.sentCount || 0), candidates.filter((candidate) => candidate.status === "sent").length);
+    const priorSkipped = Math.max(Number(approval.skippedCount || 0), candidates.filter((candidate) => candidate.status === "skipped").length);
     if (!group.candidates.length) {
       await ref.set(
         {
-          status: "no_targets",
-          lastError: "18:00 재검증 결과 현재 예약 대상 없음",
+          status: priorSent ? "sent" : "no_targets",
+          sentCount: priorSent,
+          skippedCount: priorSkipped,
+          deferredCount: 0,
+          dispatchDeferredReason: null,
+          nextAllowedAt: null,
+          lastError: priorSent ? null : "18:00 재검증 결과 현재 예약 대상 없음",
+          ...(priorSent ? { liveSendCompletedAt: nowTimestamp() } : {}),
           updatedAt: nowTimestamp(),
         },
         { merge: true },
       );
-      summary.blocked += 1;
+      if (!priorSent) summary.blocked += 1;
       continue;
     }
 
@@ -501,26 +557,32 @@ export async function sendApprovedInstructorLessonAlimtalks(
       continue;
     }
 
-    const batchResult = { sent: 0, skipped: 0, failed: 0, blocked: 0, blockedReasons: [] as string[] };
+    const batchResult = { sent: 0, skipped: 0, failed: 0, blocked: 0, deferred: 0, blockedReasons: [] as string[] };
     for (const candidate of group.candidates) {
-      const result = await sendApprovedInstructorLessonCandidate(candidate, sourceDate, approval);
+      const result = await sendApprovedInstructorLessonCandidate(candidate, approval);
       batchResult[result.status] += 1;
+      if (result.deferred) batchResult.deferred += 1;
       if (result.reason) batchResult.blockedReasons.push(`${candidate.candidateId}: ${result.reason}`);
     }
     summary.sent += batchResult.sent;
     summary.skipped += batchResult.skipped;
     summary.failed += batchResult.failed;
     summary.blocked += batchResult.blocked;
+    if (batchResult.deferred) (summary.blockedReasons ||= []).push(...batchResult.blockedReasons);
+    const pending = batchResult.deferred > 0 && !batchResult.failed && batchResult.blocked === batchResult.deferred;
     await ref.set(
       {
-        status: batchResult.failed || batchResult.blocked ? "failed" : "sent",
-        sentCount: batchResult.sent,
-        skippedCount: batchResult.skipped,
+        status: pending ? "approved" : batchResult.failed || batchResult.blocked ? "failed" : "sent",
+        sentCount: priorSent + batchResult.sent,
+        skippedCount: priorSkipped + batchResult.skipped,
         failedCount: batchResult.failed,
         blockedCount: batchResult.blocked,
         blockedReasons: batchResult.blockedReasons,
-        liveSendCompletedAt: nowTimestamp(),
-        lastError: batchResult.failed || batchResult.blocked ? `발송 실패 ${batchResult.failed}건 / 원본 재확인 ${batchResult.blocked}건` : null,
+        deferredCount: batchResult.deferred,
+        dispatchDeferredReason: batchResult.deferred ? memberDispatchWindow().reason : null,
+        nextAllowedAt: batchResult.deferred ? memberDispatchWindow().nextAllowedAt : null,
+        ...(!pending ? { liveSendCompletedAt: nowTimestamp() } : {}),
+        lastError: !pending && (batchResult.failed || batchResult.blocked) ? `발송 실패 ${batchResult.failed}건 / 원본 재확인 ${batchResult.blocked}건` : null,
         updatedAt: nowTimestamp(),
       },
       { merge: true },
@@ -565,10 +627,13 @@ async function recoverSampleSendingApproval(
 
 async function sendApprovedInstructorLessonCandidate(
   candidate: AlimtalkCandidateDoc,
-  sourceDate: string,
   approval: InstructorLessonApprovalDoc,
-): Promise<{ status: "sent" | "skipped" | "failed" | "blocked"; reason?: string }> {
-  const sendabilityIssue = await autoSendabilityIssue(candidate, sourceDate);
+): Promise<{ status: "sent" | "skipped" | "failed" | "blocked"; reason?: string; deferred?: boolean }> {
+  let window = memberDispatchWindow();
+  if (!window.allowed) return { status: "blocked", reason: window.reason, deferred: true };
+  const sendabilityIssue = await autoSendabilityIssue(candidate, todayKst());
+  window = memberDispatchWindow();
+  if (!window.allowed) return { status: "blocked", reason: window.reason, deferred: true };
   if (sendabilityIssue) {
     await refs.alimtalkCandidate(candidate.candidateId).set(
       {
@@ -584,6 +649,8 @@ async function sendApprovedInstructorLessonCandidate(
   const dedupeKey = alimtalkDedupeKey(candidate);
   const dedupePolicy = alimtalkDedupePolicy(candidate.templateCode);
   const duplicate = await findCompletedDuplicateForCandidate(candidate, dedupeKey, dedupePolicy.windowDays);
+  window = memberDispatchWindow();
+  if (!window.allowed) return { status: "blocked", reason: window.reason, deferred: true };
   if (duplicate) {
     await refs.alimtalkCandidate(candidate.candidateId).set(
       {
@@ -602,7 +669,9 @@ async function sendApprovedInstructorLessonCandidate(
     const ref = refs.alimtalkCandidate(candidate.candidateId);
     const snap = await tx.get(ref);
     const current = snap.data();
-    const blocked = (issue: string) => ({ candidate: null, issue });
+    const blocked = (issue: string, deferred = false) => ({ candidate: null, issue, deferred });
+    const claimWindow = memberDispatchWindow();
+    if (!claimWindow.allowed) return blocked(claimWindow.reason, true);
     if (!current || !["candidate", "reviewed"].includes(current.status)) return blocked("후보 원본 누락 또는 선점 상태 변경");
     const approvalSnap = await tx.get(db.collection(APPROVAL_COLLECTION).doc(approval.approvalId));
     const currentApproval = approvalSnap.data() as InstructorLessonApprovalDoc | undefined;
@@ -646,10 +715,12 @@ async function sendApprovedInstructorLessonCandidate(
       lastError: null,
       updatedAt: nowTimestamp(),
     };
+    const finalWindow = memberDispatchWindow();
+    if (!finalWindow.allowed) return blocked(finalWindow.reason, true);
     tx.set(ref, next, { merge: true });
-    return { candidate: next, issue: "" };
+    return { candidate: next, issue: "", deferred: false };
   });
-  if (!claimed.candidate) return { status: "blocked", reason: claimed.issue };
+  if (!claimed.candidate) return { status: "blocked", reason: claimed.issue, deferred: claimed.deferred };
   const sendCandidate = claimed.candidate;
 
   try {
@@ -687,6 +758,20 @@ async function sendApprovedInstructorLessonCandidate(
     );
     return { status: "sent" };
   } catch (err) {
+    if (isMemberDispatchDeferred(err)) {
+      const restored = await db.runTransaction(async (tx) => {
+        const ref = refs.alimtalkCandidate(candidate.candidateId);
+        const current = (await tx.get(ref)).data();
+        const send = await tx.get(refs.alimtalkSend(candidate.candidateId));
+        if (!current || stableHash(current) !== stableHash(sendCandidate) || send.exists) return false;
+        // Only a proven pre-provider deferral may undo this invocation's claim.
+        tx.set(ref, candidate);
+        return true;
+      });
+      return restored
+        ? { status: "blocked", reason: err.message, deferred: true }
+        : { status: "blocked", reason: "보류된 후보 선점 변경 또는 발송 원장 확인 필요: 자동 재시도 금지" };
+    }
     const message = errorText(err);
     const now = nowTimestamp();
     await refs.alimtalkCandidate(sendCandidate.candidateId).set(
@@ -1058,7 +1143,7 @@ async function sendInstructorLessonAttentionEmail(input: {
 
 async function sendInstructorLessonResultEmail(
   approval: InstructorLessonApprovalDoc,
-  result: { sent: number; skipped: number; failed: number; blocked: number; blockedReasons: string[] },
+  result: { sent: number; skipped: number; failed: number; blocked: number; deferred?: number; blockedReasons: string[] },
 ): Promise<void> {
   const failed = result.failed > 0;
   await sendAlimtalkLogEmail({
@@ -1071,7 +1156,8 @@ async function sendInstructorLessonResultEmail(
       `성공: ${result.sent}건`,
       `제외: ${result.skipped}건`,
       `실패: ${result.failed}건`,
-      `원본 재확인: ${result.blocked}건`,
+      `원본 재확인: ${result.blocked - (result.deferred || 0)}건`,
+      ...(result.deferred ? [`시간 보류: ${result.deferred}건 (보류 대상 발송 시도 없음)`] : []),
       ...result.blockedReasons,
     ].join("\n"),
     status: failed ? "failure" : result.blocked ? "attention" : "success",

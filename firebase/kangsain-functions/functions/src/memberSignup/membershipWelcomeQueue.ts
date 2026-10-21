@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { assertMemberDispatchAllowed, isMemberDispatchDeferred, MEMBER_DISPATCH_WINDOW_POLICY } from "./memberDispatchWindow";
 import { normalizeMembershipPhone } from "./membershipContractPolicy";
 import {
   MEMBERSHIP_WELCOME_TEMPLATE,
@@ -30,6 +31,22 @@ export interface MembershipWelcomeDependencies {
 }
 
 const fingerprint = (value: Data) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+function welcomeDispatchBinding(candidate: Data): string {
+  return fingerprint([candidate.candidateId, candidate.studioId, candidate.memberId, candidate.memberPhone,
+    candidate.memberName, candidate.type, candidate.templateCode, candidate.payload]);
+}
+
+function welcomeDeferredPretransportClaim(claim: Data | undefined, candidate: Data, now: number): boolean {
+  return !!claim && claim.candidateId === candidate.candidateId && claim.status === "deferred_pretransport" &&
+    claim.candidateBinding === welcomeDispatchBinding(candidate) &&
+    claim.externalAttempted === false && claim.quietHoursPolicy === MEMBER_DISPATCH_WINDOW_POLICY &&
+    claim.deferredProof === "member_dispatch_guard_before_fetch" && !claim.messageId && !claim.groupId &&
+    !claim.solapiMessageId && !claim.solapiGroupId && !claim.receipt &&
+    Array.isArray(claim.pretransportDeferrals) && claim.pretransportDeferrals.length > 0 &&
+    Number.isFinite(claim.deferredAt?.toMillis?.()) &&
+    typeof claim.nextEligibleAt === "string" && Date.parse(claim.nextEligibleAt) <= now;
+}
 export const membershipAutomationEnabled = (config: Data | undefined) =>
   config?.enabled === true &&
   config?.mode === "live" &&
@@ -246,7 +263,7 @@ export async function dispatchMembershipWelcome<T extends { messageId: string }>
   const claimRefs = claimIds.map((id) => deps.db.collection(MEMBERSHIP_WELCOME_CLAIMS).doc(id));
   const candidateRef = deps.db.collection("alimtalkCandidates").doc(candidate.candidateId);
   const sourceRef = deps.db.collection(MEMBERSHIP_CONTRACT_COLLECTION).doc(checked.source.contractId);
-  await deps.db.runTransaction(async (tx) => {
+  const attemptedAt = await deps.db.runTransaction(async (tx) => {
     const liveCandidate = await tx.get(candidateRef);
     const source = await tx.get(sourceRef);
     const config = await tx.get(deps.db.doc(MEMBERSHIP_AUTOMATION_SETTINGS));
@@ -267,7 +284,7 @@ export async function dispatchMembershipWelcome<T extends { messageId: string }>
       actual.memberName !== candidate.memberName ||
       actual.studioId !== candidate.studioId ||
       JSON.stringify(actual.payload) !== JSON.stringify(candidate.payload) ||
-      claims.some((doc) => doc.exists)
+      (claims.some((doc) => doc.exists) && !claims.every((doc) => welcomeDeferredPretransportClaim(doc.data(), candidate, deps.now().getTime())))
     )
       throw new Error("welcome_already_attempted_or_not_claimed");
     if (
@@ -277,24 +294,60 @@ export async function dispatchMembershipWelcome<T extends { messageId: string }>
       membershipWelcomeReadbackIssue(source.data()!, deps.now(), actual)
     )
       throw new Error("welcome_source_changed_before_send");
+    assertMemberDispatchAllowed(deps.now());
     const at = deps.timestamp();
-    for (const ref of claimRefs)
-      tx.create(ref, { candidateId: candidate.candidateId, status: "attempting", attemptedAt: at });
+    for (const [index, ref] of claimRefs.entries()) {
+      const next = { candidateId: candidate.candidateId, candidateBinding: welcomeDispatchBinding(candidate),
+        status: "attempting", externalAttempted: false, attemptedAt: at };
+      if (claims[index].exists) tx.update(ref, next);
+      else tx.create(ref, next);
+    }
     tx.update(candidateRef, { attempts: 1, maxAttempts: 1, providerAttemptedAt: at, updatedAt: at });
+    return at;
   });
   try {
     const result = await transport();
     if (!result.messageId) throw new Error("provider_acceptance_unknown");
     const batch = deps.db.batch();
     for (const ref of claimRefs)
-      batch.update(ref, { status: "accepted", messageId: result.messageId, updatedAt: deps.timestamp() });
+      batch.update(ref, { status: "accepted", externalAttempted: true, messageId: result.messageId, updatedAt: deps.timestamp() });
     batch.update(sourceRef, { welcomeStatus: "accepted", updatedAt: deps.timestamp() });
     await batch.commit();
     return result;
   } catch (error) {
+    if (isMemberDispatchDeferred(error)) {
+      try {
+        await deps.db.runTransaction(async tx => {
+          const actual = (await tx.get(candidateRef)).data();
+          const claims = await tx.getAll(...claimRefs);
+          const send = await tx.get(deps.db.collection("alimtalkSends").doc(candidate.candidateId));
+          if (!actual || actual.status !== "processing" || actual.attempts !== 1 ||
+            actual.queueLeaseId !== candidate.queueLeaseId || !actual.providerAttemptedAt?.isEqual(attemptedAt) ||
+            welcomeDispatchBinding(actual) !== welcomeDispatchBinding(candidate) || send.exists ||
+            claims.some(doc => { const claim = doc.data(); return !claim || claim.candidateId !== candidate.candidateId ||
+              claim.status !== "attempting" || claim.externalAttempted !== false || claim.messageId || claim.groupId ||
+              claim.candidateBinding !== welcomeDispatchBinding(candidate) ||
+              !claim.attemptedAt?.isEqual(attemptedAt); })) throw new Error("welcome_quiet_hold_state_conflict");
+          const at = deps.timestamp();
+          for (const [index, ref] of claimRefs.entries()) tx.update(ref, {
+            status: "deferred_pretransport", externalAttempted: false, deferredProof: "member_dispatch_guard_before_fetch",
+            quietHoursPolicy: MEMBER_DISPATCH_WINDOW_POLICY, nextEligibleAt: error.nextAllowedAt, deferredAt: at,
+            pretransportDeferrals: [...(claims[index].data()?.pretransportDeferrals || []),
+              { reservedAt: attemptedAt, deferredAt: at, nextEligibleAt: error.nextAllowedAt, reason: error.message }],
+          });
+          tx.update(candidateRef, { status: "queued", attempts: 0, providerAttemptedAt: null, queueLeaseId: null,
+            reasonCode: error.message, lastError: error.message, nextEligibleAt: error.nextAllowedAt,
+            quietHoursPolicy: MEMBER_DISPATCH_WINDOW_POLICY, updatedAt: at });
+        });
+      } catch {
+        // Keep existing claims blocking replay if recording the proven pre-POST hold fails.
+        Object.assign(error, { pretransportStateIssue: "membership_welcome_quiet_hold_review_required" });
+      }
+      throw error;
+    }
     // Original error wins even if recording the ambiguity also fails. Claims are retained.
     const batch = deps.db.batch();
-    for (const ref of claimRefs) batch.update(ref, { status: "unknown", updatedAt: deps.timestamp() });
+    for (const ref of claimRefs) batch.update(ref, { status: "unknown", externalAttempted: true, updatedAt: deps.timestamp() });
     batch.update(sourceRef, { welcomeStatus: "review", updatedAt: deps.timestamp() });
     await batch.commit().catch(() => undefined);
     throw error;

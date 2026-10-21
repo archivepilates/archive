@@ -5,6 +5,7 @@ import {
   StudioMateNativeApiError,
 } from "./studiomate-native-contract-source.mjs";
 import { verifyStudioMateOfficialSeal } from "./studiomate-membership-contract-seal.mjs";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
 
 export const MEMBERSHIP_CONTRACT_TEMPLATES = Object.freeze({
   first_purchase_contract: Object.freeze({
@@ -220,7 +221,10 @@ export async function executeStudioMateMembershipContract({
   terms,
   sealPath,
   operatorTestApproval,
+  now = Date.now,
 }) {
+  const deferred = () => ({ ...memberDispatchWindow(now()), status: "deferred", jobKey: selection?.jobKey });
+  if (!memberDispatchWindow(now()).allowed) return deferred();
   const payload = buildStudioMateJoinContractPayload({
     selection,
     member,
@@ -231,11 +235,14 @@ export async function executeStudioMateMembershipContract({
     operatorTestApproval,
   });
   const payloadHash = hash(payload);
-  const claim = await journal.claim({
-    jobKey: selection.jobKey,
-    payloadHash,
-    selection,
-  });
+  let claim;
+  try {
+    assertMemberDispatchAllowed(now());
+    claim = await journal.claim({ jobKey: selection.jobKey, payloadHash, selection });
+  } catch (error) {
+    if (isMemberDispatchDeferred(error)) return deferred();
+    throw error;
+  }
   if (!claim || !["claimed", "resume", "complete"].includes(claim.status))
     return { status: "review", reason: claim?.reason || "write_claim_rejected" };
   if (claim.status === "complete")
@@ -244,175 +251,221 @@ export async function executeStudioMateMembershipContract({
     return { status: "review", reason: "claimed_payload_mismatch" };
 
   let contractId = claim.contractId || "";
-  if (!contractId) {
-    if (claim.status === "resume")
-      return { status: "review", reason: "ambiguous_create_must_not_retry" };
-    await journal.stage(selection.jobKey, "attempting_create", { payloadHash });
-    try {
-      const created = await api.post("/v2/staff/contract/join", payload);
-      contractId = String(created?.id || created?.data?.id || "");
-      if (!/^[a-f0-9]{64}$/.test(contractId))
-        throw new StudioMateNativeApiError("StudioMate create response has no contract ID", {
-          method: "POST",
-          ambiguous: true,
-        });
-      await journal.stage(selection.jobKey, "created", { contractId });
-    } catch (error) {
-      await journal.stage(selection.jobKey, "unknown", {
-        reason: "contract_create_outcome_unknown",
-      });
-      return { status: "review", reason: "contract_create_outcome_unknown" };
-    }
-  }
-
-  let readback = validateCreatedContractReadback(
-    await api.get(`/v2/staff/contract/${contractId}`),
-    selection,
-    payload,
-    contractId,
-  );
-  if (!readback.ok) {
-    await journal.stage(selection.jobKey, "review", { reason: readback.reason, contractId });
-    return { status: "review", reason: readback.reason, contractId };
-  }
-
-  if (!readback.detail.centerSignaturePresent) {
-    const seal = await verifyStudioMateOfficialSeal({ path: sealPath });
-    const bytes = await readFile(seal.path);
-    const signatureData = `data:${seal.mimeType};base64,${bytes.toString("base64")}`;
-    await journal.stage(selection.jobKey, "attempting_seal", { contractId, sealSha256: seal.sha256 });
-    try {
-      await api.post("/v2/staff/contract/signature/direct", {
-        contract_id_hash: contractId,
-        signature_party: "M",
-        signature_method: "upload",
-        signature_data: signatureData,
-      });
-    } catch {
-      // A failed response may still have committed. Read back once, never blind-retry.
-    }
-    readback = validateCreatedContractReadback(
-      await api.get(`/v2/staff/contract/${contractId}`),
-      selection,
-      payload,
-      contractId,
-    );
-    if (!readback.ok || !readback.detail.centerSignaturePresent) {
-      await journal.stage(selection.jobKey, "review", {
-        reason: "official_seal_outcome_unknown",
-        contractId,
-      });
-      return { status: "review", reason: "official_seal_outcome_unknown", contractId };
-    }
-    await journal.stage(selection.jobKey, "sealed", { contractId, sealSha256: seal.sha256 });
-  }
-
-  if (readback.detail.status === "draft") {
-    if (
-      claim.status === "resume" &&
-      (["attempting_signature_request", "attempting_signature_message", "signature_message_outcome_unknown"].includes(claim.stage) ||
-        ["signature_message_outcome_unknown", "signature_request_outcome_unknown",
-          "signature_request_prepare_outcome_unknown", "signature_request_prepare_binding_invalid"].includes(claim.reason))
-    ) {
-      await journal.stage(selection.jobKey, "signature_message_outcome_unknown", {
-        reason: "signature_message_outcome_unknown",
-        contractId,
-      });
-      return {
-        status: "review",
-        reason: "signature_message_outcome_unknown",
-        contractId,
-      };
-    }
-    await journal.stage(selection.jobKey, "attempting_signature_request", { contractId });
-    let prepared;
-    try {
-      prepared = await api.post(`/v2/staff/contract/signature/request/${contractId}`);
-    } catch {
-      // Preparation may have completed, but it does not send the member message.
-      // Stop rather than guessing a second write payload.
-      await journal.stage(selection.jobKey, "review", {
-        reason: "signature_request_prepare_outcome_unknown",
-        contractId,
-      });
-      return {
-        status: "review",
-        reason: "signature_request_prepare_outcome_unknown",
-        contractId,
-      };
-    }
-    let requestPayload;
-    try {
-      requestPayload = buildStudioMateSignatureRequestPayload({
-        prepared,
-        contractId,
-        memberName: member.name,
-      });
-    } catch {
-      await journal.stage(selection.jobKey, "review", {
-        reason: "signature_request_prepare_binding_invalid",
-        contractId,
-      });
-      return {
-        status: "review",
-        reason: "signature_request_prepare_binding_invalid",
-        contractId,
-      };
-    }
-    await journal.stage(selection.jobKey, "attempting_signature_message", { contractId });
-    let signatureMessageError = false;
-    try {
-      await api.post(
-        `/v2/staff/contract/signature/request/sms/${contractId}`,
-        requestPayload,
-      );
-    } catch {
-      // The provider may have accepted the send before a transport failure.
-      // Resolve that ambiguity through the authoritative contract status below.
-      signatureMessageError = true;
-    }
-    readback = validateCreatedContractReadback(
-      await api.get(`/v2/staff/contract/${contractId}`),
-      selection,
-      payload,
-      contractId,
-    );
-    if (!readback.ok || !["sent", "signed"].includes(readback.detail.status)) {
-      await journal.stage(selection.jobKey, "review", {
-        reason: signatureMessageError
-          ? "signature_message_outcome_unknown"
-          : "signature_request_outcome_unknown",
-        contractId,
-      });
-      return {
-        status: "review",
-        reason: signatureMessageError
-          ? "signature_message_outcome_unknown"
-          : "signature_request_outcome_unknown",
-        contractId,
-      };
-    }
-  }
-
-  if (!readback.detail.centerSignaturePresent) {
-    await journal.stage(selection.jobKey, "review", {
-      reason: "center_signature_missing_after_request",
-      contractId,
-    });
-    return { status: "review", reason: "center_signature_missing_after_request", contractId };
-  }
-  await journal.stage(selection.jobKey, "signature_requested", {
-    contractId,
-    providerStatus: readback.detail.providerStatus,
-  });
-  return {
-    status: readback.detail.status === "signed" ? "signed" : "waiting",
-    reason:
-      readback.detail.status === "signed"
-        ? "member_already_signed"
-        : "native_signature_request_verified",
-    contractId,
+  let safeStage = claim.stage || "claimed";
+  let preparedPayload = claim.preparedPayload || "";
+  let postStarted = false;
+  let blockedStage = "";
+  // A journal await can cross 23:00. Undo only our marker, never an attempted POST.
+  const post = async (stage, url, body, fields = {}) => {
+    postStarted = false;
+    blockedStage = stage;
+    assertMemberDispatchAllowed(now());
+    await journal.stage(selection.jobKey, stage, { contractId, ...fields });
+    assertMemberDispatchAllowed(now());
+    postStarted = true;
+    return api.post(url, body);
   };
+  try {
+    if (!contractId) {
+      if (claim.status === "resume" && claim.stage !== "deferred_create")
+        return { status: "review", reason: "ambiguous_create_must_not_retry" };
+      safeStage = "deferred_create";
+      try {
+        const created = await post("attempting_create", "/v2/staff/contract/join", payload, { payloadHash });
+        contractId = String(created?.id || created?.data?.id || "");
+        if (!/^[a-f0-9]{64}$/.test(contractId))
+          throw new StudioMateNativeApiError("StudioMate create response has no contract ID", {
+            method: "POST",
+            ambiguous: true,
+          });
+        await journal.stage(selection.jobKey, "created", { contractId });
+        safeStage = "created";
+        postStarted = false;
+      } catch (error) {
+        if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+        await journal.stage(selection.jobKey, "unknown", {
+          reason: "contract_create_outcome_unknown",
+        });
+        return { status: "review", reason: "contract_create_outcome_unknown" };
+      }
+    }
+
+    let readback = validateCreatedContractReadback(
+      await api.get(`/v2/staff/contract/${contractId}`),
+      selection,
+      payload,
+      contractId,
+    );
+    if (!readback.ok) {
+      await journal.stage(selection.jobKey, "review", { reason: readback.reason, contractId });
+      return { status: "review", reason: readback.reason, contractId };
+    }
+
+    if (!readback.detail.centerSignaturePresent) {
+      if (claim.status === "resume" && (claim.stage === "attempting_seal" || claim.reason === "official_seal_outcome_unknown"))
+        return { status: "review", reason: "official_seal_outcome_unknown", contractId };
+      blockedStage = "before_seal_read";
+      assertMemberDispatchAllowed(now());
+      const seal = await verifyStudioMateOfficialSeal({ path: sealPath });
+      const bytes = await readFile(seal.path);
+      const signatureData = `data:${seal.mimeType};base64,${bytes.toString("base64")}`;
+      try {
+        await post("attempting_seal", "/v2/staff/contract/signature/direct", {
+          contract_id_hash: contractId,
+          signature_party: "M",
+          signature_method: "upload",
+          signature_data: signatureData,
+        }, { sealSha256: seal.sha256 });
+      } catch (error) {
+        if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+        // A failed response may still have committed. Read back once, never blind-retry.
+      }
+      readback = validateCreatedContractReadback(
+        await api.get(`/v2/staff/contract/${contractId}`),
+        selection,
+        payload,
+        contractId,
+      );
+      if (!readback.ok || !readback.detail.centerSignaturePresent) {
+        await journal.stage(selection.jobKey, "review", {
+          reason: "official_seal_outcome_unknown",
+          contractId,
+        });
+        return { status: "review", reason: "official_seal_outcome_unknown", contractId };
+      }
+      await journal.stage(selection.jobKey, "sealed", { contractId, sealSha256: seal.sha256 });
+      safeStage = "sealed";
+      postStarted = false;
+    }
+
+    if (readback.detail.status === "draft") {
+      if (claim.stage === "signature_prepared" && !preparedPayload)
+        return { status: "review", reason: "signature_prepared_payload_missing", contractId };
+      if (
+        claim.status === "resume" &&
+        (["attempting_signature_request", "attempting_signature_message", "signature_message_outcome_unknown"].includes(claim.stage) ||
+          ["signature_message_outcome_unknown", "signature_request_outcome_unknown",
+            "signature_request_prepare_outcome_unknown", "signature_request_prepare_binding_invalid"].includes(claim.reason))
+      ) {
+        await journal.stage(selection.jobKey, "signature_message_outcome_unknown", {
+          reason: "signature_message_outcome_unknown",
+          contractId,
+        });
+        return {
+          status: "review",
+          reason: "signature_message_outcome_unknown",
+          contractId,
+        };
+      }
+      if (!preparedPayload) {
+        let prepared;
+        try {
+          prepared = await post("attempting_signature_request", `/v2/staff/contract/signature/request/${contractId}`);
+        } catch (error) {
+          if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+          // Preparation may have completed, but it does not send the member message.
+          // Stop rather than guessing a second write payload.
+          await journal.stage(selection.jobKey, "review", {
+            reason: "signature_request_prepare_outcome_unknown",
+            contractId,
+          });
+          return {
+            status: "review",
+            reason: "signature_request_prepare_outcome_unknown",
+            contractId,
+          };
+        }
+        let requestPayload;
+        try {
+          requestPayload = buildStudioMateSignatureRequestPayload({
+            prepared,
+            contractId,
+            memberName: member.name,
+          });
+        } catch {
+          await journal.stage(selection.jobKey, "review", {
+            reason: "signature_request_prepare_binding_invalid",
+            contractId,
+          });
+          return {
+            status: "review",
+            reason: "signature_request_prepare_binding_invalid",
+            contractId,
+          };
+        }
+        preparedPayload = JSON.stringify({ contract_id_hash: contractId, contractor_name: member.name,
+          studio_name: "ARCHIVE PILATES", contract_link: `https://sign.studiomate.kr/${contractId}`,
+          title: requestPayload.title, message: requestPayload.message });
+        await journal.stage(selection.jobKey, "signature_prepared", { contractId, preparedPayload, reason: null });
+        safeStage = "signature_prepared";
+        postStarted = false;
+      }
+      const requestPayload = buildStudioMateSignatureRequestPayload({
+        prepared: JSON.parse(preparedPayload), contractId, memberName: member.name,
+      });
+      let signatureMessageError = false;
+      try {
+        await post(
+          "attempting_signature_message",
+          `/v2/staff/contract/signature/request/sms/${contractId}`,
+          requestPayload,
+        );
+      } catch (error) {
+        if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+        // The provider may have accepted the send before a transport failure.
+        // Resolve that ambiguity through the authoritative contract status below.
+        signatureMessageError = true;
+      }
+      readback = validateCreatedContractReadback(
+        await api.get(`/v2/staff/contract/${contractId}`),
+        selection,
+        payload,
+        contractId,
+      );
+      if (!readback.ok || !["sent", "signed"].includes(readback.detail.status)) {
+        await journal.stage(selection.jobKey, "review", {
+          reason: signatureMessageError
+            ? "signature_message_outcome_unknown"
+            : "signature_request_outcome_unknown",
+          contractId,
+        });
+        return {
+          status: "review",
+          reason: signatureMessageError
+            ? "signature_message_outcome_unknown"
+            : "signature_request_outcome_unknown",
+          contractId,
+        };
+      }
+    }
+
+    if (!readback.detail.centerSignaturePresent) {
+      await journal.stage(selection.jobKey, "review", {
+        reason: "center_signature_missing_after_request",
+        contractId,
+      });
+      return { status: "review", reason: "center_signature_missing_after_request", contractId };
+    }
+    await journal.stage(selection.jobKey, "signature_requested", {
+      contractId,
+      providerStatus: readback.detail.providerStatus,
+    });
+    return {
+      status: readback.detail.status === "signed" ? "signed" : "waiting",
+      reason:
+        readback.detail.status === "signed"
+          ? "member_already_signed"
+          : "native_signature_request_verified",
+      contractId,
+    };
+  } catch (error) {
+    if (!isMemberDispatchDeferred(error) || postStarted) throw error;
+    const window = memberDispatchWindow(now());
+    await journal.stage(selection.jobKey, safeStage, { contractId, preparedPayload, reason: null,
+      dispatchDeferrals: [...(claim.dispatchDeferrals || []), { stage: blockedStage || "before_seal_read",
+        deferredAt: new Date(now()).toISOString(), nextAllowedAt: window.nextAllowedAt, providerPostCount: 0 }] });
+    return { ...deferred(), contractId };
+  }
 }
 
 function validateOperatorTestApproval(approval, selection) {

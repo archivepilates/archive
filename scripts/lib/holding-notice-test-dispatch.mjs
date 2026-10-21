@@ -1,4 +1,6 @@
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIssue, planHoldingNotice } from "./holding-allowance-notice.mjs";
+import { randomUUID } from "node:crypto";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
 
 export const HOLDING_V2_TEST_KEY = "holding_v2_operator_test_20261006";
 export const HOLDING_V2_TEST_DATE = "2026-10-06";
@@ -36,7 +38,10 @@ export function holdingNoticeSamplePlan(recipient, date, template) {
 }
 
 // This sample never enters the automatic queue or creates a real ticket/hold source.
-export async function dispatchHoldingNoticeSample({ db, stamp, recipient, date, template, request, confirmed }) {
+export async function dispatchHoldingNoticeSample({ db, stamp, recipient, date, template, request, confirmed, now = Date.now }) {
+  const deferred = () => ({ ...memberDispatchWindow(now()), ok: true, status: "deferred", providerPostCount: 0 });
+  if (!memberDispatchWindow(now()).allowed) return deferred();
+  const dispatchToken = randomUUID();
   if (confirmed !== true) throw new Error("Explicit live-test confirmation required");
   const issue = holdingTemplateIssue(template);
   if (issue) throw new Error(issue);
@@ -45,30 +50,49 @@ export async function dispatchHoldingNoticeSample({ db, stamp, recipient, date, 
   const sendRef = db.collection("alimtalkSends").doc(plan.id);
   const claimed = await db.runTransaction(async (tx) => {
     const [candidate, send] = await Promise.all([tx.get(candidateRef), tx.get(sendRef)]);
-    if (candidate.exists || send.exists) return false;
-    tx.create(candidateRef, {
+    const safe = row => {
+      const proof = Array.isArray(row?.dispatchDeferrals) ? row.dispatchDeferrals.at(-1) : null;
+      return row?.status === "deferred" && row.attempts === 0 && row.providerOutcome === "quiet_deferred_no_transport"
+        && typeof row.dispatchToken === "string" && row.dispatchToken.length > 0 && proof != null
+        && row.candidateId === plan.id && row.memberId === recipient.memberId && row.memberPhone === recipient.phone
+        && row.templateCode === HOLDING_NOTICE_TEMPLATE_ID && row.isTest === true && !row.solapiMessageId
+        && proof?.dispatchToken === row.dispatchToken && proof.providerPostCount === 0;
+    };
+    const resume = candidate.exists && send.exists && safe(candidate.data()) && safe(send.data())
+      && candidate.data().dispatchToken === send.data().dispatchToken
+      && JSON.stringify(send.data().variables) === JSON.stringify(plan.variables);
+    if ((candidate.exists || send.exists) && !resume) return false;
+    if (!memberDispatchWindow(now()).allowed) return null;
+    const dispatchDeferrals = resume ? send.data().dispatchDeferrals : [];
+    const write = (ref, fields) => resume ? tx.update(ref, fields) : tx.create(ref, fields);
+    write(candidateRef, {
       candidateId: plan.id, studioId: "5330", memberId: recipient.memberId, memberName: recipient.name,
       memberPhone: recipient.phone, type: "manual_review", status: "reviewed", templateCode: HOLDING_NOTICE_TEMPLATE_ID,
       title: HOLDING_NOTICE_TEMPLATE.name, reason: "운영자 승인 단건 합성 테스트 · 실제 홀딩 아님",
       sourceActionKey: plan.id, sourceDate: HOLDING_V2_TEST_DATE, dedupeKey: plan.id, queuedBy: "operator",
       reviewedByUid: "codex:operator-approved-holding-test", reviewedAt: stamp(),
       payload: { deliveryMode: "sample", source: "holding_notice_operator_sample" },
-      isTest: true, attempts: 1, maxAttempts: 1, lastError: null, createdAt: stamp(), updatedAt: stamp(),
+      dispatchToken, dispatchDeferrals, providerOutcome: "claimed_no_retry", isTest: true, attempts: 1, maxAttempts: 1, lastError: null,
+      ...(resume ? {} : { createdAt: stamp() }), updatedAt: stamp(),
     });
-    tx.create(sendRef, {
-      sendId: plan.id, candidateId: plan.id, studioId: "5330", memberId: recipient.memberId,
+    write(sendRef, {
+      dispatchToken, sendId: plan.id, candidateId: plan.id, studioId: "5330", memberId: recipient.memberId,
       memberName: recipient.name, memberPhone: recipient.phone, templateCode: HOLDING_NOTICE_TEMPLATE_ID,
       status: "processing", dedupeKey: plan.id, dedupePolicy: "운영자 승인 v2 합성 테스트 전체 1회 · 날짜 변경 재발송 금지",
       dedupeWindowDays: null, attempts: 1, maxAttempts: 1, variables: plan.variables,
       isTest: true, createdByUid: "codex:operator-approved-holding-test", nextRunAt: stamp(),
-      lastError: null, createdAt: stamp(), updatedAt: stamp(),
+      dispatchDeferrals, providerOutcome: "claimed_no_retry", lastError: null, ...(resume ? {} : { createdAt: stamp() }), updatedAt: stamp(),
     });
     return true;
   });
+  if (claimed === null) return deferred();
   if (!claimed) return { ok: true, duplicateBlocked: true, id: plan.id, providerPostCount: 0 };
   let accepted = false;
   let receipt = null;
+  let postStarted = false;
   try {
+    assertMemberDispatchAllowed(now());
+    postStarted = true;
     const result = await request("/messages/v4/send-many/detail", "POST", {
       messages: [{ to: recipient.phone, type: "ATA", kakaoOptions: {
         pfId: HOLDING_NOTICE_TEMPLATE.channelId, templateId: HOLDING_NOTICE_TEMPLATE_ID,
@@ -104,6 +128,22 @@ export async function dispatchHoldingNoticeSample({ db, stamp, recipient, date, 
     return { ok: true, id: plan.id, providerPostCount: 1, messageId: message.messageId,
       groupId: message.groupId || result.groupInfo?.groupId || "", summary: plan.summary, message: plan.message };
   } catch (error) {
+    if (isMemberDispatchDeferred(error) && !postStarted) {
+      await db.runTransaction(async tx => {
+        const rows = await Promise.all([tx.get(candidateRef), tx.get(sendRef)]);
+        if (rows.some(row => row.data()?.dispatchToken !== dispatchToken || row.data()?.solapiMessageId))
+          throw new Error("holding_quiet_claim_changed");
+        if (rows[0].data().status !== "reviewed" || rows[1].data().status !== "processing")
+          throw new Error("holding_quiet_claim_changed");
+        const window = memberDispatchWindow(now());
+        const proof = { dispatchToken, deferredAt: stamp(), providerPostCount: 0, reason: window.reason, nextAllowedAt: window.nextAllowedAt };
+        for (const [index, ref] of [candidateRef,sendRef].entries()) tx.update(ref, {
+          status: "deferred", attempts: 0, providerOutcome: "quiet_deferred_no_transport", nextAllowedAt: window.nextAllowedAt,
+          dispatchDeferrals: [...(rows[index].data().dispatchDeferrals || []),proof], updatedAt: stamp(),
+        });
+      });
+      return deferred();
+    }
     const batch = db.batch();
     const detail = accepted ? "Provider accepted; ledger persistence requires reconciliation" : "Provider outcome unknown; do not resend";
     batch.update(candidateRef, { status: "failed", reasonCode: "holding_test_reconciliation_required", lastError: detail, updatedAt: stamp() });

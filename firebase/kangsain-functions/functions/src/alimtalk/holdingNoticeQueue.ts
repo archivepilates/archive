@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { Timestamp } from "firebase-admin/firestore";
+import { assertMemberDispatchAllowed, isMemberDispatchDeferred, MEMBER_DISPATCH_WINDOW_POLICY } from "../memberSignup/memberDispatchWindow";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { isAlimtalkTestRecipient, normalizeRecipientPhone } from "./testRecipients";
 
@@ -120,6 +122,27 @@ export function holdingClaimIssue(candidate: unknown): string {
       !Number.isFinite(timestampMillis(candidate.reviewedAt)) ||
       !Number.isFinite(timestampMillis(candidate.createdAt)) || overrides(candidate) || overrides(candidate.payload) ||
       attempted(candidate) || isAlimtalkTestRecipient(candidate)) return "holding_candidate_not_unattempted_approved";
+  return "";
+}
+
+/** Only a durably proven, same-event pre-POST hold can reuse existing audit records. */
+export function holdingDeferredPretransportIssue(claim: Data | undefined, send: Data | undefined, candidate: Data, now: number): string {
+  if (!["queued", "processing"].includes(candidate.status) || holdingClaimIssue({ ...candidate, status: "processing" }) ||
+    !claim || !send || claim.candidateId !== candidate.candidateId || send.candidateId !== candidate.candidateId ||
+    claim.status !== "deferred_pretransport" || send.status !== "queued" || send.providerOutcome !== "deferred_pretransport" ||
+    claim.externalAttempted !== false || send.externalAttempted !== false || send.attempts !== 0 ||
+    claim.deferredProof !== "member_dispatch_guard_before_fetch" || claim.quietHoursPolicy !== MEMBER_DISPATCH_WINDOW_POLICY ||
+    !Array.isArray(claim.pretransportDeferrals) || !claim.pretransportDeferrals.length ||
+    !Number.isFinite(timestampMillis(claim.deferredAt)) ||
+    typeof claim.nextEligibleAt !== "string" || !(Date.parse(claim.nextEligibleAt) <= now) ||
+    claim.nextEligibleAt !== send.nextEligibleAt || claim.messageId || claim.groupId || send.solapiMessageId || send.solapiGroupId ||
+    claim.solapiMessageId || claim.receipt || send.receipt ||
+    claim.sourceId !== candidate.payload?.holdingSourceId || claim.sourceVersion !== candidate.payload?.holdingSourceVersion ||
+    claim.holdId !== candidate.payload?.holdId || !record(claim.variables) || !record(send.variables) ||
+    !record(candidate.payload?.variables) || fingerprint(claim.variables) !== fingerprint(candidate.payload.variables) ||
+    fingerprint(send.variables) !== fingerprint(claim.variables) || send.memberId !== candidate.memberId ||
+    normalizeRecipientPhone(send.memberPhone) !== normalizeRecipientPhone(candidate.memberPhone) ||
+    send.studioId !== candidate.studioId || send.templateCode !== candidate.templateCode) return "holding_prior_send_or_claim";
   return "";
 }
 
@@ -366,7 +389,7 @@ export async function approveHoldingNotice(deps: HoldingNoticeDependencies, inpu
   });
 }
 
-/** Claims survive all failures; reconciliation may record receipts but must never re-POST. */
+/** Attempted/ambiguous claims never replay; only a proven pre-POST quiet hold may resume. */
 export async function dispatchHoldingNotice<T extends { messageId: string; groupId?: string }>(
   deps: HoldingNoticeDependencies, candidate: Data, transport: (variables: Variables) => Promise<T>,
 ): Promise<T> {
@@ -377,43 +400,82 @@ export async function dispatchHoldingNotice<T extends { messageId: string; group
   const candidateRef = deps.db.doc(`alimtalkCandidates/${candidate.candidateId}`);
   const sendRef = deps.db.doc(`alimtalkSends/${candidate.candidateId}`);
   const claimRef = deps.db.doc(`${HOLDING_NOTICE_CLAIM_COLLECTION}/${candidate.candidateId}`);
-  const variables = await deps.db.runTransaction(async (tx) => {
+  const reserved = await deps.db.runTransaction(async (tx) => {
     const actual = (await tx.get(candidateRef)).data();
     if (!actual || holdingClaimIssue(actual) || fingerprint(actual) !== fingerprint(candidate))
       throw new Error("holding_candidate_changed_or_attempted");
     const recalculated = await currentReads(deps, tx, checked, sourceId, holdId, actual);
     const send = await tx.get(sendRef), claim = await tx.get(claimRef);
-    if (send.exists || claim.exists) throw new Error("holding_prior_send_or_claim");
+    if ((send.exists || claim.exists) && holdingDeferredPretransportIssue(claim.data(), send.data(), actual, deps.now().getTime()))
+      throw new Error("holding_prior_send_or_claim");
+    assertMemberDispatchAllowed(deps.now());
     const at = deps.timestamp();
     if (!Number.isFinite(timestampMillis(at))) throw new Error("holding_timestamp_invalid");
-    tx.create(claimRef, { candidateId: candidate.candidateId, sourceId, sourceVersion: checked.source.sourceVersion,
-      holdId, status: "attempting", attemptedAt: at, variables: recalculated, memberFingerprint: checked.memberHash });
-    tx.create(sendRef, { sendId: candidate.candidateId, candidateId: candidate.candidateId,
+    const nextClaim = { candidateId: candidate.candidateId, sourceId, sourceVersion: checked.source.sourceVersion,
+      holdId, status: "attempting", externalAttempted: false, attemptedAt: at, variables: recalculated, memberFingerprint: checked.memberHash };
+    if (claim.exists) tx.update(claimRef, nextClaim);
+    else tx.create(claimRef, nextClaim);
+    const nextSend = { sendId: candidate.candidateId, candidateId: candidate.candidateId,
       studioId: candidate.studioId, memberId: candidate.memberId, memberName: candidate.memberName,
       memberPhone: candidate.memberPhone, templateCode: HOLDING_NOTICE_TEMPLATE_CODE, dedupeKey: candidate.candidateId,
-      status: "processing", providerOutcome: "attempting", attempts: 1, maxAttempts: 1, variables: recalculated,
-      lastError: null, createdByUid: candidate.reviewedByUid, createdAt: at, updatedAt: at, nextRunAt: at });
+      status: "processing", providerOutcome: "attempting", externalAttempted: false, attempts: 1, maxAttempts: 1, variables: recalculated,
+      lastError: null, createdByUid: candidate.reviewedByUid, updatedAt: at, nextRunAt: at };
+    if (send.exists) tx.update(sendRef, nextSend);
+    else tx.create(sendRef, { ...nextSend, createdAt: at });
     tx.update(candidateRef, { attempts: 1, maxAttempts: 1, providerAttemptedAt: at, updatedAt: at });
-    return recalculated;
+    return { variables: recalculated, attemptedAt: at };
   });
   let receipt: T | undefined;
   try {
-    const result = await transport({ ...variables });
+    const result = await transport({ ...reserved.variables });
     if (!result || !text(result.messageId)) throw new Error("holding_provider_acceptance_unknown");
     receipt = result;
     await deps.db.runTransaction(async (tx) => {
       const claim = (await tx.get(claimRef)).data();
       if (!claim || claim.status !== "attempting") throw new Error("holding_claim_outcome_changed");
       const at = deps.timestamp();
-      const accepted = { status: "accepted", messageId: result.messageId,
+      const accepted = { status: "accepted", externalAttempted: true, messageId: result.messageId,
         ...(text(result.groupId) ? { groupId: result.groupId } : {}), updatedAt: at };
       tx.update(claimRef, accepted);
-      tx.update(sendRef, { status: "done", providerOutcome: "accepted", solapiMessageId: result.messageId,
+      tx.update(sendRef, { status: "done", providerOutcome: "accepted", externalAttempted: true, solapiMessageId: result.messageId,
         ...(text(result.groupId) ? { solapiGroupId: result.groupId } : {}), updatedAt: at });
       tx.update(candidateRef, { status: "sent", attempts: 1, maxAttempts: 1, sentAt: at, updatedAt: at });
     });
     return result;
   } catch (error) {
+    if (isMemberDispatchDeferred(error)) {
+      try {
+        await deps.db.runTransaction(async tx => {
+          const actual = (await tx.get(candidateRef)).data();
+          const claim = (await tx.get(claimRef)).data();
+          const send = (await tx.get(sendRef)).data();
+          if (!actual || actual.status !== "processing" || actual.attempts !== 1 ||
+            actual.queueLeaseId !== candidate.queueLeaseId || fingerprint(actual.payload) !== fingerprint(candidate.payload) ||
+            timestampMillis(actual.providerAttemptedAt) !== timestampMillis(reserved.attemptedAt) ||
+            !claim || claim.candidateId !== candidate.candidateId || claim.status !== "attempting" ||
+            claim.externalAttempted !== false || claim.messageId || claim.groupId ||
+            timestampMillis(claim.attemptedAt) !== timestampMillis(reserved.attemptedAt) ||
+            !send || send.candidateId !== candidate.candidateId || send.status !== "processing" ||
+            send.providerOutcome !== "attempting" || send.externalAttempted !== false || send.attempts !== 1 ||
+            send.solapiMessageId || send.solapiGroupId) throw new Error("holding_quiet_hold_state_conflict");
+          const at = deps.timestamp();
+          const proof = { externalAttempted: false, deferredProof: "member_dispatch_guard_before_fetch",
+            nextEligibleAt: error.nextAllowedAt, quietHoursPolicy: MEMBER_DISPATCH_WINDOW_POLICY, deferredAt: at };
+          tx.update(claimRef, { ...proof, status: "deferred_pretransport",
+            pretransportDeferrals: [...(claim.pretransportDeferrals || []),
+              { reservedAt: reserved.attemptedAt, deferredAt: at, nextEligibleAt: error.nextAllowedAt, reason: error.message }] });
+          tx.update(sendRef, { ...proof, status: "queued", providerOutcome: "deferred_pretransport", attempts: 0,
+            nextRunAt: error.nextAllowedAt ? Timestamp.fromDate(new Date(error.nextAllowedAt)) : at,
+            lastError: error.message, updatedAt: at });
+          tx.update(candidateRef, { status: "queued", attempts: 0, providerAttemptedAt: null, queueLeaseId: null,
+            reasonCode: error.message, lastError: error.message, nextEligibleAt: error.nextAllowedAt,
+            quietHoursPolicy: MEMBER_DISPATCH_WINDOW_POLICY, updatedAt: at });
+        });
+      } catch {
+        Object.assign(error, { pretransportStateIssue: "holding_quiet_hold_review_required" });
+      }
+      throw error;
+    }
     const provisional = record(error) && record(error.holdingReceipt) && text(error.holdingReceipt.messageId)
       ? error.holdingReceipt : undefined;
     const retainedReceipt = receipt || provisional;
@@ -422,10 +484,11 @@ export async function dispatchHoldingNotice<T extends { messageId: string; group
       const claim = (await tx.get(claimRef)).data();
       if (!claim || claim.status === "accepted") return;
       const at = deps.timestamp();
-      tx.update(claimRef, { status: receipt ? "accepted" : "unknown", updatedAt: at,
+      tx.update(claimRef, { status: receipt ? "accepted" : "unknown", externalAttempted: true, updatedAt: at,
         ...(retainedReceipt ? { messageId: retainedReceipt.messageId,
           ...(text(retainedReceipt.groupId) ? { groupId: retainedReceipt.groupId } : {}) } : {}) });
       tx.update(sendRef, { status: "failed", providerOutcome: receipt ? "accepted_ledger_error" : "unknown",
+        externalAttempted: true,
         attempts: 1, maxAttempts: 1, lastError: "홀딩 발송 결과 대조 필요 · 재발송 금지", updatedAt: at,
         ...(retainedReceipt ? { solapiMessageId: retainedReceipt.messageId,
           ...(text(retainedReceipt.groupId) ? { solapiGroupId: retainedReceipt.groupId } : {}) } : {}) });

@@ -52,6 +52,7 @@ function evaluate(file, dependencies, globals = {}) {
   return exports;
 }
 const crypto = { createHash, randomBytes };
+const memberWindow = evaluate("memberSignup/memberDispatchWindow", {});
 const hash = evaluate("utils/hash", { "node:crypto": crypto });
 const management = evaluate("alimtalk/instructorLessonManagement", {});
 const bookingPolicy = evaluate("alimtalk/instructorLessonBookingPolicy", {});
@@ -184,6 +185,7 @@ function harness({ count = 1, approvals = true, providerError = false, duplicate
   const routes = [];
   const deps = {
     "node:crypto": crypto,
+    "../memberSignup/memberDispatchWindow": memberWindow,
     "firebase-functions": { logger: { info() {} } },
     "../config/constants": { DEFAULT_STUDIO_ID: "5330", REGION: "synthetic" },
     "../config/firebase": { db: store.db },

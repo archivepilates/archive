@@ -1,8 +1,13 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { assertMemberDispatchRequestAllowed, MemberDispatchRequestBlockedError,
+  reconcileMemberDispatchRequestOutcome, reconcileQueuedMemberDispatchRequests } from "./memberDispatchRequests";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred,
+  MEMBER_DISPATCH_WINDOW_POLICY } from "../memberSignup/memberDispatchWindow";
 import { reconcileHoldingNoticeQueue, sendHoldingNotice } from "./holdingNoticeRuntime";
 import { holdingRecoveryPatch } from "./holdingNoticeScheduling";
 import { selectHoldingQueueCandidates } from "./holdingQueueSelection";
 import { holdingAutomationEnabled, holdingClaimIssue, isHoldingNoticeCandidate,
+  holdingDeferredPretransportIssue,
   HOLDING_NOTICE_SETTINGS, HOLDING_NOTICE_SOURCE_COLLECTION, HOLDING_NOTICE_CLAIM_COLLECTION } from "./holdingNoticeQueue";
 import { reconcileMembershipWelcomeQueue, sendMembershipWelcome } from "../memberSignup/membershipWelcomeRuntime";
 import { MEMBERSHIP_WELCOME_TEMPLATE } from "../memberSignup/membershipWelcomePolicy";
@@ -48,12 +53,14 @@ import {
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 const RECOMMENDED_MEAL_ALREADY_SENT = "추천식단 이미 발송 완료";
+type DispatchCandidate = AlimtalkCandidateDoc & { nextEligibleAt?: string | null; queueLeaseId?: string };
 
 export interface AlimtalkCandidateProcessResult {
   processed: boolean;
   status: "not_found" | "not_claimed" | "sent" | "skipped" | "deferred" | "failed";
   lastError?: string | null;
   solapiMessageId?: string;
+  nextEligibleAt?: string | null;
 }
 
 export async function processAlimtalkQueue(): Promise<{
@@ -62,12 +69,15 @@ export async function processAlimtalkQueue(): Promise<{
   failed: number;
   deferred: number;
 }> {
-  await reconcileMembershipWelcomeQueue().catch((error) =>
-    logger.error("Membership welcome reconciliation unavailable", {
-      error: errorMessage(error),
-    }),
-  );
-  await reconcileHoldingNoticeQueue().catch(error => logger.error("Holding reconciliation unavailable", { error: errorMessage(error) }));
+  await safeReconcileQueuedMemberDispatchRequests();
+  if (memberDispatchWindow().allowed) {
+    await reconcileMembershipWelcomeQueue().catch((error) =>
+      logger.error("Membership welcome reconciliation unavailable", {
+        error: errorMessage(error),
+      }),
+    );
+    await reconcileHoldingNoticeQueue().catch(error => logger.error("Holding reconciliation unavailable", { error: errorMessage(error) }));
+  }
   const candidates = await selectHoldingQueueCandidates(
     refs.alimtalkCandidates().where("status", "in", ["queued", "processing"]),
   );
@@ -80,6 +90,12 @@ export async function processAlimtalkQueue(): Promise<{
   let holdingProcessed = false;
 
   for (const candidateSnap of candidates) {
+    const window = memberDispatchWindow();
+    if (!window.allowed) {
+      await deferMemberDispatchCandidate(candidateSnap.data(), window);
+      deferred += 1;
+      continue;
+    }
     if (isHoldingNoticeCandidate(candidateSnap.data())) {
       if (holdingProcessed) continue;
     }
@@ -88,7 +104,10 @@ export async function processAlimtalkQueue(): Promise<{
       membershipProcessed = true;
     }
     const claimed = await claimCandidate(candidateSnap.data());
-    if (!claimed) continue;
+    if (!claimed) {
+      if (!memberDispatchWindow().allowed) deferred += 1;
+      continue;
+    }
     processed += 1;
     if (isHoldingNoticeCandidate(claimed)) {
       holdingProcessed = true;
@@ -273,8 +292,8 @@ export async function processAlimtalkQueue(): Promise<{
         );
         continue;
       }
-      const attempts = (claimed.attempts || 0) + 1;
       const result = await sendSolapiAlimtalk(claimed);
+      const attempts = (claimed.attempts || 0) + 1;
       await refs.alimtalkCandidate(claimed.candidateId).set(
         {
           status: "sent",
@@ -321,6 +340,16 @@ export async function processAlimtalkQueue(): Promise<{
       });
       sent += 1;
     } catch (err) {
+      if (err instanceof MemberDispatchRequestBlockedError) {
+        if (!(await skipBlockedMemberDispatchRequest(claimed, err.message))) deferred += 1;
+        continue;
+      }
+      if (isMemberDispatchDeferred(err)) {
+        quietDispatchErrorDetail(err);
+        await deferMemberDispatchCandidate(claimed, { reason: err.message, nextAllowedAt: err.nextAllowedAt }, true);
+        deferred += 1;
+        continue;
+      }
       if (err instanceof MembershipWelcomePreflightError) {
         const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
         if (recorded) deferred += 1;
@@ -381,15 +410,36 @@ export async function processAlimtalkQueue(): Promise<{
     }
   }
 
+  for (const snap of candidates) {
+    const candidate = snap.data();
+    if (["pricing_info", "recommended_meal_survey"].includes(candidate.type)) await safeReconcileMemberDispatchRequest(candidate.candidateId);
+  }
+  await safeReconcileQueuedMemberDispatchRequests();
   logger.info("processAlimtalkQueue completed", { processed, sent, failed, deferred });
   return { processed, sent, failed, deferred };
 }
 
 export async function processAlimtalkCandidate(candidateId: string): Promise<AlimtalkCandidateProcessResult> {
-  const snap = await refs.alimtalkCandidate(candidateId).get();
-  const candidate = snap.data();
+  const candidate = (await refs.alimtalkCandidate(candidateId).get()).data();
+  try {
+    return await processAlimtalkCandidateOutcome(candidate);
+  } finally {
+    if (candidate && ["pricing_info", "recommended_meal_survey"].includes(candidate.type)) await safeReconcileMemberDispatchRequest(candidateId);
+  }
+}
+
+async function processAlimtalkCandidateOutcome(candidate: AlimtalkCandidateDoc | undefined): Promise<AlimtalkCandidateProcessResult> {
   if (!candidate) return { processed: false, status: "not_found", lastError: "알림톡 후보가 없습니다" };
+  const window = memberDispatchWindow();
+  if (!window.allowed) {
+    await deferMemberDispatchCandidate(candidate, window);
+    return { processed: false, status: "deferred", lastError: window.reason, nextEligibleAt: window.nextAllowedAt };
+  }
   const claimed = await claimCandidate(candidate);
+  if (!claimed && !memberDispatchWindow().allowed) {
+    const deferred = memberDispatchWindow();
+    return { processed: false, status: "deferred", lastError: deferred.reason, nextEligibleAt: deferred.nextAllowedAt };
+  }
   if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
   if (isHoldingNoticeCandidate(claimed)) return processClaimedHoldingNotice(claimed);
 
@@ -562,8 +612,8 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
       );
       return { processed: true, status: "skipped", lastError: mealReportIssue };
     }
-    const attempts = (claimed.attempts || 0) + 1;
     const result = await sendSolapiAlimtalk(claimed);
+    const attempts = (claimed.attempts || 0) + 1;
     await refs.alimtalkCandidate(claimed.candidateId).set(
       {
         status: "sent",
@@ -610,6 +660,17 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     });
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
+    if (err instanceof MemberDispatchRequestBlockedError) {
+      const recorded = await skipBlockedMemberDispatchRequest(claimed, err.message);
+      return { processed: true, status: recorded ? "skipped" : "deferred",
+        lastError: recorded ? err.message : "member_dispatch_request_state_review_required" };
+    }
+    if (isMemberDispatchDeferred(err)) {
+      await deferMemberDispatchCandidate(claimed, { reason: err.message, nextAllowedAt: err.nextAllowedAt }, true);
+      const detail = quietDispatchErrorDetail(err);
+      return { processed: true, status: "deferred", lastError: detail,
+        nextEligibleAt: detail === err.message ? err.nextAllowedAt : null };
+    }
     if (err instanceof MembershipWelcomePreflightError) {
       const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
       if (!recorded) logger.error("Membership welcome preflight state conflict; no attempt recorded", { candidateId: claimed.candidateId });
@@ -664,6 +725,62 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     });
     return { processed: true, status: "failed", lastError: message };
   }
+}
+
+async function safeReconcileMemberDispatchRequest(candidateId: string): Promise<void> {
+  try {
+    await reconcileMemberDispatchRequestOutcome({ db, timestamp: nowTimestamp }, candidateId);
+  } catch {
+    logger.error("Member request outcome reconciliation unavailable", { candidateId });
+  }
+}
+
+async function safeReconcileQueuedMemberDispatchRequests(): Promise<void> {
+  try {
+    await reconcileQueuedMemberDispatchRequests({ db, timestamp: nowTimestamp });
+  } catch {
+    logger.error("Queued member request outcome reconciliation unavailable");
+  }
+}
+
+async function skipBlockedMemberDispatchRequest(candidate: AlimtalkCandidateDoc, issue: string): Promise<boolean> {
+  return db.runTransaction(async tx => {
+    const ref = db.doc(`alimtalkCandidates/${candidate.candidateId}`);
+    const current = (await tx.get(ref)).data();
+    const send = await tx.get(db.doc(`alimtalkSends/${candidate.candidateId}`));
+    if (!current || current.status !== "processing" || send.exists || current.attempts !== candidate.attempts ||
+      !(candidate as DispatchCandidate).queueLeaseId || current.queueLeaseId !== (candidate as DispatchCandidate).queueLeaseId) return false;
+    tx.update(ref, { status: "skipped", reasonCode: "member_dispatch_request_blocked", lastError: issue,
+      nextEligibleAt: null, queueLeaseId: null, updatedAt: nowTimestamp() });
+    return true;
+  });
+}
+
+function quietDispatchErrorDetail(error: Error): string {
+  const issue = (error as Error & { pretransportStateIssue?: string }).pretransportStateIssue;
+  if (issue) logger.error("Member dispatch safely held; state review required", { issue });
+  return issue || error.message;
+}
+
+function quietHoursPatch(window: { reason: string; nextAllowedAt: string | null }) {
+  return { status: "queued", reasonCode: window.reason, lastError: window.reason,
+    nextEligibleAt: window.nextAllowedAt, quietHoursPolicy: MEMBER_DISPATCH_WINDOW_POLICY,
+    queueLeaseId: null, updatedAt: nowTimestamp() };
+}
+
+async function deferMemberDispatchCandidate(candidate: AlimtalkCandidateDoc,
+  window: { reason: string; nextAllowedAt: string | null }, ownedProcessing = false): Promise<void> {
+  await db.runTransaction(async tx => {
+    const ref = db.doc(`alimtalkCandidates/${candidate.candidateId}`);
+    const current = (await tx.get(ref)).data();
+    // Never release another worker's processing lease, or resurrect a terminal/reviewed row.
+    if (!current || current.status !== (ownedProcessing ? "processing" : "queued") ||
+      current.attempts !== candidate.attempts) return;
+    if (ownedProcessing ? !(candidate as DispatchCandidate).queueLeaseId ||
+      current.queueLeaseId !== (candidate as DispatchCandidate).queueLeaseId :
+      !current.updatedAt?.isEqual(candidate.updatedAt)) return;
+    tx.update(ref, quietHoursPatch(window));
+  });
 }
 
 async function deferTicketFactTemplateReview(candidate: AlimtalkCandidateDoc, issue: string): Promise<void> {
@@ -957,6 +1074,12 @@ async function processClaimedHoldingNotice(candidate: AlimtalkCandidateDoc): Pro
     const result = await sendHoldingNotice(candidate);
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (error) {
+    if (isMemberDispatchDeferred(error)) {
+      await deferMemberDispatchCandidate(candidate, { reason: error.message, nextAllowedAt: error.nextAllowedAt }, true);
+      const detail = quietDispatchErrorDetail(error);
+      return { processed: true, status: "deferred", lastError: detail,
+        nextEligibleAt: detail === error.message ? error.nextAllowedAt : null };
+    }
     const message = errorMessage(error);
     // The holding dispatcher owns attempted outcomes. Never let generic retry bookkeeping overwrite it.
     const claim = await db.collection(HOLDING_NOTICE_CLAIM_COLLECTION).doc(candidate.candidateId).get();
@@ -982,6 +1105,13 @@ export async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<A
     const snap = await tx.get(ref);
     const current = snap.data();
     if (!current) return null;
+    const window = memberDispatchWindow();
+    if (!window.allowed) {
+      if (current.status === "queued") tx.update(db.doc(ref.path), quietHoursPatch(window));
+      return null;
+    }
+    const nextEligibleAt = (current as DispatchCandidate).nextEligibleAt;
+    if (nextEligibleAt != null && !(Date.parse(nextEligibleAt) <= Date.now())) return null;
     if (isHoldingNoticeCandidate(current)) {
       // Only a manager-authenticated queued review may capture an approval binding.
       // Processing/attempted rows are never automatically reclaimed for this action.
@@ -995,7 +1125,8 @@ export async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<A
       const config = (await tx.get(db.doc(HOLDING_NOTICE_SETTINGS))).data();
       if (!holdingAutomationEnabled(config)) return null;
       if (current.status !== "queued") return null;
-      const next = { ...current, status: "processing" as const, updatedAt: nowTimestamp() };
+      const next = { ...current, status: "processing" as const,
+        queueLeaseId: randomBytes(16).toString("hex"), updatedAt: nowTimestamp() };
       if (holdingClaimIssue(next)) return null;
       const source = (await tx.get(db.collection(HOLDING_NOTICE_SOURCE_COLLECTION).doc(String(current.payload?.holdingSourceId)))).data();
       const observed = Date.parse(source?.observedAt || "");
@@ -1011,7 +1142,7 @@ export async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<A
         observed <= (current.createdAt?.toMillis?.() || Infinity)) return null;
       const claim = await tx.get(db.collection(HOLDING_NOTICE_CLAIM_COLLECTION).doc(current.candidateId));
       const send = await tx.get(refs.alimtalkSend(current.candidateId));
-      if (claim.exists || send.exists) return null;
+      if ((claim.exists || send.exists) && holdingDeferredPretransportIssue(claim.data(), send.data(), current, Date.now())) return null;
       tx.update(ref, next);
       return next;
     }
@@ -1055,6 +1186,7 @@ export async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<A
       status: "processing" as const,
       attempts: current.attempts || 0,
       maxAttempts: current.maxAttempts || 2,
+      queueLeaseId: randomBytes(16).toString("hex"),
       updatedAt: nowTimestamp(),
     };
     tx.set(ref, next, { merge: true });
@@ -1070,6 +1202,7 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
 export async function sendSolapiAlimtalk(
   candidate: AlimtalkCandidateDoc,
 ): Promise<{ messageId: string; variables: Record<string, string> }> {
+  assertMemberDispatchAllowed();
   if (isHoldingNoticeCandidate(candidate)) return sendHoldingNotice(candidate);
   if (candidate.type === "membership_welcome" || candidate.templateCode === MEMBERSHIP_WELCOME_TEMPLATE.templateId) {
     return sendMembershipWelcome(candidate, () => sendSolapiMessage(candidate));
@@ -1104,25 +1237,35 @@ async function sendSolapiMessage(candidate: AlimtalkCandidateDoc): Promise<{ mes
     showMessageList: true,
   };
 
-  const response = await fetch(SOLAPI_SEND_URL, {
+  const options = {
     method: "POST",
     headers: {
       Authorization: solapiAuthHeader(),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-  });
-  const result = (await response.json().catch(() => ({}))) as SolapiSendResponse;
-  if (!response.ok) {
-    throw new Error(result.errorMessage || result.message || `SOLAPI ${response.status}`);
-  }
-  if (Array.isArray(result.failedMessageList) && result.failedMessageList.length) {
-    throw new Error(result.failedMessageList[0]?.statusMessage || "SOLAPI rejected message");
-  }
-  return {
-    messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
-    variables,
   };
+  await assertMemberDispatchRequestAllowed({ db }, candidate);
+  assertMemberDispatchAllowed();
+  try {
+    const response = await fetch(SOLAPI_SEND_URL, options);
+    const result = (await response.json().catch(() => ({}))) as SolapiSendResponse;
+    if (!response.ok) {
+      throw new Error(result.errorMessage || result.message || `SOLAPI ${response.status}`);
+    }
+    if (Array.isArray(result.failedMessageList) && result.failedMessageList.length) {
+      throw new Error(result.failedMessageList[0]?.statusMessage || "SOLAPI rejected message");
+    }
+    return {
+      messageId: result.messageList?.[0]?.messageId || result.groupInfo?.groupId || "",
+      variables,
+    };
+  } catch (error) {
+    // A typed error from an invoked provider is no longer proof that no POST occurred.
+    if (isMemberDispatchDeferred(error) || error instanceof MemberDispatchRequestBlockedError)
+      throw new Error("member_dispatch_error_after_transport_started", { cause: error });
+    throw error;
+  }
 }
 
 function solapiAuthHeader(): string {

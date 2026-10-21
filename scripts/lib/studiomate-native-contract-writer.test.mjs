@@ -5,12 +5,84 @@ import { firestoreJournal } from "./studiomate-membership-contract-processor.mjs
 import {
   buildStudioMateSignatureRequestPayload,
   buildStudioMateJoinContractPayload,
-  executeStudioMateMembershipContract,
+  executeStudioMateMembershipContract as executeWithClock,
   MEMBERSHIP_CONTRACT_TEMPLATES,
   validateCreatedContractReadback,
 } from "./studiomate-native-contract-writer.mjs";
 
 const CONTRACT_ID = "c".repeat(64);
+const dayClock = () => Date.parse("2026-10-22T01:00:00.000Z");
+const executeStudioMateMembershipContract = input => executeWithClock({ now: dayClock, ...input });
+
+test("quiet boundaries reject before journal/API access even with historical daytime operator approval", async () => {
+  for (const time of ["2026-10-22T14:00:00.000Z", "2026-10-22T15:00:00.000Z", "2026-10-22T23:59:59.999Z"]) {
+    for (const input of [fixture(), operatorTestFixture()]) {
+      const result = await executeStudioMateMembershipContract({ ...input, now: () => Date.parse(time),
+        api: { get: () => assert.fail("quiet read"), post: () => assert.fail("quiet POST") },
+        journal: { claim: () => assert.fail("quiet claim"), stage: () => assert.fail("quiet stage") } });
+      assert.equal(result.status, "deferred");
+      assert.equal(result.jobKey, input.selection.jobKey);
+      assert.equal(result.nextAllowedAt, "2026-10-23T00:00:00.000Z");
+    }
+  }
+});
+
+test("crossing 23:00 at a journal await restores only a proven unsent stage and resumes without replay", async t => {
+  for (const crossing of ["attempting_create", "attempting_signature_request", "signature_prepared", "attempting_signature_message"]) {
+    await t.test(crossing, async () => {
+      const input = fixture();
+      let clock = Date.parse("2026-10-22T13:59:59.999Z"), saved, sent = false, crossed = false;
+      const posts = [];
+      const journal = {
+        claim: async ({payloadHash}) => saved ? { ...saved, status: "resume" } :
+          (saved = { payloadHash, status: "claimed", stage: "claimed" }),
+        stage: async (_key, stage, fields) => {
+          saved = { ...saved, ...fields, stage };
+          if (!crossed && stage === crossing) { crossed = true; clock = Date.parse("2026-10-22T14:00:00.000Z"); }
+        },
+      };
+      const api = {
+        get: async () => nativeContract(input, sent ? "waiting" : "draft"),
+        post: async url => {
+          assert.ok(clock < Date.parse("2026-10-22T14:00:00.000Z") || clock >= Date.parse("2026-10-23T00:00:00.000Z"));
+          posts.push(url);
+          if (url.endsWith("/join")) return {id: CONTRACT_ID};
+          if (url.endsWith(`/request/${CONTRACT_ID}`)) return {contract_id_hash:CONTRACT_ID,
+            contractor_name:input.member.name,contract_link:`https://sign.studiomate.kr/${CONTRACT_ID}`};
+          sent = true; return {};
+        },
+      };
+      const run = () => executeStudioMateMembershipContract({...input,api,journal,now:()=>clock});
+      assert.equal((await run()).status, "deferred");
+      assert.ok(!saved.stage.startsWith("attempting_"));
+      assert.equal(saved.reason, null);
+      assert.equal(posts.some(url=>url.includes("/sms/")), false);
+      const snapshot = structuredClone(saved);
+      assert.equal((await run()).status, "deferred");
+      assert.deepEqual(saved, snapshot);
+      clock = Date.parse("2026-10-23T00:00:00.000Z");
+      assert.equal((await run()).status, "waiting");
+      assert.equal(posts.filter(url=>url.endsWith("/join")).length, 1);
+      assert.equal(posts.filter(url=>url.endsWith(`/request/${CONTRACT_ID}`)).length, 1);
+      assert.equal(posts.filter(url=>url.includes("/sms/")).length, 1);
+    });
+  }
+});
+
+test("old no-ID resume and tampered persisted preparation never POST", async () => {
+  const input = fixture();
+  for (const stage of ["claimed", "attempting_create", "unknown"]) {
+    const result = await executeStudioMateMembershipContract({...input,
+      journal:{claim:async ({payloadHash})=>({status:"resume",payloadHash,stage}),stage:()=>assert.fail("no stage")},
+      api:{post:()=>assert.fail("no replay")}});
+    assert.equal(result.reason,"ambiguous_create_must_not_retry");
+  }
+  const preparedPayload=JSON.stringify({contract_id_hash:CONTRACT_ID,contractor_name:"Other Member",
+    contract_link:`https://sign.studiomate.kr/${CONTRACT_ID}`});
+  await assert.rejects(executeStudioMateMembershipContract({...input,
+    journal:{claim:async ({payloadHash})=>({status:"resume",payloadHash,stage:"signature_prepared",contractId:CONTRACT_ID,preparedPayload}),stage:()=>assert.fail("no stage")},
+    api:{get:async()=>nativeContract(input,"draft"),post:()=>assert.fail("no POST")}}),/binding is invalid/);
+});
 
 function fixture(action = "first_purchase_contract") {
   const expectedTemplate = MEMBERSHIP_CONTRACT_TEMPLATES[action];
@@ -278,7 +350,7 @@ test("old-title renewal journals remain unchanged and never replay after a title
         get: async () => assert.fail("old-title mismatch must stop before provider calls"),
         post: async () => assert.fail("old-title mismatch must never recreate or resend"),
       };
-      assert.deepEqual(await executeStudioMateMembershipContract({ ...input, api, journal: firestoreJournal(db) }), {
+      assert.deepEqual(await executeStudioMateMembershipContract({ ...input, api, journal: firestoreJournal(db, null, dayClock) }), {
         status: "review", reason: "job_payload_mismatch",
       });
       assert.deepEqual(saved, original);
@@ -630,7 +702,7 @@ test("recovery claim persistence failures reject before any native API call", as
       };
 
       await assert.rejects(
-        executeStudioMateMembershipContract({ ...input, api, journal: firestoreJournal(db, approval) }),
+        executeStudioMateMembershipContract({ ...input, api, journal: firestoreJournal(db, approval, dayClock) }),
         (error) => error === failure,
       );
       assert.equal(creates, 1);
@@ -701,7 +773,7 @@ test("recovery approval is committed with the initial claim before native writes
   };
 
   const result = await executeStudioMateMembershipContract({
-    ...input, api, journal: firestoreJournal(db, approval),
+    ...input, api, journal: firestoreJournal(db, approval, dayClock),
   });
   assert.equal(result.status, "waiting");
   assert.equal(result.contractId, CONTRACT_ID);

@@ -3,6 +3,7 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
@@ -31,8 +32,6 @@ import {
   staleExternalActionStatus,
 } from "./lib/instructor-lesson-registration-contract.mjs";
 
-const require = createRequire(import.meta.url);
-const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
 const args = parseArgs(process.argv.slice(2));
 const apply = Boolean(args.apply);
 const config = {
@@ -60,9 +59,6 @@ if (config.refreshCompletedFields && !config.jobId) throw new Error("완료 가�
 if (config.recheckCompletedDocument && (!config.jobId || !/^[a-f0-9]{32}$/.test(config.recheckCompletedDocument)
   || config.refreshCompletedFields || config.loginOnly)) throw new Error("완료 문서 재검증은 --job-id와 정확한 --recheck-completed-document 지정만 허용합니다.");
 
-if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });
-const db = admin.firestore();
-const FieldValue = admin.firestore.FieldValue;
 const summary = {
   ok: false,
   mode: config.loginOnly ? "login-only" : apply ? "apply" : "dry-run",
@@ -78,9 +74,23 @@ const summary = {
   jobs: [],
 };
 
-await mkdir(config.profileDir, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 await mkdir(path.dirname(config.lastResultPath), { recursive: true });
+const dispatchWindow = memberDispatchWindow();
+if (!dispatchWindow.allowed) {
+  Object.assign(summary, dispatchWindow, { ok: true, status: "deferred", finishedAt: new Date().toISOString() });
+  await writeFile(config.lastResultPath, `${JSON.stringify(summary, null, 2)}\n`);
+  appendIdleHeartbeatIfDue(config.runLogPath, summary, 30 * 60 * 1000);
+  console.log(JSON.stringify(summary));
+  process.exit(0);
+}
+
+const require = createRequire(import.meta.url);
+const admin = require("../firebase/kangsain-functions/functions/node_modules/firebase-admin");
+if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });
+const db = admin.firestore();
+const FieldValue = admin.firestore.FieldValue;
+await mkdir(config.profileDir, { recursive: true });
 if (apply && !config.loginOnly && !config.refreshCompletedFields && !config.recheckCompletedDocument) await recoverStaleJobs();
 
 const candidates = await loadCandidates(config.limit);
@@ -140,6 +150,11 @@ if (!summary.ok) process.exitCode = 1;
 
 async function processCandidate(page, candidate) {
   const item = { jobId: candidate.ref.id, status: candidate.data.status };
+  if (!memberDispatchWindow().allowed) {
+    Object.assign(summary, memberDispatchWindow(), { status: "deferred" });
+    summary.jobs.push({ ...item, ...memberDispatchWindow(), status: "deferred" });
+    return;
+  }
   try {
     if (candidate.type === "orphan_registration") {
       summary.processed += 1;
@@ -188,8 +203,9 @@ async function processCandidate(page, candidate) {
           }
           assertSamePaidOrder(registration, readImwebOrder(registration.externalOrder.orderNo));
         }
-        finalSendClicked = true;
+        assertMemberDispatchAllowed();
         await markSending(candidate.ref, claimed);
+        return () => { finalSendClicked = true; };
       });
       await markSent(candidate.ref, claimed, sendResult);
       item.status = "waiting_completion";
@@ -197,6 +213,14 @@ async function processCandidate(page, candidate) {
       summary.sent += 1;
       summary.waiting += 1;
     } catch (error) {
+      if (isMemberDispatchDeferred(error) && !finalSendClicked) {
+        await deferClaim(candidate.ref, claimed);
+        summary.processed -= 1;
+        summary.deferred = (summary.deferred || 0) + 1;
+        Object.assign(summary, memberDispatchWindow(), { status: "deferred" });
+        summary.jobs.push({ ...item, ...memberDispatchWindow(), status: "deferred" });
+        return;
+      }
       const message = error instanceof Error ? error.message : String(error);
       const outcome = await markFailure(candidate.ref, claimed, message, finalSendClicked);
       item.status = outcome.status;
@@ -307,6 +331,7 @@ async function claimJob(ref) {
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     if (registrationSnapshot.data()?.cancellation?.jobId) return null;
     const data = snapshot.data();
+    if (!memberDispatchWindow().allowed) return null;
     if (data.externalEffectStarted || data.effectStartedAt || data.sendClickedAt) {
       const message = "이폼싸인 전송 실행 흔적이 있어 자동 재발송을 차단했습니다.";
       transaction.set(ref, { status: "send_review_required", lastError: message, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -336,7 +361,10 @@ async function claimJob(ref) {
       "steps.eformsign": stepValue("processing", "강사회원 가입서", "이폼싸인 문서 준비 중"),
       updatedAt: FieldValue.serverTimestamp(),
     }));
-    return { ...data, attempts, claimToken };
+    return { ...data, attempts, claimToken, dispatchUndo: {
+      job: restoreFields(data, ["status", "attempts", "claimToken", "claimedBy", "claimedAt", "updatedAt", "lastError", "externalEffectStarted", "sendClickedAt"]),
+      registration: restoreFields(registrationData, ["status", "nextAction", "steps.eformsign", "updatedAt"]),
+    } };
   });
 }
 
@@ -438,9 +466,11 @@ async function sendInstructorMemberForm(page, job, beforeFinalSend) {
   const sendModal = sendHeading.locator("xpath=ancestor::*[.//button[@subkey='cancelButton']][1]");
   await configureSmsRecipient(page, sendModal, job);
 
-  await beforeFinalSend();
   const finalSendButton = sendModal.locator('button[subkey="confirmButton"]');
   if (!(await finalSendButton.isEnabled())) throw new Error("이폼싸인 수신자 정보가 완성되지 않아 전송을 중단했습니다.");
+  const onClick = await beforeFinalSend();
+  assertMemberDispatchAllowed();
+  if (typeof onClick === "function") onClick();
   await finalSendButton.click();
   const evidence = await waitForSendEvidence(page, documentName, job.memberPhone);
   if (!evidence.documentId || !evidence.bodyText.includes(documentName)) {
@@ -881,6 +911,26 @@ async function markSending(ref, job) {
     nextAction: "가입서 발송 결과 확인",
     "steps.eformsign": stepValue("processing", "강사회원 가입서", "최종 전송 실행 중"),
     updatedAt: now,
+  });
+}
+
+function restoreFields(data, fields) {
+  return Object.fromEntries(fields.map(field => {
+    const value = field.split(".").reduce((row, key) => row?.[key], data);
+    return [field, value === undefined ? FieldValue.delete() : value];
+  }));
+}
+
+async function deferClaim(ref, job) {
+  await db.runTransaction(async tx => {
+    const current = (await tx.get(ref)).data();
+    if (current?.claimToken !== job.claimToken || !["processing", "sending"].includes(current.status))
+      throw new Error("instructor_eform_quiet_claim_changed");
+    const nextAllowedAt = memberDispatchWindow().nextAllowedAt;
+    tx.update(ref, { ...job.dispatchUndo.job, nextAllowedAt,
+      dispatchDeferrals: [...(current.dispatchDeferrals || []), { claimToken: job.claimToken, claimedAt: current.claimedAt,
+        sendPreparedAt: current.sendClickedAt || null, deferredAt: new Date().toISOString(), providerPostCount: 0, nextAllowedAt }] });
+    tx.update(db.collection("instructorLessonRegistrations").doc(ref.id), job.dispatchUndo.registration);
   });
 }
 

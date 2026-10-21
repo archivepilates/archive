@@ -22,7 +22,14 @@ test("both queue entrypoints route holding to the guarded dispatcher, not generi
   assert.match(source, /if \(isHoldingNoticeCandidate\(candidate\)\) return sendHoldingNotice\(candidate\)/);
   assert.match(source, /if \(current\.status !== "queued"\) return null/);
   assert.doesNotMatch(source, /holdingApprovalSnapshot: holdingApprovalSnapshot\(current\)/, "claim cannot replace the human-reviewed snapshot");
-  assert.match(source, /if \(claim\.exists \|\| send\.exists\) return null/);
+  assert.match(source, /if \(\(claim\.exists \|\| send\.exists\) && holdingDeferredPretransportIssue\(claim\.data\(\), send\.data\(\), current, Date\.now\(\)\)\) return null/);
+  const claims = await read("firebase/kangsain-functions/functions/src/alimtalk/holdingNoticeQueue.ts");
+  assert.match(claims, /claim\.status !== "deferred_pretransport"/);
+  assert.match(claims, /send\.providerOutcome !== "deferred_pretransport"/);
+  assert.match(claims, /claim\.externalAttempted !== false \|\| send\.externalAttempted !== false/);
+  assert.match(claims, /claim\.deferredProof !== "member_dispatch_guard_before_fetch"/);
+  assert.match(claims, /claim\.sourceVersion !== candidate\.payload\?\.holdingSourceVersion/);
+  assert.doesNotMatch(claims, /tx\.delete\(/, "quiet deferral must preserve claim audit records");
 });
 
 test("holding approval binds the displayed snapshot to an authenticated manager", async () => {

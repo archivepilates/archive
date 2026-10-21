@@ -11,6 +11,7 @@ import { ensureShortLink } from "../utils/shortLinks";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate, normalizePhone } from "../alimtalk/dedupe";
 import { autoSendabilityIssue } from "../alimtalk/eligibility";
 import { processAlimtalkCandidate } from "../alimtalk/processAlimtalkQueue";
+import { reconcileMemberDispatchRequestOutcome } from "../alimtalk/memberDispatchRequests";
 import { isAlimtalkTemplateApproved } from "../alimtalk/templateStatus";
 import { ALIMTALK_TEMPLATES, alimtalkDedupePolicy } from "../alimtalk/templates";
 import {
@@ -132,30 +133,23 @@ export async function operatorSendRecommendedMealProgramAlimtalkHandler(
     return { ok: true, status: "skipped", requestId, candidateId: candidate.candidateId, message: lastError };
   }
 
-  await refs.alimtalkCandidate(candidate.candidateId).set({ ...candidate, dedupeKey }, { merge: true });
-  await requestRef.set(
+  const batch = db.batch();
+  batch.set(refs.alimtalkCandidate(candidate.candidateId), { ...candidate, dedupeKey }, { merge: true });
+  batch.set(requestRef,
     { ...baseRequest, status: "queued", candidateId: candidate.candidateId, dedupeKey, lastError: null },
     { merge: true },
   );
+  await batch.commit();
   const result = await processAlimtalkCandidate(candidate.candidateId);
-  await requestRef.set(
-    {
-      status: result.status,
-      solapiMessageId: result.solapiMessageId || "",
-      lastError: result.lastError || null,
-      completedAt: nowTimestamp(),
-      updatedAt: nowTimestamp(),
-    },
-    { merge: true },
-  );
+  await reconcileMemberDispatchRequestOutcome({ db, timestamp: nowTimestamp }, candidate.candidateId, requestRef.path);
   return {
-    ok: result.status === "sent" || result.status === "skipped",
+    ok: ["sent", "skipped", "deferred"].includes(result.status),
     status: result.status,
     requestId,
     candidateId: candidate.candidateId,
     shortUrl: shortLink.shortUrl,
     solapiMessageId: result.solapiMessageId || "",
-    message: result.lastError || "",
+    message: result.lastError === "member_dispatch_quiet_hours" ? "회원 발송 제한시간입니다. 오전 9시 이후 원본과 중복 여부를 재확인한 뒤 처리합니다." : result.lastError || "",
   };
 }
 
