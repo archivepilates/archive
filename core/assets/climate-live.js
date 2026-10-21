@@ -17,7 +17,7 @@ export function startClimateLive({ win, doc, parentDoc, runtime, active, knownId
     if (!foreground()) return;
     const before = interval();
     const docs = Array.isArray(snapshot.docs) ? snapshot.docs : [];
-    receiver = docs.find(item => item.id === "__receiver__")?.data() || null;
+    receiver = docs.find(item => item.id === "receiver-status")?.data() || null;
     const changes = baseline ? docs.map(item => ({ doc: item })) : snapshot.docChanges();
     const allowed = new Set(knownIds().slice(0, 8));
     for (const change of changes) {

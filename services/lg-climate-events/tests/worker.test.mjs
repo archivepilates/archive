@@ -10,7 +10,7 @@ function fixture(renew) {
   const worker = createWorker({ config: config(), client, firestore, ledger: memoryLedger(), ...time,
     log: code => codes.push(code), renewSubscriptions: async signal => { renewals += 1; await renew?.(signal); } });
   return { time, firestore, client, codes, worker, get renewals() { return renewals; },
-    get status() { return firestore.writes.filter(write => write.path.endsWith('/__receiver__')).at(-1)?.data; } };
+    get status() { return firestore.writes.filter(write => write.path.endsWith('/receiver-status')).at(-1)?.data; } };
 }
 
 test('no import-time connection; start subscribes exact topics QoS1, renews on reconnect and every 12h', async () => {
@@ -81,7 +81,7 @@ test('events route only while transport online and flush safely on shutdown', as
   f.client.emit('connect'); await settle();
   f.client.emit('message', 'server/issued/topic', payload());
   await f.worker.stop();
-  const signals = f.firestore.writes.filter(write => !write.path.endsWith('/__receiver__'));
+  const signals = f.firestore.writes.filter(write => !write.path.endsWith('/receiver-status'));
   assert.equal(signals.length, 1);
   assert.deepEqual(Object.keys(signals[0].data).sort(), ['deviceId', 'eventHash', 'revision', 'updatedAt']);
 });

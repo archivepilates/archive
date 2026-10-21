@@ -37,7 +37,9 @@ export function clock() {
 export function store() {
   const writes = []; let fail = false;
   return { writes, set fail(value) { fail = value; },
-    doc(path) { return { async set(data) {
+    doc(path) {
+      if (path.split('/').some(segment => /^__.*__$/.test(segment))) throw new Error('reserved Firestore document ID');
+      return { async set(data) {
       if (fail) throw new Error('sensitive upstream content must never be logged');
       writes.push({ path, data });
     } }; },

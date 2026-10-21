@@ -17,7 +17,7 @@ activation, live verification, notifications, and ARCHIVE CORE operating rules.
   `{ deviceId, revision, eventHash, updatedAt }`. `revision` is a new UUID;
   `updatedAt` is local processing time in ISO format, not a device timestamp.
   Never store/apply report state, raw payloads, tokens, or certificates there.
-- Replace `facilityClimateSignals/__receiver__` with exactly
+- Replace `facilityClimateSignals/receiver-status` with exactly
   `{ connected, updatedAt, version: 'lg_climate_events_v1' }` every 60 seconds
   and on connectivity changes. True requires MQTT SUBACK QoS1 and successful LG
   event renewal for all eight devices. Stale heartbeat means unknown, not online.

@@ -17,7 +17,7 @@ export function createWorker({ config, client, firestore, ledger, renewSubscript
         while (statusPending !== undefined) {
           const snapshot = statusPending; statusPending = undefined;
           try {
-            await firestore.doc('facilityClimateSignals/__receiver__').set({ connected: snapshot,
+            await firestore.doc('facilityClimateSignals/receiver-status').set({ connected: snapshot,
               updatedAt: new Date(now()).toISOString(), version: VERSION });
           } catch { log('STATUS_WRITE_FAILED'); }
         }

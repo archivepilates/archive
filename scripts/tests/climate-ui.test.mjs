@@ -668,7 +668,7 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       await page.clock.pauseAt(new Date("2026-10-21T03:00:01Z"));
       await eightDevices(page);
       if (healthy) await page.evaluate(() => { window.__fixture.signalInitial = [
-        { id: "__receiver__", data: { connected: true, updatedAt: new Date().toISOString() } },
+        { id: "receiver-status", data: { connected: true, updatedAt: new Date().toISOString() } },
         { id: "initial", data: { deviceId: "synthetic-eight-0", revision: 0 } },
       ]; });
       await mount(page);
@@ -704,7 +704,7 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       await advance(page, 120000); assert.equal((await readCalls(page)).length, 4);
       await advance(page, 14999); assert.equal((await readCalls(page)).length, 4);
       await advance(page, 1); assert.equal((await readCalls(page)).length, 5);
-      await page.evaluate(() => window.__fixture.signals([{ id: "__receiver__", data: { connected: true, updatedAt: new Date().toISOString() } }]));
+      await page.evaluate(() => window.__fixture.signals([{ id: "receiver-status", data: { connected: true, updatedAt: new Date().toISOString() } }]));
       await page.evaluate(() => window.__fixture.signalError());
       await advance(page, 14999); assert.equal((await readCalls(page)).length, 5);
       await advance(page, 1); assert.equal((await readCalls(page)).length, 6);
