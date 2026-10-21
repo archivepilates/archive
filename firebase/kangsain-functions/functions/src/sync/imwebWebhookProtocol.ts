@@ -18,14 +18,16 @@ export function matchesDigest(value: unknown, digest: unknown): boolean {
       typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)) return false;
   return timingSafeEqual(Buffer.from(hashValue(value), "hex"), Buffer.from(digest, "hex"));
 }
-export function recordShape(value: unknown, depth = 0): unknown {
+export function recordShape(value: unknown, depth = 0, keyHash: (value: string) => string = hashValue): unknown {
   if (depth > 4) return "bounded";
-  if (Array.isArray(value)) return { type: "array", length: value.length, items: value.slice(0, 2).map(v => recordShape(v, depth + 1)) };
+  if (Array.isArray(value)) return { type: "array", length: value.length, items: value.slice(0, 2).map(v => recordShape(v, depth + 1, keyHash)) };
   if (value && typeof value === "object") {
     const allowed = new Set(["siteCode", "unitCode", "memberUid", "memberUidList", "gradeCodes"]);
     const entries = Object.entries(value);
     return { fields: Object.fromEntries(entries.filter(([key]) => allowed.has(key))
-      .map(([key, child]) => [key, recordShape(child, depth + 1)])),
+      .map(([key, child]) => [key, recordShape(child, depth + 1, keyHash)])),
+      unknownFields: Object.fromEntries(entries.filter(([key]) => !allowed.has(key)).slice(0, 50)
+        .map(([key, child]) => [keyHash(key), recordShape(child, depth + 1, keyHash)])),
       unknownFieldCount: entries.filter(([key]) => !allowed.has(key)).length };
   }
   return value === null ? "null" : typeof value;
@@ -42,5 +44,5 @@ export function probeEvidence(headers: Record<string, unknown>, body: unknown, p
   return { headerNames: Object.keys(headers).filter(name => knownNames.has(name)).sort(),
     unknownHeaderNameDigests: Object.keys(headers).filter(name => !knownNames.has(name)).map(keyedHash).sort(),
     candidateHeaderDigests: Object.fromEntries(candidates.map(([name, value]) => [name, keyedHash(String(value))])),
-    bodyShape: recordShape(body) };
+    bodyShape: recordShape(body, 0, keyedHash) };
 }

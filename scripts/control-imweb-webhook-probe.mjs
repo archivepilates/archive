@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 
-const require = createRequire(import.meta.url);
-const { initializeApp, cert } = require('../firebase/kangsain-functions/functions/node_modules/firebase-admin/app');
-const { getFirestore, Timestamp } = require('../firebase/kangsain-functions/functions/node_modules/firebase-admin/firestore');
+const require = createRequire(new URL('../firebase/kangsain-functions/functions/package.json', import.meta.url));
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const args = process.argv.slice(2);
 if (args.length !== 1 || !['--enable-approved-probe', '--disable-probe', '--inspect'].includes(args[0]))
   throw Error('Choose exactly one supported probe action');
@@ -38,8 +38,15 @@ if (args[0] === '--enable-approved-probe') {
 } else {
   const config = (await ref.get()).data();
   const receipts = await db.collection(`${lane}/probeReceipts`).get();
+  const probe = fs.existsSync(privateFile) ? JSON.parse(fs.readFileSync(privateFile, 'utf8')) : null;
+  const candidates = ['data', 'payload', 'event', 'eventType', 'event_type', 'eventCode', 'timestamp', 'time',
+    'eventId', 'event_id', 'id', 'type', 'resource', 'site_code', 'createdAt', 'eventTime', 'event_time'];
+  const names = probe ? Object.fromEntries(candidates.map(name =>
+    [createHmac('sha256', probe.token).update(name).digest('hex'), name])) : {};
+  const decode = value => Array.isArray(value) ? value.map(decode) : value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).map(([k, v]) => [names[k] || k, decode(v)])) : value;
   console.log(JSON.stringify({ mode: config?.mode || 'unconfigured',
     probeActive: config?.mode === 'probe' && config?.probeExpiresAtMs > Date.now(),
-    receipts: receipts.docs.map(d => ({ id: d.id, ...d.data() })) }, null, 2));
+    receipts: receipts.docs.map(d => ({ id: d.id, ...decode(d.data()) })) }, null, 2));
 }
 await db.terminate();

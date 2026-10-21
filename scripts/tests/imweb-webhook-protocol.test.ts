@@ -24,8 +24,8 @@ test("evidence excludes raw credentials and personal body values", () => {
 });
 test("shape inspection bounds arrays and object depth", () => {
   assert.deepEqual(recordShape([{ siteCode: "never persisted" }, { memberUid: 1 }, { b: true }]),
-    { type: "array", length: 3, items: [{ fields: { siteCode: "string" }, unknownFieldCount: 0 },
-      { fields: { memberUid: "number" }, unknownFieldCount: 0 }] });
+    { type: "array", length: 3, items: [{ fields: { siteCode: "string" }, unknownFields: {}, unknownFieldCount: 0 },
+      { fields: { memberUid: "number" }, unknownFields: {}, unknownFieldCount: 0 }] });
   assert.equal(JSON.stringify(recordShape({ a: { b: { c: { d: { e: { f: "private" } } } } } })).includes("private"), false);
 });
 test("untrusted body/header keys are not persisted raw", () => {

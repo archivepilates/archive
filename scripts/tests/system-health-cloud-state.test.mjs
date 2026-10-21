@@ -91,7 +91,8 @@ test("sync exports and ownership retire only the three schedulers and preserve o
   const remaining = ["scheduledProcessContactSyncJobs", "queueStaffContactSync", "scheduledCreateParkingDiscountJobs",
     "syncDashboardNow", "adminSyncLecturesRange", "adminSyncManagerStaffs", "adminPollManagerNotices", "processAdminSyncRequest"];
   assert.deepEqual([...source.matchAll(/^export const (\w+)\s*=/gm)].map((match) => match[1]), remaining);
-  assert.deepEqual(manifest.targetCodebases["functions-sync"].owns, remaining);
+  assert.match(source, /^export \{ imwebWebhookApi \} from "\.\.\/sync\/imwebWebhookApi";/m);
+  assert.deepEqual(manifest.targetCodebases["functions-sync"].owns, ["imwebWebhookApi", ...remaining]);
   const allOwned = Object.values(manifest.targetCodebases).flatMap((group) => group.owns);
   for (const { functionName } of SYSTEM_HEALTH_SCHEDULERS.filter((policy) => policy.intentionallyRetired)) {
     assert.equal(source.includes(functionName), false);
