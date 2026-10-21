@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "9c6f6e264855f31b06de7bd683ea1246e2a2dd30c73b8c4fa1d66a77fd41ca36",
+  "policyFingerprint": "bac9cefb18a2e3ea8e70cdf1654010ce5a06da690776e07334c32d3af388f0de",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -14,7 +14,7 @@
   "sourceFingerprints": [
     {
       "path": "core/assets/app.js",
-      "sha256": "9f9a8f0c7434def2317080d6a637378dc9e81ac5da2e47bb892f3045cbf00443"
+      "sha256": "2e45bb3b9a75955fe9d2a84313d985a3113faf21b39978ee1018fc6f9b29a662"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",

@@ -153,6 +153,12 @@ const MEMBER_PAGE_SIZE = 20;
 const COMMAND_MEMBER_SEARCH_MIN_LENGTH = 2;
 const COMMAND_ITEMS = [
   {
+    title: "에어컨",
+    detail: "센터 LG 에어컨 상태와 설정 확인",
+    href: "./climate/",
+    keywords: "LG ThinQ 에어컨 냉방 난방 온도 풍량 시설",
+  },
+  {
     title: "회원 검색",
     detail: "회원명, 전화번호, 수강권, 최근 방문 확인",
     href: "./members/",
@@ -217,12 +223,6 @@ const COMMAND_ITEMS = [
     detail: "후보, 발송, 실패, 대기 상태 확인",
     href: "./messages/",
     keywords: "alimtalk 알림톡 실패 후보 발송 카카오",
-  },
-  {
-    title: "영상 시청 현황",
-    detail: "구매자별 반복 시청, 영상별 도달률과 누적 재생시간 확인",
-    href: "./video-analytics/",
-    keywords: "video 영상 시청 구매자 반복 재생 완료율",
   },
   {
     title: "자동화 관제",
@@ -853,12 +853,12 @@ const NAV_ICONS = {
   staff: "user-round",
   messages: "messages-square",
   content: "file-text",
-  "video-analytics": "video",
   automation: "activity",
   business: "chart-no-axes-combined",
   imports: "download",
   rules: "book-open",
   settings: "settings-2",
+  climate: "air-vent",
 };
 
 function navIcon(section) {
@@ -879,12 +879,12 @@ const NAV_LABELS = {
   staff: "강사",
   messages: "알림톡",
   content: "콘텐츠",
-  "video-analytics": "영상 시청",
   automation: "자동화",
   business: "경영",
   imports: "원본",
   rules: "운영규칙",
   settings: "설정",
+  climate: "에어컨",
 };
 
 function setAdminNavOpen(open) {
@@ -946,7 +946,7 @@ function enhanceNav() {
     if (!icon || link.querySelector(".ui-icon")) return;
     link.insertAdjacentHTML("afterbegin", uiIcon(icon));
   });
-  const hiddenSections = new Set(["members", "lessons", "content"]);
+  const hiddenSections = new Set(["members", "lessons", "content", "video-analytics"]);
   nav.querySelectorAll("a[data-section]").forEach((link) => {
     if (hiddenSections.has(link.dataset.section)) link.remove();
   });
@@ -996,13 +996,12 @@ function enhanceNav() {
     const before = nav.querySelector('[data-section="messages"]');
     nav.insertBefore(link, before || null);
   }
-  if (!nav.querySelector('[data-section="video-analytics"]')) {
+  if (!nav.querySelector('[data-section="climate"]')) {
     const link = document.createElement("a");
-    link.href = `${coreRootHref}video-analytics/`;
-    link.dataset.section = "video-analytics";
-    link.innerHTML = "Video <small>시청</small>";
-    const before = nav.querySelector('[data-section="automation"]');
-    nav.insertBefore(link, before || null);
+    link.href = `${coreRootHref}climate/`;
+    link.dataset.section = "climate";
+    link.textContent = NAV_LABELS.climate;
+    nav.insertBefore(link, nav.querySelector('[data-section="automation"]'));
   }
   const links = [...nav.querySelectorAll("a")];
   links.forEach((link) => {
@@ -8160,6 +8159,13 @@ async function refresh() {
       return;
     }
     if (access.role === "instructor" && await renderInstructorCore(runtime, access)) return;
+    const climateRoot = document.querySelector("[data-climate-dashboard]");
+    if (climateRoot) {
+      const { mountClimate } = await import("./climate.js");
+      await mountClimate(climateRoot, () => runtime);
+      setConnection("연결됨", "에어컨 상태 조회");
+      return;
+    }
     if (!document.querySelector("[data-firestore-dashboard]")) return;
     if (document.querySelector("[data-auth-only-dashboard]")) {
       const sequenceStudio = document.querySelector("[data-sequence-studio]");

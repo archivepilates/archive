@@ -1,5 +1,6 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { climateHandler, lgThinQConnection } from "../climate/climateCallables";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
 import { completeCoreFirstLoginHandler, getCoreAccessSessionHandler, getCoreInstructorWorkspaceHandler } from "../callable/coreInstructorAccess";
 import {
@@ -76,6 +77,14 @@ import { toHttpsError } from "../utils/errors";
 import { getVideoWatchDashboardHandler, videoWatchEventApiHandler } from "../videoAnalytics/videoWatchAnalytics";
 
 const secretlessCallableOptions = { ...callableOptions, secrets: [] };
+
+const climateOptions = {
+  region: REGION, invoker: "public" as const, secrets: [lgThinQConnection],
+  timeoutSeconds: 90, memory: "256MiB" as const, maxInstances: 2, concurrency: 8,
+};
+export const getCoreAirConditioners = onCall(climateOptions, request => climateHandler(request, "dashboard"));
+export const operatorControlCoreAirConditioner = onCall(climateOptions, request => climateHandler(request, "control"));
+export const operatorReconcileCoreAirConditioner = onCall(climateOptions, request => climateHandler(request, "reconcile"));
 
 export const getCoreAccessSession = onCall(secretlessCallableOptions, async request => {
   try { return await getCoreAccessSessionHandler(request); } catch (err) { throw toHttpsError(err); }

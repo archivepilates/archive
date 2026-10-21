@@ -70,6 +70,7 @@ export function codebasesForFile(file) {
   if (normalized.includes("/parking/")) return ["functions-app"];
   if (normalized.includes("/refund/")) return ["functions-app"];
   if (normalized.includes("/videoAnalytics/")) return ["functions-app"];
+  if (normalized.startsWith("firebase/kangsain-functions/functions/src/climate/")) return ["functions-app"];
   if (normalized.includes("/onboarding/")) return ["functions-app"];
   if (/\/instructorLessonRegistration\/instructorLesson(Confirmation|NotionSchedule|CancellationPolicy)\.ts$/.test(normalized)) {
     return ["functions-alimtalk", "functions-app"];

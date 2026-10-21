@@ -8,6 +8,16 @@ const repoRoot = path.resolve(__dirname, "..");
 
 const required = [
   {
+    file: "core/climate/index.html",
+    label: "operator LG climate control entry",
+    markers: ["data-climate-dashboard", "../assets/app.js", "../assets/climate.css"],
+  },
+  {
+    file: "core/assets/climate.js",
+    label: "LG climate callable client",
+    markers: ["getCoreAirConditioners", "operatorControlCoreAirConditioner", "operatorReconcileCoreAirConditioner"],
+  },
+  {
     file: "core/sequence/index.html",
     label: "sequence studio CORE entry",
     markers: ['data-section="sequence"', 'data-src="./studio.html"', "data-auth-only-dashboard", "./sequence.css", "../assets/app.js"],

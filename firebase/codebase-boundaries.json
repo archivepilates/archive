@@ -85,6 +85,9 @@
       "physicalSource": "firebase/function-codebases/app",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/app.ts",
       "owns": [
+        "getCoreAirConditioners",
+        "operatorControlCoreAirConditioner",
+        "operatorReconcileCoreAirConditioner",
         "getInstructorHome",
         "getCoreAccessSession",
         "completeCoreFirstLogin",
