@@ -1,7 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
-import { IMWEB_EVENTS, IMWEB_LANE, hashValue, matchesDigest, probeEvidence, validProbeWindow } from "./imwebWebhookProtocol";
+import { IMWEB_EVENTS, IMWEB_LANE, hashValue, matchesDigest, probeEvidence, validProbeWindow, normalizeImwebWire } from "./imwebWebhookProtocol";
 
 export const imwebWebhookApi = onRequest({ region: "asia-northeast3", invoker: "public",
   timeoutSeconds: 20, memory: "256MiB", maxInstances: 2, concurrency: 10 }, async (req, res) => {
@@ -18,8 +18,29 @@ export const imwebWebhookApi = onRequest({ region: "asia-northeast3", invoker: "
   if (!req.rawBody || req.rawBody.byteLength > 65536 || !req.is("application/json")) {
     res.status(400).json({ ok: false, error: "invalid_payload" }); return;
   }
-  // The only initial route is a short-lived sample probe. Production ingestion
-  // stays closed until the provider's actual authentication contract is verified.
+  if (parts.length === 2 && parts[0] === "events" && Object.hasOwn(IMWEB_EVENTS, parts[1])) {
+    try {
+      const config = (await db.doc(`${IMWEB_LANE}/private/config`).get()).data();
+      if (!config || config.mode !== "shadow" || config.authorizationHeader !== "authorization" ||
+          !matchesDigest(req.headers.authorization, config.authorizationSha256)) {
+        res.status(403).json({ ok: false, error: "authentication_required" }); return;
+      }
+      let event;
+      try { event = normalizeImwebWire(req.body, parts[1]); } catch {
+        res.status(422).json({ ok: false, error: "invalid_event" }); return;
+      }
+      const ref = db.doc(`${IMWEB_LANE}/${event.providerSample ? "verifiedSamples" : "shadowEvents"}/${event.receiptKey}`);
+      const created = await db.runTransaction(async tx => {
+        if ((await tx.get(ref)).exists) return false;
+        tx.create(ref, { ...event, receivedAt: Timestamp.now(), status: event.providerSample ? "sample_verified" : "canonical_lookup_pending",
+          authority: "refresh_hint_only", grantsAllowed: false });
+        return true;
+      });
+      res.status(200).json({ ok: true, duplicate: !created, mode: event.providerSample ? "sample_verified" : "shadow" });
+    } catch { res.status(503).json({ ok: false, error: "receipt_unavailable" }); }
+    return;
+  }
+  // The diagnostic capability expires and is disabled after sender verification.
   if (parts.length !== 3 || parts[0] !== "probe" || !Object.hasOwn(IMWEB_EVENTS, parts[2])) {
     res.status(503).json({ ok: false, error: "integration_not_active" }); return;
   }

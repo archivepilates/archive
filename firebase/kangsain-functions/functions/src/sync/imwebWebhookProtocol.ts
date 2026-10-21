@@ -46,3 +46,48 @@ export function probeEvidence(headers: Record<string, unknown>, body: unknown, p
     candidateHeaderDigests: Object.fromEntries(candidates.map(([name, value]) => [name, keyedHash(String(value))])),
     bodyShape: recordShape(body, 0, keyedHash) };
 }
+
+function exactKeys(value: unknown, keys: string[]): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+function validUid(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && Buffer.byteLength(value) <= 256 &&
+    !/[\s\p{Cc}\p{Cf}\p{Cs}]/u.test(value);
+}
+export function normalizeImwebWire(body: unknown, route: string) {
+  if (!Object.hasOwn(IMWEB_EVENTS, route) || !exactKeys(body, ["eventType", "eventTime", "data"]) ||
+      body.eventType !== IMWEB_EVENTS[route] || !Number.isSafeInteger(body.eventTime) || Number(body.eventTime) <= 0)
+    throw Error("invalid_envelope");
+  const data = body.data;
+  const keys = route === "signup-bulk" ? ["siteCode", "unitCode", "memberUidList"] :
+    route === "grade" ? ["siteCode", "unitCode", "memberUid", "gradeCodes"] : ["siteCode", "unitCode", "memberUid"];
+  if (!exactKeys(data, keys)) throw Error("invalid_schema");
+  let uids: string[];
+  if (route === "signup-bulk") {
+    if (!Array.isArray(data.memberUidList) || !data.memberUidList.length || data.memberUidList.length > 50 ||
+        !data.memberUidList.every(validUid)) throw Error("invalid_identity");
+    uids = [...new Set(data.memberUidList)];
+  } else {
+    if (!validUid(data.memberUid)) throw Error("invalid_identity");
+    uids = [data.memberUid];
+  }
+  if (route === "grade" && (!Array.isArray(data.gradeCodes) || data.gradeCodes.length > 50 ||
+      !data.gradeCodes.every(code => typeof code === "string" && /^g[0-9a-f]{21}$/.test(code))))
+    throw Error("invalid_grade_codes");
+  const ownSite = data.siteCode === IMWEB_SITE && data.unitCode === IMWEB_UNIT;
+  const sampleUids = route === "signup-bulk" ? ["test_member1@imweb.me", "test_member2@imweb.me", "test_member3@imweb.me"] : ["test_member@imweb.me"];
+  const providerSample = data.siteCode === "S2025012450f7813d2ddau" && data.unitCode === "u2025012465b0fbe8ce0dy" &&
+    (route !== "signup-bulk" || (Array.isArray(data.memberUidList) && data.memberUidList.length === sampleUids.length)) &&
+    uids.length === sampleUids.length && uids.every((uid, index) => uid === sampleUids[index]) &&
+    (route !== "grade" || JSON.stringify(data.gradeCodes) === JSON.stringify(["g20250124563854a652d54", "g20250124563844c752d51"]));
+  if (!ownSite && !providerSample) throw Error("site_mismatch");
+  const canonical = [body.eventType, body.eventTime, data.siteCode, data.unitCode, uids,
+    route === "grade" ? data.gradeCodes : []];
+  return { eventType: String(body.eventType), eventTime: Number(body.eventTime),
+    siteCode: String(data.siteCode), unitCode: String(data.unitCode), memberUids: uids,
+    advisoryGradeCodes: route === "grade" ? data.gradeCodes as string[] : [],
+    providerSample, receiptKey: hashValue(JSON.stringify(canonical)), grantsAllowed: false };
+}

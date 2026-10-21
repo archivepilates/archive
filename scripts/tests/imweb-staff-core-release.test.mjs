@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertStaffNoteOnly, assertStudentShareNoteOnly } from '../release-imweb-staff-core-rules.mjs';
+import { assertStaffNoteOnly, assertStudentShareNoteOnly, assertWebhookOnboardingNoteOnly } from '../release-imweb-staff-core-rules.mjs';
 
 test('CORE release accepts exactly one new staff policy note and no other changes', () => {
   const before = '<main>\n</main>\n';
@@ -22,4 +22,13 @@ test('student-share release adds its note without replacing historical rules or 
     assert.throws(() => assertStudentShareNoteOnly(before, bad));
   }
   assert.throws(() => assertStudentShareNoteOnly(after, after));
+});
+
+test('webhook onboarding release permits one operational note without other changes', () => {
+  const before = '<main>\n  <p>Prior grant and STAFF protections stay</p>\n</main>\n';
+  const line = '  <div class="rule-note" id="imweb-app-webhook-onboarding-policy"><strong>Pending review</strong></div>\n';
+  const after = before.replace('</main>', line+'</main>');
+  assertWebhookOnboardingNoteOnly(before, after);
+  for (const bad of [before, after+line, after.replace('protections stay', 'protection removed')])
+    assert.throws(() => assertWebhookOnboardingNoteOnly(before, bad));
 });

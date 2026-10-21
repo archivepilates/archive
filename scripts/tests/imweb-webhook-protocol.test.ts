@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { hashValue, matchesDigest, probeEvidence, recordShape, validProbeWindow, IMWEB_EVENTS } from "../../firebase/kangsain-functions/functions/src/sync/imwebWebhookProtocol";
+import { hashValue, matchesDigest, probeEvidence, recordShape, validProbeWindow, IMWEB_EVENTS, IMWEB_SITE, IMWEB_UNIT, normalizeImwebWire } from "../../firebase/kangsain-functions/functions/src/sync/imwebWebhookProtocol";
 const probeToken = "a".repeat(64);
 
 test("probe capability comparison requires strong exact digest and no coercion", () => {
@@ -44,4 +44,65 @@ test("probe lifetime must be finite and at most twenty minutes", () => {
 });
 test("prototype properties are not event routes", () => {
   for (const key of ["constructor", "toString", "__proto__"]) assert.equal(Object.hasOwn(IMWEB_EVENTS, key), false);
+});
+const baseEvent = () => ({ eventType: "END_USER_SIGN_UP", eventTime: 1792594000,
+  data: { siteCode: IMWEB_SITE, unitCode: IMWEB_UNIT, memberUid: "synthetic@example.invalid" } });
+test("verified wire is a shadow lookup hint, never a grant", () => {
+  const event = normalizeImwebWire(baseEvent(), "signup");
+  assert.equal(event.grantsAllowed, false);
+  assert.equal(event.providerSample, false);
+  assert.deepEqual(event.memberUids, ["synthetic@example.invalid"]);
+});
+test("receipt ignores JSON key ordering and does not merge distinct arrivals", () => {
+  const a = baseEvent();
+  const b = { data: { memberUid: a.data.memberUid, unitCode: IMWEB_UNIT, siteCode: IMWEB_SITE }, eventTime: a.eventTime, eventType: a.eventType };
+  assert.equal(normalizeImwebWire(a, "signup").receiptKey, normalizeImwebWire(b, "signup").receiptKey);
+  b.eventTime += 1;
+  assert.notEqual(normalizeImwebWire(a, "signup").receiptKey, normalizeImwebWire(b, "signup").receiptKey);
+});
+for (const field of ["eventType", "eventTime", "data"]) test(`wire rejects missing ${field}`, () => {
+  const event: Record<string, unknown> = baseEvent(); delete event[field];
+  assert.throws(() => normalizeImwebWire(event, "signup"));
+});
+for (const time of [NaN, Infinity, -1, 0, 1.5, "1000", null]) test(`wire rejects invalid time ${String(time)}`, () => {
+  assert.throws(() => normalizeImwebWire({ ...baseEvent(), eventTime: time }, "signup"));
+});
+test("wrong site or unit is not saved, including valid-looking synthetic UIDs", () => {
+  for (const data of [{ ...baseEvent().data, siteCode: "other" }, { ...baseEvent().data, unitCode: "other" }])
+    assert.throws(() => normalizeImwebWire({ ...baseEvent(), data }, "signup"));
+});
+test("route and payload type must agree and inherited keys are rejected", () => {
+  for (const route of ["constructor", "__proto__", "grade", "signup-bulk", "unknown"])
+    assert.throws(() => normalizeImwebWire(baseEvent(), route));
+});
+test("unknown fields and malformed identities fail closed", () => {
+  assert.throws(() => normalizeImwebWire({ ...baseEvent(), extra: "private" }, "signup"));
+  for (const memberUid of [null, 123, "", "a b", "a\nb", "x".repeat(257)])
+    assert.throws(() => normalizeImwebWire({ ...baseEvent(), data: { ...baseEvent().data, memberUid } }, "signup"));
+});
+test("bulk max fifty and exact list schema are enforced before dedupe", () => {
+  const event = { ...baseEvent(), eventType: "END_USER_SIGN_UP_BULK", data: {
+    siteCode: IMWEB_SITE, unitCode: IMWEB_UNIT, memberUidList: ["synthetic@example.invalid", "synthetic@example.invalid"] } };
+  assert.deepEqual(normalizeImwebWire(event, "signup-bulk").memberUids, ["synthetic@example.invalid"]);
+  for (const memberUidList of [[], null, Array(51).fill("synthetic@example.invalid")])
+    assert.throws(() => normalizeImwebWire({ ...event, data: { ...event.data, memberUidList } }, "signup-bulk"));
+});
+test("grade payload accepts removal hints but cannot authorize removal", () => {
+  const event = { ...baseEvent(), eventType: "END_USER_GRADE_UPDATE", data: { ...baseEvent().data, gradeCodes: [] } };
+  assert.equal(normalizeImwebWire(event, "grade").grantsAllowed, false);
+  assert.throws(() => normalizeImwebWire({ ...event, data: { ...event.data, gradeCodes: ["admin"] } }, "grade"));
+});
+test("only the actual provider sample identity is accepted as nonproduction", () => {
+  const event = { ...baseEvent(), data: { siteCode: "S2025012450f7813d2ddau", unitCode: "u2025012465b0fbe8ce0dy", memberUid: "test_member@imweb.me" } };
+  assert.equal(normalizeImwebWire(event, "signup").providerSample, true);
+  assert.throws(() => normalizeImwebWire({ ...event, data: { ...event.data, memberUid: "other@imweb.me" } }, "signup"));
+});
+test("sample fixtures reject changed grades and duplicated bulk sample rows", () => {
+  const sample = { siteCode: "S2025012450f7813d2ddau", unitCode: "u2025012465b0fbe8ce0dy" };
+  const bulk = { ...baseEvent(), eventType: "END_USER_SIGN_UP_BULK", data: { ...sample,
+    memberUidList: ["test_member1@imweb.me", "test_member2@imweb.me", "test_member3@imweb.me", "test_member1@imweb.me"] } };
+  assert.throws(() => normalizeImwebWire(bulk, "signup-bulk"));
+  const grade = { ...baseEvent(), eventType: "END_USER_GRADE_UPDATE", data: { ...sample, memberUid: "test_member@imweb.me", gradeCodes: [] } };
+  assert.throws(() => normalizeImwebWire(grade, "grade"));
+  assert.equal(normalizeImwebWire({ ...grade, data: { ...grade.data, gradeCodes: ["g20250124563854a652d54", "g20250124563844c752d51"] } }, "grade").providerSample, true);
 });
