@@ -1,1 +1,33 @@
-<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 에어컨 상태 갱신 개선</title><style>body{font:16px/1.7 system-ui,sans-serif;color:#24282b;background:#f4f6f7;margin:0}main{max-width:920px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-top:30px}table{width:100%;border-collapse:collapse;background:white}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #dce1e5;padding:12px}a{color:#a32738}code{overflow-wrap:anywhere}p,li{max-width:75ch}strong{color:#182c2a}</style><main><p>ARCHIVE PILATES · 2026.10.21</p><h1>에어컨 상태 갱신·응답 개선</h1><p><strong id="release-status">구현·검증 중, 운영 배포 대기</strong></p><h2>변경 내용</h2><table><tr><th>항목</th><th>변경</th></tr><tr><td>외부 조작 반영</td><td>맥미니 MQTT 수신기 → Firestore 변경 신호 → 해당 기기 LG 원본 재조회. 이벤트의 상태값을 그대로 표시하지 않습니다.</td></tr><tr><td>보조 갱신</td><td>화면을 보고 있을 때만 정상 수신기 기준60초, 연결 이상15초. 숨김·이동·로그아웃 시 중지합니다.</td></tr><tr><td>제어 지연</td><td>제어 전 원본 재확인 유지. 제어 후 중복 목록·프로파일 조회를 제거해 LG 요청7회→5회. 실제 전원·온도 변경 시간은 Codex가 측정하지 않습니다.</td></tr><tr><td>화면 응답</td><td>기기별 처리 표시, 다른 기기 조작 유지, 상세 설정·작성 중 입력 보존. 전체 끄기는 기존 순차·중복방지 규칙 유지.</td></tr></table><h2>안전 기준</h2><p>활성 운영자 권한·정확한8대 허용 목록·명령 ID·기기 잠금·응답 불명확 시 자동 재전송 금지를 유지합니다. 신규 수신기는 제어 API를 호출하지 않습니다. Firestore 신호는 원본 상태나 제어 승인 근거가 아닙니다.</p><h2>연결</h2><p>기존 PAT의 MQTT 등록 권한 부족(1309)은 사용자가 새로 발급한 별도 PAT로 해결했습니다. MQTT 클라이언트·인증서 발급 성공, 구독 주제2개를 확인했습니다. 기존 운영 REST 토큰은 변경하지 않았습니다. 토큰·인증서·이벤트 원문은 보고서와 Git에 포함하지 않습니다.</p><h2>검증</h2><p id="verification">서버109건·타입 검사,5개 Functions 코드베이스 빌드, 경계·원천 정책·배포 안전·Hosting 검증 통과. UI·수신기·규칙 통합 검증과 실제 운영 연결 확인은 진행 중입니다.</p><h2>배포·실기 확인</h2><p id="deployment">대상: 에어컨 함수3개, 신호 읽기 규칙, CORE Hosting, 맥미니 수신기1개. 실제 전원·온도 변경은 사용자가 직접 테스트하며 Codex는 실행하지 않습니다.</p><p><a href="https://core.archivepilates.com/climate/">에어컨 메뉴</a> · <a href="https://core.archivepilates.com/rules/#lg-climate-control">운영규칙</a></p><h2>공식 근거</h2><p><a href="https://github.com/thinq-connect/pythinqconnect/blob/main/thinqconnect/mqtt_client.py">LG 공식 MQTT 구현</a> · <a href="https://github.com/thinq-connect/pythinqconnect/blob/main/thinqconnect/thinq_api.py">LG REST·이벤트 구독 API</a> · <a href="https://github.com/thinq-connect/pythinqconnect/issues/24">LG 권한 오류1309 안내</a></p></main></html>
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 에어컨 상태 갱신 개선</title>
+<style>body{font:16px/1.7 system-ui,sans-serif;color:#24282b;background:#f4f6f7;margin:0}main{max-width:920px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-top:30px}table{width:100%;border-collapse:collapse;background:white}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #dce1e5;padding:12px}a{color:#a32738}code{overflow-wrap:anywhere}p,li{max-width:75ch}strong{color:#182c2a}</style>
+<main>
+<p>ARCHIVE PILATES · 2026.10.21</p><h1>에어컨 상태 갱신·응답 개선</h1>
+<p><strong>운영 연결·실제 이벤트 수신·화면 자동 갱신 확인</strong></p>
+<h2>변경 내용</h2>
+<table><tr><th>항목</th><th>내용</th></tr>
+<tr><td>외부 상태 반영</td><td>맥미니 MQTT 수신기 → Firestore 변경 신호 → 해당 기기 LG 원본 재조회. 이벤트의 상태값을 그대로 표시하지 않습니다.</td></tr>
+<tr><td>보조 갱신</td><td>화면을 볼 때만 정상 수신기 기준 60초, 연결 이상 15초. 숨김·이동·로그아웃 시 중지하며 오류 시 최대 120초로 늦춥니다.</td></tr>
+<tr><td>제어 응답</td><td>제어 전 원본 재확인 유지. 제어 후 중복 목록·프로파일 조회를 제거해 LG 요청 7회→5회. 실제 전원·온도 변경 시간은 측정하지 않았습니다.</td></tr>
+<tr><td>화면</td><td>기기별 처리 표시, 다른 기기 조작 유지, 작성 중 입력·포커스·상세 설정 유지. 전체 끄기는 기존 순차·중복방지 규칙을 유지합니다.</td></tr>
+<tr><td>조회 충돌</td><td>서버 제한은 유지하고, 앞선 조회 완료 후 전체 10.25초·부분 2.25초 간격을 적용했습니다. 백그라운드 재조회 성공 시 이전 조회 오류를 지웁니다.</td></tr></table>
+<h2>운영 증거</h2>
+<ul><li>에어컨 함수 3개 ACTIVE: 2026-10-21 18:02 KST. Firestore 신호 읽기 규칙 컴파일·운영 반영, CORE Hosting 양쪽 사이트 배포.</li>
+<li>수신기 1개 실행. 18:03:11 KST MQTT 연결·2개 주제 QoS1·8대 이벤트 구독 완료. 18:07:03에도 connected=true heartbeat 확인.</li>
+<li>실제 LG 상태 이벤트의 신호 문서 4개를 확인했습니다. 저장 필드는 deviceId·revision·eventHash·updatedAt뿐입니다.</li>
+<li>18:04:12.007 신호 저장 → 18:04:12.681 조회 시작 → 약 0.723초 후 응답. 신호 저장부터 응답까지 약 1.4초입니다. 외부 리모컨 조작 시점부터의 지연 측정은 아닙니다.</li>
+<li>수동 새로고침 없이 리포머 실내 온도 표시가 24.5→23.5°C로 바뀌었습니다. 상태 변화의 원인을 Codex 조작으로 만들지 않았습니다.</li>
+<li>실제 운영자 화면 8대, 운전 5대 조회·카드 높이 279px 일치·가로 넘침 없음·브라우저 오류 로그 없음. 새 전체 조회 응답 표본 약 1.2~1.4초, 대상 조회 약 0.5~0.7초. 표본이며 지연 보장은 아닙니다.</li>
+<li>미로그인 함수 요청 401, 신호 직접 읽기 403. 실제 규칙 에뮬레이터에서 강사·회원 접근과 모든 클라이언트 쓰기를 차단했습니다.</li></ul>
+<h2>검증</h2>
+<p>서버 109건·모바일 포함 화면 66건·수신기 27건·연결 준비 12건·실제 Firestore 규칙 350건, 총 564건 통과. 320·390·768·1440px, 타이머·중복·숨김·복구·권한·불명확 명령 잠금·전체/부분 조회 충돌을 검증했습니다. Functions 5개 코드베이스 빌드, 경계·원천 정책·배포 안전·Hosting 검증 통과.</p>
+<h2>수정한 연결 문제</h2>
+<p>기존 PAT의 MQTT 등록 권한 부족(1309)은 사용자가 발급한 별도 PAT로 해결했습니다. 기존 제어 토큰은 유지합니다. 첫 활성화에서 예약 문서 이름이 거절돼 수신기를 중지한 뒤 유효한 receiver-status로 수정·재검증·재활성화했습니다. 실제 자동 갱신 중 부분 조회 직후 전체 조회가 제한된 1건을 확인해 서버 제한을 낮추지 않고 클라이언트 간격을 보강했습니다. 복구됐는데 오류 문구만 남던 문제도 함께 수정했습니다.</p>
+<h2>안전·남은 실기 테스트</h2>
+<p>활성 운영자 권한·정확한 8대 허용 목록·명령 ID·기기 잠금·응답 불명확 시 자동 재전송 금지를 유지합니다. 수신기는 제어 API를 호출하지 않습니다. 토큰·인증서·이벤트 원문은 보고서와 Git에 포함하지 않습니다. 회원·예약·알림톡·StudioMate 자동화는 변경하지 않았습니다. 실제 전원·온도·전체 끄기와 리모컨/ThinQ 앱 비교 조작은 사용자가 직접 테스트합니다.</p>
+<p>Functions 소스: <code>1782b4f4</code>. 후속 수정은 UI·수신기·문서만 반영하며 Functions를 반복 배포하지 않습니다. 현재 배포 소스는 <a href="https://core.archivepilates.com/release.json">운영 release.json</a>에서 확인합니다.</p>
+<p><a href="https://core.archivepilates.com/climate/">에어컨 메뉴</a> · <a href="https://core.archivepilates.com/rules/#lg-climate-control">운영규칙</a></p>
+<h2>공식 근거</h2><p><a href="https://github.com/thinq-connect/pythinqconnect/blob/main/thinqconnect/mqtt_client.py">LG 공식 MQTT 구현</a> · <a href="https://github.com/thinq-connect/pythinqconnect/blob/main/thinqconnect/thinq_api.py">LG REST·이벤트 구독 API</a> · <a href="https://github.com/thinq-connect/pythinqconnect/issues/24">LG 권한 오류 1309 안내</a></p>
+</main></html>
