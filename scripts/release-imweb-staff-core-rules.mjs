@@ -15,8 +15,8 @@ const SHARE_BASE = '074d9a6600bf00f5268bafc32d1d8958769edbf5';
 const SHARE_BASE_HASH = '692397d07b4a443b6138a7a06773e4358e3eaf80bda24918a185fa9d935b5a93';
 const WEBHOOK_BASE = 'e38a36e7b4f334ceac8757c4e685b0af46fec16e';
 const WEBHOOK_BASE_HASH = '44a9c5c076e562279933c02c3f24562f0a504d20c7f946a71c6d296537849892';
-const OAUTH_BASE = '4e3efeac0ef67450c164ca848683196726d86651';
-const OAUTH_BASE_HASH = '895b9c80ca8181cf6e1a21a9c46385f534d72650af517518ec083328a439c509';
+const OAUTH_BASE = 'dac9e03c96416b066cc9717f0759698d2fed12d1';
+const OAUTH_BASE_HASH = '00af19ccf93380b0f6aa025b6c9356289d41a9a8db1c05a0bcefedfe05e66534';
 const sha = value => createHash('sha256').update(value).digest('hex');
 
 export function assertStaffNoteOnly(before, after) {
