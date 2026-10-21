@@ -22,6 +22,24 @@ const NEXT = "2026-10-23T00:00:00.000Z";
 const fail = () => assert.fail("Unexpected external operation");
 const workers = ["process-studiomate-refund-sms-jobs.mjs", "process-eformsign-refund-jobs.mjs", "process-eformsign-instructor-member-jobs.mjs"];
 
+test("operator recovery crossing cutoff preserves deferred outcome instead of reporting a failure", async () => {
+  const tree = await parsed("recover-october-renewal-contracts.mjs");
+  let branch;
+  function visit(node) {
+    if (ts.isIfStatement(node) && node.expression.getText(tree) === 'outcome.status === "deferred"') branch = node;
+    ts.forEachChild(node, visit);
+  }
+  visit(tree); assert.ok(branch);
+  const outcome = { status: "deferred", nextAllowedAt: NEXT, providerPostCount: 0 };
+  const output = { outcomes: [] }, writes = [], logs = [];
+  await vm.runInNewContext(`(async()=>{for(const item of [1]) {${branch.getText(tree)}; throw new Error("must stop before success checks");}})()`, {
+    outcome, result: outcome, output, outputPath: "local-report-only", NEXT,
+    writeFile: async (...args) => writes.push(args), console: { log: value => logs.push(JSON.parse(value)) },
+  });
+  assert.equal(output.outcomes[0].status, "deferred"); assert.equal(writes.length, 1);
+  assert.equal(logs[0].status, "deferred"); assert.equal(logs[0].providerPostCount, 0);
+});
+
 async function parsed(name) {
   const source = await readFile(new URL(`../${name}`, import.meta.url), "utf8");
   return ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);

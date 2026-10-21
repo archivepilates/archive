@@ -114,6 +114,12 @@ try {
       if (apply) {
         const outcome = await executeStudioMateMembershipContract({ ...input, api, journal: firestoreJournal(db, { ...approval, approvedAt: now, sourceSha256 }) });
         Object.assign(result, outcome);
+        if (outcome.status === "deferred") {
+          output.outcomes.push(result);
+          await writeFile(outputPath, JSON.stringify(output, null, 2), { mode: 0o600 });
+          console.log(JSON.stringify(result));
+          break;
+        }
         assert(["waiting", "signed"].includes(outcome.status), `Native write held: ${outcome.reason}`);
         const detail = await readStudioMateContract(api, outcome.contractId);
         assert(detail?.verified && detail.contractId === outcome.contractId && detail.memberId === member.memberId && detail.centerSignaturePresent && ["sent", "signed"].includes(detail.status), "Post-send native verification failed");
