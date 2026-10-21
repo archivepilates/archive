@@ -13,11 +13,36 @@ const before = file => execFileSync('git', ['show', `${base}:${file}`], { cwd: r
 const ast = (text, file) => ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 const functions = source => new Map(source.statements.filter(ts.isFunctionDeclaration)
   .map(statement => [statement.name.text, statement.body.getText(source)]));
+const welcomePreflightBranches = [
+  `      if (err instanceof MembershipWelcomePreflightError) {
+        const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
+        if (recorded) deferred += 1;
+        else {
+          failed += 1;
+          logger.error("Membership welcome preflight state conflict; no attempt recorded", { candidateId: claimed.candidateId });
+        }
+        continue;
+      }
+`,
+  `    if (err instanceof MembershipWelcomePreflightError) {
+      const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
+      if (!recorded) logger.error("Membership welcome preflight state conflict; no attempt recorded", { candidateId: claimed.candidateId });
+      return { processed: true, status: recorded ? "deferred" : "failed", lastError: recorded ? err.message : "membership_welcome_preflight_state_conflict" };
+    }
+`,
+];
 
 for (const name of ['processAlimtalkQueue.ts', 'instructorLessonSampleApproval.ts']) {
-  test(`${name}: every execution function body remains byte-identical to released baseline`, () => {
+  test(`${name}: execution bodies preserve baseline except exact welcome preflight deferral branches`, () => {
     const file = prefix + name;
-    assert.deepEqual(functions(ast(read(file), file)), functions(ast(before(file), file)));
+    let current = read(file);
+    if (name === 'processAlimtalkQueue.ts') {
+      for (const branch of welcomePreflightBranches) {
+        assert.equal(current.split(branch).length - 1, 1, 'Exact typed preflight branch must occur once');
+        current = current.replace(branch, '');
+      }
+    }
+    assert.deepEqual(functions(ast(current, file)), functions(ast(before(file), file)));
     const imports = ast(read(file), file).statements.filter(ts.isImportDeclaration);
     const shared = imports.find(node => node.moduleSpecifier.text === './targetValidationChecks');
     assert.ok(shared);
@@ -39,6 +64,28 @@ test('eligibility send evaluator has exactly the previous rule body, with only o
 for (const name of ['dedupe.ts', 'templates.ts', 'templateTargetRules.ts', 'recipientExclusion.ts', 'testRecipients.ts',
   'privateSurveySendGuard.ts', 'renewalSendGuard.ts', 'longAbsenceSendGuard.ts', 'approvalStore.ts']) {
   test(`${name}: canonical selection, history windows and exceptions are unchanged`, () => {
+    if (name === 'templates.ts') {
+      const file = prefix + name;
+      const metadata = new Set(['RESERVATION_OPEN_ALIMTALK_TEMPLATE', 'PRIVATE_SURVEY_NONWELCOME_CONTRACT',
+        'PRIVATE_LESSON_REPORT_NONWELCOME_CONTRACT']);
+      const seen = new Set();
+      const current = ast(read(file), file);
+      const policyStatements = current.statements.filter(statement => {
+        if (!ts.isVariableStatement(statement)) return true;
+        const declarations = statement.declarationList.declarations;
+        const names = declarations.map(node => node.name.getText(current));
+        if (!names.some(name => metadata.has(name))) return true;
+        assert.equal(declarations.length, 1);
+        assert.equal(names.length, 1);
+        assert.equal(seen.has(names[0]), false);
+        seen.add(names[0]);
+        return false;
+      });
+      assert.deepEqual(seen, metadata, 'Only the three independently audited metadata declarations are additional');
+      const baseline = ast(before(file), file);
+      assert.deepEqual(policyStatements.map(node => node.getText(current)), baseline.statements.map(node => node.getText(baseline)));
+      return;
+    }
     assert.equal(read(prefix + name), before(prefix + name));
   });
 }

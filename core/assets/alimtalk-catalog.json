@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "bac9cefb18a2e3ea8e70cdf1654010ce5a06da690776e07334c32d3af388f0de",
+  "policyFingerprint": "88fb4395377b29c057f073f239ba43f27660fd390ed05311e94e6fc70f90ebf6",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -14,7 +14,7 @@
   "sourceFingerprints": [
     {
       "path": "core/assets/app.js",
-      "sha256": "2e45bb3b9a75955fe9d2a84313d985a3113faf21b39978ee1018fc6f9b29a662"
+      "sha256": "7d55dc71b8155693aadec2502b61565107ab9531cdfe280170bd0c3b87ac0f1a"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
@@ -46,7 +46,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
-      "sha256": "844bac218c29006094dcc93b42a7df726c5f1390787d668e86bbafb49b581438"
+      "sha256": "a6a95604f5a395b0d839add15e7ae1771a31f49abcaa4afb33100bb2d4f6e37d"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",
@@ -66,7 +66,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
-      "sha256": "ca88dfdfe13c32ae4e5586d088b5b98506901710f3ef28ab3d0f7611c7f461c2"
+      "sha256": "da582eac788e1f7ecd5c80300fdd44e913b04da336b09786f995e86c7d21316b"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -180,7 +180,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -252,7 +252,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -328,7 +328,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -402,7 +402,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -492,7 +492,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -594,7 +594,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -696,7 +696,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -795,7 +795,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -889,7 +889,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -981,7 +981,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1072,7 +1072,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1131,7 +1131,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
@@ -1197,7 +1197,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonChart.ts",
@@ -1261,7 +1261,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
@@ -1352,7 +1352,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1450,7 +1450,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1532,7 +1532,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1608,7 +1608,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1686,7 +1686,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1767,7 +1767,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
@@ -1842,7 +1842,7 @@
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
           "symbol": "ALIMTALK_TEMPLATES",
-          "line": 56
+          "line": 84
         },
         {
           "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",

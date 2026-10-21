@@ -13,6 +13,12 @@ export const MEMBERSHIP_WELCOME_CLAIMS = "membershipWelcomeClaims";
 export const MEMBERSHIP_AUTOMATION_SETTINGS = "systemSettings/membershipContractAutomation";
 export const MEMBERSHIP_READBACK_REQUESTS = "adminSyncRequests";
 type Data = Record<string, any>;
+export class MembershipWelcomePreflightError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = "MembershipWelcomePreflightError";
+  }
+}
 export interface MembershipWelcomeDependencies {
   db: FirebaseFirestore.Firestore;
   now(): Date;
@@ -221,9 +227,18 @@ export async function dispatchMembershipWelcome<T extends { messageId: string }>
   candidate: Data,
   transport: () => Promise<T>,
 ): Promise<T> {
-  const checked = await inspectMembershipWelcome(deps, String(candidate.payload?.sourceContractId || ""), candidate);
-  if (checked.issue || !checked.source || !checked.memberIds?.includes(checked.source.completion.memberId))
-    throw new Error(checked.issue || "member_aliases_missing");
+  // Only this read-only phase can attest that the provider transport was not reached.
+  const checked = await (async () => {
+    let evidence;
+    try {
+      evidence = await inspectMembershipWelcome(deps, String(candidate.payload?.sourceContractId || ""), candidate);
+    } catch {
+      throw new MembershipWelcomePreflightError("welcome_preflight_unavailable");
+    }
+    if (evidence.issue || !evidence.source || !evidence.memberIds?.includes(evidence.source.completion.memberId))
+      throw new MembershipWelcomePreflightError(evidence.issue || "member_aliases_missing");
+    return evidence;
+  })();
   const claimIds = [
     candidate.candidateId,
     ...checked.memberIds.map((id) => `member_${fingerprint({ studio: candidate.studioId, id })}`),
@@ -284,4 +299,41 @@ export async function dispatchMembershipWelcome<T extends { messageId: string }>
     await batch.commit().catch(() => undefined);
     throw error;
   }
+}
+
+/** Keep pre-transport checks separate from attempts. Never replay or rewrite an outbound record. */
+export async function deferMembershipWelcomePreflight(
+  deps: Pick<MembershipWelcomeDependencies, "db" | "timestamp">,
+  candidate: Data,
+  error: unknown,
+): Promise<boolean> {
+  if (!(error instanceof MembershipWelcomePreflightError) || membershipWelcomeClaimIssue(candidate)) return false;
+  const sourceId = String(candidate.payload?.sourceContractId || "");
+  if (!/^[a-f0-9]{64}$/.test(sourceId) || candidate.candidateId !== membershipWelcomeKey(candidate.studioId, candidate.memberPhone))
+    return false;
+  return deps.db.runTransaction(async (tx) => {
+    const candidateRef = deps.db.collection("alimtalkCandidates").doc(candidate.candidateId);
+    const sourceRef = deps.db.collection(MEMBERSHIP_CONTRACT_COLLECTION).doc(sourceId);
+    const current = await tx.get(candidateRef);
+    const source = await tx.get(sourceRef);
+    const send = await tx.get(deps.db.collection("alimtalkSends").doc(candidate.candidateId));
+    const claim = await tx.get(deps.db.collection(MEMBERSHIP_WELCOME_CLAIMS).doc(candidate.candidateId));
+    const actual = current.data();
+    const contract = source.data();
+    if (!actual || actual.status !== "processing" || membershipWelcomeClaimIssue(actual) || send.exists || claim.exists ||
+      actual.memberId !== candidate.memberId || actual.studioId !== candidate.studioId ||
+      actual.memberPhone !== candidate.memberPhone || actual.memberName !== candidate.memberName ||
+      actual.candidateId !== candidate.candidateId || actual.templateCode !== candidate.templateCode ||
+      JSON.stringify(actual.payload) !== JSON.stringify(candidate.payload) || !contract ||
+      contract.source !== "studiomate_native_contract" || contract.contractId !== sourceId ||
+      contract.studioId !== candidate.studioId || contract.welcomeCandidateId !== candidate.candidateId ||
+      contract.completion?.memberId !== candidate.memberId ||
+      normalizeMembershipPhone(contract.completion?.memberPhone) !== normalizeMembershipPhone(candidate.memberPhone) ||
+      ["accepted", "delivered"].includes(contract.welcomeStatus)) return false;
+    const at = deps.timestamp();
+    tx.update(candidateRef, { status: "reviewed", lastError: error.message,
+      reasonCode: "membership_welcome_preflight_review", preflightFailure: { reason: error.message, checkedAt: at }, updatedAt: at });
+    tx.update(sourceRef, { welcomeStatus: "review", welcomeReason: error.message, updatedAt: at });
+    return true;
+  });
 }

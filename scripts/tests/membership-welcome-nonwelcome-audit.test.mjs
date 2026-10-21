@@ -3,8 +3,9 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import {
   AUDIT_FIELD, AUDIT_SETTINGS, AUDIT_PROJECT, AUDIT_OPERATOR,
-  NONWELCOME_CONTRACT, NONWELCOME_CONTRACT_HASH, NONWELCOME_AUDIT_ID,
+  NONWELCOME_CONTRACT, NONWELCOME_CONTRACT_HASH, NONWELCOME_AUDIT_ID, NONWELCOME_SCOPES,
   auditHash, buildNonWelcomeAllowlist, auditMembershipWelcomeNonWelcome,
+  readNonWelcomeAuditSource, nonWelcomeScopeTemplateId,
 } from "../lib/membership-welcome-nonwelcome-audit.mjs";
 import { parseAuditArgs, validateAuditCredential, createTemplateGetter } from "../audit-membership-welcome-nonwelcome-templates.mjs";
 
@@ -207,9 +208,9 @@ test("dry-run also detects changed configuration", async () => {
   assert.equal(db.state().writes.length, 0);
 });
 test("operator CLI flags are opt-in and reject ambiguous extras", () => {
-  assert.deepEqual(parseAuditArgs([]), { apply: false });
-  assert.deepEqual(parseAuditArgs(["--dry-run"]), { apply: false });
-  assert.deepEqual(parseAuditArgs(["--apply"]), { apply: true });
+  assert.deepEqual(parseAuditArgs([]), { apply: false, scope: "group_survey" });
+  assert.deepEqual(parseAuditArgs(["--dry-run"]), { apply: false, scope: "group_survey" });
+  assert.deepEqual(parseAuditArgs(["--apply"]), { apply: true, scope: "group_survey" });
   for (const args of [["--apply=false"], ["--apply", "--dry-run"], ["--project=other"], ["--apply", "--apply"]])
     assert.throws(() => parseAuditArgs(args));
 });
@@ -273,4 +274,487 @@ test("empty/null quick replies remain valid, but empty fields never rescue a wro
   const template = fixture(); template.buttons[0].linkMo += "&extra=true";
   template.buttons[0].linkAnd = null;
   assert.throws(() => build({ template }), /buttons_mismatch/);
+});
+
+// Synthetic full contract for isolated tests, not a claim about the provider's actual body.
+const reservationContract = () => ({
+  templateId: "KA01TP26072806273194229P2ZesQwPp", status: "APPROVED",
+  name: "아카이브 스튜디오메이트 예약 안내 v4", channelId: "KA01PF260511123220162lk0NUjstpVl",
+  messageType: "BA", emphasizeType: "IMAGE", imageId: "ST01FZ260728062730347ZXJsa4lUJuP",
+  content: "Synthetic static-source fixture: #{이름}, #{예약주차}.",
+  buttons: [
+    { buttonType: "WL", buttonName: "Synthetic notice", targetOut: false,
+      linkMo: "https://archivepilates.notion.site/notice", linkPc: "https://archivepilates.notion.site/notice" },
+    { buttonType: "WL", buttonName: "Synthetic method", targetOut: true,
+      linkMo: "https://archivepilates.notion.site/studiomate", linkPc: "https://archivepilates.notion.site/studiomate" },
+  ],
+});
+const reservationSource = () => ({ ...clone(source), reservationOpenContract: reservationContract() });
+const reservationBuild = (overrides = {}) => build({ scope: "reservation_open", source: reservationSource(),
+  template: reservationContract(), ...overrides });
+const reservationRun = (db, overrides = {}) => run(db, { scope: "reservation_open",
+  readSource: () => reservationSource(), providerGet: async () => reservationContract(), ...overrides });
+
+function staticReader(contract = reservationContract()) {
+  const symbols = [];
+  return {
+    symbols,
+    constant(path, name) {
+      symbols.push({ path, name });
+      if (name === "ALIMTALK_TEMPLATES") return {
+        group_survey: { code: source.groupSurveyId }, reservation_open: { code: reservationContract().templateId },
+        membership_welcome: { code: welcomeId },
+      };
+      if (name === "MEMBERSHIP_WELCOME_HISTORY_TEMPLATE_IDS") return [welcomeId, "synthetic-legacy-welcome"];
+      if (name === "MEMBERSHIP_WELCOME_TEMPLATE") return { templateId: welcomeId, referenceTemplateId: "synthetic-reference-welcome" };
+      if (name === "RESERVATION_OPEN_ALIMTALK_TEMPLATE") {
+        if (contract === undefined) throw new Error("Missing source constant");
+        return clone(contract);
+      }
+      assert.fail(`Unexpected source symbol: ${name}`);
+    },
+    fingerprints: () => [{ path: "synthetic-static-source", sha256: "c".repeat(64) }],
+  };
+}
+
+test("static source reader defaults to group survey and retains the original group contract hash", () => {
+  assert.equal(NONWELCOME_CONTRACT_HASH, "f80ef17f6b46b3dbb24db79c3c3edfb16eb11785ec7c6e77f8676775cff0b433");
+  const actual = readNonWelcomeAuditSource();
+  assert.equal(actual.groupSurveyId, source.groupSurveyId);
+  assert.ok(actual.welcomeIds.includes(welcomeId));
+  const reader = staticReader();
+  readNonWelcomeAuditSource("group_survey", reader);
+  assert.equal(reader.symbols.some(({ name }) => name === "RESERVATION_OPEN_ALIMTALK_TEMPLATE"), false);
+});
+
+test("reservation source uses only the named full static contract and protects all welcome IDs", () => {
+  const reader = staticReader(), actual = readNonWelcomeAuditSource("reservation_open", reader);
+  assert.deepEqual(actual.reservationOpenContract, reservationContract());
+  assert.ok(reader.symbols.some(({ path, name }) => path.endsWith("alimtalk/templates.ts") && name === "RESERVATION_OPEN_ALIMTALK_TEMPLATE"));
+  for (const templateId of actual.welcomeIds)
+    assert.throws(() => reservationBuild({ source: actual, template: { ...reservationContract(), templateId } }), /welcome_template_forbidden/);
+});
+
+test("reservation scope never falls back to template ID, catalog snippets or provider body as expected contract", async () => {
+  const reader = staticReader();
+  const read = reader.constant;
+  reader.constant = (path, name) => {
+    if (name === "RESERVATION_OPEN_ALIMTALK_TEMPLATE") throw new Error("Missing static full contract");
+    return read(path, name);
+  };
+  assert.throws(() => readNonWelcomeAuditSource("reservation_open", reader), /reservation_open_static_contract_required/);
+  await assert.rejects(reservationRun({ doc: () => assert.fail("no database access") }, {
+    readSource: () => clone(source), providerGet: () => assert.fail("no provider access"),
+  }), /reservation_open_static_contract_required/);
+});
+
+test("reservation audit matches the full contract and has a distinct stable audit ID", () => {
+  const a = reservationBuild(), b = reservationBuild({ auditedAt: "2026-10-20T01:00:00.000Z" });
+  assert.deepEqual(a.templateIds, [reservationContract().templateId]);
+  assert.notEqual(a.auditId, NONWELCOME_AUDIT_ID);
+  assert.equal(a.scopedAudits.reservation_open.contractHash, auditHash(reservationContract()));
+  assert.equal(a.scopedAudits.reservation_open.auditId, b.scopedAudits.reservation_open.auditId);
+  assert.equal(a.scopedAudits.group_survey, undefined);
+});
+
+for (const field of ["templateId", "status", "name", "channelId", "messageType", "emphasizeType", "imageId", "content"]) {
+  test(`reservation provider contract rejects exact field drift: ${field}`, () => {
+    const template = reservationContract(); template[field] += " ";
+    assert.throws(() => reservationBuild({ template }), /mismatch/);
+  });
+}
+for (const index of [0, 1]) {
+  for (const field of ["buttonType", "buttonName", "linkMo", "linkPc", "targetOut"]) {
+    test(`reservation button ${index} rejects exact field drift: ${field}`, () => {
+      const template = reservationContract();
+      template.buttons[index][field] = field === "targetOut" ? !template.buttons[index][field] : "altered";
+      assert.throws(() => reservationBuild({ template }), /buttons_mismatch/);
+    });
+  }
+  for (const field of ["linkAnd", "linkIos", "chatExtra", "unexpectedAction"]) {
+    test(`reservation button ${index} rejects extra action: ${field}`, () => {
+      const template = reservationContract(); template.buttons[index][field] = "https://unexpected.invalid";
+      assert.throws(() => reservationBuild({ template }), /buttons_mismatch/);
+    });
+  }
+}
+for (const buttons of [null, [], [reservationContract().buttons[0]], [null, null], reservationContract().buttons.toReversed(),
+  [...reservationContract().buttons, reservationContract().buttons[0]]]) {
+  test(`reservation rejects missing, reordered or extra buttons: ${JSON.stringify(buttons)}`, () => {
+    assert.throws(() => reservationBuild({ template: { ...reservationContract(), buttons } }), /buttons_mismatch/);
+  });
+}
+test("reservation scope retains strict quick reply and top-level optional link guards", () => {
+  for (const quickReplies of [[{}], {}, "", false])
+    assert.throws(() => reservationBuild({ template: { ...reservationContract(), quickReplies } }), /quick_replies_mismatch/);
+  for (const key of ["linkAnd", "linkIos", "chatExtra"])
+    assert.throws(() => reservationBuild({ template: { ...reservationContract(), [key]: "unexpected" } }), /optional_links_mismatch/);
+});
+
+for (const patch of [
+  { content: undefined }, { content: "#{이름} only" }, { content: "#{예약주차} only" },
+  { imageId: "other" }, { templateId: welcomeId }, { status: "PENDING" },
+  { buttons: [] }, { buttons: reservationContract().buttons.toReversed() }, { extraAction: "unexpected" },
+]) {
+  test(`reservation rejects incomplete or wrong static source contract: ${JSON.stringify(patch)}`, async () => {
+    const changedSource = reservationSource(); Object.assign(changedSource.reservationOpenContract, patch);
+    await assert.rejects(reservationRun({ doc: () => assert.fail("no database access") }, {
+      readSource: () => changedSource, providerGet: () => assert.fail("no provider access"),
+    }), /reservation_open_static_contract_required/);
+  });
+}
+
+test("adding reservation scope preserves prior group audit, IDs, timestamp and umbrella audit verbatim", async () => {
+  const initial = config(), groupAudit = build();
+  initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = groupAudit;
+  const db = memoryDb(initial), result = await reservationRun(db, { apply: true });
+  const saved = db.state().data.providerHistoryCoverage.nonWelcomeTemplateAllowlist;
+  assert.equal(result.applied, true);
+  assert.equal(saved.auditId, groupAudit.auditId);
+  assert.deepEqual(saved.scopedAudits.group_survey, groupAudit.scopedAudits.group_survey);
+  assert.deepEqual(saved.templateIds, [source.groupSurveyId, reservationContract().templateId]);
+  const expected = clone(initial); expected.providerHistoryCoverage.nonWelcomeTemplateAllowlist = saved;
+  assert.deepEqual(db.state().data, expected);
+  assert.deepEqual(Object.keys(db.state().writes[0]), [AUDIT_FIELD]);
+  assert.deepEqual(reservationBuild({ config: db.state().data }), saved);
+});
+
+test("adding group scope preserves a prior reservation audit without re-certifying it", () => {
+  const initial = config(), reservationAudit = reservationBuild();
+  initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = reservationAudit;
+  const saved = build({ config: initial });
+  assert.equal(saved.auditId, reservationAudit.auditId);
+  assert.deepEqual(saved.scopedAudits.reservation_open, reservationAudit.scopedAudits.reservation_open);
+  assert.deepEqual(saved.templateIds, [reservationContract().templateId, source.groupSurveyId]);
+});
+
+for (const scope of ["group_survey", "reservation_open"]) {
+  for (const field of ["auditId", "contractHash", "templateId", "auditedAt", "sourceHash"]) {
+    test(`reservation audit rejects tampered prior ${scope} metadata: ${field}`, () => {
+      const initial = config(), prior = scope === "group_survey" ? build() : reservationBuild();
+      prior.scopedAudits[scope][field] = "tampered";
+      initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = prior;
+      assert.throws(() => reservationBuild({ config: initial }), /invalid_existing_nonwelcome_audit_metadata/);
+    });
+  }
+}
+
+test("reservation dry-run fetches only its exact template and never writes", async () => {
+  const db = memoryDb(), before = db.state();
+  const result = await reservationRun(db, { providerGet: async (url) => {
+    assert.equal(url, `https://api.solapi.com/kakao/v2/templates/${reservationContract().templateId}`);
+    return reservationContract();
+  } });
+  assert.equal(result.applied, false);
+  assert.deepEqual(db.state(), before);
+});
+
+for (const mode of ["settings", "source"]) {
+  test(`reservation audit aborts concurrent ${mode} change before writing`, async () => {
+    const db = memoryDb(); let changed = false;
+    await assert.rejects(reservationRun(db, { apply: true, readSource: () => {
+      const current = reservationSource();
+      if (changed && mode === "source") current.reservationOpenContract.content += " altered";
+      return current;
+    }, providerGet: async () => {
+      if (mode === "settings") db.bump();
+      changed = true; return reservationContract();
+    } }), /changed_retry_read_only/);
+    assert.equal(db.state().writes.length, 0);
+  });
+}
+
+test("CLI scope is explicit, validated, single-use and defaults to group survey", () => {
+  assert.deepEqual(parseAuditArgs(["--scope", "reservation_open"]), { apply: false, scope: "reservation_open" });
+  assert.deepEqual(parseAuditArgs(["--apply", "--scope", "reservation_open"]), { apply: true, scope: "reservation_open" });
+  assert.deepEqual(parseAuditArgs(["--scope", "group_survey", "--dry-run"]), { apply: false, scope: "group_survey" });
+  for (const args of [["--scope"], ["--scope", "unknown"], ["--scope", "membership_welcome"],
+    ["--scope=reservation_open"], ["--scope", "reservation_open", "--scope", "group_survey"],
+    ["--scope", "reservation_open", "--apply", "--dry-run"]]) assert.throws(() => parseAuditArgs(args));
+  for (const scope of ["membership_welcome", "unknown", null, {}, " group_survey"])
+    assert.throws(() => nonWelcomeScopeTemplateId(scope), /invalid_nonwelcome_audit_scope/);
+});
+
+test("reservation provider getter rejects every non-scoped URL before any credential or network call", async () => {
+  let secretReads = 0, networkCalls = 0;
+  const get = createTemplateGetter({ scope: "reservation_open", readSecret: () => { secretReads++; return "synthetic"; },
+    now: () => at, salt: () => "synthetic-salt", fetchImpl: async (url, options) => {
+      networkCalls++; assert.equal(options.method, "GET"); assert.equal(options.redirect, "error");
+      return { ok: true, json: async () => reservationContract() };
+    } });
+  for (const templateId of [source.groupSurveyId, welcomeId, "unknown"])
+    await assert.rejects(get(`https://api.solapi.com/kakao/v2/templates/${templateId}`), /Only the scoped/);
+  for (const url of ["https://api.solapi.com/messages/v4/send",
+    `https://api.solapi.com/kakao/v2/templates/${reservationContract().templateId}?extra=1`])
+    await assert.rejects(get(url), /Only the scoped/);
+  assert.equal(secretReads, 0); assert.equal(networkCalls, 0);
+  assert.deepEqual(await get(`https://api.solapi.com/kakao/v2/templates/${reservationContract().templateId}`), reservationContract());
+  assert.equal(secretReads, 2); assert.equal(networkCalls, 1);
+});
+
+// Independent synthetic bodies exercise full comparison without contacting the provider.
+const privateScopes = {
+  private_survey: {
+    symbol: "PRIVATE_SURVEY_NONWELCOME_CONTRACT", sourceKey: "privateSurveyContract",
+    contract: {
+      templateId: "KA01TP260729144645970fv13He8mfsK", status: "APPROVED",
+      name: "프라이빗 사전설문 안내 v2", channelId: "KA01PF260511123220162lk0NUjstpVl",
+      messageType: "BA", emphasizeType: "IMAGE", imageId: "ST01FZ2605141601264576AUwmK3Bqgl",
+      content: "Synthetic private survey for #{이름}.",
+      buttons: [{ buttonType: "WL", buttonName: "사전설문 작성", targetOut: true,
+        linkMo: "https://in.archivepilates.com/s/#{링크ID}/", linkPc: "https://in.archivepilates.com/s/#{링크ID}/" }],
+    },
+  },
+  private_lesson_report: {
+    symbol: "PRIVATE_LESSON_REPORT_NONWELCOME_CONTRACT", sourceKey: "privateLessonReportContract",
+    contract: {
+      templateId: "KA01TP260528081225871Fr92FW901Vo", status: "APPROVED",
+      name: "회원용_프라이빗 수업 리포트 안내 v1", channelId: "KA01PF260511123220162lk0NUjstpVl",
+      messageType: "BA", emphasizeType: "IMAGE", imageId: "ST01FZ260528081542186AabecSODs8l",
+      content: "Synthetic private report for #{회원명}: #{수업일시}, #{회차}.",
+      buttons: [{ buttonType: "WL", buttonName: "리포트 확인하기", targetOut: true,
+        linkMo: "https://in.archivepilates.com/s/#{리포트링크ID}/", linkPc: "https://in.archivepilates.com/s/#{리포트링크ID}/" }],
+    },
+  },
+};
+const privateContract = (scope) => clone(privateScopes[scope].contract);
+const privateSource = (scope) => ({ ...clone(source), [privateScopes[scope].sourceKey]: privateContract(scope) });
+const privateBuild = (scope, overrides = {}) => build({ scope, source: privateSource(scope), template: privateContract(scope), ...overrides });
+const privateRun = (scope, db, overrides = {}) => run(db, { scope,
+  readSource: () => privateSource(scope), providerGet: async () => privateContract(scope), ...overrides });
+
+function privateStaticReader(scope, contract = privateContract(scope)) {
+  const reader = staticReader(), read = reader.constant;
+  reader.constant = (path, name) => {
+    if (name === privateScopes[scope].symbol) {
+      reader.symbols.push({ path, name });
+      if (contract === null) throw new Error("Missing full static contract");
+      return clone(contract);
+    }
+    const value = read(path, name);
+    if (name === "ALIMTALK_TEMPLATES") value[scope] = { code: privateContract(scope).templateId };
+    return value;
+  };
+  return reader;
+}
+
+for (const scope of Object.keys(privateScopes)) {
+  const { symbol, sourceKey } = privateScopes[scope];
+  test(`${scope} reads only its named static contract and the matching template type`, () => {
+    const reader = privateStaticReader(scope), actual = readNonWelcomeAuditSource(scope, reader);
+    assert.deepEqual(actual[sourceKey], privateContract(scope));
+    assert.ok(reader.symbols.some(({ path, name }) => path.endsWith("alimtalk/templates.ts") && name === symbol));
+    assert.equal(reader.symbols.some(({ name }) => name === "RESERVATION_OPEN_ALIMTALK_TEMPLATE"), false);
+    const otherSymbol = Object.values(privateScopes).find((entry) => entry.symbol !== symbol).symbol;
+    assert.equal(reader.symbols.some(({ name }) => name === otherSymbol), false);
+    assert.equal(nonWelcomeScopeTemplateId(scope), privateContract(scope).templateId);
+  });
+
+  test(`${scope} canonical source parses locally and exactly matches its full contract`, () => {
+    const actual = readNonWelcomeAuditSource(scope);
+    const result = privateBuild(scope, { source: actual, template: clone(actual[sourceKey]) });
+    assert.deepEqual(result.templateIds, [privateContract(scope).templateId]);
+    assert.equal(result.scopedAudits[scope].contractHash, auditHash(actual[sourceKey]));
+    for (const templateId of actual.welcomeIds)
+      assert.throws(() => privateBuild(scope, { source: actual, template: { ...clone(actual[sourceKey]), templateId } }), /welcome_template_forbidden/);
+  });
+
+  test(`${scope} cannot use mismatched ALIMTALK_TEMPLATES, missing constants or partial snippets`, async () => {
+    const reader = privateStaticReader(scope), read = reader.constant;
+    reader.constant = (path, name) => {
+      const value = read(path, name);
+      if (name === "ALIMTALK_TEMPLATES") value[scope].code = welcomeId;
+      return value;
+    };
+    assert.throws(() => readNonWelcomeAuditSource(scope, reader), /source_attestation_invalid/);
+    assert.throws(() => readNonWelcomeAuditSource(scope, privateStaticReader(scope, null)), new RegExp(`${scope}_static_contract_required`));
+    await assert.rejects(privateRun(scope, { doc: () => assert.fail("no database access") }, {
+      readSource: () => clone(source), providerGet: () => assert.fail("no provider access"),
+    }), new RegExp(`${scope}_static_contract_required`));
+  });
+
+  test(`${scope} creates a stable scoped audit without mutating inputs`, () => {
+    const input = config(), original = clone(input), inputSource = privateSource(scope), originalSource = clone(inputSource);
+    const a = privateBuild(scope, { config: input, source: inputSource });
+    const b = privateBuild(scope, { auditedAt: "2026-10-20T01:00:00.000Z" });
+    assert.equal(a.scopedAudits[scope].auditId, b.scopedAudits[scope].auditId);
+    assert.equal(a.scopedAudits[scope].contractHash, auditHash(privateContract(scope)));
+    assert.notEqual(a.auditId, NONWELCOME_AUDIT_ID);
+    assert.deepEqual(a.templateIds, [privateContract(scope).templateId]);
+    assert.deepEqual(input, original); assert.deepEqual(inputSource, originalSource);
+    assert.equal(a.scopedAudits.group_survey, undefined);
+  });
+
+  for (const field of ["templateId", "status", "name", "channelId", "messageType", "emphasizeType", "imageId", "content"]) {
+    test(`${scope} rejects provider field tamper: ${field}`, () => {
+      const template = privateContract(scope); template[field] += " ";
+      assert.throws(() => privateBuild(scope, { template }), /mismatch/);
+    });
+    test(`${scope} rejects missing static source field before any IO: ${field}`, async () => {
+      const changed = privateSource(scope); delete changed[sourceKey][field];
+      await assert.rejects(privateRun(scope, { doc: () => assert.fail("no database access") }, {
+        readSource: () => changed, providerGet: () => assert.fail("no provider access"),
+      }), new RegExp(`${scope}_static_contract_required`));
+    });
+  }
+  for (const field of ["buttonType", "buttonName", "linkMo", "linkPc", "targetOut"]) {
+    test(`${scope} rejects provider button tamper: ${field}`, () => {
+      const template = privateContract(scope);
+      template.buttons[0][field] = field === "targetOut" ? false : "altered";
+      assert.throws(() => privateBuild(scope, { template }), /buttons_mismatch/);
+    });
+    test(`${scope} rejects static source button tamper: ${field}`, () => {
+      const changed = privateSource(scope);
+      changed[sourceKey].buttons[0][field] = field === "targetOut" ? false : "altered";
+      assert.throws(() => privateBuild(scope, { source: changed }), new RegExp(`${scope}_static_contract_required`));
+    });
+  }
+  for (const buttons of [undefined, null, {}, [], [null], [privateContract(scope).buttons[0], privateContract(scope).buttons[0]]]) {
+    test(`${scope} rejects malformed or extra provider/source buttons: ${JSON.stringify(buttons)}`, () => {
+      assert.throws(() => privateBuild(scope, { template: { ...privateContract(scope), buttons } }), /buttons_mismatch/);
+      const changed = privateSource(scope); changed[sourceKey].buttons = buttons;
+      assert.throws(() => privateBuild(scope, { source: changed }), new RegExp(`${scope}_static_contract_required`));
+    });
+  }
+  for (const field of ["linkAnd", "linkIos", "chatExtra", "unexpectedAction"]) {
+    test(`${scope} rejects additional provider button action: ${field}`, () => {
+      const template = privateContract(scope); template.buttons[0][field] = "https://unexpected.invalid";
+      assert.throws(() => privateBuild(scope, { template }), /buttons_mismatch/);
+    });
+  }
+  test(`${scope} preserves optional-link and quick-reply guards`, () => {
+    for (const quickReplies of [[{}], {}, "", false])
+      assert.throws(() => privateBuild(scope, { template: { ...privateContract(scope), quickReplies } }), /quick_replies_mismatch/);
+    for (const quickReplies of [undefined, null, []])
+      assert.ok(privateBuild(scope, { template: { ...privateContract(scope), quickReplies } }));
+    for (const field of ["linkAnd", "linkIos", "chatExtra"])
+      assert.throws(() => privateBuild(scope, { template: { ...privateContract(scope), [field]: "unexpected" } }), /optional_links_mismatch/);
+  });
+  for (const patch of [{ content: "missing required variables" }, { templateId: welcomeId }, { imageId: "other" },
+    { status: "PENDING" }, { extraAction: "unexpected" }]) {
+    test(`${scope} rejects wrong/incomplete static contract: ${JSON.stringify(patch)}`, () => {
+      const changed = privateSource(scope); Object.assign(changed[sourceKey], patch);
+      assert.throws(() => privateBuild(scope, { source: changed }), new RegExp(`${scope}_static_contract_required`));
+    });
+  }
+  test(`${scope} never approves a different scope, legacy template or arbitrary ID`, () => {
+    for (const templateId of [welcomeId, source.groupSurveyId, reservationContract().templateId, "unknown",
+      "KA01TP260514153632171uiWXYoeiOLS", ...Object.keys(privateScopes).filter((entry) => entry !== scope).map((entry) => privateContract(entry).templateId)])
+      assert.throws(() => privateBuild(scope, { template: { ...privateContract(scope), templateId } }), /forbidden|mismatch/);
+    assert.throws(() => privateBuild(scope, { source: { ...privateSource(scope), welcomeIds: [privateContract(scope).templateId] } }), /source_attestation_invalid/);
+  });
+  test(`${scope} dry-run GETs its exact template and never writes`, async () => {
+    const db = memoryDb(), before = db.state();
+    const result = await privateRun(scope, db, { providerGet: async (url) => {
+      assert.equal(url, `https://api.solapi.com/kakao/v2/templates/${privateContract(scope).templateId}`);
+      return privateContract(scope);
+    } });
+    assert.equal(result.applied, false); assert.deepEqual(db.state(), before);
+  });
+  for (const mode of ["settings", "source"]) {
+    test(`${scope} aborts concurrent ${mode} change before a scoped write`, async () => {
+      const db = memoryDb(); let changed = false;
+      await assert.rejects(privateRun(scope, db, { apply: true, readSource: () => {
+        const current = privateSource(scope);
+        if (changed && mode === "source") current[sourceKey].content += " altered";
+        return current;
+      }, providerGet: async () => {
+        if (mode === "settings") db.bump();
+        changed = true; return privateContract(scope);
+      } }), /changed_retry_read_only/);
+      assert.equal(db.state().writes.length, 0);
+    });
+  }
+  test(`${scope} provider failure or field drift cannot reach a write`, async () => {
+    for (const providerGet of [async () => { throw new Error("offline"); }, async () => ({ ...privateContract(scope), content: "altered" })]) {
+      const db = memoryDb();
+      await assert.rejects(privateRun(scope, db, { apply: true, providerGet }));
+      assert.equal(db.state().writes.length, 0); assert.equal(db.state().transactions, 0);
+    }
+  });
+  test(`${scope} retains group, reservation and existing independent audit metadata verbatim`, async () => {
+    const initial = config(); initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = existing();
+    const group = build({ config: initial }); initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = group;
+    const prior = reservationBuild({ config: initial }); initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = prior;
+    const before = clone(initial), db = memoryDb(initial), result = await privateRun(scope, db, { apply: true });
+    const saved = db.state().data.providerHistoryCoverage.nonWelcomeTemplateAllowlist;
+    assert.equal(result.applied, true); assert.equal(saved.auditId, prior.auditId);
+    for (const [key, audit] of Object.entries(prior.scopedAudits)) assert.deepEqual(saved.scopedAudits[key], audit);
+    assert.equal(saved.operatorNote, prior.operatorNote);
+    assert.deepEqual(saved.templateIds, [...prior.templateIds, privateContract(scope).templateId]);
+    const expected = clone(before); expected.providerHistoryCoverage.nonWelcomeTemplateAllowlist = saved;
+    assert.deepEqual(db.state().data, expected);
+    assert.equal(db.state().writes.length, 1); assert.deepEqual(Object.keys(db.state().writes[0]), [AUDIT_FIELD]);
+    assert.deepEqual(privateBuild(scope, { config: db.state().data }), saved);
+  });
+  for (const priorScope of NONWELCOME_SCOPES) {
+    for (const field of ["auditId", "contractHash", "templateId", "auditedAt", "sourceHash"]) {
+      test(`${scope} rejects tampered prior ${priorScope} metadata: ${field}`, () => {
+        const initial = config(), prior = priorScope === "group_survey" ? build()
+          : priorScope === "reservation_open" ? reservationBuild() : privateBuild(priorScope);
+        prior.scopedAudits[priorScope][field] = "tampered";
+        initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = prior;
+        assert.throws(() => privateBuild(scope, { config: initial }), /invalid_existing_nonwelcome_audit_metadata/);
+      });
+    }
+  }
+  test(`${scope} rejects malformed prior allowlists before provider GET`, async () => {
+    const initial = config(); initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = { ...existing(), templateIds: [welcomeId] };
+    const db = memoryDb(initial);
+    await assert.rejects(privateRun(scope, db, { apply: true, providerGet: () => assert.fail("no provider access") }), /invalid_existing/);
+    assert.equal(db.state().transactions, 0);
+  });
+  test(`${scope} requires scoped metadata for its own umbrella audit`, () => {
+    const initial = config(), prior = privateBuild(scope); delete prior.scopedAudits[scope];
+    initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = prior;
+    assert.throws(() => privateBuild(scope, { config: initial }), /invalid_existing_nonwelcome_audit_metadata/);
+  });
+  test(`${scope} prior audit survives group/reservation/other private audits without re-certification`, () => {
+    const prior = privateBuild(scope), initial = config();
+    for (const nextScope of NONWELCOME_SCOPES.filter((entry) => entry !== scope)) {
+      initial.providerHistoryCoverage.nonWelcomeTemplateAllowlist = clone(prior);
+      const saved = nextScope === "group_survey" ? build({ config: initial })
+        : nextScope === "reservation_open" ? reservationBuild({ config: initial }) : privateBuild(nextScope, { config: initial });
+      assert.deepEqual(saved.scopedAudits[scope], prior.scopedAudits[scope]);
+      assert.equal(saved.auditId, prior.auditId);
+      assert.deepEqual(saved.templateIds, [...prior.templateIds, nonWelcomeScopeTemplateId(nextScope)]);
+    }
+  });
+  test(`${scope} CLI is explicit, single-use and cannot select an arbitrary template`, () => {
+    assert.deepEqual(parseAuditArgs(["--scope", scope]), { apply: false, scope });
+    assert.deepEqual(parseAuditArgs(["--apply", "--scope", scope]), { apply: true, scope });
+    assert.deepEqual(parseAuditArgs(["--scope", scope, "--dry-run"]), { apply: false, scope });
+    for (const args of [["--scope", scope, "--scope", scope], ["--scope", scope, "--apply", "--dry-run"],
+      ["--scope", scope, "--template-id", privateContract(scope).templateId], ["--scope", privateContract(scope).templateId]])
+      assert.throws(() => parseAuditArgs(args));
+  });
+  test(`${scope} getter rejects every other URL before secrets and performs GET only`, async () => {
+    let secretReads = 0; const calls = [];
+    const get = createTemplateGetter({ scope, readSecret: () => { secretReads++; return "synthetic"; },
+      now: () => at, salt: () => "synthetic-salt", fetchImpl: async (url, options) => {
+        calls.push({ url, options }); return { ok: true, json: async () => privateContract(scope) };
+      } });
+    const allowedUrl = `https://api.solapi.com/kakao/v2/templates/${privateContract(scope).templateId}`;
+    for (const otherScope of NONWELCOME_SCOPES.filter((entry) => entry !== scope))
+      await assert.rejects(get(`https://api.solapi.com/kakao/v2/templates/${nonWelcomeScopeTemplateId(otherScope)}`), /Only the scoped/);
+    for (const url of [`https://api.solapi.com/kakao/v2/templates/${welcomeId}`, "https://api.solapi.com/messages/v4/send-many/detail",
+      `${allowedUrl}?extra=1`, `${allowedUrl}#fragment`, allowedUrl.replace("api.solapi.com", "unexpected.invalid")])
+      await assert.rejects(get(url), /Only the scoped/);
+    assert.equal(secretReads, 0); assert.equal(calls.length, 0);
+    assert.deepEqual(await get(allowedUrl), privateContract(scope));
+    assert.equal(secretReads, 2); assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.method, "GET"); assert.equal(calls[0].options.redirect, "error");
+    assert.equal(calls[0].options.body, undefined);
+  });
+}
+
+test("scope extension preserves group default and exposes only four exact current scopes", () => {
+  assert.deepEqual(NONWELCOME_SCOPES, ["group_survey", "reservation_open", "private_survey", "private_lesson_report"]);
+  assert.deepEqual(parseAuditArgs([]), { apply: false, scope: "group_survey" });
+  const ids = NONWELCOME_SCOPES.map((scope) => nonWelcomeScopeTemplateId(scope));
+  assert.equal(new Set(ids).size, 4);
+  for (const scope of ["private_survey_v1", "staff_private_survey", "inbody_report", "all", welcomeId])
+    assert.throws(() => parseAuditArgs(["--scope", scope]), /invalid_nonwelcome_audit_scope/);
+  const reader = staticReader(); readNonWelcomeAuditSource("group_survey", reader);
+  for (const { symbol } of Object.values(privateScopes)) assert.equal(reader.symbols.some((entry) => entry.name === symbol), false);
 });

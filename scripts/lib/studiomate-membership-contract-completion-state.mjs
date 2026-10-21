@@ -1,12 +1,52 @@
 const OPEN = new Set(["waiting", "review"]);
 
+export function verifiedLegacyMembershipWelcomeDisposition(source, nowMs = Date.now()) {
+  const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
+  const nativeId = value => typeof value === "string" && /^[1-9]\d{0,63}$/.test(value);
+  const instant = value => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return NaN;
+    const at = Date.parse(value);
+    return Number.isFinite(at) && new Date(at).toISOString() === (value.length === 20 ? value.replace("Z", ".000Z") : value) ? at : NaN;
+  };
+  const disposition = source?.welcomeDisposition;
+  const binding = source?.binding;
+  if (!record(source) || source.schemaVersion !== 1 || source.source !== "studiomate_native_contract" ||
+      source.studioId !== "5330" || source.bindingVerified !== true || source.welcomeStatus !== "not_required" ||
+      typeof source.contractId !== "string" || !/^[a-f0-9]{64}$/.test(source.contractId) ||
+      (source.id !== undefined && source.id !== source.contractId) || !record(binding) ||
+      binding.contractId !== source.contractId || binding.studioId !== source.studioId || !nativeId(binding.memberId) ||
+      !record(disposition) || disposition.reason !== "legacy_member_before_contract_cutover" ||
+      disposition.verified !== true || disposition.source !== "studiomate_native_member_ticket" ||
+      disposition.memberId !== binding.memberId || disposition.contractId !== source.contractId) return false;
+  for (const identity of [source.completion, source.signatureReceipt]) {
+    if (identity != null && (!record(identity) || identity.memberId !== binding.memberId ||
+        identity.contractId !== source.contractId || identity.studioId !== source.studioId)) return false;
+  }
+  const checkedAt = instant(disposition.checkedAt);
+  const registeredAt = instant(disposition.registeredAt);
+  const cutoverAt = instant(disposition.cutoverAt);
+  const prior = disposition.priorRegularIssuanceIds;
+  return Number.isFinite(nowMs) && Number.isFinite(checkedAt) && Number.isFinite(registeredAt) && Number.isFinite(cutoverAt) &&
+    registeredAt <= cutoverAt && cutoverAt <= checkedAt && checkedAt <= nowMs &&
+    Array.isArray(prior) && prior.length > 0 && prior.every(nativeId) && new Set(prior).size === prior.length &&
+    !prior.includes(binding.userTicketId) &&
+    (!source.selection?.member?.registeredAt || source.selection.member.registeredAt === disposition.registeredAt) &&
+    (!source.selection?.policy?.cutoverAt || source.selection.policy.cutoverAt === disposition.cutoverAt);
+}
+
+export function terminalMembershipWelcome(source, nowMs = Date.now()) {
+  return source?.welcomeStatus === "accepted" || verifiedLegacyMembershipWelcomeDisposition(source, nowMs);
+}
+
 export function needsMembershipContractObservation(source, id, studioId, { refresh = false } = {}) {
-  const signedRefresh = source?.status === "signed" && Boolean(source.completion) && (refresh || source.welcomeStatus === "queued");
+  const terminal = terminalMembershipWelcome(source);
+  const signedRefresh = source?.status === "signed" && Boolean(source.completion || (refresh && source.signatureReceipt)) &&
+    (refresh || source.welcomeStatus === "queued");
   return source?.schemaVersion === 1 && source.source === "studiomate_native_contract" &&
     source.bindingVerified === true && source.studioId === studioId &&
     source.contractId === id && source.binding?.contractId === id &&
     (signedRefresh || (OPEN.has(source.status) && !source.completion && !source.signatureReceipt)) && source.observationHold !== true &&
-    source.welcomeStatus !== "accepted";
+    (!terminal || refresh);
 }
 
 export function compactMembershipContractObservations(rows) {
@@ -51,8 +91,17 @@ export function membershipContractObservationTail(source, observation) {
 
 export function membershipContractCompletionSafetyPatch(outcome, source, deleteField) {
   if (outcome.status !== "review" || outcome.reason === "native_contract_read_failed") return {};
-  return { status: "review", completion: deleteField, welcomeStatus: "review", welcomeReason: outcome.reason,
+  return { status: "review", completion: deleteField,
+    ...(terminalMembershipWelcome(source) ? { welcomeStatus: source.welcomeStatus } : { welcomeStatus: "review", welcomeReason: outcome.reason }),
     ...(source.completion ? { invalidatedCompletion: source.completion } : {}) };
+}
+
+export function membershipContractWelcomeObservationPatch(outcome, source) {
+  if (!outcome.completion && !outcome.signatureReceipt) return {};
+  if (terminalMembershipWelcome(source)) return { welcomeStatus: source.welcomeStatus };
+  if (source.welcomeStatus === "not_required") return { welcomeStatus: "review", welcomeReason: "invalid_legacy_welcome_disposition" };
+  if (outcome.completion) return { welcomeStatus: source.welcomeStatus === "queued" ? "queued" : "ready" };
+  return { welcomeStatus: source.welcomeStatus === "queued" ? "queued" : "review", welcomeReason: "late_signature_welcome_review_required" };
 }
 
 export function resolveMembershipContractSignature(outcome, signature, domStatus) {
@@ -67,6 +116,7 @@ export function resolveMembershipContractSignature(outcome, signature, domStatus
 }
 
 export function membershipContractNextObservation(outcome, source, nowMs) {
+  if (terminalMembershipWelcome(source, nowMs)) return null;
   if (outcome.completion || outcome.signatureReceipt) return null;
   if (outcome.status === "review" && outcome.reason !== "native_contract_read_failed") return null;
   const review = outcome.status === "review";

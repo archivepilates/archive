@@ -28,6 +28,7 @@ import {
   resolveMembershipContractSignature,
   membershipContractObservationTail,
   membershipContractCompletionSafetyPatch,
+  membershipContractWelcomeObservationPatch,
 } from "./lib/studiomate-membership-contract-completion-state.mjs";
 import {
   buildMembershipContractMemberProfilePatch,
@@ -268,18 +269,13 @@ try {
         observationHold: outcome.status === "review" && !next,
         observationDiagnostic: outcome.diagnostic || null,
         ...(outcome.signatureReceipt ? { signatureReceipt: outcome.signatureReceipt, status: "signed" } : {}),
-        ...(outcome.signatureReceipt && !outcome.completion ? {
-          welcomeStatus: ["accepted", "queued"].includes(source.welcomeStatus) ? source.welcomeStatus : "review",
-          welcomeReason: "late_signature_welcome_review_required",
-        } : {}),
         ...(outcome.completion
           ? {
               completion: outcome.completion,
               status: "signed",
-              welcomeStatus:
-                source.welcomeStatus === "queued" ? "queued" : "ready",
             }
           : {}),
+        ...membershipContractWelcomeObservationPatch(outcome, source),
         ...membershipContractCompletionSafetyPatch(outcome, source, admin.firestore.FieldValue.delete()),
         nextObservationAt: next ? admin.firestore.Timestamp.fromMillis(next.at) : admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.Timestamp.now(),

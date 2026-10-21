@@ -13,12 +13,40 @@ export const GROUP_SURVEY_ALIMTALK_START_DATE = "2026-05-21";
 export const LONG_ABSENCE_ALIMTALK_START_DATE = "2026-05-24";
 export const RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE = "KA01TP26072806273194229P2ZesQwPp";
 export const RESERVATION_OPEN_ALIMTALK_IMAGE_ID = "ST01FZ260728062730347ZXJsa4lUJuP";
+// Independently reviewed against the approved SOLAPI template; not a welcome message.
+export const RESERVATION_OPEN_ALIMTALK_TEMPLATE = {
+  templateId: RESERVATION_OPEN_ALIMTALK_TEMPLATE_CODE,
+  status: "APPROVED",
+  name: "아카이브 스튜디오메이트 예약 안내 v4",
+  channelId: "KA01PF260511123220162lk0NUjstpVl",
+  messageType: "BA",
+  emphasizeType: "IMAGE",
+  imageId: RESERVATION_OPEN_ALIMTALK_IMAGE_ID,
+  content: "#{이름}님,\n회원님이 소지하신 수강권의\n\n#{예약주차} \n예약 가능 시간표가\n오후 1시부터 열립니다.\n\n수업 예약 전\n예약 안내, 예약방법을\n확인해 주세요.",
+  buttons: [
+    { buttonType: "WL", buttonName: "예약 안내 보기", linkMo: "https://archivepilates.notion.site/notice", linkPc: "https://archivepilates.notion.site/notice", targetOut: false },
+    { buttonType: "WL", buttonName: "예약 방법 보기", linkMo: "https://archivepilates.notion.site/studiomate", linkPc: "https://archivepilates.notion.site/studiomate", targetOut: false },
+  ],
+};
 export const LEGACY_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE = "KA01TP260514153632171uiWXYoeiOLS";
 export const LEGACY_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE = "KA01TP260527182741301uIuSTL01YQ1";
 export const NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE = "KA01TP260729144645970fv13He8mfsK";
 export const NATIVE_STAFF_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE = "KA01TP260808034937468FF5LLYH823H";
 export const NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_TEMPLATE_CODE = "KA01TP260903104439283cNjQW0YrrtV";
 export const NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID = "ST01FZ2605141601264576AUwmK3Bqgl";
+export const PRIVATE_SURVEY_NONWELCOME_CONTRACT = {
+  templateId: NATIVE_PRIVATE_SURVEY_ALIMTALK_TEMPLATE_CODE, status: "APPROVED", name: "프라이빗 사전설문 안내 v2",
+  channelId: "KA01PF260511123220162lk0NUjstpVl", messageType: "BA", emphasizeType: "IMAGE",
+  imageId: NATIVE_PRIVATE_SURVEY_ALIMTALK_IMAGE_ID,
+  content: "#{이름}님,\nARCHIVE PILATES 프라이빗 수업을 준비하기 위한 사전설문입니다.\n\n운동 목적과 현재 컨디션을 확인해\n첫 수업 계획과 이후 리포트에 반영합니다.\n\n아래 버튼에서 설문을 작성해 주세요.",
+  buttons: [{buttonType:"WL",buttonName:"사전설문 작성",linkMo:"https://in.archivepilates.com/s/#{링크ID}/",linkPc:"https://in.archivepilates.com/s/#{링크ID}/",targetOut:true}],
+};
+export const PRIVATE_LESSON_REPORT_NONWELCOME_CONTRACT = {
+  templateId:"KA01TP260528081225871Fr92FW901Vo",status:"APPROVED",name:"회원용_프라이빗 수업 리포트 안내 v1",
+  channelId:"KA01PF260511123220162lk0NUjstpVl",messageType:"BA",emphasizeType:"IMAGE",imageId:"ST01FZ260528081542186AabecSODs8l",
+  content:"#{회원명}님 \uD83D\uDE0A\n#{수업일시} 프라이빗 \n#{회차}회차\n수업 리포트가 정리되었습니다.\n\n이번 수업에서 확인한 변화와\n다음 수업 방향은 아래 버튼에서 \n확인하실 수 있습니다.\n\n수업 리포트는\n개인 확인용으로 제공됩니다.\n\n감사합니다.\n아카이브 필라테스 드림 \uD83D\uDC99",
+  buttons:[{buttonType:"WL",buttonName:"리포트 확인하기",linkMo:"https://in.archivepilates.com/s/#{리포트링크ID}/",linkPc:"https://in.archivepilates.com/s/#{리포트링크ID}/",targetOut:true}],
+};
 export const NATIVE_STAFF_PRIVATE_CHART_ALIMTALK_IMAGE_ID = "ST01FZ260527183751162YVedKZ3LQIu";
 export const RECOMMENDED_MEAL_ALIMTALK_TEMPLATE_CODE = "KA01TP260802163827071E2TTuX6CsWp";
 export const RECOMMENDED_MEAL_ALIMTALK_IMAGE_ID = "ST01FZ260730122108103pEzxH5jOOpU";
