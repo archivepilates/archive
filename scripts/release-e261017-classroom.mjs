@@ -9,10 +9,16 @@ import { pathToFileURL } from 'node:url';
 export const ASSET = '/assets/imweb-my-classroom-20260723a.js';
 export const BASELINE_SHA256 = '6145954b623ae8ad1bd8541a582eaafe0e1c964aa82cc10b28195ccfcf6cc646';
 const CORE_RULES = process.argv.includes('--core-rules');
-const SITE = CORE_RULES ? 'archive-pilates' : 'archive-pilates-home';
-const RESOURCE_PATH = CORE_RULES ? '/core/rules/index.html' : ASSET;
-const LIVE_URL = CORE_RULES ? 'https://archive-pilates.web.app/core/rules/' : `https://archivepilates.com${ASSET}`;
-const EXPECTED_BASELINE = CORE_RULES ? '7e4056e334bc4c6057ff2c7fb394aba34e37c2b7fd7d85d140d10bc3ddd2c388' : BASELINE_SHA256;
+export function releaseTarget({ coreRules = false, coreSite = false } = {}) {
+  if (coreSite && !coreRules) throw Error('CORE site requires the E-team rules-only scope');
+  if (coreSite) return { site: 'archive-pilates-core', resource: '/rules/index.html', live: 'https://archive-pilates-core.web.app/rules/' };
+  if (coreRules) return { site: 'archive-pilates', resource: '/core/rules/index.html', live: 'https://archive-pilates.web.app/core/rules/' };
+  return { site: 'archive-pilates-home', resource: ASSET, live: `https://archivepilates.com${ASSET}` };
+}
+const { site: SITE, resource: RESOURCE_PATH, live: LIVE_URL } = releaseTarget({
+  coreRules: CORE_RULES, coreSite: process.argv.includes('--core-site'),
+});
+const EXPECTED_BASELINE = CORE_RULES ? '9e0f76c0bf12f87eab08b1b768be59b446d2878dbe9d08ba828bb7f876b5dbd1' : BASELINE_SHA256;
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const API = 'https://firebasehosting.googleapis.com/v1beta1/';
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -54,7 +60,7 @@ async function main() {
   const root = git(['rev-parse', '--show-toplevel']);
   const trackedPath = CORE_RULES ? 'core/rules/index.html' : `official-home${ASSET}`;
   const source = fs.readFileSync(path.join(root, trackedPath));
-  const oldSource = execFileSync('git', ['show', `${CORE_RULES ? '00624211d442384dff8d849e9ab860dc49a65836' : 'cc2f803'}:${trackedPath}`]);
+  const oldSource = execFileSync('git', ['show', `${CORE_RULES ? 'ebf8f26f19ecd2ab366a6b07684e576635072634' : 'cc2f803'}:${trackedPath}`]);
   if (sha(oldSource) !== EXPECTED_BASELINE) throw Error('Pinned Git baseline changed');
   const addition = ',\n    {"code":"E261017","path":"/private-lesson-external-feedback-e-261017","title":"10/17 외부 피드백 E팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D","private":true}';
   if (CORE_RULES) {
@@ -100,7 +106,7 @@ async function main() {
   if (!live.ok || sha(Buffer.from(await live.arrayBuffer())) !== EXPECTED_BASELINE) throw Error('Live asset is not the reviewed baseline');
   const evidenceDir = path.join(root, 'artifacts/student-share-261017');
   fs.mkdirSync(evidenceDir, { recursive: true });
-  const evidencePath = path.join(evidenceDir, `${CORE_RULES ? 'core-rules-' : ''}${apply ? 'hosting-release.json' : 'hosting-plan.json'}`);
+  const evidencePath = path.join(evidenceDir, `${CORE_RULES ? `core-rules-${SITE}-` : ''}${apply ? 'hosting-release.json' : 'hosting-plan.json'}`);
   const evidence = { site: SITE, sourceCommit: git(['rev-parse', 'HEAD']), baselineVersion: baseline.name,
     changedPaths: [RESOURCE_PATH], fileCount: baselineFiles.length, newSourceHash: sha(source), compressedHash: hash, mode: apply ? 'apply' : 'plan' };
   const save = () => fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2));

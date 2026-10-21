@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import { ASSET, BASELINE_SHA256, makeManifest, assertManifest, assertETeamNoteOnly } from '../release-e261017-classroom.mjs';
+import { ASSET, BASELINE_SHA256, makeManifest, assertManifest, assertETeamNoteOnly, releaseTarget } from '../release-e261017-classroom.mjs';
 
 test('only E261017 is added to the pinned live classroom source', () => {
   const source = fs.readFileSync(`official-home${ASSET}`, 'utf8');
@@ -41,4 +41,16 @@ test('CORE replacement is restricted to one existing E-team note without whitesp
     next.replace('E팀 수강생 영상', '다른 팀'), next + next.match(/  <div[^\n]+\n/)[0]]) {
     assert.throws(() => assertETeamNoteOnly(old, bad), /exactly one/);
   }
+});
+
+
+test('E-team rule release selects only the matching CORE path on each site', () => {
+  assert.deepEqual(releaseTarget({ coreRules: true }), {
+    site: 'archive-pilates', resource: '/core/rules/index.html', live: 'https://archive-pilates.web.app/core/rules/',
+  });
+  assert.deepEqual(releaseTarget({ coreRules: true, coreSite: true }), {
+    site: 'archive-pilates-core', resource: '/rules/index.html', live: 'https://archive-pilates-core.web.app/rules/',
+  });
+  assert.equal(releaseTarget().resource, ASSET);
+  assert.throws(() => releaseTarget({ coreSite: true }), /rules-only scope/);
 });
