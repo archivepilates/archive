@@ -37,3 +37,11 @@
 - Existing five completed welcome sends are verification-only. Seo remains blocked pending native required information and member signature; no contract is fabricated or resent.
 - Release guards require clean local main matching freshly fetched origin/main, so reviewed main promotion precedes deployment. The scoped feature branch is pushed after live verification as well.
 - Independent release review found two additional display ambiguities: terminal delivery failure behind legacy exclusion, and a queued candidate masking a failed send-ledger read. Both now remain review; accepted-send fallback is preserved. Registration tests pass 79 cases. Final release catalog fingerprint is 88fb4395377b29c057f073f239ba43f27660fd390ed05311e94e6fc70f90ebf6.
+
+## Verified Release, October 22
+- Behavior commits: 55e6f399 and 465a4796. Deployed source: 27118d0a, preserving the independent main changes. Runtime was fast-forwarded without changing scheduler cadence.
+- CORE Hosting archive-pilates and archive-pilates-core deployed successfully. Live responsive checks 95 and release canary checks 10 passed; authenticated registration readback confirms existing-member exclusion, correct contract-bound pass, five completed welcomes and one required-information review.
+- Affected Functions only: functions-alimtalk (15 functions) and functions-private-chart (24 functions). Dry runs and all update operations succeeded. Read-only Google Cloud metadata confirms representative queue, staff survey and member contract functions ACTIVE with new update times.
+- Read-only canonical guards confirm all five original message IDs unchanged, attempts still one, and signatureReminderEnabled still true. No member send, manual queue, contract resend or data-policy migration occurred.
+- Full results: docs/reports/2026-10-22-welcome-registration-release.html. Earlier approval-pending notes above describe historical checkpoints and are superseded by this release record.
+- This final documentation-only commit does not require another Functions deployment. Refresh CORE Hosting release metadata after promotion and push the scoped feature branch after the live canary succeeds.
