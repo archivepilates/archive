@@ -3,13 +3,22 @@ import { defineSecret } from "firebase-functions/params";
 import { onRequest } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase";
-import { IMWEB_LANE, IMWEB_SITE, validProbeWindow } from "./imwebWebhookProtocol";
+import { IMWEB_LANE, IMWEB_SITE, matchesDigest, validProbeWindow } from "./imwebWebhookProtocol";
 import { makeAuthorizeUrl, validateOAuthConfig, validateTokenResponse, sealTokens } from "./imwebOAuthPolicy";
 
 const connection = defineSecret("IMWEB_APP_OAUTH_CONNECTION");
 const callbackUri = "https://asia-northeast3-archive-pilates.cloudfunctions.net/imwebOAuthApi/callback";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const cookieName = "__Host-imweb-oauth-state";
+const startCookieName = "__Host-imweb-oauth-start";
+const cookieValue = (header: unknown, name: string) => {
+  const matches = String(header || "").split(";").map(v => v.trim()).filter(v => v.startsWith(`${name}=`));
+  return matches.length === 1 ? matches[0].slice(name.length + 1) : "";
+};
+const activeGate = (gate: Record<string, unknown> | undefined, capability: string) =>
+  !!gate && /^[a-f0-9]{64}$/.test(capability) &&
+  validProbeWindow(gate.oauthEnabledAtMs, gate.oauthEnabledUntilMs, Date.now()) &&
+  matchesDigest(capability, gate.oauthStartCapabilitySha256);
 const messagePage = (title: string, detail: string) => `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 사이트 연결</title><style>*{box-sizing:border-box}body{margin:0;background:#fafafa;color:#202020;font:16px/1.7 system-ui}main{max-width:640px;margin:auto;padding:40px 20px}h1{font-size:26px;line-height:1.4}p{overflow-wrap:anywhere}</style><main><p>ARCHIVE PILATES</p><h1>${title}</h1><p>${detail}</p></main></html>`;
 
 export const imwebOAuthApi = onRequest({ region: "asia-northeast3", invoker: "public", secrets: [connection],
@@ -22,6 +31,17 @@ export const imwebOAuthApi = onRequest({ region: "asia-northeast3", invoker: "pu
   let config;
   try { config = validateOAuthConfig(JSON.parse(connection.value())); }
   catch { res.status(503).type("html").send(messagePage("연결 설정 확인 필요", "운영자에게 앱 연결 설정 확인을 요청해 주세요.")); return; }
+  if (req.path.startsWith("/start/")) {
+    try {
+      const capability = req.path.slice("/start/".length);
+      const gate = (await db.doc(`${IMWEB_LANE}/private/config`).get()).data();
+      if (!activeGate(gate, capability)) { res.status(403).send("operator_start_required"); return; }
+      res.set("Set-Cookie", `${startCookieName}=${capability}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=1200`);
+      res.redirect(302, "/imwebOAuthApi/connect");
+    } catch { res.status(503).send("operator_start_unavailable"); }
+    return;
+  }
+  const startCapability = cookieValue(req.headers.cookie, startCookieName);
   if (req.path === "/" || req.path === "/connect") {
     if (req.query.siteCode && req.query.siteCode !== IMWEB_SITE) { res.status(403).send("site_not_allowed"); return; }
     try {
@@ -29,7 +49,7 @@ export const imwebOAuthApi = onRequest({ region: "asia-northeast3", invoker: "pu
       const gateRef = db.doc(`${IMWEB_LANE}/private/config`);
       await db.runTransaction(async tx => {
         const gate = (await tx.get(gateRef)).data();
-        if (!gate || !validProbeWindow(gate.oauthEnabledAtMs, gate.oauthEnabledUntilMs, Date.now()) ||
+        if (!gate || !activeGate(gate, startCapability) ||
             !Number.isInteger(gate.oauthAttemptCount) || gate.oauthAttemptCount < 0 || gate.oauthAttemptCount >= 5)
           throw Error("operator_window_required");
         if (typeof gate.oauthCurrentAttemptHash === "string" && /^[a-f0-9]{64}$/.test(gate.oauthCurrentAttemptHash)) {
@@ -49,8 +69,7 @@ export const imwebOAuthApi = onRequest({ region: "asia-northeast3", invoker: "pu
   if (req.path !== "/callback") { res.status(404).send("not_found"); return; }
   const state = req.query.state;
   const code = req.query.code;
-  const matches = String(req.headers.cookie || "").split(";").map(v => v.trim()).filter(v => v.startsWith(`${cookieName}=`));
-  const cookieState = matches.length === 1 ? matches[0].slice(cookieName.length + 1) : "";
+  const cookieState = cookieValue(req.headers.cookie, cookieName);
   if (typeof state !== "string" || !/^[a-f0-9]{64}$/.test(state) || !/^[a-f0-9]{64}$/.test(cookieState) ||
       !timingSafeEqual(Buffer.from(state), Buffer.from(cookieState)) || typeof code !== "string" ||
       !code.length || code.length > 4096 || /[\s\p{Cc}]/u.test(code)) {
@@ -63,7 +82,7 @@ export const imwebOAuthApi = onRequest({ region: "asia-northeast3", invoker: "pu
     claimed = await db.runTransaction(async tx => {
       const gate = (await tx.get(db.doc(`${IMWEB_LANE}/private/config`))).data();
       const attempt = (await tx.get(ref)).data();
-      if (gate?.oauthCurrentAttemptHash !== ref.id || !attempt || attempt.siteCode !== IMWEB_SITE || attempt.status !== "pending" ||
+      if (!activeGate(gate, startCapability) || gate?.oauthCurrentAttemptHash !== ref.id || !attempt || attempt.siteCode !== IMWEB_SITE || attempt.status !== "pending" ||
           !Number.isFinite(attempt.expiresAtMs) || attempt.expiresAtMs <= Date.now()) return false;
       tx.update(ref, { status: "exchange_intent", exchangeStartedAt: Timestamp.now() });
       return true;
@@ -80,7 +99,8 @@ export const imwebOAuthApi = onRequest({ region: "asia-northeast3", invoker: "pu
       const gateRef = db.doc(`${IMWEB_LANE}/private/config`);
       const gate = (await tx.get(gateRef)).data();
       const attempt = (await tx.get(ref)).data();
-      if (gate?.oauthCurrentAttemptHash !== ref.id || attempt?.status !== "exchange_intent") throw Error("state_changed");
+      if (!activeGate(gate, startCapability) || gate?.oauthCurrentAttemptHash !== ref.id || attempt?.status !== "exchange_intent")
+        throw Error("state_changed");
       tx.set(db.doc(`${IMWEB_LANE}/private/ownSiteTokenEnvelope`), { ...sealed,
         siteCode: IMWEB_SITE, scopes: tokens.scope, tokenReceivedAt: Timestamp.now(),
         sourceAttempt: ref.id, authority: "oauth_token_only", integrationVerified: false });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertStaffNoteOnly, assertStudentShareNoteOnly, assertWebhookOnboardingNoteOnly } from '../release-imweb-staff-core-rules.mjs';
+import { assertStaffNoteOnly, assertStudentShareNoteOnly, assertWebhookOnboardingNoteOnly, assertWebhookOAuthNoteOnly } from '../release-imweb-staff-core-rules.mjs';
 
 test('CORE release accepts exactly one new staff policy note and no other changes', () => {
   const before = '<main>\n</main>\n';
@@ -31,4 +31,15 @@ test('webhook onboarding release permits one operational note without other chan
   assertWebhookOnboardingNoteOnly(before, after);
   for (const bad of [before, after+line, after.replace('protections stay', 'protection removed')])
     assert.throws(() => assertWebhookOnboardingNoteOnly(before, bad));
+});
+
+test('OAuth release updates only the existing webhook note and preserves other lanes', () => {
+  const note = '  <div class="rule-note" id="imweb-app-webhook-onboarding-policy"><strong>Before</strong></div>\n';
+  const before = '<main>\n' + note + '  <p>Other lane</p>\n</main>\n';
+  const after = before.replace('Before', 'Approved storage; consent pending');
+  assertWebhookOAuthNoteOnly(before, after);
+  for (const bad of [after + note, after.replace(note.trim().slice(0, 10), '<changed'),
+    after.replace('Other lane', 'Other change'), after.replace('consent pending', 'consent\npending')])
+    assert.throws(() => assertWebhookOAuthNoteOnly(before, bad));
+  assert.throws(() => assertWebhookOAuthNoteOnly(before.replace(note, ''), after));
 });

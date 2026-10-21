@@ -47,11 +47,16 @@ if (args[0] === '--enable-approved-probe') {
       !/^projects\/(?:archive-pilates|[0-9]+)\/secrets\/IMWEB_APP_OAUTH_CONNECTION\/versions\/[0-9]+$/.test(receipt.resource || ''))
     throw Error('Approved OAuth credential provisioning required');
   const now = Date.now();
+  const capability = randomBytes(32).toString('hex');
   await ref.set({ oauthEnabledAtMs: now, oauthEnabledUntilMs: now + 20 * 60_000,
+    oauthStartCapabilitySha256: createHash('sha256').update(capability).digest('hex'),
     oauthAttemptCount: 0, updatedAt: Timestamp.now() }, { merge: true });
+  fs.writeFileSync(path.join(dir, 'oauth-start-session.json'), JSON.stringify({ expiresAtMs: now + 20 * 60_000,
+    startUrl: `https://asia-northeast3-archive-pilates.cloudfunctions.net/imwebOAuthApi/start/${capability}` }),
+    { mode: 0o600 });
   console.log(JSON.stringify({ oauthWindowEnabled: true, maxAttempts: 5, expiresAt: new Date(now + 20 * 60_000).toISOString() }));
 } else if (args[0] === '--disable-oauth-window') {
-  await ref.set({ oauthEnabledUntilMs: 0, updatedAt: Timestamp.now() }, { merge: true });
+  await ref.set({ oauthEnabledUntilMs: 0, oauthStartCapabilitySha256: '', updatedAt: Timestamp.now() }, { merge: true });
   console.log(JSON.stringify({ oauthWindowDisabled: true }));
 } else if (args[0] === '--disable-probe') {
   await ref.set({ mode: 'disabled', probeExpiresAtMs: 0, updatedAt: Timestamp.now() }, { merge: true });
@@ -61,6 +66,8 @@ if (args[0] === '--enable-approved-probe') {
   const receipts = await db.collection(`${lane}/probeReceipts`).get();
   const samples = await db.collection(`${lane}/verifiedSamples`).get();
   const shadow = await db.collection(`${lane}/shadowEvents`).get();
+  const attempts = await db.collection(`${lane}/oauthAttempts`).get();
+  const tokenEnvelope = (await db.doc(`${lane}/private/ownSiteTokenEnvelope`).get()).data();
   const probe = fs.existsSync(privateFile) ? JSON.parse(fs.readFileSync(privateFile, 'utf8')) : null;
   const candidates = ['data', 'payload', 'event', 'eventType', 'event_type', 'eventCode', 'timestamp', 'time',
     'eventId', 'event_id', 'id', 'type', 'resource', 'site_code', 'createdAt', 'eventTime', 'event_time'];
@@ -70,6 +77,13 @@ if (args[0] === '--enable-approved-probe') {
     ? Object.fromEntries(Object.entries(value).map(([k, v]) => [names[k] || k, decode(v)])) : value;
   console.log(JSON.stringify({ mode: config?.mode || 'unconfigured',
     probeActive: config?.mode === 'probe' && config?.probeExpiresAtMs > Date.now(),
+    oauth: {
+      windowActive: config?.oauthEnabledUntilMs > Date.now(),
+      attemptCount: config?.oauthAttemptCount || 0,
+      attempts: attempts.docs.map(d => ({ status: d.data().status })),
+      tokenEnvelopeStored: !!tokenEnvelope,
+      integrationVerified: tokenEnvelope?.integrationVerified === true,
+    },
     samples: samples.docs.map(d => ({ id: d.id, eventType: d.data().eventType, status: d.data().status })),
     shadowCount: shadow.size,
     receipts: receipts.docs.map(d => ({ id: d.id, ...decode(d.data()) })) }, null, 2));

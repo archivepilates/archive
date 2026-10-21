@@ -41,6 +41,7 @@ if (action[0] === '--prepare-encrypted-handoff') {
   }
   const plaintext = privateDecrypt({ key: privateRead(files['private.pem']), oaepHash: 'sha256',
     padding: constants.RSA_PKCS1_OAEP_PADDING }, Buffer.from(privateRead(files['credential-handoff.enc']), 'base64'));
+  let receiptStored = false;
   try {
   let handoff;
   try { handoff = JSON.parse(plaintext.toString('utf8')); } catch { throw Error('invalid_encrypted_handoff'); }
@@ -72,7 +73,12 @@ if (action[0] === '--prepare-encrypted-handoff') {
   if (!String(result.name).startsWith(`${created.name}/versions/`)) throw Error('invalid_secret_response');
   fs.writeFileSync(files['secret-provision-receipt.json'], JSON.stringify({ resource: result.name,
     appCode: 'ga202609279410fb87e608a', createdAt: new Date().toISOString(), plaintextStoredLocally: false }), { flag: 'wx', mode: 0o600 });
+  receiptStored = true;
   cleanup();
   console.log(JSON.stringify({ stored: true, resource: result.name, plaintextStoredLocally: false }));
-  } finally { plaintext.fill(0); cleanup(); }
+  } finally {
+    plaintext.fill(0);
+    // Keep the encrypted handoff/key for explicit recovery if provisioning is uncertain.
+    if (receiptStored) cleanup();
+  }
 } else throw Error('unsupported_action');
