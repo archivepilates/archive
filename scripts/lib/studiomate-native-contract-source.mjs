@@ -408,7 +408,7 @@ export function normalizeUserTicket(row, expectedMemberId) {
   });
 }
 
-export function normalizePayments(rows) {
+export function normalizePayments(rows, { allowZero = false } = {}) {
   if (!Array.isArray(rows)) return invalidPayment("invalid_payment_rows");
   const live = rows.filter((row) => record(row) && !row.deleted_at);
   if (!live.length) return invalidPayment("missing_payment_rows");
@@ -422,7 +422,11 @@ export function normalizePayments(rows) {
   });
   if (sorted.some((row) => /refund|cancel|return/i.test(String(row.status || row.type || ""))))
     return invalidPayment("refunded_or_cancelled_payment");
-  const latestOutstanding = money(sorted.at(-1)?.unpaid_amount);
+  const nativeAmount = (value) => {
+    if (typeof value !== "number" && !(typeof value === "string" && /^\d+$/.test(value))) return null;
+    return money(value);
+  };
+  const latestOutstanding = nativeAmount(sorted.at(-1)?.unpaid_amount);
   if (latestOutstanding === null) return invalidPayment("invalid_outstanding_amount");
   const transactions = [];
   const components = [
@@ -438,7 +442,7 @@ export function normalizePayments(rows) {
     if (!paidAt) return invalidPayment("invalid_payment_time");
     const seenMethods = new Set();
     for (const [key, method] of components) {
-      const amount = money(key === "point_amount" ? row[key] ?? 0 : row[key]);
+      const amount = nativeAmount(key === "point_amount" && row[key] === undefined ? 0 : row[key]);
       if (amount === null) return invalidPayment("invalid_payment_amount");
       if (!amount || seenMethods.has(method)) continue;
       seenMethods.add(method);
@@ -457,7 +461,7 @@ export function normalizePayments(rows) {
   }
   const paidAmount = transactions.reduce((sum, row) => sum + row.amount, 0);
   const totalAmount = paidAmount + latestOutstanding;
-  if (!Number.isSafeInteger(paidAmount) || !Number.isSafeInteger(totalAmount) || totalAmount <= 0)
+  if (!Number.isSafeInteger(paidAmount) || !Number.isSafeInteger(totalAmount) || totalAmount < 0 || (allowZero !== true && totalAmount === 0))
     return invalidPayment("invalid_payment_total");
   const status = latestOutstanding === 0 ? "paid" : paidAmount === 0 ? "unpaid" : "partial";
   return Object.freeze({

@@ -545,38 +545,38 @@ test("legacy or incomplete history is not evidence of first purchase", () => {
   }
   const existing = renewal();
   existing.history.contracts.records = [];
-  blocked(existing, "prior_purchase_without_signed_contract");
+  assert.equal(evaluate(existing).action, "renewal_purchase_confirmation");
   const legacy = renewal();
   legacy.member.registeredAt = "2025-03-07T00:00:00+09:00";
   legacy.history.contracts.records = [];
-  const legacyResult = blocked(legacy, "legacy_member_before_contract_cutover");
-  assert.equal(legacyResult.status, "ignored");
+  assert.equal(evaluate(legacy).action, "renewal_purchase_confirmation");
   const postCutover = renewal();
   postCutover.member.registeredAt = "2026-09-14T09:00:01+09:00";
   postCutover.history.contracts.records = [];
-  blocked(postCutover, "prior_purchase_without_signed_contract");
+  assert.equal(evaluate(postCutover).action, "renewal_purchase_confirmation");
   const invalid = fixture();
   invalid.history.purchases.priorRegularIssuanceIds = ["200"];
   blocked(invalid, "invalid_purchase_history");
 });
 
-test("renewal requires an applicable signed regular contract and exact terms version", () => {
+test("renewal obtains fresh consent while malformed regular contract evidence still blocks", () => {
   for (const patch of [
     { status: "sent" },
     { status: "completed" },
-    { scope: "instructor_consent" },
-    { termsVersion: "old" },
-    { applicable: false },
-    { revoked: true },
     { revoked: undefined },
     { signedAt: null },
-    { signedAt: "2026-09-14T11:51:00+09:00" },
-    { validUntil: "2026-09-14T12:00:00+09:00" },
+    { signedAt: "2026-09-14T12:00:01+09:00" },
     { validUntil: "invalid" },
   ]) {
     const input = renewal();
     Object.assign(input.history.contracts.records[0], patch);
     blocked(input);
+  }
+  for (const patch of [{ scope: "instructor_consent" }, { termsVersion: "old" },
+    { applicable: false }, { revoked: true }, { validUntil: "2026-09-14T12:00:00+09:00" }]) {
+    const input = renewal();
+    Object.assign(input.history.contracts.records[0], patch);
+    assert.equal(evaluate(input).action, "renewal_purchase_confirmation");
   }
   const duplicate = renewal();
   duplicate.history.contracts.records.push({

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { evaluateMembershipContractEligibility, normalizeMembershipPhone } from "./membershipContractPolicy";
+import { evaluateMembershipContractEligibility, evaluateApprovedOctoberRenewalRecovery, normalizeMembershipPhone } from "./membershipContractPolicy";
 
 export const MEMBERSHIP_WELCOME_TEMPLATE = {
   templateId: "KA01TP260914091233543JoFDsn7KfCr",
@@ -122,7 +122,9 @@ export function planMembershipContractWelcome(input: any = {}) {
     sendAllowed: false,
     intent,
   });
-  const decision = evaluateMembershipContractEligibility(selection);
+  const decision = selection?.operatorRecoveryApproval
+    ? evaluateApprovedOctoberRenewalRecovery(selection, selection.operatorRecoveryApproval)
+    : evaluateMembershipContractEligibility(selection);
   if (!decision.eligibleForDetection) return result("blocked", `contract_${decision.reasons[0]}`);
   if (decision.action !== "first_purchase_contract") return result("excluded", "renewal_no_welcome");
   if (!completion) return result("waiting", "native_member_signature_required");

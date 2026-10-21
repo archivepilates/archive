@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "88fb4395377b29c057f073f239ba43f27660fd390ed05311e94e6fc70f90ebf6",
+  "policyFingerprint": "88a0aae34ad45467dc89ebac6272c0bb3950f6c94895c4a3d356564cb3c7efcb",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -90,7 +90,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/memberSignup/membershipWelcomePolicy.ts",
-      "sha256": "7411bbf3e182057838153e1c1bbed27bd96e84ab50ae2b417e7bab2c3a56c186"
+      "sha256": "3c1abc9ba8049e5bc3864095edaa1303540daa82a8978bf11ffcc8dd9ff356a0"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/parking/instructorLessonParkingContract.ts",

@@ -23,6 +23,20 @@ const money = (value) => Number.isSafeInteger(value) && value >= 0;
 const hash = (value) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
+const OPERATOR_TEST_BINDING = Object.freeze({
+  reference: "user_october_renewal_test_20261022",
+  studioId: "5330",
+  memberId: "1982133",
+  userTicketId: "10277817",
+  productId: "191164",
+  action: "renewal_purchase_confirmation",
+  jobKey: `membership_contract_${hash([
+    "studiomate-renewal-operator-test-v1", "1982133", "10277817", "20261022",
+  ])}`,
+});
+const OPERATOR_TEST_PURCHASE_DETAILS =
+  "운영자 테스트 전용 문서입니다. 신규 구매나 결제를 생성하지 않으며, 회원 동의로 간주되지 않고 회원 동의나 서명을 대신하지 않습니다. 기존 실제 수강권의 금액과 이용기간을 그대로 표시합니다.";
+
 export function buildStudioMateSignatureRequestPayload({
   prepared,
   contractId,
@@ -65,8 +79,10 @@ export function buildStudioMateSignatureRequestPayload({
 }
 
 export function buildStudioMateJoinContractPayload(input) {
-  const { selection, member, ticket, staff, template, terms } = input || {};
-  validateSelection(selection, member, ticket);
+  const { selection, member, ticket, staff, template, terms, operatorTestApproval } = input || {};
+  if (operatorTestApproval !== undefined)
+    validateOperatorTestApproval(operatorTestApproval, selection);
+  validateSelection(selection, member, ticket, operatorTestApproval !== undefined);
   if (!nativeId(staff?.id) || !clean(staff?.name))
     throw new Error("Verified StudioMate staff is required");
   const expectedTemplate = MEMBERSHIP_CONTRACT_TEMPLATES[selection.action];
@@ -92,13 +108,20 @@ export function buildStudioMateJoinContractPayload(input) {
 
   const periodLike = ticket.type.includes("P") || ticket.type === "S";
   const payment = ticket.payment.contractPayment;
+  const additional = optionalFields(template?.basic?.additional);
+  if (operatorTestApproval !== undefined) {
+    const purchaseDetails = additional?.filter((field) => field.field_label === "구매조건 상세") || [];
+    if (purchaseDetails.length !== 1)
+      throw new Error("Operator test requires exactly one active 구매조건 상세 field");
+    purchaseDetails[0].val = OPERATOR_TEST_PURCHASE_DETAILS;
+  }
   const payload = {
     category_id: 1,
     sign_type: 1,
     staff_name: staff.name,
     staff_id: Number(staff.id),
     sign_expiration_period: selection.signExpirationDays,
-    title: expectedTemplate.title,
+    title: operatorTestApproval === undefined ? expectedTemplate.title : "(테스트) 아카이브 재등록",
     contractor_member_id: Number(member.memberId),
     contractor_name: member.name,
     contractor_mobile: member.phone,
@@ -110,7 +133,7 @@ export function buildStudioMateJoinContractPayload(input) {
         birthday: member.birthday,
       },
       optional: optionalFields(template?.basic?.optional),
-      additional: optionalFields(template?.basic?.additional),
+      additional,
     },
     join_user_tickets: [
       {
@@ -196,6 +219,7 @@ export async function executeStudioMateMembershipContract({
   template,
   terms,
   sealPath,
+  operatorTestApproval,
 }) {
   const payload = buildStudioMateJoinContractPayload({
     selection,
@@ -204,6 +228,7 @@ export async function executeStudioMateMembershipContract({
     staff,
     template,
     terms,
+    operatorTestApproval,
   });
   const payloadHash = hash(payload);
   const claim = await journal.claim({
@@ -390,7 +415,25 @@ export async function executeStudioMateMembershipContract({
   };
 }
 
-function validateSelection(selection, member, ticket) {
+function validateOperatorTestApproval(approval, selection) {
+  if (
+    !approval ||
+    typeof approval !== "object" ||
+    Array.isArray(approval) ||
+    Object.entries(OPERATOR_TEST_BINDING).some(
+      ([field, expected]) =>
+        approval[field] !== expected ||
+        (field !== "reference" && selection[field] !== expected),
+    ) ||
+    typeof selection.now !== "string" ||
+    !Number.isFinite(Date.parse(selection.now)) ||
+    Date.parse(selection.now) < Date.parse("2026-10-21T15:00:00.000Z") ||
+    Date.parse(selection.now) > Date.parse("2026-10-22T15:00:00.000Z")
+  )
+    throw new Error("Invalid operator test approval or selection");
+}
+
+function validateSelection(selection, member, ticket, approvedOperatorTest = false) {
   if (
     !selection ||
     !Object.hasOwn(MEMBERSHIP_CONTRACT_TEMPLATES, selection.action) ||
@@ -433,7 +476,7 @@ function validateSelection(selection, member, ticket) {
     ticket?.payment?.complete !== true ||
     !["paid", "partial", "unpaid"].includes(ticket?.payment?.status) ||
     !money(ticket?.payment?.totalAmount) ||
-    ticket.payment.totalAmount <= 0 ||
+    (ticket.payment.totalAmount <= 0 && !approvedOperatorTest) ||
     !money(ticket?.payment?.paidAmount) ||
     !money(ticket?.payment?.outstandingAmount) ||
     ticket.payment.totalAmount !== ticket.payment.paidAmount + ticket.payment.outstandingAmount ||

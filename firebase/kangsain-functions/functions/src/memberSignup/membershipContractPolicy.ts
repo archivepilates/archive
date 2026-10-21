@@ -126,8 +126,9 @@ function instant(value: any) {
  *   contracts: { memberId, authoritative: true, complete: true, asOf,
  *     records: [{ contractId, scope, status, termsVersion?, applicable?, revoked?,
  *       signedAt?, validUntil?: RFC3339|null }] } }
- * Signed records require signedAt, termsVersion, applicable/revoked booleans and
- * validUntil (explicit null means no expiry). Cancelled/expired signed records need review.
+ * Signed regular records require signedAt and structurally complete metadata. New
+ * renewals obtain their own agreement; they do not inherit consent from an old contract.
+ * A same-issuance contract blocks recreation regardless of signing status.
  * Histories must cover capturedAt through asOf, and include legacy/native records.
  * baselineCapturedAt must be a prior complete capture at/after cutover; an unseen ID
  * issued at/before that baseline is held, never treated as a catch-up event.
@@ -135,6 +136,31 @@ function instant(value: any) {
  * Only eligible returns an action/key. Other outcomes expose the first blocking reason.
  */
 export function evaluateMembershipContractEligibility(input: any = {}) {
+  return evaluate(input, false);
+}
+
+/** One-off October operator recovery, never used by the periodic detector. */
+export function evaluateApprovedOctoberRenewalRecovery(input: any, approval: any) {
+  const nowMs = instant(input?.now);
+  const issuedMs = instant(input?.ticket?.issuedAt);
+  if (
+    approval?.reference !== "user_october_renewal_recovery_20261022" ||
+    approval?.memberId !== input?.member?.memberId ||
+    approval?.userTicketId !== input?.ticket?.userTicketId ||
+    typeof approval?.sourceSha256 !== "string" || !/^[a-f0-9]{64}$/.test(approval.sourceSha256) ||
+    !Number.isFinite(nowMs) || nowMs < Date.parse("2026-10-21T15:00:00.000Z") ||
+    nowMs >= Date.parse("2026-10-22T15:00:00.000Z") ||
+    !Number.isFinite(issuedMs) || issuedMs < Date.parse("2026-09-30T15:00:00.000Z") ||
+    issuedMs >= Date.parse("2026-10-31T15:00:00.000Z") ||
+    approval?.sourceComplete !== true
+  ) return { status: "review", reasons: ["invalid_october_recovery_approval"], eligibleForDetection: false, action: null, jobKey: null, sendAllowed: false };
+  const decision = evaluate(input, true);
+  if (decision.status === "eligible" && decision.action !== "renewal_purchase_confirmation")
+    return { status: "excluded", reasons: ["recovery_not_a_renewal"], eligibleForDetection: false, action: null, jobKey: null, sendAllowed: false };
+  return decision;
+}
+
+function evaluate(input: any, approvedRecovery: boolean) {
   const { ticket, member, history, policy, now } = input || {};
   const result = (status: string, reason: string, action: string | null = null) => ({
     status,
@@ -204,17 +230,19 @@ export function evaluateMembershipContractEligibility(input: any = {}) {
   const issuedMs = instant(ticket.issuedAt);
   if (!Number.isFinite(issuedMs) || issuedMs > capturedMs) return review("invalid_issuance_timestamp");
   if (issuedMs <= cutoverMs) return result("ignored", "historical_issuance");
-  if (nowMs - issuedMs > policy.maxIssuanceAgeMs) return review("stale_issuance");
+  if (!approvedRecovery && nowMs - issuedMs > policy.maxIssuanceAgeMs) return review("stale_issuance");
 
   const delta = baselineDiff(history.previousIssuanceIds, history.currentIssuanceIds);
   if (delta.status === "review") return review(delta.reasons[0]);
   if (!history.currentIssuanceIds.includes(ticket.userTicketId)) return review("issuance_missing_from_snapshot");
-  if (delta.status === "baseline") return result("baseline", "initialize_without_events");
-  const baselineMs = instant(history.baselineCapturedAt);
-  if (!Number.isFinite(baselineMs) || baselineMs < cutoverMs || baselineMs >= capturedMs)
-    return review("invalid_baseline_time");
-  if (!delta.newIds.includes(ticket.userTicketId)) return result("ignored", "issuance_already_observed");
-  if (issuedMs <= baselineMs) return review("late_discovered_issuance_no_backfill");
+  if (!approvedRecovery) {
+    if (delta.status === "baseline") return result("baseline", "initialize_without_events");
+    const baselineMs = instant(history.baselineCapturedAt);
+    if (!Number.isFinite(baselineMs) || baselineMs < cutoverMs || baselineMs >= capturedMs)
+      return review("invalid_baseline_time");
+    if (!delta.newIds.includes(ticket.userTicketId)) return result("ignored", "issuance_already_observed");
+    if (issuedMs <= baselineMs) return review("late_discovered_issuance_no_backfill");
+  }
 
   const paymentError = validatePayment(ticket.payment);
   if (paymentError) return review(paymentError);
@@ -247,13 +275,19 @@ export function evaluateMembershipContractEligibility(input: any = {}) {
     new Set(contracts.map((row: any) => row.contractId)).size !== contracts.length
   )
     return review("invalid_contract_history");
-  if (
-    contracts.some((row: any) => row.scope === "regular_membership" && ["draft", "opened", "sent"].includes(row.status))
-  )
+  const regularContracts = contracts.filter((row: any) => row.scope === "regular_membership");
+  if (regularContracts.some((row: any) => row.userTicketId != null && !nativeId(row.userTicketId)))
+    return review("invalid_contract_issuance_binding");
+  const boundIds = regularContracts.filter((row: any) => row.userTicketId).map((row: any) => row.userTicketId);
+  if (new Set(boundIds).size !== boundIds.length)
+    return review("duplicate_contract_issuance_binding");
+  if (regularContracts.some((row: any) => row.userTicketId === ticket.userTicketId))
+    return review("existing_contract_for_issuance");
+  if (regularContracts.some((row: any) => !row.userTicketId && ["draft", "opened", "sent"].includes(row.status)))
     return review("existing_unsigned_regular_contract");
-  if (contracts.some((row: any) => row.status !== "signed" && row.signedAt != null))
+  if (regularContracts.some((row: any) => row.status !== "signed" && row.signedAt != null))
     return review("conflicting_signature_history");
-  const signed = contracts.filter((row: any) => row.status === "signed");
+  const signed = regularContracts.filter((row: any) => row.status === "signed");
   if (
     signed.some(
       (row: any) =>
@@ -266,30 +300,10 @@ export function evaluateMembershipContractEligibility(input: any = {}) {
     )
   )
     return review("incomplete_signature_evidence");
-  if (!signed.length) {
-    const registeredMs = instant(member.registeredAt);
-    if (prior.length && Number.isFinite(registeredMs) && registeredMs <= cutoverMs)
-      return result("ignored", "legacy_member_before_contract_cutover");
-    return prior.length
-      ? review("prior_purchase_without_signed_contract")
-      : result("eligible", "verified_first_regular_purchase", "first_purchase_contract");
-  }
-  const applicable = signed.filter((row: any) => {
-    const signedMs = instant(row.signedAt);
-    const expiryMs = row.validUntil == null ? Infinity : instant(row.validUntil);
-    return (
-      row.scope === "regular_membership" &&
-      row.applicable === true &&
-      row.revoked === false &&
-      row.termsVersion === policy.termsVersion &&
-      Number.isFinite(signedMs) &&
-      signedMs <= issuedMs &&
-      expiryMs > nowMs
-    );
-  });
-  if (!applicable.length) return review("no_applicable_signed_regular_contract");
-  if (!prior.length) return review("signed_contract_without_prior_regular_purchase");
-  return result("eligible", "verified_signed_member_renewal", "renewal_purchase_confirmation");
+  if (prior.length)
+    return result("eligible", "verified_regular_repurchase", "renewal_purchase_confirmation");
+  if (signed.length) return review("signed_contract_without_prior_regular_purchase");
+  return result("eligible", "verified_first_regular_purchase", "first_purchase_contract");
 }
 
 function validatePayment(payment: any) {

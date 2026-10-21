@@ -1,9 +1,21 @@
 import {
   evaluateMembershipContractEligibility,
   membershipContractJobKey,
+  evaluateApprovedOctoberRenewalRecovery,
 } from "./studiomate-membership-contract-policy.mjs";
 
 const nativeId = (value) => /^[1-9]\d{0,63}$/.test(String(value ?? ""));
+// Retired regular products verified against native paid purchase histories on
+// 2026-10-22. These establish prior purchase only, never select a new send target.
+const HISTORICAL_REGULAR_PRODUCT_IDS = new Set([
+  "194834", "203252", "268320", "338610", "375406", "412181", "211940",
+  "216386", "249896", "249897", "258773", "336809", "434225",
+]);
+const REGULAR_CONTRACT_TITLES = new Set([
+  "\uC544\uCE74\uC774\uBE0C \uD68C\uC6D0\uAC00\uC785",
+  "\uC544\uCE74\uC774\uBE0C \uC7AC\uB4F1\uB85D",
+  "\uC544\uCE74\uC774\uBE0C \uC7AC\uB4F1\uB85D \uAD6C\uB9E4\uC870\uAC74 \uD655\uC778",
+]);
 const REGULAR_MEMBER_GRADES = new Set(["", "vip", "blue", "인플루언서", "회원", "일반회원", "일반멤버"]);
 const EXCLUDED_MEMBER_GRADES = new Map([
   ["강사회원", "instructor_member_grade_excluded"],
@@ -54,6 +66,7 @@ export function selectNativeMembershipContractCandidate({
   previousDownloadedAt,
   sourceDownloadedAt,
   config,
+  recoveryApproval = null,
 }) {
   const review = (reason, details = {}) => ({
     status: "review",
@@ -80,9 +93,9 @@ export function selectNativeMembershipContractCandidate({
     contractHistory?.status !== "verified" ||
     !Array.isArray(ticketRead.tickets) ||
     !Array.isArray(contractHistory.records) ||
-    !validInstant(previousDownloadedAt) ||
+    (!recoveryApproval && !validInstant(previousDownloadedAt)) ||
     !validInstant(sourceDownloadedAt) ||
-    Date.parse(previousDownloadedAt) >= Date.parse(sourceDownloadedAt)
+    (!recoveryApproval && Date.parse(previousDownloadedAt) >= Date.parse(sourceDownloadedAt))
   )
     return review("incomplete_native_selection_source");
   const regularProductIds = (config?.regularProductIds || []).map(String);
@@ -101,20 +114,20 @@ export function selectNativeMembershipContractCandidate({
   const allRegular = ticketRead.tickets.filter((ticket) =>
     regularProductIds.includes(ticket.productId),
   );
-  const currentIds = allRegular.map((ticket) => ticket.userTicketId);
-  const previousIds = allRegular
+  const purchaseHistory = ticketRead.tickets.filter((ticket) =>
+    regularProductIds.includes(ticket.productId) || HISTORICAL_REGULAR_PRODUCT_IDS.has(ticket.productId),
+  );
+  const currentIds = purchaseHistory.map((ticket) => ticket.userTicketId);
+  const previousIds = purchaseHistory
     .filter((ticket) => Date.parse(ticket.issuedAt) <= Date.parse(previousDownloadedAt))
     .map((ticket) => ticket.userTicketId);
-  const changedProductNames = new Set(
-    (group.rows || [])
-      .map((row) => String(row?.["\uC218\uAC15\uAD8C\uBA85"] || "").trim())
-      .filter(Boolean),
-  );
+  // Excel discovers the member; native issuance IDs and timestamps select the ticket.
   const candidates = allRegular.filter(
     (ticket) =>
-      Date.parse(ticket.issuedAt) > Date.parse(previousDownloadedAt) &&
-      Date.parse(ticket.issuedAt) <= Date.parse(sourceDownloadedAt) &&
-      changedProductNames.has(ticket.title),
+      recoveryApproval
+        ? ticket.userTicketId === recoveryApproval.userTicketId
+        : Date.parse(ticket.issuedAt) > Date.parse(previousDownloadedAt) &&
+          Date.parse(ticket.issuedAt) <= Date.parse(sourceDownloadedAt),
   );
   if (!candidates.length)
     return {
@@ -129,26 +142,22 @@ export function selectNativeMembershipContractCandidate({
     });
 
   const ticket = candidates[0];
-  const contracts = contractHistory.records.map((contract) => ({
-    contractId: contract.contractId,
-    scope:
-      contract.categoryId === 1 &&
-      contract.title === "\uC544\uCE74\uC774\uBE0C \uD68C\uC6D0\uAC00\uC785"
-        ? "regular_membership"
-        : "other",
-    status: contract.status,
-    termsVersion:
-      contract.categoryId === 1 &&
-      contract.title === "\uC544\uCE74\uC774\uBE0C \uD68C\uC6D0\uAC00\uC785"
-        ? config.termsVersion
-        : undefined,
-    applicable:
-      contract.categoryId === 1 &&
-      contract.title === "\uC544\uCE74\uC774\uBE0C \uD68C\uC6D0\uAC00\uC785",
-    revoked: contract.status === "cancelled",
-    signedAt: contract.signedAt || undefined,
-    validUntil: null,
-  }));
+  const contracts = contractHistory.records.map((contract) => {
+    const regular = contract.categoryId === 1 && REGULAR_CONTRACT_TITLES.has(contract.title);
+    return {
+      contractId: contract.contractId,
+      scope: regular ? "regular_membership" : "other",
+      status: contract.status,
+      termsVersion: regular ? config.termsVersion : undefined,
+      applicable: regular,
+      revoked: contract.status === "cancelled",
+      signedAt: contract.signedAt || undefined,
+      validUntil: null,
+      ...(contract.verified === true && nativeId(contract.ticket?.userTicketId)
+        ? { userTicketId: String(contract.ticket.userTicketId) }
+        : {}),
+    };
+  });
   const selectionInput = {
     now: sourceDownloadedAt,
     member: {
@@ -184,16 +193,16 @@ export function selectNativeMembershipContractCandidate({
       maxIssuanceAgeMs: config.maxIssuanceAgeMs,
     },
     history: {
-      previousIssuanceIds: previousIds,
+      previousIssuanceIds: recoveryApproval ? null : previousIds,
       currentIssuanceIds: currentIds,
-      baselineCapturedAt: previousDownloadedAt,
+      baselineCapturedAt: recoveryApproval ? null : previousDownloadedAt,
       purchases: {
         memberId: member.memberId,
         authoritative: true,
         complete: true,
         asOf: sourceDownloadedAt,
-        priorRegularIssuanceIds: allRegular
-          .filter((row) => Date.parse(row.issuedAt) < Date.parse(ticket.issuedAt))
+        priorRegularIssuanceIds: purchaseHistory
+          .filter((row) => !row.refunded && !row.cancelled && row.payment?.verified === true && row.payment?.complete === true && row.payment.totalAmount > 0 && row.payment.refundedAmount === 0 && Date.parse(row.issuedAt) < Date.parse(ticket.issuedAt))
           .map((row) => row.userTicketId),
       },
       contracts: {
@@ -205,7 +214,9 @@ export function selectNativeMembershipContractCandidate({
       },
     },
   };
-  const decision = evaluateMembershipContractEligibility(selectionInput);
+  const decision = recoveryApproval
+    ? evaluateApprovedOctoberRenewalRecovery(selectionInput, recoveryApproval)
+    : evaluateMembershipContractEligibility(selectionInput);
   if (decision.status === "ignored")
     return {
       status: "ignored",
@@ -237,6 +248,7 @@ export function selectNativeMembershipContractCandidate({
       ticket: selectionInput.ticket,
       policy: selectionInput.policy,
       history: selectionInput.history,
+      ...(recoveryApproval ? { operatorRecoveryApproval: Object.freeze({ ...recoveryApproval }) } : {}),
     }),
     ticket,
   };

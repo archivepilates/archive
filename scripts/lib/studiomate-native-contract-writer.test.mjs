@@ -100,6 +100,139 @@ function fixture(action = "first_purchase_contract") {
   };
 }
 
+function operatorTestFixture() {
+  const input = fixture("renewal_purchase_confirmation");
+  const binding = {
+    studioId: "5330",
+    memberId: "1982133",
+    userTicketId: "10277817",
+    productId: "191164",
+  };
+  Object.assign(input.selection, binding, {
+    now: "2026-10-22T03:00:00.000Z",
+    jobKey: `membership_contract_${createHash("sha256").update(JSON.stringify([
+      "studiomate-renewal-operator-test-v1", "1982133", "10277817", "20261022",
+    ])).digest("hex")}`,
+  });
+  input.member.memberId = binding.memberId;
+  Object.assign(input.ticket, binding);
+  input.template.basic.additional = [
+    { field_label: "구매조건 상세" },
+    { field_label: "Synthetic additional field" },
+  ];
+  input.operatorTestApproval = {
+    reference: "user_october_renewal_test_20261022",
+    ...binding,
+    action: input.selection.action,
+    jobKey: input.selection.jobKey,
+  };
+  return input;
+}
+
+test("operator test has a deterministic label without changing native purchase facts or consent", () => {
+  const input = operatorTestFixture();
+  const before = structuredClone(input);
+  const normal = buildStudioMateJoinContractPayload({ ...input, operatorTestApproval: undefined });
+  const payload = buildStudioMateJoinContractPayload(input);
+  assert.equal(payload.title, "(테스트) 아카이브 재등록");
+  assert.deepEqual(payload.basic.additional, [
+    {
+      field_label: "구매조건 상세",
+      val: "운영자 테스트 전용 문서입니다. 신규 구매나 결제를 생성하지 않으며, 회원 동의로 간주되지 않고 회원 동의나 서명을 대신하지 않습니다. 기존 실제 수강권의 금액과 이용기간을 그대로 표시합니다.",
+    },
+    { field_label: "Synthetic additional field", val: "" },
+  ]);
+  assert.ok(payload.terms.every((term) => term.is_agree === false));
+  assert.equal(Object.hasOwn(payload, "contractor_signature"), false);
+  assert.equal(Object.hasOwn(payload, "manager_signature"), false);
+  assert.deepEqual(payload.join_user_tickets, normal.join_user_tickets);
+  assert.deepEqual({
+    ...payload,
+    title: normal.title,
+    basic: { ...payload.basic, additional: normal.basic.additional },
+  }, normal);
+  assert.equal(JSON.stringify(payload), JSON.stringify(buildStudioMateJoinContractPayload(input)));
+  assert.deepEqual(input, before);
+});
+
+test("omitted or undefined operator approval preserves normal payload bytes for both actions", () => {
+  for (const input of [fixture(), fixture("renewal_purchase_confirmation"), operatorTestFixture()]) {
+    delete input.operatorTestApproval;
+    const normal = buildStudioMateJoinContractPayload(input);
+    assert.equal(normal.title, MEMBERSHIP_CONTRACT_TEMPLATES[input.selection.action].title);
+    assert.ok(normal.basic.additional.every((field) => field.val === ""));
+    assert.equal(JSON.stringify(normal), JSON.stringify(buildStudioMateJoinContractPayload({
+      ...input, operatorTestApproval: undefined,
+    })));
+  }
+});
+
+test("operator test rejects wrong selection bindings even when approval matches the changed selection", async (t) => {
+  for (const [field, value] of [
+    ["studioId", "5331"], ["memberId", "1982134"], ["userTicketId", "10277818"],
+    ["productId", "191165"], ["action", "first_purchase_contract"],
+    ["jobKey", `membership_contract_${"b".repeat(64)}`],
+  ]) {
+    await t.test(field, () => {
+      const input = operatorTestFixture();
+      input.selection[field] = value;
+      input.operatorTestApproval[field] = value;
+      if (Object.hasOwn(input.ticket, field)) input.ticket[field] = value;
+      if (field === "memberId") input.member.memberId = value;
+      if (field === "action") Object.assign(input.template, MEMBERSHIP_CONTRACT_TEMPLATES[value]);
+      assert.throws(() => buildStudioMateJoinContractPayload(input), /Invalid operator test/);
+    });
+  }
+});
+
+test("operator test requires every exact approval field and rejects absent or malformed approvals", async (t) => {
+  for (const field of Object.keys(operatorTestFixture().operatorTestApproval)) {
+    await t.test(field, () => {
+      const input = operatorTestFixture();
+      input.operatorTestApproval[field] = "wrong";
+      assert.throws(() => buildStudioMateJoinContractPayload(input), /Invalid operator test/);
+      delete input.operatorTestApproval[field];
+      assert.throws(() => buildStudioMateJoinContractPayload(input), /Invalid operator test/);
+    });
+  }
+  for (const approval of [null, false, "approved", []]) {
+    assert.throws(() => buildStudioMateJoinContractPayload({
+      ...operatorTestFixture(), operatorTestApproval: approval,
+    }), /Invalid operator test/);
+  }
+});
+
+test("operator test time window includes only the requested selection time boundaries", () => {
+  for (const now of ["2026-10-21T15:00:00.000Z", "2026-10-22T15:00:00.000Z"]) {
+    const input = operatorTestFixture();
+    input.selection.now = now;
+    assert.equal(buildStudioMateJoinContractPayload(input).title, "(테스트) 아카이브 재등록");
+  }
+  for (const now of [
+    "2026-10-21T14:59:59.999Z", "2026-10-22T15:00:00.001Z",
+    "invalid", undefined, null, Date.parse("2026-10-22T03:00:00.000Z"),
+  ]) {
+    const input = operatorTestFixture();
+    input.selection.now = now;
+    assert.throws(() => buildStudioMateJoinContractPayload(input), /Invalid operator test/);
+  }
+});
+
+test("operator test requires exactly one active purchase detail field and supports native object fields", () => {
+  for (const additional of [undefined, {}, [],
+    [{ field_label: "Other" }], [{ field_label: "구매조건 상세", is_active: false }],
+    [{ field_label: "구매조건 상세" }, { label: "구매조건 상세" }],
+  ]) {
+    const input = operatorTestFixture();
+    input.template.basic.additional = additional;
+    assert.throws(() => buildStudioMateJoinContractPayload(input), /exactly one active 구매조건 상세/);
+  }
+  const input = operatorTestFixture();
+  input.template.basic.additional = { "구매조건 상세": {} };
+  assert.equal(buildStudioMateJoinContractPayload(input).basic.additional[0].val,
+    buildStudioMateJoinContractPayload(operatorTestFixture()).basic.additional[0].val);
+});
+
 test("renewal title changes without changing the template ID, issuance key or purchase fields", () => {
   const input = fixture("renewal_purchase_confirmation");
   const payload = buildStudioMateJoinContractPayload(input);
@@ -158,8 +291,8 @@ function nativeContract(input, status, { centerSignaturePresent = true } = {}) {
   const requiredTicket = payload.join_user_tickets[0].required;
   return {
     id: CONTRACT_ID,
-    studio_id: 11,
-    selected_member_id: 22,
+    studio_id: Number(input.selection.studioId),
+    selected_member_id: Number(input.selection.memberId),
     category_id: 1,
     title: payload.title,
     status,
@@ -194,6 +327,54 @@ function claimedJournal(events) {
     },
   };
 }
+
+test("execute forwards operator approval and retains native readback and signature request flow", async () => {
+  const input = operatorTestFixture();
+  const events = [];
+  let reads = 0;
+  const api = {
+    post: async (pathname, body) => {
+      events.push(["post", pathname, body]);
+      if (pathname === "/v2/staff/contract/join") return { id: CONTRACT_ID };
+      if (pathname === `/v2/staff/contract/signature/request/${CONTRACT_ID}`)
+        return {
+          contract_id_hash: CONTRACT_ID,
+          contractor_name: input.member.name,
+          studio_name: "Synthetic Studio",
+          contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}`,
+        };
+      assert.equal(pathname, `/v2/staff/contract/signature/request/sms/${CONTRACT_ID}`);
+      return { success: true };
+    },
+    get: async () => nativeContract(input, reads++ === 0 ? "draft" : "waiting"),
+  };
+  const result = await executeStudioMateMembershipContract({ ...input, api, journal: claimedJournal(events) });
+  assert.deepEqual(result, {
+    status: "waiting", reason: "native_signature_request_verified", contractId: CONTRACT_ID,
+  });
+  const posts = events.filter(([kind]) => kind === "post");
+  assert.equal(posts.length, 3);
+  assert.deepEqual(posts[0][2], buildStudioMateJoinContractPayload(input));
+  assert.equal(posts[0][2].title, "(테스트) 아카이브 재등록");
+  assert.ok(posts[0][2].terms.every((term) => term.is_agree === false));
+  assert.equal(events[0][0], "claim");
+  assert.equal(events[0][1].jobKey, input.selection.jobKey);
+  assert.equal(events[0][1].payloadHash,
+    createHash("sha256").update(JSON.stringify(posts[0][2])).digest("hex"));
+});
+
+test("execute rejects invalid operator approval before any journal or API access", async () => {
+  const input = operatorTestFixture();
+  input.operatorTestApproval.reference = "wrong";
+  await assert.rejects(executeStudioMateMembershipContract({
+    ...input,
+    journal: { claim: async () => assert.fail("invalid approval must not claim") },
+    api: {
+      get: async () => assert.fail("invalid approval must not read"),
+      post: async () => assert.fail("invalid approval must not write"),
+    },
+  }), /Invalid operator test/);
+});
 
 test("builds the exact native payload with verified IDs, template and no member consent", () => {
   const input = fixture();

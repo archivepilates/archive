@@ -21,4 +21,5 @@ export const {
   membershipContractJobKey,
   baselineDiff,
   evaluateMembershipContractEligibility,
+  evaluateApprovedOctoberRenewalRecovery,
 } = policy;
