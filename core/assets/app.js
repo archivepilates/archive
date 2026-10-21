@@ -2,9 +2,10 @@ import { uiIcon } from "./ui-icons.js";
 import { prepareCoreAccess, renderInstructorCore } from "./core-instructor-access.js";
 import { finishCoreNavigation, sharedNavigationRuntime, initCoreNavigationDocument } from "./core-navigation.js";
 import { createRealmSafeWhere } from "./firestore-query.js";
+import { operationalReadPlan } from "./core-read-plan.js";
 
 const CORE_BRAND_IMAGE_URL = new URL("../icons/archive-pilates-icon-192.png", import.meta.url).href;
-const FIREBASE_APP_VERSION = "10.14.1";
+const FIREBASE_APP_VERSION = globalThis.ARCHIVE_CORE_FIREBASE_VERSION || "10.14.1";
 const CORE_RUNTIME_CONTRACT_VERSION = "2026-09-25.1";
 const WORK_LANE_ID = "archive-core-transition";
 const STUDIO_ID = "5330";
@@ -8289,6 +8290,11 @@ function renderFallback(error, options = {}) {
 async function refresh() {
   let navigationAccess = null;
   let navigationError = null;
+  let navigationPublished = false;
+  const publishNavigation = async () => {
+    navigationPublished = true;
+    await finishCoreNavigation(state.firebaseRuntime, navigationAccess);
+  };
   const refreshButton = qs("refreshButton");
   if (refreshButton) {
     refreshButton.disabled = true;
@@ -8315,7 +8321,7 @@ async function refresh() {
       showLoginGate(qs("coreLoginError")?.textContent || "");
       return;
     }
-    if (access.role === "instructor" && await renderInstructorCore(runtime, access)) return;
+    if (access.role === "instructor" && await renderInstructorCore(runtime, access, { onReady: publishNavigation })) return;
     const climateRoot = document.querySelector("[data-climate-dashboard]");
     if (climateRoot) {
       const { mountClimate } = await import("./climate.js");
@@ -8347,7 +8353,10 @@ async function refresh() {
       setConnection("연결됨", "운영 도구 준비 완료");
       return;
     }
+    // Fresh access and page setup are complete; data readiness is shown inside the destination.
+    await publishNavigation();
     const { db, doc, getDoc } = runtime;
+    const operationalReads = operationalReadPlan(document);
     const shouldLoadBusiness = Boolean(qs("businessMonthSelect"));
     const shouldLoadTicketLiability = Boolean(qs("ticketLiabilityTableBody"));
     const shouldLoadHome = Boolean(qs("homeDecisionList"));
@@ -8395,10 +8404,14 @@ async function refresh() {
       staffHrCards,
       staffEvaluationSubmissions,
     ] = await Promise.all([
-      safeRead("workLanes", () => getDoc(doc(db, "workLanes", WORK_LANE_ID)), null),
-      safeRead("automationStatus", () => getRecentCollection(db, runtime, "automationStatus"), []),
-      safeRead("sourceImports", () => getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50), []),
-      safeRead("dataQualityIssues", () => getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100), []),
+      operationalReads.lane
+        ? safeRead("workLanes", () => getDoc(doc(db, "workLanes", WORK_LANE_ID)), null) : Promise.resolve(null),
+      operationalReads.automation
+        ? safeRead("automationStatus", () => getRecentCollection(db, runtime, "automationStatus"), []) : Promise.resolve([]),
+      operationalReads.imports
+        ? safeRead("sourceImports", () => getCollectionBy(db, runtime, "sourceImports", "updatedAt", 50), []) : Promise.resolve([]),
+      operationalReads.quality
+        ? safeRead("dataQualityIssues", () => getCollectionBy(db, runtime, "dataQualityIssues", "updatedAt", 100), []) : Promise.resolve([]),
       shouldLoadBusinessSnapshot
         ? safeRead("dashboardSnapshots/current", () => getDoc(doc(db, "dashboardSnapshots", "current")), null)
         : Promise.resolve(null),
@@ -8652,7 +8665,7 @@ async function refresh() {
       refreshButton.removeAttribute("aria-busy");
       refreshButton.setAttribute("title", "새로고침");
     }
-    await finishCoreNavigation(state.firebaseRuntime, navigationAccess, navigationError);
+    if (!navigationPublished) await finishCoreNavigation(state.firebaseRuntime, navigationAccess, navigationError);
   }
 }
 

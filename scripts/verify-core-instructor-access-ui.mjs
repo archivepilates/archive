@@ -27,6 +27,11 @@ const fixtures = new Map();
 const report = {
   scope: "Offline full-app integration with synthetic fixtures and mocked Firebase SDKs, including revoked-session and transient access failures. No live auth, backend authorization, canonical matching, revocation, or delivery proof.",
   fixedTime, options, engine: engineName, scenarioFilter, liveStaticOrigin, sources: [], scenarios: [], failures: [],
+  baselineExpectationAlignment: [
+    "QA-only: existing manager library tab is '시퀀스', while instructor '내 시퀀스' expectations stay unchanged.",
+    "QA-only: existing manager library defaults to bounded all-owner queries; ownerUid is required only for an explicitly requested mine scope.",
+    "QA-only: commit native month input edits with keyboard blur before asserting workspace results; WebKit 768px reproduced the prior fill-only timeout.",
+  ],
   cleanup: { contextsOpened: 0, contextsClosed: 0, browserClosed: false, serverClosed: false, fixturesRemaining: 0 },
 };
 let fixtureNumber = 0;
@@ -138,10 +143,38 @@ export function read(operation, ref) {
   return { docs: [], size: 0, empty: true, metadata: { fromCache: false, hasPendingWrites: false },
     exists: () => false, data: () => undefined, forEach: () => {} };
 }
+export function holdRead(id, path) {
+  if (fixture.mode !== "manager-slow-data-navigation") throw new Error("Read gates require the slow-data fixture");
+  let resolve;
+  const gate = { id, path, started: false, released: false, completed: false,
+    promise: new Promise(done => { resolve = done; }) };
+  gate.release = () => {
+    if (gate.released) return;
+    gate.released = true;
+    record("readGate", { id, phase: "released", atMs: performance.now() });
+    resolve();
+  };
+  (state.readGates ||= []).push(gate);
+  return gate;
+}
+export async function readAsync(operation, ref) {
+  // Keep the existing authorization check and synthetic snapshot unchanged.
+  const snapshot = read(operation, ref);
+  const gate = state.readGates?.find(item => !item.started && item.path === ref.path);
+  if (gate) {
+    gate.started = true;
+    record("readGate", { id: gate.id, phase: "started", atMs: performance.now() });
+    await gate.promise;
+    gate.completed = true;
+    record("readGate", { id: gate.id, phase: "completed", atMs: performance.now() });
+  }
+  return snapshot;
+}
+if (fixture.mode === "manager-slow-data-navigation") holdRead("initial", "automationStatus");
 `;
 
 function firebaseModule(kind) {
-  const shared = `import { fixture, state, record, denied, authClient, observe, logout, read, rejectWrite } from ${JSON.stringify(`${origin}/__qa/state.mjs`)};\n`;
+  const shared = `import { fixture, state, record, denied, authClient, observe, logout, read, readAsync, rejectWrite } from ${JSON.stringify(`${origin}/__qa/state.mjs`)};\n`;
   if (kind === "app") return shared + `
     const app = { name: "qa-only" };
     export const initializeApp = () => { state.sdkInitializations++; return app; };
@@ -159,6 +192,7 @@ function firebaseModule(kind) {
       const call = record("callables", { name, month: payload?.month, path: location.pathname });
       if (!authClient.currentUser) throw denied("Synthetic session is signed out");
       if (name === "getCoreAccessSession") {
+        call.startedAtMs = performance.now();
         const destination = document.querySelector('[data-core-navigation-frame][hidden]');
         if (destination) call.destination = new URL(destination.dataset.destination).pathname;
         const gate = state.nextAccessGate;
@@ -185,6 +219,7 @@ function firebaseModule(kind) {
         state.session = session;
         state.accessResolved = true;
         call.resolved = true;
+        call.resolvedAtMs = performance.now();
         record("session", { role, rawRole: fixture.rawRole });
         return { data: session };
       }
@@ -200,7 +235,17 @@ function firebaseModule(kind) {
       if (name === "getCoreInstructorWorkspace") {
         if (state.session?.role !== "instructor" || fixture.mustChangePassword) throw denied("Workspace before access");
         state.workspaceAttempts++;
+        const gate = state.nextWorkspaceGate;
+        if (gate) {
+          state.nextWorkspaceGate = null;
+          gate.started = true;
+          await gate.promise;
+          if (!authClient.currentUser || state.session?.role !== "instructor" || fixture.mustChangePassword)
+            throw denied("Workspace session changed while pending");
+          gate.completed = true;
+        }
         if (fixture.workspaceFailures-- > 0) throw new Error("Synthetic workspace failure");
+        call.resolved = true;
         return { data: { ...fixture.workspace, privateTasks: payload?.month && payload.month !== "2026-10" ? [] : fixture.workspace.privateTasks } };
       }
       if (name === "getCoreAirConditioners" && fixture.mode === "climate" && state.session?.role === "instructor"
@@ -233,10 +278,10 @@ function firebaseModule(kind) {
     export const orderBy = (field, direction) => ({ kind: "orderBy", field, direction });
     export const limit = (value) => ({ kind: "limit", value });
     export const query = (ref, ...filters) => ({ ...ref, filters: [...ref.filters, ...filters] });
-    export const getDoc = async (ref) => read("getDoc", ref);
-    export const getDocs = async (ref) => read("getDocs", ref);
-    export const getDocFromServer = async (ref) => read("getDocFromServer", ref);
-    export const getDocsFromServer = async (ref) => read("getDocsFromServer", ref);
+    export const getDoc = async (ref) => readAsync("getDoc", ref);
+    export const getDocs = async (ref) => readAsync("getDocs", ref);
+    export const getDocFromServer = async (ref) => readAsync("getDocFromServer", ref);
+    export const getDocsFromServer = async (ref) => readAsync("getDocsFromServer", ref);
     export function onSnapshot(ref, options, next, error) {
       const callback = typeof options === "function" ? options : next;
       let subscribed = true;
@@ -353,6 +398,7 @@ function installDomHooks() {
     ".cia-account": "qa-instructor-account",
     "[data-core-navigation-frame]": "qa-navigation-frame",
     ".core-navigation-status": "qa-navigation-status",
+    "#privateProgressList": "qa-private-progress",
   };
   const tag = () => {
     for (const [selector, id] of Object.entries(hooks)) {
@@ -379,7 +425,9 @@ async function settled(page) {
   await page.waitForFunction(() => {
     if (!window.__coreFirebaseQA?.accessResolved) return false;
     const refresh = document.querySelector('[data-testid="qa-refresh"]');
-    return !refresh || refresh.getAttribute("aria-busy") !== "true";
+    const workspace = document.querySelector("[data-core-instructor-content]");
+    return (!refresh || refresh.getAttribute("aria-busy") !== "true")
+      && (!workspace || workspace.getAttribute("aria-busy") !== "true");
   });
 }
 
@@ -537,9 +585,12 @@ async function workspaceCase(page, base, kind, surface = page) {
     await filters.getByRole("button", { name: "전체", exact: true }).click();
     assert.equal(await ui.getByRole("listitem").count(), 3);
     await ui.getByLabel("조회 월").fill("2026-08");
+    await ui.getByLabel("조회 월").press("Tab");
+    await page.waitForFunction(() => window.__coreFirebaseQA.callables.some(call => call.name === "getCoreInstructorWorkspace" && call.month === "2026-08"));
     await ui.getByRole("paragraph").filter({ hasText: "연결된 프라이빗 기록이 없습니다." }).waitFor();
     assert.equal((await telemetry(page)).callables.at(-1).month, "2026-08");
     await ui.getByLabel("조회 월").fill("2026-10");
+    await ui.getByLabel("조회 월").press("Tab");
     await ui.getByRole("link", { name: "리포트 확인", exact: true }).waitFor();
     const before = (await telemetry(page)).callables.length;
     await ui.getByRole("button", { name: "새로고침", exact: true }).click();
@@ -632,7 +683,7 @@ async function simplifiedChrome(frame) {
   return { ...metrics, focus, toolsKeyboardOutsideAndCommand: true };
 }
 
-async function sequenceChromeLayout(page, frame, name) {
+async function sequenceChromeLayout(page, frame, name, manager = false) {
   const chrome = await simplifiedChrome(frame);
   const layout = await frame.evaluate(() => {
     const shown = node => {
@@ -653,7 +704,7 @@ async function sequenceChromeLayout(page, frame, name) {
   assert.equal(layout.overflow, false, "Sequence chrome has no horizontal overflow");
   assert.deepEqual(layout.clipped, [], "Sequence chrome text is not clipped");
   assert.deepEqual(layout.smallTargets, [], "Sequence action hit areas are at least 44px high");
-  await frame.getByRole("tab", { name: /내 시퀀스/ }).click();
+  await frame.getByRole("tab", { name: manager ? /^시퀀스/ : /내 시퀀스/ }).click();
   assert.equal(await frame.getByRole("contentinfo").isVisible(), false, "Library hides footer");
   const summary = summaryControl(frame, "불러오기·백업");
   assert.equal(await summary.evaluate(node => node.parentElement.open), false);
@@ -722,8 +773,8 @@ async function managerSequenceCase(page, base, name) {
   const frame = page.frames().find(frame => new URL(frame.url()).pathname === `${base}sequence/studio.html`);
   assert.ok(frame, "Actual manager studio iframe loads on the matching surface");
   await frame.getByRole("heading", { name: "시퀀스 노트", exact: true }).waitFor();
-  await frame.getByRole("tab", { name: /내 시퀀스/ }).waitFor();
-  const sequenceLayout = { chrome: await sequenceChromeLayout(page, frame, name), initial: await managerSequenceGeometry(page, frame) };
+  await frame.getByRole("tab", { name: /^시퀀스/ }).waitFor();
+  const sequenceLayout = { chrome: await sequenceChromeLayout(page, frame, name, true), initial: await managerSequenceGeometry(page, frame) };
   const menu = page.getByRole("button", { name: "메뉴", exact: true });
   const nav = page.getByTestId("qa-operator-nav");
   assert.ok(await nav.getByRole("link", { includeHidden: true }).count() > 3);
@@ -746,17 +797,40 @@ async function managerSequenceCase(page, base, name) {
     assert.equal(await menu.isVisible(), false);
     await nav.waitFor({ state: "visible" });
   }
+  const defaultReads = (await telemetry(page)).reads;
+  await frame.getByRole("tab", { name: /^시퀀스/ }).click();
+  const scope = frame.getByLabel("시퀀스 조회 범위", { exact: true });
+  assert.equal(await scope.inputValue(), "all", "Manager library defaults to the existing all-owner view");
+  await scope.selectOption("mine");
+  await page.waitForFunction(start => window.__coreFirebaseQA.reads.slice(start).some(read => read.operation === "onSnapshot"
+    && read.filters.some(filter => filter.kind === "where" && filter.field === "ownerUid" && filter.value === "qa-instructor")), defaultReads.length);
+  const mineReads = (await telemetry(page)).reads.slice(defaultReads.length);
+  await frame.waitForFunction(() => !document.getElementById("libraryScope").disabled);
+  assert.equal(await scope.inputValue(), "mine");
+  await scope.selectOption("all");
+  await page.waitForFunction(start => window.__coreFirebaseQA.reads.slice(start).some(read => read.operation === "onSnapshot"
+    && !read.filters.some(filter => filter.kind === "where" && filter.field === "ownerUid")), defaultReads.length + mineReads.length);
+  await frame.waitForFunction(() => !document.getElementById("libraryScope").disabled);
+  assert.equal(await scope.inputValue(), "all");
+  await frame.getByRole("tab", { name: "작성", exact: true }).click();
   const state = await telemetry(page);
   assert.equal(state.role, "manager");
   assert.equal(state.events[0]?.name, "getCoreAccessSession", "Access check precedes sequence reads");
   assert.equal(state.events.find(event => event.kind === "session")?.rawRole, "manager");
   assert.deepEqual(state.callables.map(call => call.name), ["getCoreAccessSession"]);
   assert.ok(state.reads.length > 0, "Actual manager sequence store reads its notes");
-  for (const read of state.reads) {
-    assert.equal(read.path, "sequenceNotes");
-    assert.equal(read.allowed, true);
-    assert.ok(read.filters.some(filter => filter.kind === "where" && filter.field === "ownerUid"
-      && filter.operator === "==" && filter.value === "qa-instructor"));
+  for (const [scope, reads] of [["all", defaultReads], ["mine", mineReads], ["all", state.reads.slice(defaultReads.length + mineReads.length)]]) {
+    assert.ok(reads.length > 0, `Manager ${scope} scope actually reads its library`);
+    for (const read of reads) {
+      assert.equal(read.path, "sequenceNotes");
+      assert.equal(read.allowed, true);
+      assert.ok(read.filters.some(filter => filter.kind === "where" && filter.field === "deleted" && filter.operator === "==" && filter.value === false));
+      assert.ok(read.filters.some(filter => filter.kind === "limit" && filter.value === 100));
+      assert.ok(read.filters.some(filter => filter.kind === "orderBy" && filter.field === "updatedAt" && filter.direction === "desc"));
+      const owners = read.filters.filter(filter => filter.kind === "where" && filter.field === "ownerUid");
+      assert.equal(owners.length, scope === "mine" ? 1 : 0, "Owner filter is present only for the explicitly requested mine scope");
+      if (scope === "mine") assert.ok(owners[0].operator === "==" && owners[0].value === "qa-instructor");
+    }
   }
   assert.deepEqual(state.writes, [], "Manager studio QA must not write");
   return { ...state, sequenceLayout };
@@ -815,7 +889,7 @@ async function pendingNavigation(page, destination, documentId) {
   assert.notEqual(last.resolved, true);
 }
 
-async function destinationFrame(page, pathName, documentId, manager) {
+async function destinationFrame(page, pathName, documentId, manager, waitForData = true) {
   await page.waitForURL(`${origin}${pathName}`);
   await page.waitForFunction(pathName => [...document.querySelectorAll('[data-core-navigation-frame]')]
     .some(frame => !frame.hidden && new URL(frame.dataset.destination).pathname === pathName), pathName);
@@ -860,6 +934,12 @@ async function destinationFrame(page, pathName, documentId, manager) {
     assert.equal(await page.getByRole("button", { name: "메뉴", exact: true }).getAttribute("aria-expanded"), "false",
       "Mobile menu collapsed and ARIA state reset after navigation");
   }
+  if (waitForData) await frame.waitForFunction(() => {
+    const refresh = document.getElementById("refreshButton");
+    const workspace = document.querySelector("[data-core-instructor-content]");
+    return (!refresh || refresh.getAttribute("aria-busy") !== "true")
+      && (!workspace || workspace.getAttribute("aria-busy") !== "true");
+  });
   return frame;
 }
 
@@ -968,6 +1048,182 @@ async function navigationCase(page, base, manager, name) {
     "Each click/back/forward destination independently revalidates access");
   await layout(page, `${name}-continuity`, !manager);
   return { ...await telemetry(page), navigation: evidence };
+}
+
+async function managerSlowDataNavigationCase(page, base, name) {
+  await page.waitForFunction(() => window.__coreFirebaseQA?.readGates?.find(gate => gate.id === "initial")?.started);
+  const documentId = await navigationSetup(page, true);
+  const destination = `${base}private/`;
+  const globalPaths = ["workLanes/archive-core-transition", "automationStatus", "sourceImports", "dataQualityIssues"];
+  const initialReads = (await telemetry(page)).reads;
+  const globalCounts = Object.fromEntries(globalPaths.map(path => [path, initialReads.filter(read => read.path === path).length]));
+  assert.deepEqual(globalCounts, { "workLanes/archive-core-transition": 0, automationStatus: 1, sourceImports: 1, dataQualityIssues: 1 },
+    "Home retains health/import/quality reads but omits the unused lane query");
+  await page.evaluate(async () => {
+    const { holdRead } = await import("/__qa/state.mjs");
+    holdRead("destination", "privateLessonSessions");
+    const host = window.archiveCoreNavigation;
+    const dispose = host.dispose;
+    const qa = window.__coreSlowDataQA = {
+      host, initialRefresh: document.getElementById("refreshButton"), disposeCalls: 0,
+      startedAtMs: performance.now(),
+    };
+    host.dispose = function(...args) { qa.disposeCalls++; return dispose.apply(this, args); };
+    if (qa.initialRefresh?.getAttribute("aria-busy") !== "true") throw new Error("Initial data must still be loading");
+  });
+  await armNavigationAccess(page);
+  await (await navigationLink(page, true, "프라이빗")).click();
+  await pendingNavigation(page, { before: base, after: destination }, documentId);
+  const pending = await page.evaluate(() => ({
+    accessCount: window.__coreFirebaseQA.callables.filter(call => call.name === "getCoreAccessSession").length,
+    destinationReadStarted: window.__coreFirebaseQA.readGates.find(gate => gate.id === "destination").started,
+    initialCompleted: window.__coreFirebaseQA.readGates.find(gate => gate.id === "initial").completed,
+    readCount: window.__coreFirebaseQA.reads.length,
+  }));
+  assert.equal(pending.accessCount, 2, "Destination requires its own access call despite the initial data still loading");
+  assert.equal(pending.destinationReadStarted, false, "No destination Firestore reads before fresh access resolves");
+  assert.equal(pending.initialCompleted, false);
+  assert.equal(pending.readCount, initialReads.length, "All destination reads wait for fresh access, not just the gated query");
+  await page.evaluate(() => window.__coreNavigationGate.release());
+  const child = await destinationFrame(page, destination, documentId, true, false);
+  await child.getByRole("heading", { name: "프라이빗 기록·리포트", exact: true }).waitFor({ state: "visible" });
+  await page.waitForFunction(() => window.__coreFirebaseQA.readGates.find(gate => gate.id === "destination").started);
+  assert.equal(await child.getByTestId("qa-refresh").getAttribute("aria-busy"), "true",
+    "Destination shell is visible while its Firestore query remains pending");
+  assert.match(await child.getByTestId("qa-private-progress").innerText(), /수업 불러오는 중/,
+    "Visible destination accurately reports pending data rather than an empty success");
+  const visible = await page.evaluate(async () => {
+    const { record, state } = await import("/__qa/state.mjs");
+    record("slowData", { phase: "destination-visible", atMs: performance.now() });
+    const access = state.callables.filter(call => call.name === "getCoreAccessSession").at(-1);
+    const qa = window.__coreSlowDataQA;
+    qa.visibleAtMs = performance.now();
+    return {
+      gates: state.readGates.map(({ id, started, released, completed }) => ({ id, started, released, completed })),
+      freshSession: window.__coreNavigationQA.ready.at(-1).distinctSession,
+      accessResolved: access.resolved, accessResolvedAtMs: access.resolvedAtMs,
+      visibleAtMs: qa.visibleAtMs, startedAtMs: qa.startedAtMs,
+      sameHost: window.archiveCoreNavigation === qa.host, disposeCalls: qa.disposeCalls,
+    };
+  });
+  assert.deepEqual(visible.gates, [
+    { id: "initial", started: true, released: false, completed: false },
+    { id: "destination", started: true, released: false, completed: false },
+  ], "Both real UI data reads remain gated after the verified destination is visible");
+  assert.equal(visible.freshSession, true);
+  assert.equal(visible.accessResolved, true);
+  assert.equal(visible.sameHost, true);
+  assert.equal(visible.disposeCalls, 0);
+  await page.screenshot({ path: path.join(output, `${name}-visible-before-data.png`), fullPage: true });
+
+  // Complete the original page after departure, while the destination is still loading.
+  await page.evaluate(() => window.__coreFirebaseQA.readGates.find(gate => gate.id === "initial").release());
+  await page.waitForFunction(() => window.__coreFirebaseQA.readGates.find(gate => gate.id === "initial").completed
+    && window.__coreSlowDataQA.initialRefresh.getAttribute("aria-busy") !== "true");
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+  const continuity = await page.evaluate(async () => {
+    const { record, state } = await import("/__qa/state.mjs");
+    record("slowData", { phase: "initial-page-settled", atMs: performance.now() });
+    return {
+      sameHost: window.archiveCoreNavigation === window.__coreSlowDataQA.host,
+      disposeCalls: window.__coreSlowDataQA.disposeCalls,
+      documentId: window.__coreUiQA.documentId,
+      frames: [...document.querySelectorAll("[data-core-navigation-frame]")].map(frame => ({
+        hidden: frame.hidden, destination: new URL(frame.dataset.destination).pathname,
+      })),
+      destinationCompleted: state.readGates.find(gate => gate.id === "destination").completed,
+    };
+  });
+  assert.equal(page.url(), `${origin}${destination}`, "Late initial completion cannot restore the initial URL");
+  assert.equal(continuity.documentId, documentId);
+  assert.equal(continuity.sameHost, true, "Late initial completion cannot replace the navigation host");
+  assert.equal(continuity.disposeCalls, 0, "Late initial completion cannot dispose the navigation host");
+  assert.deepEqual(continuity.frames, [{ hidden: false, destination }]);
+  assert.equal(continuity.destinationCompleted, false);
+  assert.equal(child.isDetached(), false);
+
+  await page.evaluate(() => window.__coreFirebaseQA.readGates.find(gate => gate.id === "destination").release());
+  await child.waitForFunction(() => document.getElementById("refreshButton")?.getAttribute("aria-busy") !== "true");
+  const progress = child.getByTestId("qa-private-progress");
+  await progress.getByRole("article").first().waitFor({ state: "visible" });
+  assert.equal(await progress.getByRole("article").count(), 4, "Query completion renders the real four-stage empty result");
+  assert.match(await progress.innerText(), /해당 단계 수업 없음/);
+  assert.doesNotMatch(await progress.innerText(), /불러오는 중|불러오지 못했습니다/);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+  const completed = await page.evaluate(() => ({
+    sameHost: window.archiveCoreNavigation === window.__coreSlowDataQA.host,
+    disposeCalls: window.__coreSlowDataQA.disposeCalls,
+    gatesCompleted: window.__coreFirebaseQA.readGates.every(gate => gate.completed),
+  }));
+  assert.equal(completed.sameHost, true, "Destination completion also retains the same navigation host");
+  assert.equal(completed.disposeCalls, 0);
+  assert.equal(completed.gatesCompleted, true);
+  assert.equal(child.isDetached(), false);
+  assert.equal(page.url(), `${origin}${destination}`);
+  const state = await telemetry(page);
+  const visibleIndex = state.events.findIndex(event => event.kind === "slowData" && event.phase === "destination-visible");
+  const initialIndex = state.events.findIndex(event => event.kind === "readGate" && event.id === "initial" && event.phase === "completed");
+  const destinationIndex = state.events.findIndex(event => event.kind === "readGate" && event.id === "destination" && event.phase === "completed");
+  assert.ok(visibleIndex >= 0 && visibleIndex < initialIndex && initialIndex < destinationIndex,
+    "Controlled ordering proves visible destination, late initial completion, then destination data completion");
+  assert.equal(state.callables.filter(call => call.name === "getCoreAccessSession").length, 2);
+  assert.equal(state.sdkInitializations, 1);
+  assert.equal(state.authClientsCreated, 1);
+  assert.ok(state.reads.every(read => read.allowed));
+  assert.deepEqual(Object.fromEntries(globalPaths.map(path => [path, state.reads.filter(read => read.path === path).length])), globalCounts,
+    "Private destination adds none of the four unrelated global queries");
+  assert.deepEqual(state.writes, []);
+  return { ...state, slowDataNavigation: { visible, continuity, completed, globalCounts,
+    timing: { navigationToVisibleMs: visible.visibleAtMs - visible.startedAtMs,
+      accessResolvedToVisibleMs: visible.visibleAtMs - visible.accessResolvedAtMs,
+      interpretation: "Synthetic local timing only; controlled gate ordering is the acceptance proof." } } };
+}
+
+async function instructorSlowWorkspaceNavigationCase(page, base, name) {
+  const documentId = await navigationSetup(page, false);
+  await page.getByRole("link", { name: "기록 작성", exact: true }).waitFor();
+  await (await navigationLink(page, false, "시퀀스 노트")).click();
+  const sequence = await destinationFrame(page, `${base}sequence/`, documentId, false);
+  const studio = sequence.childFrames().find(frame => new URL(frame.url()).pathname === `${base}sequence/studio.html`);
+  assert.ok(studio);
+  await studio.waitForFunction(() => Boolean(window.archiveSequenceNavigation));
+  await page.evaluate(() => {
+    let release;
+    const promise = new Promise(resolve => { release = resolve; });
+    const gate = window.__coreSlowWorkspaceQA = { promise, release, started: false, completed: false };
+    window.__coreFirebaseQA.nextWorkspaceGate = gate;
+  });
+  await armNavigationAccess(page);
+  await (await navigationLink(page, false, "프라이빗")).click();
+  await pendingNavigation(page, { before: `${base}sequence/`, after: `${base}private/` }, documentId);
+  assert.equal(await page.evaluate(() => window.__coreSlowWorkspaceQA.started), false,
+    "Workspace request cannot precede destination access validation");
+  await page.evaluate(() => window.__coreNavigationGate.release());
+  const child = await destinationFrame(page, `${base}private/`, documentId, false, false);
+  await page.waitForFunction(() => window.__coreSlowWorkspaceQA.started);
+  await child.getByRole("status").filter({ hasText: "프라이빗 기록을 불러오는 중" }).waitFor({ state: "visible" });
+  const pending = await child.evaluate(() => ({
+    busy: document.querySelector("[data-core-instructor-content]").getAttribute("aria-busy"),
+    hasTaskRows: Boolean(document.querySelector(".cia-list .cia-row")),
+    completed: parent.__coreSlowWorkspaceQA.completed,
+    accessResolved: parent.__coreFirebaseQA.callables.filter(call => call.name === "getCoreAccessSession").at(-1).resolved,
+    workspaceResolved: parent.__coreFirebaseQA.callables.filter(call => call.name === "getCoreInstructorWorkspace").at(-1).resolved === true,
+  }));
+  assert.deepEqual(pending, { busy: "true", hasTaskRows: false, completed: false, accessResolved: true, workspaceResolved: false },
+    "Verified instructor destination shows loading without exposing stale tasks while workspace is pending");
+  await page.screenshot({ path: path.join(output, `${name}-visible-before-workspace.png`), fullPage: true });
+  await page.evaluate(() => window.__coreSlowWorkspaceQA.release());
+  await child.getByRole("link", { name: "기록 작성", exact: true }).waitFor();
+  await child.waitForFunction(() => document.querySelector("[data-core-instructor-content]")?.getAttribute("aria-busy") !== "true");
+  assert.equal(await page.evaluate(() => window.__coreSlowWorkspaceQA.completed), true);
+  assert.equal(await child.getByRole("link", { name: "리포트 확인", exact: true }).count(), 1);
+  assert.equal(page.url(), `${origin}${base}private/`);
+  const state = await noOperatorReads(page, true);
+  assert.equal(state.callables.filter(call => call.name === "getCoreAccessSession").length, 3);
+  assert.equal(state.callables.filter(call => call.name === "getCoreInstructorWorkspace").length, 2);
+  assert.ok(state.reads.every(read => read.path === "sequenceNotes"));
+  assert.deepEqual(state.writes, []);
+  return { ...state, slowWorkspaceNavigation: { pending, completed: true } };
 }
 
 async function pendingAccessCase(page, base, manager, revoked) {
@@ -1102,6 +1358,8 @@ async function runCase(page, base, kind, name) {
     return state;
   }
   if (["navigation", "manager-navigation"].includes(kind)) return navigationCase(page, base, kind.startsWith("manager-"), name);
+  if (kind === "manager-slow-data-navigation") return managerSlowDataNavigationCase(page, base, name);
+  if (kind === "instructor-slow-workspace-navigation") return instructorSlowWorkspaceNavigationCase(page, base, name);
   if (kind === "manager-current-refresh-downgrade") return currentRefreshDowngrade(page, base, name);
   if (/^(?:manager|instructor)-destination-(?:transient|timeout)$/.test(kind)) {
     return destinationFailureCase(page, base, kind.startsWith("manager-"), kind.endsWith("timeout"));
@@ -1172,7 +1430,10 @@ async function runCase(page, base, kind, name) {
     assert.equal(state.role, "manager");
     assert.equal(state.events.find(event => event.kind === "session").rawRole, kind);
     assert.equal(state.events[0]?.name, "getCoreAccessSession");
-    assert.ok(state.reads.some(read => read.path === "workLanes/archive-core-transition"));
+    assert.equal(state.reads.some(read => read.path === "workLanes/archive-core-transition"), false, "Home omits the unused lane query");
+    for (const path of ["automationStatus", "sourceImports", "dataQualityIssues"]) {
+      assert.ok(state.reads.some(read => read.path === path), `Home retains ${path} health data`);
+    }
     assert.ok(state.reads.every(read => read.allowed));
     assert.deepEqual(state.writes, []);
     await loginName(page, true);
@@ -1324,7 +1585,7 @@ function routeFor(base, kind) {
   if (kind === "manager-sequence") return `${base}sequence/`;
   if (["private", "sequence", "climate"].includes(kind)) return `${base}${kind}/`;
   if (kind === "workspace-retry") return `${base}private/`;
-  if (["navigation", "instructor-bfcache"].includes(kind) || /^instructor-(?:pending|destination)-/.test(kind)) return `${base}private/`;
+  if (["navigation", "instructor-bfcache", "instructor-slow-workspace-navigation"].includes(kind) || /^instructor-(?:pending|destination)-/.test(kind)) return `${base}private/`;
   if (kind.startsWith("blocked-")) return `${base}${kind.slice(8)}/`;
   return base;
 }
@@ -1456,7 +1717,7 @@ try {
   assert.ok(app.includes('from "./core-instructor-access.js"'), "Main integration import is required");
   assert.ok(refresh.indexOf("await prepareCoreAccess(runtime, user)") >= 0);
   assert.ok(refresh.indexOf("await prepareCoreAccess(runtime, user)") < refresh.indexOf("const { db, doc, getDoc }"), "Access preparation must precede operator reads");
-  assert.ok(refresh.includes("await renderInstructorCore(runtime, access)"));
+  assert.ok(refresh.includes("await renderInstructorCore(runtime, access"));
   const moduleFile = path.join(repo, "core/assets/core-instructor-access.js");
   await source("core/assets/core-instructor-access.js");
   await source("core/assets/core-instructor-access.css");
@@ -1474,7 +1735,7 @@ try {
   browser = await ({ chromium, webkit }[engineName]).launch({ headless: true });
   const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence", "climate",
     "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "manager-sequence", "owner", "revoked-session", "access-transient",
-    "logged-out", "bootstrap-failure", "navigation", "manager-navigation"];
+    "logged-out", "bootstrap-failure", "navigation", "manager-navigation", "manager-slow-data-navigation", "instructor-slow-workspace-navigation"];
   for (const base of surfaces) {
     for (const viewport of viewports) {
       for (const kind of cases) {

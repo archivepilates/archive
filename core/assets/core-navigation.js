@@ -65,6 +65,7 @@ export async function finishCoreNavigation(runtime, session, error = null) {
   let timer;
   let host;
   let disposed = false;
+  let invalidating = false;
   let serial = Promise.resolve();
   const original = new Map([...container.children].map(node => [node, { hidden: node.hidden, inert: node.inert }]));
   const navLinks = new Map([...document.querySelectorAll(NAV_SELECTOR)].map(link => [link, link.getAttribute("href")]));
@@ -109,8 +110,17 @@ export async function finishCoreNavigation(runtime, session, error = null) {
   };
   const invalidate = destination => {
     // An access change is never converted into a cached page or cached privilege.
-    api.dispose();
-    location.replace(destination);
+    if (invalidating || disposed) return;
+    invalidating = true;
+    setBusy(true);
+    document.documentElement.removeAttribute("data-core-access");
+    const instructor = document.querySelector("#coreInstructorAccess");
+    if (instructor) instructor.hidden = true;
+    // Safari can abort a child caller when dispose removes that child's iframe.
+    window.setTimeout(() => {
+      api.dispose();
+      location.replace(destination);
+    }, 0);
   };
   const navigate = async (raw, historyMode = "push") => {
     const url = validTarget(raw);

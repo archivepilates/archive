@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARCHIVE CORE 로딩 개선 검증</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#222;font:16px/1.75 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:32px 20px 72px}h1{font-size:27px;line-height:1.4}h2{font-size:20px;margin:32px 0 12px}p,li{max-width:70ch;overflow-wrap:anywhere}section{border-top:1px solid #d9dde3;padding-top:8px;margin-top:28px}small{color:#666}strong{font-weight:650}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #d9dde3;padding:12px 8px}code{overflow-wrap:anywhere}a{color:#8c2330}ul{padding-left:20px}.status{border-left:3px solid #a12434;padding-left:14px}@media(max-width:480px){main{padding:20px 16px 48px}h1{font-size:24px}table{font-size:13px}th,td{padding:10px 4px}}
+</style>
+<main>
+<small>ARCHIVE PILATES · 2026-10-22 · 검증 완료 / 운영 배포 승인</small>
+<h1>ARCHIVE CORE 초기 연결·메뉴 이동 개선</h1>
+<p class="status"><strong>구현·검증 완료, 운영 배포 승인 후 준비 중.</strong> 권한 확인을 없애지 않고 불필요한 조회와 화면 전환의 데이터 대기를 분리했습니다. 실제 회원 발송·기기 조작·운영 데이터 변경은 하지 않았습니다.</p>
+<section><h2>확인한 원인</h2><ul>
+<li>새 메뉴가 서버 권한 확인뿐 아니라 모든 본문 데이터 조회가 끝날 때까지 숨겨져 있었습니다.</li>
+<li>운영자 화면마다 해당 화면에서 쓰지 않는 작업 상태·자동화·가져오기·품질 자료를 공통 조회했습니다.</li>
+<li>처음 접속하면 큰 앱 모듈을 받은 뒤에야 Firebase SDK 4개 다운로드를 시작했습니다.</li>
+</ul></section>
+<section><h2>수정 범위</h2><ul>
+<li>매번 최신 서버 권한 확인 후 목적지 화면을 먼저 열고, 본문에는 기존 조회 중·실패 상태를 표시합니다. 강사의 프라이빗 목록에도 적용합니다.</li>
+<li>늦게 끝난 이전 화면의 조회가 현재 메뉴 호스트를 다시 만들거나 주소를 되돌리지 않도록 완료 처리를 한 번만 수행합니다.</li>
+<li>일반 프라이빗·회원등록·환불·강사·메시지 등에는 불필요한 운영 조회 4종을 생략합니다. 홈 원본 상태, 회원·회원 상세 품질 경고, 관제·가져오기 전용 화면은 필요한 원천을 유지합니다.</li>
+<li>첫 문서에서 공개 SDK 4개를 미리 병렬 다운로드합니다. 메뉴 프레임은 기존 연결을 공유하며 추가 사전 다운로드하지 않습니다.</li>
+<li>Safari에서 권한 변경 시 프레임 정리가 재연결을 중단하던 경합을 상위 페이지 타이머로 보강했습니다. 검증된 강사 화면에는 로딩 영역 숨김을 명시해 빈 공간이 남지 않게 했습니다.</li>
+</ul><p>계정·권한·비밀번호·회원 자료·발송 규칙·동기화 주기·Functions·Firestore 규칙은 변경하지 않습니다. 권한 캐시나 오래된 회원 자료를 화면 권한의 근거로 사용하지 않습니다.</p></section>
+<section><h2>측정과 검증</h2>
+<table><thead><tr><th>검사</th><th>결과 / 해석</th></tr></thead><tbody>
+<tr><td>배포 전 운영본 Chrome UI 관찰</td><td>홈→프라이빗 약 898ms, 프라이빗 새로고침 후 화면 표시 약 1,682ms. 기존 로그인·캐시의 각 1회 관찰이며 UI 도구 지연을 포함합니다. 전체 데이터 완료나 모바일 최악 조건의 수치가 아닙니다.</td></tr>
+<tr><td>권한·담당자 접근 검사</td><td>224건 통과. 서버의 재검증·최초 로그인 제한·다른 강사 자료 차단 유지.</td></tr>
+<tr><td>일반 회귀·로딩 검사</td><td>73건 통과. 홈의 실패·지연·불완전 원천 경고 유지. Chromium·WebKit 모두 앱 다운로드를 멈춘 동안 SDK 4개 다운로드가 먼저 시작되고 인증·앱 실행은 일어나지 않는 것을 확인했습니다.</td></tr>
+<tr><td>시퀀스 자료·교차 프레임 저장</td><td>36건 통과. 저장·삭제·충돌·소유권·세션 변경 차단 유지. VM 모듈 실행 플래그로 재검증 완료.</td></tr>
+<tr><td>반응형 정적 화면</td><td>95건 통과. 320·390·768·1440·1920px, 가로 넘침 및 화면 구성 검사. 실제 로그인 권한 증거와는 별도입니다.</td></tr>
+<tr><td>느린 원천·메뉴 경합 통합 검사</td><td id="integration-status">Chromium 회귀 112건 및 느린 조회 16건, 최종 WebKit 128건 통과. 두 경로(/, /core/)·320/390/768/1440px에서 새 권한 확인 전 조회 차단, 데이터 완료 전 화면 표시, 이전 조회 완료 후 현재 메뉴 유지, 로그아웃·권한 하향·미저장 시퀀스 보호를 검증했습니다. 실제 계정·회원·기기 없는 격리 시험입니다.</td></tr>
+<tr><td>Hosting 정적 검증</td><td>통과. 카탈로그는 앱의 코드 해시·참조 행 번호만 다시 생성했으며 발송 정책은 그대로입니다.</td></tr>
+</tbody></table>
+<p>SDK 다운로드 시작 앞당김과 본문 대기 분리는 실제 요청 순서를 개선하지만 네트워크·서버 응답 자체를 0초로 만들지는 않습니다. 배포 전이므로 운영 사이트가 이미 빨라졌다고 판정하지 않습니다.</p></section>
+<section><h2>재현과 최종 증거</h2><p>처음에는 오래된 관리자 시퀀스 목록 기대값, Safari 월 입력의 변경 확정 조건, VM 모듈 실행 플래그와 Safari 재연결·레이아웃 경합을 발견했습니다. 테스트 기대값은 기존 실제 기능에 맞추고 사용자 기능의 권한·소유권·저장 검사 강도는 낮추지 않았습니다. 중간 실패 보고서는 최종 통과 증거와 구분합니다.</p><ul>
+<li>최종 WebKit: <code>core-instructor-access-ui-Ifl0Bg/report.json</code> · 128건, 재시도 없이 통과.</li>
+<li>Chromium 회귀: <code>core-instructor-access-ui-TYKnZn/report.json</code> · 112건 통과.</li>
+<li>Chromium 느린 원천: <code>core-instructor-access-ui-NhZNZD/report.json</code> · 16건 통과.</li>
+</ul><p>위 격리 보고서는 macOS 임시 폴더의 개별 실행 디렉터리에 보관됩니다. 모든 실행의 브라우저·컨텍스트·로컬 서버·가상 자료는 정리 완료했습니다. 작업 중 생성한 Chrome 관찰 탭만 닫았으며 기존 사용자 탭과 StudioMate 세션은 건드리지 않았습니다.</p></section>
+<section><h2>배포와 다음 확인</h2><p id="deployment-status">2026-10-22 사용자의 배포 승인 접수. 전용 브랜치 <code>codex/mini/core-loading-performance-20261022</code>에서 검증한 소스를 main으로 승격하고 CORE Hosting 2곳에만 반영합니다. 배포 후 실제 릴리스 파일·메뉴 이동을 재확인합니다. 회원 발송·기기 조작·운영 계정 테스트 자료 생성은 제외합니다. 실제 배포 완료 여부와 커밋은 아래 후속 검증 기록에 남깁니다.</p>
+<p>CORE 운영규칙에도 구현·검증·Hosting 적용 시점을 분리해 기록했습니다. 실제 iPhone Safari와 콜드 스타트 네트워크 조건은 별도 관찰 대상입니다.</p></section>
+</main></html>

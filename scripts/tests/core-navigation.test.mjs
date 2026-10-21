@@ -79,3 +79,11 @@ test("access isolation tears down content frames and tasks rather than preservin
   assert.match(access, /function suspendAccess\(\) \{\n  window.archiveCoreNavigation\?\.dispose\(\);/);
   for (const marker of ["pendingFrame?.remove()", "currentFrame?.remove()", "clearTimeout(timer)", 'window.removeEventListener("popstate", pop)']) assert.ok(source.includes(marker));
 });
+
+test("access-change reload runs on the parent after hiding invalidated content", () => {
+  const invalidate = source.slice(source.indexOf("const invalidate = destination"), source.indexOf("const navigate = async"));
+  assert.match(invalidate, /if \(invalidating \|\| disposed\) return/);
+  assert.ok(invalidate.indexOf('removeAttribute("data-core-access")') < invalidate.indexOf("window.setTimeout"));
+  assert.match(invalidate, /instructor\.hidden = true/);
+  assert.match(invalidate, /window\.setTimeout\(\(\) => \{\s*api\.dispose\(\);\s*location\.replace\(destination\);\s*\}, 0\)/);
+});

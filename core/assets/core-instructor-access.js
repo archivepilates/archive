@@ -617,6 +617,9 @@ export async function renderInstructorCore(runtime, session, view = {}) {
   const status = root.querySelector("[data-core-instructor-status]");
   status.textContent = "프라이빗 기록을 불러오는 중";
   content.setAttribute("aria-busy", "true");
+  await view.onReady?.();
+  if (generation !== ticket || activeSession?.session !== session || !content.isConnected
+    || activeSession.uid !== runtime.authClient.currentUser?.uid) return true;
   const month = view.month || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" });
   try {
     const response = await runtime.httpsCallable(runtime.functionsClient, "getCoreInstructorWorkspace")(month ? { month } : {});

@@ -84,6 +84,7 @@ html:not([data-core-access="manager"]) .shell {
 .core-access-loading p { margin: 0; }
 .core-access-loading a { display: inline-flex; align-items: center; color: var(--text); }
 html[data-core-access="manager"] .core-access-loading,
+html[data-core-access="instructor"][data-core-instructor-uid][data-core-instructor-staff-id] .core-access-loading,
 body:has(#coreInstructorAccess:not(:empty)) .core-access-loading,
 body:has(.login-gate.on) .core-access-loading {
   display: none;
