@@ -3,12 +3,28 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { AUDIT_PROJECT, AUDIT_OPERATOR, NONWELCOME_CONTRACT, auditMembershipWelcomeNonWelcome } from "./lib/membership-welcome-nonwelcome-audit.mjs";
+import {
+  AUDIT_PROJECT, AUDIT_OPERATOR, DEFAULT_NONWELCOME_SCOPE, NONWELCOME_SCOPES, nonWelcomeScopeTemplateId,
+  readNonWelcomeAuditSource, auditMembershipWelcomeNonWelcome,
+} from "./lib/membership-welcome-nonwelcome-audit.mjs";
 
 export function parseAuditArgs(args) {
-  if (!args.length || (args.length === 1 && args[0] === "--dry-run")) return { apply: false };
-  if (args.length === 1 && args[0] === "--apply") return { apply: true };
-  throw new Error("Use no flags, --dry-run, or --apply only");
+  const options = { apply: false, scope: DEFAULT_NONWELCOME_SCOPE };
+  let modeSeen = false, scopeSeen = false;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (["--apply", "--dry-run"].includes(arg) && !modeSeen) {
+      modeSeen = true;
+      options.apply = arg === "--apply";
+    } else if (arg === "--scope" && !scopeSeen) {
+      scopeSeen = true;
+      const scope = args[++index];
+      if (scope === undefined) throw new Error("Audit scope value required");
+      nonWelcomeScopeTemplateId(scope);
+      options.scope = scope;
+    } else throw new Error(`Use --dry-run or --apply with optional --scope ${NONWELCOME_SCOPES.join("|")}`);
+  }
+  return options;
 }
 
 export function validateAuditCredential(key, env = {}) {
@@ -20,8 +36,9 @@ export function validateAuditCredential(key, env = {}) {
     throw new Error("Expected archive-pilates operator service-account ADC without target overrides");
 }
 
-export function createTemplateGetter({ readSecret, fetchImpl = fetch, now = () => new Date().toISOString(), salt = () => randomBytes(16).toString("hex") }) {
-  const allowedUrl = `https://api.solapi.com/kakao/v2/templates/${NONWELCOME_CONTRACT.templateId}`;
+export function createTemplateGetter({ readSecret, scope = DEFAULT_NONWELCOME_SCOPE, fetchImpl = fetch,
+  now = () => new Date().toISOString(), salt = () => randomBytes(16).toString("hex") }) {
+  const allowedUrl = `https://api.solapi.com/kakao/v2/templates/${nonWelcomeScopeTemplateId(scope)}`;
   return async (url) => {
     if (url !== allowedUrl) throw new Error("Only the scoped provider template GET is allowed");
     const apiKey = readSecret("SOLAPI_API_KEY"), apiSecret = readSecret("SOLAPI_API_SECRET");
@@ -38,6 +55,7 @@ export function createTemplateGetter({ readSecret, fetchImpl = fetch, now = () =
 
 export async function main(args = process.argv.slice(2)) {
   const options = parseAuditArgs(args);
+  readNonWelcomeAuditSource(options.scope);
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) throw new Error("Explicit operator service-account ADC path required");
   const key = JSON.parse(await readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8"));
   validateAuditCredential(key, process.env);
@@ -51,7 +69,8 @@ export async function main(args = process.argv.slice(2)) {
       encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20_000,
       env: { ...process.env, CLOUDSDK_CORE_LOG_HTTP: "false", CLOUDSDK_CORE_VERBOSITY: "error" },
     }).trim();
-    const result = await auditMembershipWelcomeNonWelcome({ db: app.firestore(), providerGet: createTemplateGetter({ readSecret }), ...options });
+    const result = await auditMembershipWelcomeNonWelcome({ db: app.firestore(),
+      providerGet: createTemplateGetter({ readSecret, scope: options.scope }), ...options });
     console.log(JSON.stringify(result));
     return result;
   } finally { await app.delete(); }

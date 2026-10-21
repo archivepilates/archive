@@ -7,6 +7,7 @@ import { holdingAutomationEnabled, holdingClaimIssue, isHoldingNoticeCandidate,
 import { reconcileMembershipWelcomeQueue, sendMembershipWelcome } from "../memberSignup/membershipWelcomeRuntime";
 import { MEMBERSHIP_WELCOME_TEMPLATE } from "../memberSignup/membershipWelcomePolicy";
 import { isMembershipWelcomeCandidate, membershipAutomationEnabled, membershipWelcomeClaimIssue,
+  MembershipWelcomePreflightError, deferMembershipWelcomePreflight,
   MEMBERSHIP_AUTOMATION_SETTINGS, MEMBERSHIP_CONTRACT_COLLECTION } from "../memberSignup/membershipWelcomeQueue";
 import { membershipWelcomeReadbackIssue } from "../memberSignup/membershipWelcomeReadback";
 import { logger } from "firebase-functions";
@@ -320,6 +321,15 @@ export async function processAlimtalkQueue(): Promise<{
       });
       sent += 1;
     } catch (err) {
+      if (err instanceof MembershipWelcomePreflightError) {
+        const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
+        if (recorded) deferred += 1;
+        else {
+          failed += 1;
+          logger.error("Membership welcome preflight state conflict; no attempt recorded", { candidateId: claimed.candidateId });
+        }
+        continue;
+      }
       const message = errorMessage(err);
       await markPrivateLessonReportFailed(claimed, message);
       await markRecommendedMealReportFailed(claimed, message);
@@ -600,6 +610,11 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
     });
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
+    if (err instanceof MembershipWelcomePreflightError) {
+      const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
+      if (!recorded) logger.error("Membership welcome preflight state conflict; no attempt recorded", { candidateId: claimed.candidateId });
+      return { processed: true, status: recorded ? "deferred" : "failed", lastError: recorded ? err.message : "membership_welcome_preflight_state_conflict" };
+    }
     const message = errorMessage(err);
     await markPrivateLessonReportFailed(claimed, message);
     await markRecommendedMealReportFailed(claimed, message);

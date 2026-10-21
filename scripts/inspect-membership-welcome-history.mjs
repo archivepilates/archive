@@ -125,6 +125,7 @@ async function main() {
       apiSecret = secret("SOLAPI_API_SECRET");
     const deadline = Date.now() + 25_000;
     let providerGets = 0;
+    const observedTemplates = {};
     const get = async (url) => {
       const parsed = new URL(url);
       if (
@@ -150,7 +151,15 @@ async function main() {
         signal: AbortSignal.timeout(Math.min(20_000, remaining)),
       });
       if (!response.ok) throw new Error(`Provider GET ${response.status}`);
-      return response.json();
+      const body = await response.json();
+      if (parsed.pathname === "/messages/v4/list" && body?.messageList && typeof body.messageList === "object") {
+        for (const row of Object.values(body.messageList)) {
+          const id = row?.kakaoOptions?.templateId || row?.templateId;
+          if (typeof id === "string" && /^KA01TP[A-Za-z0-9_-]{1,122}$/.test(id))
+            observedTemplates[id] = (observedTemplates[id] || 0) + 1;
+        }
+      }
+      return body;
     };
     const coverage = config?.providerHistoryCoverage;
     const provider = await loadMembershipProviderHistory(get, {
@@ -198,6 +207,7 @@ async function main() {
             reason: provider.reason,
             welcomeRecords: provider.records.length,
             gets: providerGets,
+            observedTemplates: Object.entries(observedTemplates).map(([templateId, count]) => ({ templateId, count })),
           },
           templateIssue,
           candidateId,

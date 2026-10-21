@@ -7598,7 +7598,18 @@ const MEMBER_REGISTRATION_REASONS = Object.freeze({
   membership_activation_scope_blocked: "회원가입 자동화 적용 범위를 확인해야 합니다.",
   contract_outside_cutover_or_stale: "계약서 최신 상태를 다시 확인해야 합니다.",
   canonical_contract_not_verified: "계약서 원천 검증이 완료되지 않았습니다.",
+  history_time_limit: "웰컴 발송 이력 조회가 제한시간을 초과했습니다. 실제 발송 여부를 확인하세요.",
+  membership_welcome_preflight_state_conflict: "웰컴 발송 전 상태 검증이 일치하지 않습니다. 원본 상태와 발송 이력을 확인하세요.",
+  unknown_welcome_template: "기존 알림톡 중 분류되지 않은 양식이 있습니다. 웰컴 중복 여부를 확인하세요.",
+  welcome_preflight_unavailable: "웰컴 발송 전 검증을 완료하지 못했습니다. 원본 상태와 발송 이력을 다시 확인하세요.",
+  invalid_or_stale_signature_time: "계약서 서명 시각이 유효하지 않거나 오래된 정보입니다. 서명 원본과 발송 이력을 확인하세요.",
+  previous_welcome_attempt_requires_review: "이전 웰컴 처리 이력의 확인이 필요합니다. 실제 발송 여부를 확인하고 중복 발송하지 마세요.",
   late_signature_welcome_review_required: "계약서 서명은 완료됐습니다. 늦게 확인된 서명의 웰컴 안내는 별도 확인이 필요합니다.",
+  operator_recovery_claimed_no_retry: "승인된 웰컴 복구가 선점됐습니다. 접수 결과를 확인하며 중복 발송하지 않습니다.",
+  operator_recovery_reconciliation_required: "웰컴 복구 접수 결과 확인이 필요합니다. 원장을 대조하기 전에는 다시 발송하지 않습니다.",
+  provider_terminal_failure: "알림톡 전달에 실패했습니다. 제공사 결과를 확인하고 별도 승인 없이 재발송하지 않습니다.",
+  member_identity_is_incomplete: "StudioMate 회원 필수정보가 누락돼 계약서를 작성하지 못했습니다. 원본 기본정보를 확인하세요.",
+  "member identity is incomplete": "StudioMate 회원 필수정보가 누락돼 계약서를 작성하지 못했습니다. 원본 기본정보를 확인하세요.",
 });
 
 function memberRegistrationReason(value, fallback = "자동화 상태를 확인해야 합니다.") {
@@ -7645,10 +7656,67 @@ function memberRegistrationTicketHint(hint) {
     })[0] || null;
 }
 
+function verifiedLegacyMembershipWelcomeDisposition(source, nowMs = Date.now()) {
+  const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
+  const nativeId = value => typeof value === "string" && /^[1-9]\d{0,63}$/.test(value);
+  const instant = value => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return NaN;
+    const at = Date.parse(value);
+    return Number.isFinite(at) && new Date(at).toISOString() === (value.length === 20 ? value.replace("Z", ".000Z") : value) ? at : NaN;
+  };
+  const disposition = source?.welcomeDisposition;
+  const binding = source?.binding;
+  if (!record(source) || source.schemaVersion !== 1 || source.source !== "studiomate_native_contract" ||
+      source.studioId !== "5330" || source.bindingVerified !== true || source.welcomeStatus !== "not_required" ||
+      typeof source.contractId !== "string" || !/^[a-f0-9]{64}$/.test(source.contractId) ||
+      (source.id !== undefined && source.id !== source.contractId) || !record(binding) ||
+      binding.contractId !== source.contractId || binding.studioId !== source.studioId || !nativeId(binding.memberId) ||
+      !record(disposition) || disposition.reason !== "legacy_member_before_contract_cutover" ||
+      disposition.verified !== true || disposition.source !== "studiomate_native_member_ticket" ||
+      disposition.memberId !== binding.memberId || disposition.contractId !== source.contractId) return false;
+  for (const identity of [source.completion, source.signatureReceipt]) {
+    if (identity != null && (!record(identity) || identity.memberId !== binding.memberId ||
+        identity.contractId !== source.contractId || identity.studioId !== source.studioId)) return false;
+  }
+  const checkedAt = instant(disposition.checkedAt);
+  const registeredAt = instant(disposition.registeredAt);
+  const cutoverAt = instant(disposition.cutoverAt);
+  const prior = disposition.priorRegularIssuanceIds;
+  return Number.isFinite(nowMs) && Number.isFinite(checkedAt) && Number.isFinite(registeredAt) && Number.isFinite(cutoverAt) &&
+    registeredAt <= cutoverAt && cutoverAt <= checkedAt && checkedAt <= nowMs &&
+    Array.isArray(prior) && prior.length > 0 && prior.every(nativeId) && new Set(prior).size === prior.length &&
+    !prior.includes(binding.userTicketId) &&
+    (!source.selection?.member?.registeredAt || source.selection.member.registeredAt === disposition.registeredAt) &&
+    (!source.selection?.policy?.cutoverAt || source.selection.policy.cutoverAt === disposition.cutoverAt);
+}
+
+function memberRegistrationHistoricalContractReview(contract) {
+  if (!verifiedLegacyMembershipWelcomeDisposition(contract) || contract.status !== "signed") return false;
+  const reason = contract.observationReason;
+  if (["stale_first_signed_observation", "invalid_or_stale_signature_time", "late_signature_welcome_review_required"].includes(reason)) return true;
+  // The same native-binding error can mean age or an identity conflict; age alone is not enough.
+  const selectedAt = timestampMs(contract.binding?.selectedAt);
+  const receipt = contract.signatureReceipt;
+  return reason === "invalid_native_binding" && selectedAt > 0 && Date.now() - selectedAt > 7 * 86400_000 &&
+    receipt?.authoritative === true && receipt.source === "studiomate_native_contract" &&
+    receipt.status === "signed" && receipt.memberSigned === true && receipt.centerSigned === true &&
+    timestampMs(receipt.signedAt) >= selectedAt && timestampMs(receipt.signedAt) <= Date.now();
+}
+
 function memberRegistrationWelcomeState(contract, candidate, send) {
   const sendStatus = String(send?.status || "").toLowerCase();
   const candidateStatus = String(candidate?.status || "").toLowerCase();
   const contractStatus = String(contract?.welcomeStatus || "").toLowerCase();
+  if (contractStatus === "not_required") {
+    const deliveryFailure = [candidate, send].some(item =>
+      [item?.sendStatus, item?.deliveryStatus, item?.resultStatus, item?.solapiStatus, item?.alimtalkStatus, item?.providerStatus].some(isFailureStatus));
+    if (deliveryFailure) return { status: "error", label: "확인필요", reason: "provider_terminal_failure" };
+    if (!verifiedLegacyMembershipWelcomeDisposition(contract) ||
+        (send && !["done", "sent", "accepted", "delivered"].includes(sendStatus)) ||
+        (candidate && !["sent", "accepted", "delivered"].includes(candidateStatus)) || candidate?.lastError || send?.lastError)
+      return { status: "error", label: "확인필요" };
+    return { status: "not_required", label: "기존 회원 · 대상 제외" };
+  }
   if (["done", "sent", "accepted", "delivered"].includes(sendStatus) || candidateStatus === "sent" || contractStatus === "accepted") {
     return { status: "done", label: "발송완료" };
   }
@@ -7676,6 +7744,72 @@ function preferredMemberRegistrationProfile(items = []) {
   })[0] || null;
 }
 
+async function memberRegistrationWelcomeReference(contract) {
+  const id = contract?.welcomeCandidateId;
+  const memberId = contract?.completion?.memberId || contract?.binding?.memberId;
+  const phone = normalizePhone(contract?.completion?.memberPhone || contract?.binding?.memberPhone);
+  if (typeof id !== "string" || !/^membership_welcome_[a-f0-9]{64}$/.test(id) ||
+      contract.studioId !== STUDIO_ID || typeof memberId !== "string" || !memberId ||
+      !/^01[016789]\d{7,8}$/.test(phone) || !globalThis.crypto?.subtle) return null;
+  for (const identity of [contract.binding, contract.completion]) {
+    if (identity?.memberId && identity.memberId !== memberId) return null;
+    if (identity?.memberPhone && normalizePhone(identity.memberPhone) !== phone) return null;
+    if (identity?.studioId && identity.studioId !== STUDIO_ID) return null;
+  }
+  // Match the permanent, phone-scoped membershipWelcomeKey; never read an arbitrary reference path.
+  const digest = await globalThis.crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode(JSON.stringify([STUDIO_ID, "new_member_welcome", phone])));
+  const expected = `membership_welcome_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  return id === expected ? { id, memberId, phone } : null;
+}
+
+function memberRegistrationWelcomeRecordMatches(item, reference, collectionName) {
+  return Boolean(item && reference && item.id === reference.id && item.candidateId === reference.id &&
+    item.studioId === STUDIO_ID && item.memberId === reference.memberId &&
+    normalizePhone(item.memberPhone) === reference.phone &&
+    (collectionName === "alimtalkCandidates" ? item.type === "membership_welcome" :
+      (!item.sendId || item.sendId === reference.id)));
+}
+
+async function loadMemberRegistrationWelcomeReferences(runtime, contracts, candidates, sends) {
+  const references = new Map();
+  const reads = new Map();
+  const recent = { alimtalkCandidates: new Map(candidates.map((item) => [item.id, item])),
+    alimtalkSends: new Map(sends.map((item) => [item.id, item])) };
+  const read = (collectionName, id) => {
+    const key = `${collectionName}/${id}`;
+    if (!reads.has(key)) reads.set(key, (async () => {
+      const item = recent[collectionName].get(id);
+      if (item) return { item };
+      try {
+        const snapshot = await runtime.getDoc(runtime.doc(runtime.db, collectionName, id));
+        return { item: snapshot.exists() ? { ...snapshot.data(), id: snapshot.id } : null };
+      } catch (error) { return { item: null, error }; }
+    })());
+    return reads.get(key);
+  };
+  // At most 100 contract references / 200 exact reads, with at most eight reads in flight.
+  const bounded = contracts.slice(0, 100);
+  for (let index = 0; index < bounded.length; index += 4) {
+    await Promise.all(bounded.slice(index, index + 4).map(async (contract) => {
+      const reference = await memberRegistrationWelcomeReference(contract);
+      let candidate = null, send = null, sendReadError = false;
+      if (reference) {
+        const [candidateResult, sendResult] = await Promise.all([
+          read("alimtalkCandidates", reference.id), read("alimtalkSends", reference.id),
+        ]);
+        if (memberRegistrationWelcomeRecordMatches(candidateResult.item, reference, "alimtalkCandidates")) candidate = candidateResult.item;
+        if (memberRegistrationWelcomeRecordMatches(sendResult.item, reference, "alimtalkSends")) send = sendResult.item;
+        // Missing candidates may be permission-denied under resource-based rules; still use a verified send.
+        if (!candidate && !send && (candidateResult.error || sendResult.error)) throw candidateResult.error || sendResult.error;
+        sendReadError = Boolean(sendResult.error);
+      }
+      references.set(contract, { candidate, send, ...(sendReadError ? { sendReadError: true } : {}) });
+    }));
+  }
+  return references;
+}
+
 async function loadMemberRegistrationDashboard(runtime) {
   const { db } = runtime;
   const hintPath = "workLanes/studiomate-membership-contract-automation/purchaseHints";
@@ -7689,9 +7823,13 @@ async function loadMemberRegistrationDashboard(runtime) {
     getRecentStudioCollectionBy(db, runtime, "alimtalkSends", "updatedAt", 250),
   ]);
   const hints = hintsSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
+  const welcomeReferences = await loadMemberRegistrationWelcomeReferences(runtime, contracts, candidates, sends);
   const welcomeCandidates = candidates.filter((item) => item.type === "membership_welcome");
-  const welcomeCandidateIds = new Set(welcomeCandidates.map((item) => String(item.candidateId || item.id || "")));
-  const welcomeSends = sends.filter((item) => welcomeCandidateIds.has(String(item.candidateId || item.id || "")));
+  const welcomeSends = sends.filter((item) => welcomeCandidates.some((candidate) =>
+    /^membership_welcome_[a-f0-9]{64}$/.test(candidate.id) &&
+    memberRegistrationWelcomeRecordMatches(item, {
+      id: candidate.id, memberId: candidate.memberId, phone: normalizePhone(candidate.memberPhone),
+    }, "alimtalkSends")));
   const groups = new Map();
   const group = (fingerprint) => {
     if (!groups.has(fingerprint)) groups.set(fingerprint, { fingerprint, profiles: [], hints: [], contracts: [], candidates: [], sends: [] });
@@ -7720,14 +7858,18 @@ async function loadMemberRegistrationDashboard(runtime) {
     const profile = preferredMemberRegistrationProfile(entry.profiles);
     const hint = memberRegistrationLatest(entry.hints);
     const contract = memberRegistrationLatest(entry.contracts);
-    const candidate = memberRegistrationLatest(entry.candidates);
-    const send = memberRegistrationLatest(entry.sends);
+    const reference = welcomeReferences.get(contract);
+    const candidate = contract ? reference?.candidate : memberRegistrationLatest(entry.candidates);
+    const send = contract ? reference?.send : memberRegistrationLatest(entry.sends);
     const hintStatus = String(hint?.status || "").toLowerCase();
     const noActionHint =
       ["ignored", "excluded"].includes(hintStatus) ||
       (hintStatus === "review" && hint?.reason === "fresh_native_issuance_not_found");
     if (noActionHint && !contract && !candidate && !send) return null;
-    const ticketHint = memberRegistrationTicketHint(hint);
+    const matchedHint = contract ? memberRegistrationLatest(entry.hints.filter((item) =>
+      item.contractId ? (contract.contractId || contract.id) === item.contractId :
+        (contract.binding?.selectionJobKey && contract.binding.selectionJobKey === item.jobKey))) : hint;
+    const ticketHint = memberRegistrationTicketHint(matchedHint);
     const latestAt = Math.max(
       memberRegistrationItemTime(hint), memberRegistrationItemTime(contract),
       memberRegistrationItemTime(candidate), memberRegistrationItemTime(send),
@@ -7749,14 +7891,18 @@ async function loadMemberRegistrationDashboard(runtime) {
     const contractCreated = Boolean(contract?.contractId || contract?.id);
     const ticketConfirmed = Boolean(ticketHint || contract?.binding?.userTicketId || contract?.selection?.userTicketId);
     const identityConfirmed = Boolean(profile || contract?.binding?.memberId || contract?.completion?.memberId || candidate?.memberId);
-    const welcome = memberRegistrationWelcomeState(contract, candidate, send);
+    const welcome = reference?.sendReadError
+      ? { status: "error", label: "확인필요", reason: "웰컴 발송 원장을 읽지 못했습니다. 실제 발송 여부를 확인하세요." }
+      : memberRegistrationWelcomeState(contract, candidate, send);
     const hintReview = hintStatus === "review";
-    const contractReview = ["review", "failed", "error"].includes(String(contract?.observationStatus || "").toLowerCase());
+    const contractReview = [contract?.status, contract?.observationStatus]
+      .some(value => ["review", "failed", "error"].includes(String(value || "").toLowerCase())) &&
+      !memberRegistrationHistoricalContractReview(contract);
     const welcomeReview = welcome.status === "error";
     const reminder = contract?.signatureReminder;
     const reminderReview = ["review", "attempting"].includes(reminder?.status);
     const review = !identityConfirmed || (hintReview && !contractCreated) || contractReview || welcomeReview || reminderReview;
-    const completed = signed && welcome.status === "done";
+    const completed = signed && ["done", "not_required"].includes(welcome.status);
     const status = review ? "review" : completed ? "completed" : "active";
     const reason = review
       ? memberRegistrationReason(
@@ -7765,7 +7911,7 @@ async function loadMemberRegistrationDashboard(runtime) {
             : reminderReview
               ? "서명 요청 문자의 발송 결과 확인이 필요합니다. 중복 발송하지 않습니다."
             : welcomeReview
-              ? send?.lastError || candidate?.lastError || contract?.welcomeReason
+              ? welcome.reason || send?.lastError || candidate?.lastError || contract?.welcomeReason
               : contractReview
                 ? contract?.observationReason
                 : hint?.reason,
@@ -7777,7 +7923,7 @@ async function loadMemberRegistrationDashboard(runtime) {
           : welcome.status === "active"
             ? "웰컴 알림톡 발송을 준비하고 있습니다."
             : completed
-              ? "회원등록 후속 절차가 완료됐습니다."
+              ? welcome.status === "not_required" ? "기존 회원 · 대상 제외" : "회원등록 후속 절차가 완료됐습니다."
               : "서명 완료 후 웰컴 알림톡을 준비합니다.";
     const studioMateMemberHref = /^[1-9]\d{0,63}$/.test(studioMateMemberId)
       ? `https://arcpilates.studiomate.kr/users/detail?id=${encodeURIComponent(studioMateMemberId)}`
@@ -7789,7 +7935,8 @@ async function loadMemberRegistrationDashboard(runtime) {
       memberId,
       memberDetailHref: studioMateMemberHref,
       memberGrade: String(profile?.memberGrade || profile?.grade || "일반회원"),
-      ticketName: String(ticketHint?.productName || contract?.selection?.productName || "수강권 확인"),
+      ticketName: String(contract?.binding?.ticketName || contract?.selection?.ticket?.title ||
+        contract?.selection?.productName || ticketHint?.productName || "수강권 확인"),
       latestAt,
       status,
       reason,

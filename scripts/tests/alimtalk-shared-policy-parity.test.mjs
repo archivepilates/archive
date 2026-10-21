@@ -13,11 +13,36 @@ const before = file => execFileSync('git', ['show', `${base}:${file}`], { cwd: r
 const ast = (text, file) => ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 const functions = source => new Map(source.statements.filter(ts.isFunctionDeclaration)
   .map(statement => [statement.name.text, statement.body.getText(source)]));
+const welcomePreflightBranches = [
+  `      if (err instanceof MembershipWelcomePreflightError) {
+        const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
+        if (recorded) deferred += 1;
+        else {
+          failed += 1;
+          logger.error("Membership welcome preflight state conflict; no attempt recorded", { candidateId: claimed.candidateId });
+        }
+        continue;
+      }
+`,
+  `    if (err instanceof MembershipWelcomePreflightError) {
+      const recorded = await deferMembershipWelcomePreflight({ db, timestamp: nowTimestamp }, claimed, err);
+      if (!recorded) logger.error("Membership welcome preflight state conflict; no attempt recorded", { candidateId: claimed.candidateId });
+      return { processed: true, status: recorded ? "deferred" : "failed", lastError: recorded ? err.message : "membership_welcome_preflight_state_conflict" };
+    }
+`,
+];
 
 for (const name of ['processAlimtalkQueue.ts', 'instructorLessonSampleApproval.ts']) {
-  test(`${name}: every execution function body remains byte-identical to released baseline`, () => {
+  test(`${name}: execution bodies preserve baseline except exact welcome preflight deferral branches`, () => {
     const file = prefix + name;
-    assert.deepEqual(functions(ast(read(file), file)), functions(ast(before(file), file)));
+    let current = read(file);
+    if (name === 'processAlimtalkQueue.ts') {
+      for (const branch of welcomePreflightBranches) {
+        assert.equal(current.split(branch).length - 1, 1, 'Exact typed preflight branch must occur once');
+        current = current.replace(branch, '');
+      }
+    }
+    assert.deepEqual(functions(ast(current, file)), functions(ast(before(file), file)));
     const imports = ast(read(file), file).statements.filter(ts.isImportDeclaration);
     const shared = imports.find(node => node.moduleSpecifier.text === './targetValidationChecks');
     assert.ok(shared);

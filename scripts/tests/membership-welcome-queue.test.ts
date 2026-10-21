@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   dispatchMembershipWelcome,
+  deferMembershipWelcomePreflight,
+  MembershipWelcomePreflightError,
   inspectMembershipWelcome,
   isMembershipWelcomeCanaryRecipient,
   queueMembershipWelcome,
@@ -479,6 +481,77 @@ function harness() {
   };
 }
 type Harness = ReturnType<typeof harness>;
+
+test("read-only validation failures are typed and leave transport and attempt evidence untouched", async () => {
+  const h = harness();
+  h.prime();
+  h.deps.loadEvidence = async () => ({ history: {}, template: {}, recipientIssue: "history_time_limit" });
+  await assert.rejects(dispatchMembershipWelcome(h.deps, h.candidate, h.transport), (error: unknown) =>
+    error instanceof MembershipWelcomePreflightError && error.message === "history_time_limit");
+  assert.equal(h.calls.transport, 0);
+  assert.equal(h.db.writes.length, 0);
+  assert.equal(h.db.row(CANDIDATE_PATH)?.attempts, 0);
+});
+
+test("unexpected preflight exception details are not copied to operator records", async () => {
+  const h = harness(); h.prime();
+  h.deps.loadEvidence = async () => { throw new Error("SYNTHETIC PRIVATE DETAIL"); };
+  await assert.rejects(dispatchMembershipWelcome(h.deps, h.candidate, h.transport), (error: unknown) =>
+    error instanceof MembershipWelcomePreflightError && error.message === "welcome_preflight_unavailable");
+  assert.equal(h.calls.transport, 0);
+  assert.equal(h.db.writes.length, 0);
+});
+
+test("typed preflight deferral atomically updates only source and candidate, not attempts or send ledger", async () => {
+  const h = harness();
+  h.prime();
+  h.db.put(SOURCE_PATH, { ...h.input.source, welcomeCandidateId: CANDIDATE_ID, welcomeStatus: "queued" });
+  assert.equal(await deferMembershipWelcomePreflight(h.deps, h.candidate, new MembershipWelcomePreflightError("history_time_limit")), true);
+  assert.equal(h.db.row(CANDIDATE_PATH)?.status, "reviewed");
+  assert.equal(h.db.row(CANDIDATE_PATH)?.attempts, 0);
+  assert.equal(h.db.row(SOURCE_PATH)?.welcomeStatus, "review");
+  assert.equal(h.db.row(SOURCE_PATH)?.welcomeReason, "history_time_limit");
+  assert.equal(h.db.row(`alimtalkSends/${CANDIDATE_ID}`), undefined);
+  assert.equal(h.db.entries(MEMBERSHIP_WELCOME_CLAIMS).length, 0);
+  assert.equal(h.calls.transport, 0);
+  assert.equal(h.db.writes.length, 2);
+  assert.equal(await deferMembershipWelcomePreflight(h.deps, h.candidate, new MembershipWelcomePreflightError("history_time_limit")), false);
+  assert.equal(h.db.writes.length, 2);
+});
+
+for (const conflict of ["plain_error", "stored_attempt", "provider_marker", "send", "claim", "source_member", "source_phone", "source_candidate", "accepted", "candidate_changed"] as const) {
+  test(`preflight deferral preserves ambiguous or conflicting state: ${conflict}`, async () => {
+    const h = harness();
+    h.prime();
+    h.db.put(SOURCE_PATH, { ...h.input.source, welcomeCandidateId: CANDIDATE_ID, welcomeStatus: "queued" });
+    let error: Error = new MembershipWelcomePreflightError("history_time_limit");
+    if (conflict === "plain_error") error = new Error("history_time_limit");
+    if (conflict === "stored_attempt") h.prime({ attempts: 1 });
+    if (conflict === "provider_marker") h.prime({ providerAttemptedAt: { seconds: 1, nanoseconds: 0 } });
+    if (conflict === "send") h.db.put(`alimtalkSends/${CANDIDATE_ID}`, { status: "failed" });
+    if (conflict === "claim") h.db.put(claimPath(CANDIDATE_ID), { status: "unknown" });
+    if (conflict === "source_member") h.db.put(SOURCE_PATH, { ...h.db.row(SOURCE_PATH), completion: { ...h.input.source.completion, memberId: "other" } });
+    if (conflict === "source_phone") h.db.put(SOURCE_PATH, { ...h.db.row(SOURCE_PATH), completion: { ...h.input.source.completion, memberPhone: "01000000009" } });
+    if (conflict === "source_candidate") h.db.put(SOURCE_PATH, { ...h.db.row(SOURCE_PATH), welcomeCandidateId: "different" });
+    if (conflict === "accepted") h.db.put(SOURCE_PATH, { ...h.db.row(SOURCE_PATH), welcomeStatus: "accepted" });
+    if (conflict === "candidate_changed") h.prime({ memberId: "other" });
+    assert.equal(await deferMembershipWelcomePreflight(h.deps, h.candidate, error), false);
+    assert.equal(h.db.writes.length, 0);
+    assert.equal(h.calls.transport, 0);
+  });
+}
+
+test("transport errors are never typed as preflight failures", async () => {
+  const h = harness();
+  h.prime();
+  await assert.rejects(dispatchMembershipWelcome(h.deps, h.candidate, async () => {
+    h.calls.transport += 1;
+    throw new Error("synthetic timeout");
+  }), (error: unknown) => error instanceof Error && !(error instanceof MembershipWelcomePreflightError));
+  assert.equal(h.calls.transport, 1);
+  assert.equal(h.db.row(claimPath(CANDIDATE_ID))?.status, "unknown");
+  assert.equal(h.db.row(CANDIDATE_PATH)?.attempts, 1);
+});
 const noActions = (h: Harness): void => {
   assert.equal(h.db.writes.length, 0);
   assert.equal(h.calls.transport, 0);
