@@ -1,0 +1,42 @@
+# Imweb app approval, publication and webhook onboarding
+
+- Operator request: proceed with app registration/review/publication/webhook integration; hand off direct consent and confirmation steps.
+- Account verified in the developer portal: home@archivepilates.com / ARCHIVE PILATES.
+- Worktree: /Users/archivepilates/codex-worktrees/imweb-app-webhook-onboarding-20261020.
+- Branch: codex/mini/imweb-app-webhook-onboarding-20261020, initially based on origin/main 926ae1a2, fast-forwarded to ebf8f26f while preserving other lanes.
+- Existing app discovered: ARCHIVE PILATES 강사레슨 주문 연동, app code ga202609279410fb87e608a, created 2026-09-27, status 제작중.
+- Avoid duplicate registration. Existing app has zero linked sites and empty service URL/redirect URI; no actual app review/publication/integration is complete.
+- Initial scope screen: Site-Info enabled with read/write, Order enabled read-only, Member-Info disabled.
+- 2026-10-21: operator explicitly approved adding Member-Info read/write. Enabled that category, selected write, saved, then reloaded the page and verified it persisted. Site-Info write and Order read remained unchanged; Community/Promotion/Product/Payment/Script stayed disabled. This is a saved requested scope, not app review approval or site OAuth consent.
+- Webhook list is empty. The portal exposes masked webhook authentication information; it was not revealed, copied, regenerated or stored.
+- First consent gate completed: Member-Info read/write approved by the operator for member lookup, signup/grade event receipt and video-group updates. Site authorization still requires its separate installation/consent step.
+- Basic app screen contains masked client credentials. Only name/service URL/redirect URI were inspected; client secrets were not read or output.
+- Next: confirm the internal-only approval/publication path and provider authentication contract, prepare genuine service/redirect and authenticated receiver, perform test-only durable ingestion, then apply for review and complete publication/integration. No fabricated service URLs or unsupported public-service claims.
+- Technical inquiry sent from the verified home@archivepilates.com Gmail account to the portal's integration_squad@imweb.me address, CC home@archivepilates.com. Subject: [아임웹연동][확인필요] 자체 사이트 웹훅 심사 경로 · 10/21. Message/thread 1a159eb8a141aeb2 independently reread. No secrets, member contacts, payments or credentials included. The operator objected to external inquiries: do not send another inquiry without approval of recipient and content. No repeated sends or polling automation were created.
+- Reply 1a15ceed8f89b9aa received 2026-10-21 14:28 KST and independently read in the same thread: own-site webhook apps can be approved; select API permissions from the documentation; use the portal's test-send facility; register the actual webhook events before requesting approval. The vendor does not review the general service/redirect requirements for an own-site-only app. This is guidance, not approval of this app, and no second inquiry was sent.
+- Preserve existing CLI authorization and polling workers until actual event ingestion, canonical matching, idempotency, expiry and STAFF protections pass shadow comparison. App approval is an external decision; do not claim immediate completion.
+- Direct user action gates: terms/contracts, materially expanded scopes/site access, required CAPTCHA/security warning steps, and any credentials entry. Never request secrets in chat.
+- Only the approved requested app scope was saved. No site OAuth grant, deployed receiver, member mutation, job frequency, terms/contract acceptance, review submission or app publication occurred. The app remains 제작중 with empty service/redirect fields and no linked site. This is pending onboarding, not a completed integration or an operational failure.
+- Evidence: artifacts/imweb-app-onboarding/member-write-saved-20261021.png (ignored local screenshot); current scope persisted after reload. App credentials and webhook authentication remained masked and were not copied or regenerated.
+- CORE operating-rule activation update is pending actual implementation; existing deployed first-grant/STAFF protection rules remain unchanged. No policy or timing change is live from this task yet.
+
+## Resume 2026-10-21
+
+- User requested proceeding to completion. Account/target announced: home@archivepilates.com, existing app ga202609279410fb87e608a, Firebase archive-pilates when deployment is ready. No further inquiry email is authorized.
+- Fetched origin/main and fast-forwarded this dedicated worktree to 39d6d575; no unrelated local changes were overwritten. The only untracked source file remains this task note.
+- Dependencies installed using the existing Functions lockfile, without changing tracked dependency files. The initial action-queue read failed due to missing dependencies; rerunning after installation succeeded. Three unrelated normal-priority findings were not modified.
+- Current CLI default profile independently checked: expected site S20260516852c71a014d08 and unit u2026051698c99ea234719; token healthy. This does not authenticate the developer portal or prove this custom app is integrated. No credential file contents read.
+- Official webhook and OAuth guides reread. The published webhook guide still does not define the request authentication header, exact payload or retry contract; real event examples require the signed-in portal. Do not fabricate a signature scheme or treat unsigned sample receipt as production authentication proof.
+- Existing developer-portal session expired. Created a task-owned separate in-app browser tab, opened the official login flow and requested the operator sign in with the approved account. User Chrome was not touched. Login tab remains open only for that handoff; screenshot: artifacts/imweb-app-onboarding/login-required-20261021.png.
+- While login is pending, existing canonical rights workers and periodic jobs remain unchanged. No receiver, OAuth callback, secret, queue, grant, review submission, deployment, commit or push has been claimed as complete.
+- Next after login: inspect event sample/authentication contract, provision credentials through a direct protected handoff (never chat), implement and test durable authenticated ingestion and real OAuth/connection completion, deploy scoped targets, register events, use test-send, then submit review. Keep test vs live approval states separate; native approval remains Imweb's decision. Only move from shadow hints to current-source-verified entitlement execution after independent checks and preserve 40-day originals/purchases/remaining student rights.
+
+## Bootstrap sample receiver
+
+- Operator completed developer-portal login. Independently confirmed account home@archivepilates.com.
+- Registered END_USER_SIGN_UP, END_USER_SIGN_UP_BULK and END_USER_GRADE_UPDATE in test state for the planned archive-pilates imwebWebhookApi endpoint. No samples have been sent yet; registration alone is not a deployed endpoint or approval. Screenshot: artifacts/imweb-app-onboarding/webhooks-registered-20261021.png.
+- Portal signup sample contains siteCode, unitCode and memberUid with synthetic Imweb example values. It does not display authentication header details.
+- Bootstrap implementation provides a truthful service landing and a capability-protected, expiring probe. Only header names, candidate authentication digests and bounded body shape may be persisted; raw credentials, bodies and member values are excluded. Production routes return integration_not_active. This bootstrap cannot grant/revoke access or enqueue member-facing operations.
+- Probe evidence/config stay under workLanes/imweb-app-webhook-onboarding, not canonical permission collections. Existing rules permit operator reads only and deny client writes. No rules/schema migration required.
+- Manifest change adds only the new sync function ownership. Conservative affected detection marks all codebases because the manifest is shared; all five generated codebases compile and boundary validation passes. Only functions:functions-sync:imwebWebhookApi is intended for deployment; no other export/runtime changed.
+- Checks: central TypeScript build, five codebase builds, ownership boundary validation, three protocol/privacy tests and twenty Functions predeploy guard tests passed. Host Node 25 warns against declared Node 22; deployed runtime remains Node 22. Existing dependency audit findings are not repaired as part of this scoped lane.

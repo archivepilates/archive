@@ -70,6 +70,7 @@
       "physicalSource": "firebase/function-codebases/sync",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/sync.ts",
       "owns": [
+        "imwebWebhookApi",
         "scheduledProcessContactSyncJobs",
         "queueStaffContactSync",
         "scheduledCreateParkingDiscountJobs",

@@ -17,6 +17,8 @@ import type { StaffDoc } from "../types/models";
 import { queueActiveStaffContactSync, staffContactIdentityChanged } from "../sync/queueStaffContactSync";
 import { isMacMiniAdminSyncRequest } from "../sync/adminSyncRequestRouting";
 
+export { imwebWebhookApi } from "../sync/imwebWebhookApi";
+
 export const scheduledProcessContactSyncJobs = onSchedule(
   {
     ...scheduleOptions,
