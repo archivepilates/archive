@@ -12,7 +12,7 @@ export interface ClimateCommand {
   dispatchStartedAt?: string;
 }
 export interface ClimateStore {
-  throttleRead(uid: string): Promise<void>;
+  throttleRead(uid: string, minimumIntervalMs?: number): Promise<void>;
   getCommand(id: string): Promise<ClimateCommand | null>;
   pending(deviceId: string): Promise<ClimateCommand | null>;
   claim(command: ClimateCommand): Promise<ClimateCommand | null>;
@@ -37,30 +37,49 @@ export function parseControlInput(data: any): ClimateControlInput {
 export const validCommandId = (id: unknown): id is string => typeof id === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id);
 export const validDeviceId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id);
 
+function dashboardDeviceIds(data: unknown): string[] | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)
+    || Object.keys(data).some(key => key !== "deviceIds")) throw new ClimateError("invalid_request");
+  if (!Object.hasOwn(data, "deviceIds")) return null;
+  const ids = (data as { deviceIds: unknown }).deviceIds;
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > 8 || !Array.from(ids).every(validDeviceId)
+    || new Set(ids).size !== ids.length) throw new ClimateError("invalid_request");
+  return [...ids];
+}
+
 export class ClimateService {
   constructor(private readonly client: ThinQClient, private readonly store: ClimateStore) {}
-  async dashboard(actor: ClimateActor): Promise<{ checkedAt: string; devices: ClimateDevice[] }> {
-    await this.store.throttleRead(actor.uid);
-    const devices: ClimateDevice[] = [];
-    // Eight units today; bounded two-wide reads avoid both unbounded memory and a serial slow page.
-    const rows = await this.client.devices();
-    for (let i = 0; i < rows.length; i += 2) {
-      const batch = await Promise.all(rows.slice(i, i + 2).map(async d => {
+  async dashboard(actor: ClimateActor, data: unknown = {}): Promise<{ checkedAt: string; devices: ClimateDevice[]; partial: boolean }> {
+    const deviceIds = dashboardDeviceIds(data);
+    if (deviceIds?.some(id => !this.client.config.allowedDeviceIds.includes(id))) throw new ClimateError("device_not_allowed");
+    await this.store.throttleRead(actor.uid, deviceIds ? 2000 : 10000);
+    const listed = await this.client.devices();
+    const rows = deviceIds ? deviceIds.map(deviceId => ({ deviceId, descriptor: listed.find(d => d.deviceId === deviceId) }))
+      : listed.map(descriptor => ({ deviceId: descriptor.deviceId as string, descriptor }));
+    const devices: ClimateDevice[] = new Array(rows.length);
+    let next = 0;
+    // Keep four devices in flight without waiting for the slowest member of a wave.
+    const worker = async () => {
+      while (next < rows.length) {
+        const index = next++, { deviceId, descriptor } = rows[index];
         let view: ClimateDevice;
-        try { view = await this.client.read(d); }
+        try {
+          if (!descriptor) throw new ClimateError("device_not_allowed");
+          view = await this.client.read(descriptor);
+        }
         catch (error) {
-          view = { deviceId: d.deviceId, name: String(d.deviceInfo.alias || "에어컨").slice(0, 80), model: "",
+          view = { deviceId, name: String(descriptor?.deviceInfo?.alias || "에어컨").slice(0, 80), model: "",
             checkedAt: new Date().toISOString(), available: false, version: "", values: {}, controls: [],
             errorCode: error instanceof ClimateError ? error.code : "connection_failed", pendingCommand: null };
         }
-        const pending = await this.store.pending(d.deviceId);
+        const pending = await this.store.pending(deviceId);
         view.pendingCommand = pending ? { commandId: pending.commandId, status: pending.status } : null;
         if (!this.client.config.controlsEnabled) view.controls = [];
-        return view;
-      }));
-      devices.push(...batch);
-    }
-    return { checkedAt: new Date().toISOString(), devices };
+        devices[index] = view;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, rows.length) }, () => worker()));
+    return { checkedAt: new Date().toISOString(), devices, partial: deviceIds !== null };
   }
   async control(actor: ClimateActor, data: unknown) {
     const input = parseControlInput(data);
@@ -96,7 +115,7 @@ export class ClimateService {
         await this.client.control(input.deviceId, payload);
         command.status = "accepted";
         try {
-          current = await this.client.readById(input.deviceId, true);
+          current = await this.client.readById(input.deviceId, false);
           if (current.available && current.values[input.field] === input.value) command.status = "verified";
         } catch { current = null; }
       }

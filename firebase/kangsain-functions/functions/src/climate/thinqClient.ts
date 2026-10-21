@@ -157,13 +157,17 @@ export class ThinQClient {
   async read(device: Json, fresh = false): Promise<ClimateDevice> {
     if (!this.config.allowedDeviceIds.includes(device.deviceId) || device.deviceInfo?.deviceType !== "DEVICE_AIR_CONDITIONER") throw new ClimateError("device_not_allowed");
     const path = `/devices/${encodeURIComponent(device.deviceId)}`;
-    let profile = this.profiles.get(device.deviceId);
-    if (fresh || !profile || profile.until <= Date.now()) {
-      profile = { until: Date.now() + 600_000, value: await this.request(`${path}/profile`) };
-      this.profiles.set(device.deviceId, profile);
-    }
-    const state = await this.request(`${path}/state`);
-    return projectDevice(device, profile.value, state, new Date().toISOString());
+    const profile = this.profiles.get(device.deviceId);
+    const profileRead = !fresh && profile && profile.until > Date.now() ? Promise.resolve(profile.value)
+      : this.request(`${path}/profile`).then(value => {
+        this.profiles.set(device.deviceId, { until: Date.now() + 600_000, value });
+        return value;
+      });
+    // Settle both requests before releasing a dashboard worker, even when one fails early.
+    const [metadata, state] = await Promise.allSettled([profileRead, this.request(`${path}/state`)]);
+    if (metadata.status === "rejected") throw metadata.reason;
+    if (state.status === "rejected") throw state.reason;
+    return projectDevice(device, metadata.value, state.value, new Date().toISOString());
   }
   async readById(id: string, fresh = true): Promise<ClimateDevice> {
     const device = (await this.devices(fresh)).find(d => d.deviceId === id);

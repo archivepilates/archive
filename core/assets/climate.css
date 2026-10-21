@@ -35,6 +35,8 @@
 .climate-mode { min-height: 1.4em; margin: 3px 0 0; font-size: .875rem; line-height: 1.4; color: #535d6a; }
 .climate-device .climate-power { width: 52px; height: 52px; min-height: 52px; display: grid; place-items: center; padding: 12px; border: 0; border-radius: 50%; color: #fff; background: #8a8e94; cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
 .climate-device .climate-power .ui-icon { width: 28px; height: 28px; stroke-width: 1.9; }
+.climate-device[data-writing="true"] .climate-power .ui-icon { animation: climate-write-spin 1s linear infinite; }
+@keyframes climate-write-spin { to { transform: rotate(360deg); } }
 .climate-device[data-power="on"] .climate-power { color: #4265d5; background: #eef0f5; }
 .climate-device .climate-power:hover:not(:disabled) { background: #737983; }
 .climate-device[data-power="on"] .climate-power:hover:not(:disabled) { background: #e0e6f5; }
@@ -78,4 +80,4 @@
 .climate-readonly, .climate-empty { margin: 12px 0 0; color: #647181; font-size: .8125rem; overflow-wrap: anywhere; }
 @media (max-width: 360px) { .climate-device { padding: 16px; } .climate-device-heading { grid-template-columns: 36px minmax(0, 1fr) 48px; gap: 8px; } .climate-appliance { width: 36px; } .climate-appliance .ui-icon { width: 34px; height: 34px; } .climate-device .climate-power { width: 48px; height: 48px; min-height: 48px; padding: 11px; } .climate-reading dd { font-size: 1.25rem; } .climate-device[data-power="on"] .climate-readings { grid-template-columns: minmax(74px, 1fr) minmax(164px, 2fr); } }
 @media (min-width: 720px) { .climate-devices { grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 18px; } }
-@media (prefers-reduced-motion: reduce) { .climate-device, .climate-device .climate-power, .climate-details > summary .ui-icon { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .climate-device, .climate-device .climate-power, .climate-details > summary .ui-icon { transition: none; } .climate-device[data-writing="true"] .climate-power .ui-icon { animation: none; } }

@@ -12,6 +12,7 @@ const read = file => readFile(new URL(file, root), "utf8");
 const source = await read("core/assets/climate.js");
 const html = await read("core/climate/index.html");
 const appSource = await read("core/assets/app.js");
+const liveSource = await read("core/assets/climate-live.js");
 const sandbox = {};
 vm.runInNewContext(source.replace(/^import .*;\n/gm, "").replace(/^export /gm, "")
   + "\nglobalThis.api = { validClimateControl, validClimateValue, climateDevice, climateSnapshot };", sandbox);
@@ -55,6 +56,10 @@ test("shell, explicit mount, runtime and command boundaries", () => {
   assert.match(source, /import \{ sharedNavigationRuntime \} from "\.\/core-navigation\.js"/);
   assert.match(source, /export function mountClimate\(root, getRuntime = currentRuntime\)/);
   assert.doesNotMatch(source, /mountClimate\(document|setInterval|setTimeout|fetch\(|XMLHttpRequest|signIn|signOut\(|initializeApp|firebasejs|localStorage|sessionStorage/);
+  assert.match(source, /startClimateLive/);
+  assert.match(liveSource, /win\.setTimeout\(tick/);
+  assert.match(liveSource, /"facilityClimateSignals"\), runtime\.limit\(16\)/);
+  assert.doesNotMatch(liveSource, /httpsCallable|operatorControl|operatorReconcile|fetch\(|setInterval|setDoc|updateDoc|addDoc|deleteDoc/);
   const parsedMarkup = source.split("\n").filter(line => line.includes(".innerHTML"));
   assert.ok(parsedMarkup.length > 0);
   parsedMarkup.forEach(line => assert.match(line, /\.innerHTML = uiIcon\(/, "only bundled icon markup may be parsed"));
@@ -89,19 +94,45 @@ test("offline devices retain empty versions without losing other devices; malfor
   assert.equal(climateDevice(d).controls.some(control => control.field === "unsafe"), false);
 });
 
+test("partial snapshots require requested IDs, reject malformed flags and duplicates, and accept legacy full snapshots", () => {
+  const data = { ...snapshot(), partial: true };
+  assert.equal(climateSnapshot(data, ["synthetic-ac-1"]).partial, true);
+  assert.throws(() => climateSnapshot(data));
+  assert.throws(() => climateSnapshot(data, ["other"]));
+  assert.throws(() => climateSnapshot({ ...data, devices: [device(), device()] }, ["synthetic-ac-1"]));
+  assert.throws(() => climateSnapshot({ ...data, partial: "true" }, ["synthetic-ac-1"]));
+  assert.equal(climateSnapshot(snapshot()).partial, false);
+});
+
 // Synthetic runtime only. No Firebase module, authentication service, credential or device network is used.
 function bootstrap(data) {
   const f = window.__fixture = { data, calls: [], listeners: new Set(), hold: null, release: null,
     controlStatus: "verified", reconcileStatus: "unknown", failControl: null, failRead: false,
-    nullDevice: false, wrongCommand: false, accessRole: "manager" };
+    nullDevice: false, wrongCommand: false, accessRole: "manager", signalListeners: new Set(),
+    signalInitial: [], subscriptions: 0, unsubscriptions: 0, readOverride: null };
+  const signalSnapshot = items => {
+    const docs = items.map(item => ({ id: item.id, data: () => structuredClone(item.data) }));
+    return { docs, docChanges: () => docs.map(doc => ({ type: "modified", doc })) };
+  };
   const runtime = window.__runtime = { authClient: { currentUser: { uid: "synthetic-manager" } }, functionsClient: {},
+    db: {}, collection: (_db, name) => ({ name }), limit: count => ({ count }), query: (...parts) => ({ parts }),
+    onSnapshot(query, next, error) {
+      if (query.parts[0].name !== "facilityClimateSignals" || query.parts[1].count !== 16) throw new Error("Unexpected signal query");
+      const listener = { next, error }; f.signalListeners.add(listener); f.subscriptions++;
+      next(signalSnapshot(f.signalInitial));
+      return () => { if (f.signalListeners.delete(listener)) f.unsubscriptions++; };
+    },
     auth: { onAuthStateChanged(_auth, callback) { f.listeners.add(callback); return () => f.listeners.delete(callback); } },
     httpsCallable(_client, name) { return async payload => {
-      f.calls.push({ name, payload: structuredClone(payload) });
+      f.calls.push({ name, payload: structuredClone(payload), at: Date.now() });
       const read = structuredClone(f.data);
       if (f.hold === name) { f.hold = null; await new Promise(resolve => { f.release = resolve; }); }
       if (name === "getCoreAccessSession") return { data: { role: f.accessRole, staffName: "합성 운영자", staffId: "fixture-staff", mustChangePassword: false } };
-      if (name === "getCoreAirConditioners") { if (f.failRead) throw new Error("synthetic-read-error"); return { data: read }; }
+      if (name === "getCoreAirConditioners") {
+        if (f.failRead) throw new Error("synthetic-read-error");
+        return { data: f.readOverride || (payload.deviceIds ? { ...read, partial: true,
+          devices: read.devices.filter(device => payload.deviceIds.includes(device.deviceId)) } : read) };
+      }
       if (name !== "operatorControlCoreAirConditioner" && name !== "operatorReconcileCoreAirConditioner") throw new Error("Unexpected synthetic callable: " + name);
       if (name === "operatorControlCoreAirConditioner" && f.failControl) {
         const error = new Error("synthetic-command-error");
@@ -117,6 +148,8 @@ function bootstrap(data) {
         device: f.nullDevice ? null : structuredClone(d) } };
     } } };
   f.auth = uid => { runtime.authClient.currentUser = uid ? { uid } : null; [...f.listeners].forEach(callback => callback(runtime.authClient.currentUser)); };
+  f.signals = items => [...f.signalListeners].forEach(listener => listener.next(signalSnapshot(items)));
+  f.signalError = () => [...f.signalListeners].forEach(listener => listener.error(new Error("synthetic-signal-error")));
   if (location.pathname === "/integration/") window.archiveCoreNavigation = { runtime, uid: runtime.authClient.currentUser.uid,
     session: { role: "manager" }, ready() { window.__navigationReady = true; } };
 }
@@ -486,7 +519,7 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       assert.equal(await power(page).isDisabled(), true);
     }));
 
-    await t.test("all controls disabled during read/write; account changes ignore stale read and write responses", () => withPage(async page => {
+    await t.test("writing card stays disabled, populated reads stay operable; account changes ignore stale responses", () => withPage(async page => {
       await mount(page);
       await openDetails(page);
       await page.evaluate(() => { window.__fixture.hold = "operatorControlCoreAirConditioner"; });
@@ -505,8 +538,8 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       await page.evaluate(() => { window.__fixture.hold = "getCoreAirConditioners"; window.__fixture.release = null; });
       await page.getByRole("button", { name: "새로고침", exact: true }).click();
       await page.waitForFunction(() => typeof window.__fixture.release === "function");
-      assert.equal(await power(page).isDisabled(), true);
-      for (const dir of [-1, 1]) assert.equal(await temperatureButton(page, dir).isDisabled(), true);
+      assert.equal(await power(page).isDisabled(), false);
+      for (const dir of [-1, 1]) assert.equal(await temperatureButton(page, dir).isDisabled(), false);
       await page.evaluate(() => { window.__fixture.auth(null); document.dispatchEvent(new Event("core-instructor-signed-out")); window.__fixture.release(); });
       await page.waitForFunction(() => document.querySelector("[data-climate-dashboard]").hidden);
       assert.equal(await page.getByRole("heading", { name: "합성 공간 B", exact: true }).count(), 0);
@@ -628,6 +661,230 @@ test("synthetic browser lifecycle, commands, auth integration and responsive QA"
       const collapsed = await card.evaluate(node => node.getBoundingClientRect().height);
       await openDetails(page, card);
       assert.ok(await card.evaluate(node => node.getBoundingClientRect().height) > collapsed);
+    }));
+
+    const clockMount = async (page, healthy = false) => {
+      await page.clock.install({ time: new Date("2026-10-21T03:00:00Z") });
+      await page.clock.pauseAt(new Date("2026-10-21T03:00:01Z"));
+      await eightDevices(page);
+      if (healthy) await page.evaluate(() => { window.__fixture.signalInitial = [
+        { id: "__receiver__", data: { connected: true, updatedAt: new Date().toISOString() } },
+        { id: "initial", data: { deviceId: "synthetic-eight-0", revision: 0 } },
+      ]; });
+      await mount(page);
+    };
+    const advance = async (page, milliseconds) => { await page.clock.runFor(milliseconds); await page.evaluate(() => Promise.resolve()); };
+    const readCalls = page => calls(page, "getCoreAirConditioners");
+    const visibility = (page, value) => page.evaluate(value => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => value });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, value);
+
+    await t.test("clock: missing receiver polls at 15 seconds, hidden pauses/unsubscribes, resume/focus obey full cooldown without catchup", () => withPage(async page => {
+      await clockMount(page);
+      await advance(page, 14999); assert.equal((await readCalls(page)).length, 1);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 2);
+      await visibility(page, "hidden");
+      assert.equal(await page.evaluate(() => window.__fixture.signalListeners.size), 0);
+      await advance(page, 120000); assert.equal((await readCalls(page)).length, 2);
+      await visibility(page, "visible"); await advance(page, 1);
+      assert.equal((await readCalls(page)).length, 3);
+      await page.evaluate(() => { for (let i = 0; i < 6; i++) window.dispatchEvent(new Event("focus")); });
+      await advance(page, 9998); assert.equal((await readCalls(page)).length, 3);
+      await advance(page, 2); assert.equal((await readCalls(page)).length, 4);
+      const reads = await readCalls(page);
+      assert.ok(reads[3].at - reads[2].at >= 10000);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+    }));
+
+    await t.test("clock: healthy receiver selects 60 seconds; stale or failed receiver returns to 15 seconds", () => withPage(async page => {
+      await clockMount(page, true);
+      await advance(page, 59999); assert.equal((await readCalls(page)).length, 1);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 2);
+      await advance(page, 120000); assert.equal((await readCalls(page)).length, 4);
+      await advance(page, 14999); assert.equal((await readCalls(page)).length, 4);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 5);
+      await page.evaluate(() => window.__fixture.signals([{ id: "__receiver__", data: { connected: true, updatedAt: new Date().toISOString() } }]));
+      await page.evaluate(() => window.__fixture.signalError());
+      await advance(page, 14999); assert.equal((await readCalls(page)).length, 5);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 6);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+    }));
+
+    await t.test("clock: baseline ignored, signals coalesce for 350ms and targeted reads merge without event values, drops or false whole timestamp", () => withPage(async page => {
+      await clockMount(page, true);
+      await advance(page, 2000);
+      await page.evaluate(() => {
+        const f = window.__fixture;
+        f.hold = "getCoreAirConditioners";
+        f.data.checkedAt = "2026-10-21T03:05:00Z";
+        f.data.devices[0].checkedAt = f.data.checkedAt;
+        f.data.devices[0].values.currentTemperature = 22;
+        f.signals([{ id: "a", data: { deviceId: "synthetic-eight-0", revision: 1, values: { currentTemperature: 99 } } }]);
+      });
+      await advance(page, 100);
+      await page.evaluate(() => window.__fixture.signals([
+        { id: "a", data: { deviceId: "synthetic-eight-0", revision: 2 } },
+        { id: "b", data: { deviceId: "synthetic-eight-1", revision: 1 } },
+        { id: "unknown", data: { deviceId: "unknown-device", revision: 1 } },
+        { id: "bad", data: { deviceId: "../invalid", revision: 1 } },
+      ]));
+      await advance(page, 249); assert.equal((await readCalls(page)).length, 1);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 2);
+      assert.equal(await page.getByTestId("climate-device-0").evaluate(n => n.querySelector(".climate-indoor dd").textContent), "25.5°C");
+      assert.deepEqual((await readCalls(page))[1].payload, { deviceIds: ["synthetic-eight-0", "synthetic-eight-1"] });
+      await page.evaluate(() => window.__fixture.release()); await idle(page);
+      assert.equal(await page.getByTestId("climate-device-0").evaluate(n => n.querySelector(".climate-indoor dd").textContent), "22°C");
+      assert.equal(await page.getByRole("heading", { level: 2 }).count(), 9);
+      assert.match(await page.getByRole("time").textContent(), /12:00:00/);
+      await page.evaluate(() => window.__fixture.signals([
+        { id: "duplicate", data: { deviceId: "synthetic-eight-0", revision: 2 } },
+        { id: "duplicate-b", data: { deviceId: "synthetic-eight-1", revision: 1 } },
+        { id: "bad-revision", data: { deviceId: "synthetic-eight-2", revision: {} } },
+      ]));
+      await advance(page, 5000); assert.equal((await readCalls(page)).length, 2);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+    }));
+
+    await t.test("clock: targeted cooldown is two seconds and unexpected partial IDs are rejected without losing cards", () => withPage(async page => {
+      await clockMount(page, true);
+      await page.evaluate(() => window.__fixture.signals([{ id: "a", data: { deviceId: "synthetic-eight-0", revision: 1 } }]));
+      await advance(page, 1999); assert.equal((await readCalls(page)).length, 1);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 2);
+      await page.evaluate(() => {
+        const f = window.__fixture;
+        f.readOverride = { ...structuredClone(f.data), partial: true, devices: [{ ...structuredClone(f.data.devices[0]), deviceId: "unexpected" }] };
+        f.signals([{ id: "a", data: { deviceId: "synthetic-eight-0", revision: 2 } }]);
+      });
+      await advance(page, 1999); assert.equal((await readCalls(page)).length, 2);
+      await advance(page, 1); assert.equal((await readCalls(page)).length, 3);
+      assert.equal(await page.getByRole("heading", { level: 2 }).count(), 9);
+      assert.equal(await page.getByTestId("climate-device-0").getByRole("button", { name: "전원", exact: true }).isEnabled(), true);
+      assert.equal((await readCalls(page))[2].at - (await readCalls(page))[1].at, 2000);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+    }));
+
+    await t.test("clock: read errors back off 15/30/60/120 seconds, focus cannot bypass backoff, no automatic writes", () => withPage(async page => {
+      await clockMount(page);
+      await page.evaluate(() => { window.__fixture.failRead = true; });
+      await advance(page, 15000); assert.equal((await readCalls(page)).length, 2);
+      for (const delay of [15000, 30000, 60000, 120000, 120000]) {
+        const count = (await readCalls(page)).length;
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await advance(page, delay - 1); assert.equal((await readCalls(page)).length, count);
+        await advance(page, 1); assert.equal((await readCalls(page)).length, count + 1);
+      }
+      assert.equal(await page.getByTestId("climate-device-0").getByRole("button", { name: "전원", exact: true }).isEnabled(), true);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
+    }));
+
+    await t.test("clock: one writing card does not block another, automatic reads postpone until writes settle, UUIDs remain unique", () => withPage(async page => {
+      await clockMount(page); await advance(page, 14900);
+      await page.evaluate(() => { window.__fixture.hold = "operatorControlCoreAirConditioner"; });
+      const first = page.getByTestId("climate-device-0"), second = page.getByTestId("climate-device-1");
+      await first.getByRole("button", { name: "전원", exact: true }).click();
+      assert.equal(await first.getByRole("button", { name: "전원", exact: true }).getAttribute("aria-busy"), "true");
+      assert.equal(await second.getByRole("button", { name: "전원", exact: true }).isEnabled(), true);
+      await second.getByRole("button", { name: "전원", exact: true }).click();
+      assert.equal(await first.getByRole("button", { name: "전원", exact: true }).isDisabled(), true);
+      assert.equal(await allOff(page).isDisabled(), true);
+      await advance(page, 30000); assert.equal((await readCalls(page)).length, 1);
+      const sent = await calls(page, "operatorControlCoreAirConditioner");
+      assert.equal(sent.length, 2); assert.equal(new Set(sent.map(call => call.payload.commandId)).size, 2);
+      await page.evaluate(() => window.__fixture.release()); await advance(page, 1); await idle(page);
+      assert.equal((await readCalls(page)).length, 2);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 2);
+    }));
+
+    await t.test("clock: background reads retain draft DOM, open details and focus while updating readings; submitted drafts use fresh version", () => withPage(async page => {
+      await clockMount(page);
+      const card = page.getByTestId("climate-device-0"); await openDetails(page, card);
+      await card.getByLabel("운전 모드", { exact: true }).selectOption({ label: "난방" });
+      const input = card.getByLabel("희망 온도", { exact: true }); await input.fill("27"); await input.focus();
+      await input.evaluate(node => { window.__draftNode = node; });
+      await page.evaluate(() => {
+        const f = window.__fixture;
+        f.data.devices[0].values.currentTemperature = 22;
+        f.data.devices[0].values.targetTemperature = 20;
+        f.data.devices[0].version = "fresh-after-poll";
+        f.data.devices[1].values.currentTemperature = 21;
+      });
+      await advance(page, 15000); await idle(page);
+      assert.equal(await input.inputValue(), "27");
+      assert.equal(await input.evaluate(node => node === window.__draftNode && document.activeElement === node), true);
+      assert.equal(await card.getByRole("group").evaluate(node => node.open), true);
+      assert.equal(await card.getByLabel("운전 모드", { exact: true }).inputValue(), "1");
+      assert.equal(await card.evaluate(node => node.querySelector(".climate-target dd").textContent), "20°C");
+      assert.equal(await page.getByTestId("climate-device-1").evaluate(node => node.querySelector(".climate-indoor dd").textContent), "21°C");
+      await advance(page, 15000); assert.equal((await readCalls(page)).length, 3);
+      await card.getByRole("button", { name: "희망 온도 적용", exact: true }).click(); await idle(page);
+      const sent = await calls(page, "operatorControlCoreAirConditioner");
+      assert.equal(sent.length, 1); assert.equal(sent[0].payload.value, 27); assert.equal(sent[0].payload.expectedVersion, "fresh-after-poll");
+    }));
+
+    await t.test("clock: authoritative polling cannot unlock a local uncertain command, but other devices update", () => withPage(async page => {
+      await clockMount(page);
+      await page.evaluate(() => { window.__fixture.controlStatus = "unknown"; });
+      const first = page.getByTestId("climate-device-0");
+      await first.getByRole("button", { name: "전원", exact: true }).click(); await idle(page);
+      await page.evaluate(() => {
+        window.__fixture.data.devices[0].pendingCommand = null;
+        window.__fixture.data.devices[1].values.currentTemperature = 19;
+      });
+      await advance(page, 15000); await idle(page);
+      assert.equal(await first.getByRole("button", { name: "전원", exact: true }).isDisabled(), true);
+      assert.equal(await first.getByRole("button", { name: "결과 확인", exact: true }).count(), 1);
+      assert.equal(await page.getByTestId("climate-device-1").evaluate(node => node.querySelector(".climate-indoor dd").textContent), "19°C");
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 1);
+    }));
+
+    await t.test("clock: in-flight background reads never overlap, controls stay operable and stale read cannot overwrite a newer mutation", () => withPage(async page => {
+      await clockMount(page);
+      await page.evaluate(() => { window.__fixture.hold = "getCoreAirConditioners"; });
+      await advance(page, 15000); assert.equal((await readCalls(page)).length, 2);
+      await advance(page, 60000); assert.equal((await readCalls(page)).length, 2);
+      const button = page.getByTestId("climate-device-0").getByRole("button", { name: "전원", exact: true });
+      assert.equal(await button.isEnabled(), true);
+      await button.click();
+      assert.equal(await button.getAttribute("aria-pressed"), "false");
+      await page.evaluate(() => window.__fixture.release());
+      assert.equal(await button.getAttribute("aria-pressed"), "false");
+      await advance(page, 1); await idle(page);
+      assert.equal((await readCalls(page)).length, 3);
+      assert.equal(await button.getAttribute("aria-pressed"), "false");
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 1);
+    }));
+
+    await t.test("clock: auth change ignores stale background responses/signals; signout, navigation and pagehide dispose listeners and timers", () => withPage(async page => {
+      await clockMount(page);
+      await page.evaluate(() => { window.__oldSignal = [...window.__fixture.signalListeners][0]; window.__fixture.hold = "getCoreAirConditioners"; });
+      await advance(page, 15000);
+      await page.evaluate(() => {
+        window.__fixture.data.devices[0].values.currentTemperature = 18;
+        window.__fixture.auth("other-manager");
+      });
+      await idle(page);
+      await page.evaluate(() => {
+        window.__fixture.release();
+        window.__oldSignal.next({ docs: [], docChanges: () => [{ doc: { data: () => ({ deviceId: "synthetic-eight-0", revision: 99 }) } }] });
+      });
+      await advance(page, 2000);
+      assert.equal((await readCalls(page)).length, 3);
+      assert.equal(await page.getByTestId("climate-device-0").evaluate(node => node.querySelector(".climate-indoor dd").textContent), "18°C");
+      assert.equal(await page.evaluate(() => window.__fixture.signalListeners.size), 1);
+      await page.evaluate(() => document.querySelector("[data-climate-dashboard]").classList.add("core-navigation-container"));
+      await advance(page, 60000); assert.equal((await readCalls(page)).length, 3);
+      assert.equal(await page.evaluate(() => window.__fixture.signalListeners.size), 0);
+      await page.evaluate(() => document.querySelector("[data-climate-dashboard]").classList.remove("core-navigation-container"));
+      await idle(page); assert.equal((await readCalls(page)).length, 4);
+      await page.evaluate(() => window.__fixture.auth(null));
+      await advance(page, 120000); assert.equal((await readCalls(page)).length, 4);
+      assert.equal(await page.evaluate(() => window.__fixture.signalListeners.size), 0);
+      await page.evaluate(() => window.__fixture.auth("next-manager")); await idle(page);
+      await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+      await advance(page, 120000); assert.equal((await readCalls(page)).length, 5);
+      assert.equal(await page.evaluate(() => window.__fixture.signalListeners.size), 0);
+      assert.equal((await calls(page, "operatorControlCoreAirConditioner")).length, 0);
     }));
 
     await t.test("actual app.js mobile auth mount uses shared synthetic runtime and no general data reads", () => withPage(async page => {

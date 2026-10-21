@@ -39,6 +39,10 @@ Existing PAT was copied without intentional value output and temporarily stored 
 
 ## Verification
 
+## Superseding follow-up: live refresh
+
+The user subsequently requested automatic external-state updates and faster response through deployment. `docs/tasks/2026-10-21-lg-climate-live-refresh.md` supersedes this document's historical no-polling/no-MQTT/two-worker and local-only statements for this follow-up. Existing hardware-control, permission and duplicate safeguards remain unchanged. Record actual deployment evidence in the follow-up rather than treating earlier planned statuses as current.
+
 ## Production connection approval 2026-10-21
 
 - User explicitly requested actual-device connection and reserved hardware control testing to themself. This authorizes scoped secure registration, commit/main promotion/push, the3 climate Functions and CORE Hosting deployment, live read-only verification. Do not execute any real LG control POST, including no-change operator control calls.

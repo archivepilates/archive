@@ -222,6 +222,35 @@ if (!process.argv.includes('--emulator')) {
     assert.equal(result.status, 404, JSON.stringify(result.body).slice(0, 1000));
     assert.equal(result.body.error.status, 'NOT_FOUND');
   }
+  // Firestore omits a zero fraction; normalize before chronological comparison.
+  const sortableTime = timestamp => timestamp.replace(/(?:\.(\d{1,9}))?Z$/, (_, fraction = '') =>
+    `.${fraction.padEnd(9, '0')}Z`);
+
+  await test('Climate invalidation signals real Firestore rules isolation', async (t) => {
+    await allowed(commit([{ update: { name: `${documents}/facilityClimateSignals/qa`,
+      fields: fields({ deviceId: 'qa-device', revision: 'qa-revision', updatedAt: '2026-10-21T00:00:00Z' }) } }], 'owner'));
+    await t.test('manager and owner can read signals with a bounded query', async () => {
+      for (const token of [manager, other]) {
+        await allowed(get('facilityClimateSignals/qa', token));
+        await allowed(query('facilityClimateSignals', null, 16, token, false));
+      }
+    });
+    await t.test('unbounded and oversized queries are denied', async () => {
+      for (const limit of [null, 17]) await denied(query('facilityClimateSignals', null, limit, manager, false));
+    });
+    await t.test('instructor, member and signed-out reads are denied', async () => {
+      for (const token of [nonmanager, member, null]) {
+        await denied(get('facilityClimateSignals/qa', token));
+        await denied(query('facilityClimateSignals', null, 16, token, false));
+      }
+    });
+    await t.test('all clients are denied signal writes and command reads', async () => {
+      for (const token of [manager, other, nonmanager, null]) {
+        await denied(commit([{ update: { name: `${documents}/facilityClimateSignals/qa`, fields: fields({ revision: 'forged' }) } }], token));
+        await denied(get('facilityClimateCommands/qa', token));
+      }
+    });
+  });
 
   await test('Sequence Studio real Firestore rules emulator regression', async (t) => {
     const check = (label, operation, expectation = denied) => t.test(label, () => expectation(operation()));
@@ -530,7 +559,7 @@ if (!process.argv.includes('--emulator')) {
       assert(notes.every((doc) => !doc.fields.deleted.booleanValue));
       assert(!notes.some((doc) => doc.name.endsWith('/atomic')));
       const dates = notes.map((doc) => doc.fields.updatedAt.timestampValue);
-      assert.deepEqual(dates, [...dates].sort().reverse());
+      assert.deepEqual(dates, [...dates].sort((a, b) => sortableTime(b).localeCompare(sortableTime(a))));
       return result;
     }, allowed);
     await check('undelete denied', () => commit([noteWrite('atomic', note({ revision: 4 }))]));
@@ -827,8 +856,8 @@ if (!process.argv.includes('--emulator')) {
         assert.equal(seen.length, expected.size, 'No duplicated or missing rows across pages');
         assert.deepEqual(new Set(seen.map((doc) => doc.name)), expected);
         const sorted = [...seen].sort((a, b) => {
-          const aTime = a.fields.updatedAt.timestampValue;
-          const bTime = b.fields.updatedAt.timestampValue;
+          const aTime = sortableTime(a.fields.updatedAt.timestampValue);
+          const bTime = sortableTime(b.fields.updatedAt.timestampValue);
           return aTime < bTime ? 1 : aTime > bTime ? -1 : a.name < b.name ? 1 : a.name > b.name ? -1 : 0;
         });
         assert.deepEqual(seen.map((doc) => doc.name), sorted.map((doc) => doc.name));

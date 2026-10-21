@@ -22,7 +22,7 @@ function compile(relative: string, imports: Record<string, unknown>, suffix = ""
   vm.runInNewContext(output + suffix, context);
   return context.exports;
 }
-function harness(staff: any = null) {
+function harness(staff: any = null, dashboard?: (actor: service.ClimateActor, data: unknown) => Promise<unknown>) {
   const rows = new Map<string, any>(); let reads = 0, secrets = 0; let serial = Promise.resolve();
   const ref = (path: string): any => ({ path, async get() { reads++; const value = rows.get(path); return {
     exists: value !== undefined, data: () => value === undefined ? undefined : structuredClone(value),
@@ -49,9 +49,15 @@ function harness(staff: any = null) {
     "../firestore/staffRepository": { getStaffByUid: async () => staff, getStaffByEmail: async () => staff },
   });
   const module = compile("climate/climateCallables.ts", {
-    "node:crypto": { createHash }, "firebase-functions/params": { defineSecret: () => ({ value() { secrets++; throw new Error("SYNTHETIC_SECRET_MUST_NOT_BE_READ"); } }) },
+    "node:crypto": { createHash }, "firebase-functions/params": { defineSecret: () => ({ value() {
+      secrets++;
+      if (dashboard) return JSON.stringify({ pat: `thinqpat_${"synthetic".repeat(6)}`, clientId: "synthetic-core-client",
+        allowedDeviceIds: ["qa-device"], controlsEnabled: false });
+      throw new Error("SYNTHETIC_SECRET_MUST_NOT_BE_READ");
+    } }) },
     "firebase-functions/v2/https": { HttpsError }, "../config/firebase": { db }, "../security/authGuards": guards,
-    "../utils/errors": errors, "./climateService": service, "./thinqClient": client,
+    "../utils/errors": errors, "./climateService": dashboard ? { ...service, ClimateService: class { dashboard = dashboard; } } : service,
+    "./thinqClient": client,
   }, "\nexports.TestStore = FirestoreClimateStore;");
   return { rows, store: new module.TestStore(), handler: module.climateHandler, reads: () => reads, secrets: () => secrets };
 }
@@ -67,7 +73,9 @@ for (const [name, staff, req, expected] of [
 ] as const) test(`callable ${name} denied before PAT/provider`, async () => {
   const h = harness(staff);
   for (const action of ["dashboard", "control", "reconcile"]) {
-    await assert.rejects(() => h.handler(req, action), (e: any) => e.code === expected);
+    for (const data of [{}, { deviceIds: ["qa-device"] }]) {
+      await assert.rejects(() => h.handler({ ...req, data }, action), (e: any) => e.code === expected);
+    }
   }
   assert.equal(h.secrets(), 0); assert.equal(h.reads(), 0);
 });
@@ -107,3 +115,49 @@ test("actual read throttle serializes concurrent reads for same user", async () 
   const h = harness(); const values = await Promise.allSettled([h.store.throttleRead("qa"), h.store.throttleRead("qa")]);
   assert.equal(values.filter(v => v.status === "fulfilled").length, 1);
 });
+
+test("dashboard callable forwards full and targeted request data after unchanged manager authorization", async () => {
+  const seen: { actor: service.ClimateActor; data: unknown }[] = [];
+  const h = harness({ uid: "qa", staffId: "qa", role: "manager", active: true, coreAuthAfter: fresh }, async (actor, data) => {
+    seen.push({ actor, data });
+    return { checkedAt: new Date().toISOString(), devices: [], partial: Boolean((data as any)?.deviceIds) };
+  });
+  for (const data of [undefined, {}, { deviceIds: ["qa-device"] }]) {
+    const result = await h.handler({ ...request, data }, "dashboard");
+    assert.equal(result.partial, Boolean(data?.deviceIds));
+    assert.equal(seen.at(-1)!.data, data);
+    assert.equal(seen.at(-1)!.actor.uid, "qa"); assert.equal(seen.at(-1)!.actor.staffId, "qa");
+  }
+  assert.equal(h.secrets(), 3);
+});
+
+for (const interval of [2000, 10000]) test(`actual ${interval}ms read guard uses the same UID document for full and targeted reads`, async () => {
+  const h = harness();
+  await h.store.throttleRead("qa", interval);
+  const keys = [...h.rows.keys()];
+  assert.equal(keys.length, 1); assert.match(keys[0], /^facilityClimateGuards\/read_/);
+  await assert.rejects(() => h.store.throttleRead("qa", 2000), /rate_limited/);
+  await assert.rejects(() => h.store.throttleRead("qa"), /rate_limited/);
+  assert.deepEqual([...h.rows.keys()], keys);
+  h.rows.get(keys[0]).lastReadAt = Date.now() - 3000;
+  await assert.rejects(() => h.store.throttleRead("qa"), /rate_limited/);
+  await h.store.throttleRead("qa", 2000);
+  h.rows.get(keys[0]).lastReadAt = Date.now() - 11000;
+  await h.store.throttleRead("qa");
+  await h.store.throttleRead("other", 2000);
+  assert.equal(h.rows.size, 2, "different authenticated UIDs keep independent guards");
+});
+
+test("actual full and targeted read guards cannot race around the shared UID lock", async () => {
+  const h = harness();
+  const values = await Promise.allSettled([h.store.throttleRead("qa", 2000), h.store.throttleRead("qa"), h.store.throttleRead("qa", 2000)]);
+  assert.equal(values.filter(v => v.status === "fulfilled").length, 1); assert.equal(h.rows.size, 1);
+});
+
+for (const interval of [0, -1, 1, 1999, 2000.5, 9999, 10001, NaN, Infinity, null, "2000"]) {
+  test(`invalid internal throttle interval ${String(interval)} fails before any store access`, async () => {
+    const h = harness();
+    await assert.rejects(() => h.store.throttleRead("qa", interval), /invalid_request/);
+    assert.equal(h.reads(), 0); assert.equal(h.rows.size, 0);
+  });
+}

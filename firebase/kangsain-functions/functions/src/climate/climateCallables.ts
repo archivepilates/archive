@@ -12,12 +12,13 @@ const COMMANDS = "facilityClimateCommands";
 const GUARDS = "facilityClimateGuards";
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 class FirestoreClimateStore implements ClimateStore {
-  async throttleRead(uid: string) {
+  async throttleRead(uid: string, minimumIntervalMs = 10000) {
+    if (![2000, 10000].includes(minimumIntervalMs)) throw new ClimateError("invalid_request");
     const ref = db.collection(GUARDS).doc(`read_${hash(uid)}`);
     await db.runTransaction(async tx => {
       const previous = await tx.get(ref);
       const now = Date.now();
-      if (now - Number(previous.data()?.lastReadAt || 0) < 10_000) throw new ClimateError("rate_limited");
+      if (now - Number(previous.data()?.lastReadAt || 0) < minimumIntervalMs) throw new ClimateError("rate_limited");
       tx.set(ref, { lastReadAt: now });
     });
   }
@@ -80,7 +81,7 @@ export async function climateHandler(request: CallableRequest, action: "dashboar
     const staff = await requireStaff(request);
     requireManager(staff);
     const actor = { uid: request.auth!.uid, staffId: staff.staffId };
-    if (action === "dashboard") return await service().dashboard(actor);
+    if (action === "dashboard") return await service().dashboard(actor, request.data);
     if (action === "control") return await service().control(actor, request.data);
     return await service().reconcile(actor, request.data);
   } catch (error) {

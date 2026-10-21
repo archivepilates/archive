@@ -698,6 +698,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Invalidation signals only; device state and commands remain server/LG reads.
+    match /facilityClimateSignals/{signalId} {
+      allow get: if isManager();
+      allow list: if isManager() && request.query.limit != null && request.query.limit <= 16;
+      allow write: if false;
+    }
+
     match /fcmTokens/{tokenId} {
       allow read: if signedIn() && request.auth.uid == resource.data.uid;
       allow write: if false;

@@ -1,5 +1,6 @@
 import { sharedNavigationRuntime } from "./core-navigation.js";
 import { uiIcon } from "./ui-icons.js";
+import { startClimateLive } from "./climate-live.js";
 
 const FIELDS = Object.freeze({
   power: "전원", mode: "운전 모드", targetTemperature: "희망 온도", fan: "바람 세기",
@@ -70,11 +71,13 @@ export function climateDevice(device) {
     pendingCommand: device.pendingCommand ? { commandId: device.pendingCommand.commandId, status: device.pendingCommand.status } : null };
 }
 
-export function climateSnapshot(data) {
-  if (!iso(data?.checkedAt) || !Array.isArray(data?.devices)) throw new Error("invalid-snapshot");
+export function climateSnapshot(data, requestedIds) {
+  if (!iso(data?.checkedAt) || !Array.isArray(data?.devices) || data.devices.length > 8
+    || data.partial !== undefined && typeof data.partial !== "boolean") throw new Error("invalid-snapshot");
   const devices = data.devices.map(climateDevice);
   if (new Set(devices.map(device => device.deviceId)).size !== devices.length) throw new Error("duplicate-device");
-  return { checkedAt: data.checkedAt, devices };
+  if (data.partial && (!requestedIds?.length || devices.some(device => !requestedIds.includes(device.deviceId)))) throw new Error("unexpected-partial-device");
+  return { checkedAt: data.checkedAt, devices, partial: data.partial === true };
 }
 
 function currentRuntime() {
@@ -96,7 +99,9 @@ export function mountClimate(root, getRuntime = currentRuntime) {
   const count = root.querySelector("[data-climate-count]");
   const bulkOff = root.querySelector("[data-climate-bulk-off]");
   const bulkResult = root.querySelector("[data-climate-bulk-result]");
-  let active = null, generation = 0, busy = false, disposed = false, blockedUser = null;
+  let active = null, generation = 0, reading = false, batchBusy = false, disposed = false, blockedUser = null;
+  let mutationEpoch = 0, live;
+  const writes = new Set(), cards = new Map();
   let devices = [], locks = new Map(), messages = new Map(), checkedAt = null, trusted = false;
   const expanded = new Set();
   let watchedRuntime, unsubscribe;
@@ -132,7 +137,9 @@ export function mountClimate(root, getRuntime = currentRuntime) {
   const same = (a, b) => Boolean(a && b && a.runtime === b.runtime && a.user === b.user && a.uid === b.uid);
   function notice(message, error = false) { status.textContent = message; status.dataset.error = String(error); }
   function clear() {
-    generation++; busy = false; devices = []; locks.clear(); messages.clear(); expanded.clear(); checkedAt = null; trusted = false;
+    live?.dispose(); live = undefined;
+    generation++; reading = false; batchBusy = false; writes.clear(); cards.clear();
+    devices = []; locks.clear(); messages.clear(); expanded.clear(); checkedAt = null; trusted = false;
     list.replaceChildren(); checked.textContent = "조회 전"; checked.removeAttribute("datetime"); count.textContent = "기기 —";
     bulkOff.disabled = true; bulkResult.replaceChildren(); bulkResult.hidden = true;
     notice(""); root.setAttribute("aria-busy", "false"); refresh.disabled = true;
@@ -146,23 +153,37 @@ export function mountClimate(root, getRuntime = currentRuntime) {
     if (disposed) return;
     if (!root.isConnected) { dispose(); return; }
     const next = session();
-    if (same(active, next) || !active && !next) return;
+    if (same(active, next) || !active && !next) { live?.sync(); return; }
     clear(); active = next; root.hidden = !next;
     watch(next?.runtime || watchedRuntime);
-    if (next) void load();
+    if (next) {
+      const owner = next;
+      live = startClimateLive({ win, doc, parentDoc, runtime: next.runtime,
+        active: () => same(owner, session()) && !root.hidden,
+        knownIds: () => devices.map(device => device.deviceId),
+        blocked: () => reading || batchBusy || writes.size > 0,
+        read: ids => load(ids, true) });
+      if (doc.visibilityState !== "hidden") void load();
+    }
   }
   function signedOut() { blockedUser = active?.user || getRuntime()?.authClient?.currentUser; clear(); active = null; root.hidden = true; }
-  function begin() {
+  function begin(deviceId, batch = false) {
     accessChanged();
-    if (!active || busy || !same(active, session())) return null;
-    const request = { session: active, generation };
-    busy = true; render();
+    if (!active || batchBusy || reading && !devices.length || !same(active, session())
+      || batch && writes.size || deviceId && writes.has(deviceId)) return null;
+    const request = { session: active, generation, deviceId, batch };
+    mutationEpoch++;
+    if (batch) batchBusy = true;
+    else writes.add(deviceId);
+    live?.wake(); render();
     return request;
   }
   function current(request) { return request.generation === generation && same(request.session, session()); }
   function end(request) {
     if (!current(request)) { accessChanged(); return; }
-    busy = false; render();
+    if (request.batch) batchBusy = false;
+    else writes.delete(request.deviceId);
+    render(); live?.wake();
   }
   const call = async (request, name, payload) => {
     const runtime = request.session.runtime;
@@ -170,7 +191,11 @@ export function mountClimate(root, getRuntime = currentRuntime) {
   };
   function adopt(snapshot) {
     const previous = devices;
-    devices = snapshot.devices; checkedAt = snapshot.checkedAt; trusted = true;
+    if (snapshot.partial) {
+      if (snapshot.devices.some(device => !previous.some(item => item.deviceId === device.deviceId))) throw new Error("unknown-partial-device");
+      const incoming = new Map(snapshot.devices.map(device => [device.deviceId, device]));
+      devices = previous.map(device => incoming.get(device.deviceId) || device);
+    } else { devices = snapshot.devices; checkedAt = snapshot.checkedAt; trusted = true; }
     for (const device of devices) {
       if (device.pendingCommand && !locks.has(device.deviceId)) locks.set(device.deviceId, { ...device.pendingCommand, canAcknowledge: false });
     }
@@ -179,21 +204,43 @@ export function mountClimate(root, getRuntime = currentRuntime) {
       devices.push({ ...device, available: false, controls: [] });
     }
   }
-  async function load() {
-    const request = begin(); if (!request) return;
-    notice("조회 중");
+  async function load(ids, background = false) {
+    if (!active || reading || batchBusy || writes.size || !same(active, session()) || root.hidden
+      || doc.visibilityState === "hidden" || parentDoc?.visibilityState === "hidden") return null;
+    const requestedIds = Array.isArray(ids) ? [...new Set(ids)].filter(id => devices.some(device => device.deviceId === id)).slice(0, 8) : undefined;
+    if (requestedIds && !requestedIds.length) return null;
+    const request = { session: active, generation, epoch: mutationEpoch };
+    const ownerLive = live;
+    reading = true; ownerLive?.started(requestedIds); render();
+    if (!background) notice("조회 중");
+    let success = null;
     try {
-      const data = await call(request, "getCoreAirConditioners", {});
-      if (!current(request)) return;
-      adopt(climateSnapshot(data)); notice(devices.length ? "조회 완료" : "연결된 기기 없음");
-    } catch { if (current(request)) { trusted = false; notice("기기를 조회하지 못했습니다. 새로고침으로 다시 확인하세요.", true); } }
-    finally { end(request); }
+      const data = await call(request, "getCoreAirConditioners", requestedIds ? { deviceIds: requestedIds } : {});
+      if (!current(request)) return null;
+      if (request.epoch !== mutationEpoch || background && (doc.visibilityState === "hidden" || parentDoc?.visibilityState === "hidden" || root.hidden)) {
+        ownerLive?.requestFull(); return null;
+      }
+      adopt(climateSnapshot(data, requestedIds)); success = true;
+      if (!background) notice(devices.length ? "조회 완료" : "연결된 기기 없음");
+      return true;
+    } catch {
+      success = false;
+      if (current(request)) {
+        if (!background) trusted = false;
+        notice("기기를 조회하지 못했습니다. 새로고침으로 다시 확인하세요.", true);
+      }
+      return false;
+    } finally {
+      if (current(request)) { reading = false; render(); ownerLive?.finished(success, requestedIds); }
+    }
   }
   async function control(device, field, value) {
+    device = devices.find(item => item.deviceId === device.deviceId);
+    if (!device) return;
     if (!trusted || locks.has(device.deviceId) || !device.available || device.errorCode || !validVersion(device.version)) return;
     const descriptor = device.controls.find(item => item.field === field);
     if (!validClimateValue(descriptor, value)) return;
-    const request = begin(); if (!request) return;
+    const request = begin(device.deviceId); if (!request) return;
     try { await sendControl(request, device, field, value); }
     finally { end(request); }
   }
@@ -256,7 +303,7 @@ export function mountClimate(root, getRuntime = currentRuntime) {
   }
   async function turnAllOff() {
     if (!trusted) return;
-    const request = begin(); if (!request) return;
+    const request = begin(undefined, true); if (!request) return;
     const plan = [...devices];
     const targets = plan.filter(canTurnOff);
     const results = new Map(plan.filter(device => !canTurnOff(device)).map(device => [device.deviceId, "건너뜀 · 연결·잠금·지원 상태 확인 필요"]));
@@ -297,7 +344,7 @@ export function mountClimate(root, getRuntime = currentRuntime) {
     const lock = locks.get(deviceId);
     if (!lock || acknowledge && !lock.canAcknowledge) return;
     if (acknowledge && !win.confirm("현재 기기 상태를 확인했습니다. 명령을 다시 보내지 않고 이 요청의 잠금을 해제할까요?")) return;
-    const request = begin(); if (!request) return;
+    const request = begin(deviceId); if (!request) return;
     notice(acknowledge ? "잠금 해제 확인 중" : "명령 결과 확인 중");
     try {
       const result = await call(request, "operatorReconcileCoreAirConditioner", { deviceId, commandId: lock.commandId, acknowledge });
@@ -305,9 +352,9 @@ export function mountClimate(root, getRuntime = currentRuntime) {
     } catch { if (current(request)) notice("결과를 확인하지 못했습니다. 잠금을 유지합니다.", true); }
     finally { end(request); }
   }
-  function renderField(device, descriptor, index, disabled) {
+  function renderField(device, descriptor, disabled) {
     const form = text("form", "", "climate-field");
-    const id = `climate-${index}-${descriptor.field}`;
+    const id = `climate-${encodeURIComponent(device.deviceId)}-${descriptor.field}`;
     const label = text("label", FIELDS[descriptor.field]); label.htmlFor = id;
     const value = device.values[descriptor.field];
     const power = powerPair(descriptor);
@@ -334,29 +381,69 @@ export function mountClimate(root, getRuntime = currentRuntime) {
       : descriptor.kind === "boolean" ? input.checked : input.valueAsNumber;
     if (toggle) {
       label.className = "climate-toggle-label"; label.append(input);
-      input.addEventListener("change", () => void control(device, descriptor.field, readValue()));
+      input.addEventListener("change", () => { if (!input.disabled) void control(device, descriptor.field, readValue()); });
     } else {
       const submit = text("button", "적용"); submit.type = "submit"; submit.disabled = disabled;
       submit.setAttribute("aria-label", `${FIELDS[descriptor.field]} 적용`); form.append(input, submit);
     }
+    form.dataset.field = descriptor.field; form.dataset.descriptor = JSON.stringify(descriptor);
+    if (!toggle) input.addEventListener("input", () => { input.dataset.draft = "true"; });
     form.addEventListener("submit", event => { event.preventDefault();
-      if (input.value !== "" && !disabled && form.reportValidity()) void control(device, descriptor.field, readValue()); });
+      if (input.value !== "" && !input.disabled && form.reportValidity()) {
+        delete input.dataset.draft; void control(device, descriptor.field, readValue());
+      }
+    });
     return form;
   }
+  function commitCard(deviceId, card, key) {
+    const previous = cards.get(deviceId)?.node;
+    if (previous) {
+      const focused = previous.contains(doc.activeElement) ? doc.activeElement : null;
+      const focusId = focused?.id, focusLabel = focused?.getAttribute("aria-label"), focusTag = focused?.tagName;
+      card.querySelector("details").open = previous.querySelector("details").open;
+      for (const form of card.querySelectorAll(".climate-field")) {
+        const old = [...previous.querySelectorAll(".climate-field")].find(item => item.dataset.field === form.dataset.field
+          && item.dataset.descriptor === form.dataset.descriptor);
+        const input = old?.querySelector("input:not([type=checkbox]),select");
+        if (!input || input.dataset.draft !== "true" && input !== focused) continue;
+        const disabled = form.querySelector("input,select").disabled;
+        old.querySelectorAll("input,select,button").forEach(node => { node.disabled = disabled; });
+        form.replaceWith(old);
+      }
+      previous.dataset.power = card.dataset.power;
+      previous.dataset.testid = card.dataset.testid;
+      previous.dataset.writing = card.dataset.writing;
+      previous.setAttribute("aria-busy", card.getAttribute("aria-busy"));
+      previous.replaceChildren(...card.childNodes);
+      if (focused) {
+        const target = focused.isConnected ? focused : [...previous.querySelectorAll("input,select,button,summary")]
+          .find(node => focusId ? node.id === focusId : focusLabel ? node.getAttribute("aria-label") === focusLabel : node.tagName === focusTag);
+        if (target && !target.disabled) target.focus({ preventScroll: true });
+      }
+    } else list.append(card);
+    cards.set(deviceId, { node: previous || card, key });
+  }
   function render() {
-    refresh.disabled = busy || !active; root.setAttribute("aria-busy", String(busy));
+    const focused = doc.activeElement;
+    refresh.disabled = reading || batchBusy || writes.size > 0 || !active;
+    root.setAttribute("aria-busy", String(reading || batchBusy || writes.size > 0));
     checked.textContent = checkedAt ? `조회 ${timeLabel(checkedAt)}` : "조회 전";
     if (checkedAt) checked.dateTime = checkedAt;
     count.textContent = `${devices.length}대 · 운전 ${devices.filter(device => ["POWER_ON", "ON", "on"].includes(device.values.power)).length}`;
-    bulkOff.disabled = busy || !trusted || !devices.length;
-    list.replaceChildren();
+    bulkOff.disabled = batchBusy || writes.size > 0 || reading && !devices.length || !trusted || !devices.length;
+    for (const [id, entry] of cards) if (!devices.some(device => device.deviceId === id)) { entry.node.remove(); cards.delete(id); }
+    list.querySelectorAll(":scope > .climate-empty").forEach(node => node.remove());
     devices.forEach((device, index) => {
       const on = ["POWER_ON", "ON", "on"].includes(device.values.power);
       const off = ["POWER_OFF", "OFF", "off"].includes(device.values.power);
       const healthy = device.available && !device.errorCode;
-      const disabled = busy || !trusted || !healthy || locks.has(device.deviceId);
+      const writing = writes.has(device.deviceId) || batchBusy;
+      const disabled = writing || reading && !devices.length || !trusted || !healthy || locks.has(device.deviceId);
+      const key = JSON.stringify([index, device, disabled, writing, locks.get(device.deviceId), messages.get(device.deviceId)]);
+      if (cards.get(device.deviceId)?.key === key) return;
       const card = text("article", "", "climate-device"); card.dataset.testid = `climate-device-${index}`;
       card.dataset.power = healthy ? on ? "on" : off ? "off" : "unknown" : "unavailable";
+      card.dataset.writing = String(writing); card.setAttribute("aria-busy", String(writing));
       const heading = text("div", "", "climate-device-heading");
       const appliance = text("div", "", "climate-appliance"); appliance.setAttribute("aria-hidden", "true"); appliance.append(iconNode("air-vent"));
       const identity = text("div", "", "climate-identity");
@@ -367,7 +454,8 @@ export function mountClimate(root, getRuntime = currentRuntime) {
       powerButton.setAttribute("aria-label", "전원"); powerButton.setAttribute("title", `${device.name} ${on ? "전원 끄기" : "전원 켜기"}`);
       if (on || off) powerButton.setAttribute("aria-pressed", String(on));
       powerButton.disabled = disabled || !pair || !on && !off;
-      powerButton.append(iconNode("power"));
+      powerButton.setAttribute("aria-busy", String(writing));
+      powerButton.append(iconNode(writing ? "refresh-cw" : "power"));
       powerButton.addEventListener("click", () => { if (pair) void control(device, "power", pair[on ? 1 : 0]); });
       heading.append(appliance, identity, powerButton); card.append(heading);
       const readings = text("dl", "", "climate-readings");
@@ -405,7 +493,7 @@ export function mountClimate(root, getRuntime = currentRuntime) {
         if (details.open) expanded.add(device.deviceId); else expanded.delete(device.deviceId);
       });
       const fields = text("div", "", "climate-fields");
-      for (const descriptor of device.controls) if (descriptor.field !== "power") fields.append(renderField(device, descriptor, index, disabled));
+      for (const descriptor of device.controls) if (descriptor.field !== "power") fields.append(renderField(device, descriptor, disabled));
       const readOnly = text("dl", "", "climate-state");
       for (const [field, label] of Object.entries(FIELDS)) if (field !== "targetTemperature"
         && device.values[field] !== null && !device.controls.some(descriptor => descriptor.field === field)) {
@@ -421,17 +509,24 @@ export function mountClimate(root, getRuntime = currentRuntime) {
         const pending = text("div", "", "climate-command");
         pending.append(text("p", COMMANDS[lock.status] || "진행 중인 요청 · 결과 확인 필요"));
         const actions = text("div", "", "climate-command-actions");
-        const check = text("button", "결과 확인"); check.type = "button"; check.disabled = busy;
+        const check = text("button", "결과 확인"); check.type = "button"; check.disabled = writing;
         check.addEventListener("click", () => void reconcile(device.deviceId, false)); actions.append(check);
         if (lock.canAcknowledge) {
-          const ack = text("button", "현재 상태 확인·잠금 해제"); ack.type = "button"; ack.disabled = busy;
+          const ack = text("button", "현재 상태 확인·잠금 해제"); ack.type = "button"; ack.disabled = writing;
           ack.addEventListener("click", () => void reconcile(device.deviceId, true)); actions.append(ack);
         }
         pending.append(actions); card.append(pending);
       } else if (messages.has(device.deviceId)) card.append(text("p", messages.get(device.deviceId), "climate-readonly"));
-      list.append(card);
+      commitCard(device.deviceId, card, key);
     });
-    if (!devices.length) list.append(text("p", busy ? "기기 조회 중" : "연결된 기기 없음", "climate-empty"));
+    let anchor = list.firstElementChild;
+    for (const device of devices) {
+      const card = cards.get(device.deviceId).node;
+      if (card !== anchor) list.insertBefore(card, anchor);
+      anchor = card.nextElementSibling;
+    }
+    if (focused?.isConnected && list.contains(focused) && doc.activeElement !== focused && !focused.disabled) focused.focus({ preventScroll: true });
+    if (!devices.length) list.append(text("p", reading ? "기기 조회 중" : "연결된 기기 없음", "climate-empty"));
   }
   const observer = new win.MutationObserver(accessChanged);
   observer.observe(doc.documentElement, { attributes: true, childList: true, subtree: true,
