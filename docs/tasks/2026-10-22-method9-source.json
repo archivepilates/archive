@@ -2,7 +2,7 @@
   "capturedOn": "2026-10-22",
   "outputs": {
     "notionTheoryPageId": "3e4d49ea-e4bf-8000-b9ca-da823d85070c",
-    "notionCuecardFileId": "401d49ea-e4bf-81ae-bb81-00b2f7c57eb1",
+    "notionCuecardFileId": "401d49ea-e4bf-8198-acb8-00b2808e7667",
     "notionLessonRecords": {
       "external-feedback-261024": "401d49ea-e4bf-8194-8b0b-c24a50d42027",
       "external-feedback-261025": "401d49ea-e4bf-81ab-9d47-f03eb920a692"
@@ -10,10 +10,16 @@
     "theorySource8": "docs/tasks/2026-10-22-method8-theory-source.json",
     "standalonePreview": "docs/reports/2026-10-22-method9-cuecard.html",
     "verification": "artifacts/method9-2610/verification.json",
-    "verifiedChecks": 30,
-    "deployment": "not_requested",
+    "verifiedChecks": 39,
+    "liveVerification": "artifacts/method9-2610/live-verification.json",
+    "contentRevision": "b83c67c7fba874ba",
+    "deployment": "preview_channel_verified; live_release_pending",
+    "previewBaseUrl": "https://archive-pilates-in--method9-2610-review-n4guikym.web.app",
+    "previewExpiresAt": "2026-11-21T17:59:47+09:00",
+    "releaseCommit": "6e868872402564d890eb8a9b8765ce4273943bda",
+    "releaseReport": "docs/reports/2026-10-22-method9-preview-release.html",
     "memberMessages": "not_requested",
-    "operatingRules": "unchanged; content-only lesson material"
+    "operatingRules": "method9-shared-cuecards source entry updated; live CORE publication pending preview approval"
   },
   "parentId": "3e4d49ea-e4bf-8000-b9ca-da823d85070c",
   "sources": [

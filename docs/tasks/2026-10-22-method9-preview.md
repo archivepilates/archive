@@ -10,3 +10,13 @@
 - Revision workflow: reread changed Notion source; update common content; regenerate all outputs; validate; redeploy the same preview channel; verify all three hosted pages. Refresh Notion lesson links/attachments if their content changed; Notion attachments are snapshots, not a background sync.
 - CORE operating rule: source entry `method9-shared-cuecards` records this workflow. Live CORE publication remains pending because this request only authorizes a preview release.
 - Production promotion: not part of this preview-only request. Keep dated Notion DB records non-sendable until live Hosting verification and separate go-live approval.
+
+## Verified Preview Release
+
+- URL: https://archive-pilates-in--method9-2610-review-n4guikym.web.app/method/external-feedback-2610-preview/
+- Expires: 2026-11-21 17:59 KST. Redeploy the same channel when extending review.
+- Runtime commit: `6e868872402564d890eb8a9b8765ce4273943bda`; content revision `b83c67c7fba874ba`.
+- Clean `main` equal to `origin/main` was required by predeploy hooks even for this preview. The scoped commit was fast-forward promoted before preview deployment. No live Hosting workflow was invoked.
+- Local browser checks: 39/39. Preview-host browser checks: 39/39. Chromium/WebKit, four viewport widths, both instructor tabs, content revision and noon gates passed; all task browsers and local servers closed.
+- Generated-output guard and source-edit regression test passed; GitHub run https://github.com/archivepilates/archive/actions/runs/39751935494 passed.
+- Notion parent and two lesson records now link to the review URL and newest HTML attachment. Parent child sequence pages were preserved. Public URL fields remain blank and Alimtalk use remains disabled pending live release.
