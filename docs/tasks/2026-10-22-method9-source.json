@@ -1,0 +1,39 @@
+{
+  "capturedOn": "2026-10-22",
+  "outputs": {
+    "notionTheoryPageId": "3e4d49ea-e4bf-8000-b9ca-da823d85070c",
+    "notionCuecardFileId": "401d49ea-e4bf-81ae-bb81-00b2f7c57eb1",
+    "notionLessonRecords": {
+      "external-feedback-261024": "401d49ea-e4bf-8194-8b0b-c24a50d42027",
+      "external-feedback-261025": "401d49ea-e4bf-81ab-9d47-f03eb920a692"
+    },
+    "theorySource8": "docs/tasks/2026-10-22-method8-theory-source.json",
+    "standalonePreview": "docs/reports/2026-10-22-method9-cuecard.html",
+    "verification": "artifacts/method9-2610/verification.json",
+    "verifiedChecks": 30,
+    "deployment": "not_requested",
+    "memberMessages": "not_requested",
+    "operatingRules": "unchanged; content-only lesson material"
+  },
+  "parentId": "3e4d49ea-e4bf-8000-b9ca-da823d85070c",
+  "sources": [
+    {
+      "id": "3e4d49ea-e4bf-8000-b9ca-da823d85070c",
+      "title": "#9 외부 피드백2 2610",
+      "lastEditedAt": "2026-09-23T12:38:43.401Z",
+      "content": "<page url=\"https://app.notion.com/p/3e4d49eae4bf80f791f3d309f17fd972\">\n민진-바렐+스틱\n</page>\n\n<page url=\"https://app.notion.com/p/3e4d49eae4bf8021894be07d65403118\">\n은영-리포머+블럭\n</page>\n\n<p />"
+    },
+    {
+      "id": "3e4d49ea-e4bf-8021-894b-e07d65403118",
+      "title": "은영-리포머+블럭",
+      "lastEditedAt": "2026-10-22T08:12:13.388Z",
+      "content": "# <b>REFORMER × YOGA BLOCK</b>\n\n<b>WARM-UP</b>\n\n1. T-Balance (Lengthen)\n2. Side Bend\n3. Jump mermaid + saw\n4. Hip Stretch\n\n<b>MAIN</b>\n\n1. Scooter — 발바닥 아래 블럭\n2. Four-Point leg serise — 무릎 아래 블럭\n3. Four-Point Bird Dog — 무릎 아래 블럭\n4. Prone Arm Pull — 얼굴 아래 블럭\n5. Carriage Pull\n6. Carriage One-Arm Pull\n7. One-Leg Pull\n8. Tendon Stretch — 캐리지와 발 접지면 사이 블럭\n\n<b>COOL DOWN</b>\n\n1. Hanging Leg Raise\n2. Pec Stretch"
+    },
+    {
+      "id": "3e4d49ea-e4bf-80f7-91f3-d309f17fd972",
+      "title": "민진-바렐+스틱",
+      "lastEditedAt": "2026-10-22T06:00:15.068Z",
+      "content": "### <b>WARM-UP</b>\n\n1. <b>Breathing & Knee Lifts</b>\n2. <b>Lunge & Rotation</b>\n   - Shin-to-Frame Thoracic Rotation\n   - Reverse Lunge → Knee Lift to Frame\n   - Combined Lunge & Thoracic Rotation\n3. <b>Side Bend & Side Lean</b>\n4. <b>Supported Side Jumps</b>\n   - Forearm-Supported Lateral Jumps\n   - Hand-Supported Jumps\n\n---\n\n### <b>MAIN</b>\n\n1. <b>Downward Dog & Pike</b>\n2. <b>Abdominal Series</b>\n   <ul>\n   <li>\n   Thoracic Flexion & Extension\n   </li>\n   <li>\n   Curl-Up \n   </li>\n   <li>\n   Frog Roll-Back with stick Roll\n   </li>\n   <li>\n   Roll-Back Hold with Single-Leg Lower & Lift\n   </li>\n   </ul>\n3. <b>Side Bend & Side Sit-Up Series</b>\n   - stick-Supported Side Bend\n   - Classical Side Sit-Up\n4. <b>Star Series</b>\n   - Hip Abduction\n   - Front Kick & Shoulder Flexion\n   - Back Kick & Shoulder Extension\n   - Star\n5. <b>Thoracic Rotation & Posterior Chain Series</b>\n   - Quadruped stick Roll with Thoracic Rotation\n   - Swan with stick Roll\n   - Swimming\n   - Plank → Push-Ups\n\n---\n\n### <b>COOL DOWN</b>\n\n1. <b>Barrel-Supported Glute Stretch Series</b>\n2. <b>Standing Spinal Mobility</b>\n   - Barrel-Supported Roll-Down\n   - Return to Standing with Spinal Elongation"
+    }
+  ]
+}

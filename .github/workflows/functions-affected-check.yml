@@ -12,6 +12,7 @@ on:
       - "archivein/private-chart/**"
       - "archivein/privateSurvey/**"
       - "archivein/method/**"
+      - "docs/tasks/2026-10-22-method9-content.json"
       - "archivein/onsiteWelcome/**"
       - "core/**"
       - "core/rules/**"
@@ -33,6 +34,7 @@ on:
       - "archivein/private-chart/**"
       - "archivein/privateSurvey/**"
       - "archivein/method/**"
+      - "docs/tasks/2026-10-22-method9-content.json"
       - "archivein/onsiteWelcome/**"
       - "core/**"
       - "core/rules/**"
@@ -59,6 +61,9 @@ jobs:
 
       - name: Install root dependencies
         run: npm ci
+
+      - name: Validate shared METHOD 9 cue card outputs
+        run: npm run validate:method9-generated && node --test scripts/tests/method9-generated.test.mjs
 
       - name: Install Functions dependencies
         run: npm --prefix firebase/kangsain-functions/functions ci
