@@ -1,7 +1,7 @@
 {
   "project": "ARCHIVE PILATES reservation mirror",
-  "updatedAt": "2026-10-23T12:35:00Z",
-  "status": "verified_initial_capture_deployment_blocked",
+  "updatedAt": "2026-10-23T14:27:00Z",
+  "status": "hosting_deployed_postchecks_pending",
   "branch": "codex/mini/rea-studiomate-feasibility-20261023",
   "application": "apps/reservation-mirror",
   "mode": "operator_only_read_only_mirror",
@@ -37,16 +37,27 @@
   "deployment": {
     "hostingSite": "archive-pilates-booking-test",
     "hostingSiteCreated": true,
-    "hostingAppDeployed": false,
+    "hostingAppDeployed": true,
+    "liveUrl": "https://archive-pilates-booking-test.web.app/",
     "cloudRunService": "archive-reservation-mirror",
-    "cloudRunDeployed": false,
+    "cloudRunDeployed": true,
+    "cloudRunRevision": "archive-reservation-mirror-00001-b6b",
+    "imageDigest": "sha256:872e986f447c6a6389ac113443c07de234312c3e87b20fc6d71a69c201612f4b",
+    "sourceCommit": "39fe54f1",
+    "runtimeIdentity": "archive-reservation-mirror@archive-pilates.iam.gserviceaccount.com",
+    "runtimeRole": "roles/datastore.viewer with resource.name equal to projects/archive-pilates/databases/reservation-mirror",
+    "isolationExecution": "archive-reservation-mirror-isolation-cw7xq",
+    "isolationEvidenceAt": "2026-10-23T14:19:41.797850Z",
+    "runtimeKeyCreated": false,
     "domain": "booking-test.archivepilates.com",
     "domainResourceCreated": true,
-    "dnsUpdated": false,
+    "dnsUpdated": true,
+    "dnsScope": "booking-test CNAME and its _acme-challenge TXT only; existing root, wildcard and CORE unchanged",
+    "ownershipState": "OWNERSHIP_ACTIVE",
     "httpsVerified": false,
-    "committed": false,
+    "committed": true,
     "pushed": false,
-    "blockers": ["Dedicated runtime service-account creation denied for current operator; await authorized administrator approval, not self-escalation", "Cloudflare login needed for the isolated booking-test CNAME; no root/wildcard changes", "Serving-identity named-DB allow/default-DB deny proof and deployed real operator login remain pending"]
+    "blockers": ["Custom-domain certificate remains CERT_VALIDATING; use the verified web.app HTTPS URL in the meantime", "Real operator login and CORE rules publication verification remain pending"]
   },
   "checks": {
     "unitTestsPassed": 100,
@@ -61,23 +72,27 @@
     "localAnonymousPrivateRead": "401",
     "localWriteRequest": "405",
     "unknownStaticPath": "404",
-    "operatingSourceFiles": "unchanged",
+    "liveAnonymousPrivateRead": "401 on Cloud Run and Hosting",
+    "liveWriteRequest": "405 on Cloud Run and Hosting",
+    "liveHealth": "200, read_only_mirror and dispatchEnabled false",
+    "servingIdentityIsolation": "named database allowed; operating database denied in successful Cloud Run job",
+    "operatingSourceFiles": "CORE operating-rule text only; runtime, Functions, root Firebase config and automation unchanged",
     "operatingFirestoreRules": "unchanged release timestamp 2026-10-21T09:31:16.623019Z",
     "productionMemberActions": 0
   },
   "coreOperatingRules": {
     "status": "pending_deployment",
-    "reason": "No CORE files or active rules changed to avoid an unrelated operating Hosting deployment while mirror release is blocked",
+    "reason": "CORE rule source updated; publish only after clean exact-origin-main release guard passes",
     "draft": {
       "purpose": "Read-only validation of a separate reservation application against retained operating source data",
-      "implementation": "Initial verified capture and authenticated read-only UI/API implemented; not live",
+      "implementation": "Initial verified capture and authenticated read-only UI/API deployed; real operator login pending",
       "rule": "StudioMate remains authoritative. Mirror views must not dispatch messages or modify members, passes, bookings, refunds or contracts",
       "canonicalSource": "Existing studio-scoped canonical collections and explicitly dated retained exports, not the mirror",
       "affected": "Separate reservation-mirror database, archive-reservation-mirror server and archive-pilates-booking-test site only",
       "syncTiming": "Initial capture only; no additional periodic job enabled",
       "verification": "100 tests, six actual indexed entity queries and count comparison, four responsive widths",
-      "nextAction": "Approve dedicated account, prove IAM isolation, deploy and verify authenticated HTTPS; publish this rule with actual live status"
+      "nextAction": "Verify real operator login, custom-domain TLS, publish CORE rule and confirm Git push"
     }
   },
-  "next": ["Resolve dedicated runtime identity approval", "Prove named-database-only read access", "Build and deploy isolated Cloud Run and Hosting", "Connect only booking-test DNS and verify HTTPS", "Verify real CORE operator login", "Document and test incremental synchronization before scheduling", "Update CORE operating rule, scoped commit, live verification and push"]
+  "next": ["Verify custom-domain TLS", "Verify real CORE operator login", "Publish CORE operating rule from a clean guarded release", "Confirm scoped push and CI", "Document and test incremental synchronization before scheduling"]
 }
