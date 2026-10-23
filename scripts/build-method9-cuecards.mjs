@@ -84,13 +84,13 @@ ${data.distinction}
 원본: ${mention("3e4d49ea-e4bf-80f7-91f3-d309f17fd972")}
 ${data.instructors[0].connection}
 
-stick-Supported Side Bend와 Classical Side Sit-Up은 서로 다른 과제입니다. 차이를 스틱 유무만의 효과로 단정하지 않습니다. 스틱 Roll이 명시된 동작에서는 경로를 기준으로 삼되, 모든 동작에 스틱을 추가하지 않습니다.
+${data.instructors[0].sourceNotes}
 
 ### 은영T · 리포머 + 블럭
 원본: ${mention("3e4d49ea-e4bf-8021-894b-e07d65403118")}
 ${data.instructors[1].connection}
 
-Scooter는 발바닥 아래, Four-Point 두 동작은 무릎 아래, Prone Arm Pull은 얼굴 아래, Tendon Stretch는 캐리지와 발 접지면 사이에 블럭을 둔다는 원본을 반영했습니다. 명시되지 않은 동작의 블럭 위치는 정하지 않았습니다.
+${data.instructors[1].sourceNotes}
 
 블럭 위치·높이를 바꾸면 접촉감뿐 아니라 지지 높이와 하중 조건도 바뀝니다. 비교할 때는 감각 효과와 기계적 도움을 구분합니다.
 
@@ -102,7 +102,7 @@ ${data.flow.map((item, i) => `${i + 1}. **${item.title}**: ${item.body}`).join("
 ## 진행 시 확인
 - ${data.instructors[0].safety}
 - ${data.instructors[1].safety}
-- Hanging Leg Raise는 원본 Cool Down에 그대로 두되 부하가 있는 동작으로 구분합니다. 통증·어지럼·조절 상실이 있으면 중단하고 담당 강사가 세팅과 범위를 조정합니다.
+- 통증·어지럼·조절 상실이 있으면 중단하고 담당 강사가 세팅과 범위를 조정합니다.
 - 스프링, 블럭 높이, 스틱 세부 세팅, 반복 횟수는 원본에 없어 임의로 처방하지 않았습니다.
 
 ## 수업 후 기억할 것
@@ -114,7 +114,7 @@ ${data.remember.map((item) => `- ${item}`).join("\n")}
 ${data.references.map((ref) => `### ${ref.label}\n[${ref.title}](${ref.url})\n\n${ref.finding}\n\n**수업 연결**: ${ref.application}`).join("\n\n")}
 
 ## 큐카드 제작 상태
-민진T 11개 동작군·21개 세부 단계, 은영T 14개 동작을 원본 순서대로 반영했습니다. 시퀀스 상단 배치, 강사별 탭, 간결한 이론, 참고 연구, 영상 시청용 홈페이지 가입 버튼으로 구성했습니다.
+민진T ${data.instructors[0].phases.flatMap((phase) => phase.moves).length}개 동작군·${data.instructors[0].phases.flatMap((phase) => phase.moves).flatMap((move) => move.steps).length}개 세부 단계, 은영T ${data.instructors[1].phases.flatMap((phase) => phase.moves).length}개 동작을 반영했습니다. 시퀀스 상단 배치, 강사별 탭, 간결한 이론, 참고 연구, 영상 시청용 홈페이지 가입 버튼으로 구성했습니다.
 
 24일·25일 자료는 각 수업일 정오 공개 안내를 적용한 배포용 파일로 제작했습니다. 스태프 프리뷰는 공개시간과 무관하게 검토할 수 있습니다. 프리뷰·수업일별 HTML·로컬 검토본은 공통 원본에서 함께 생성하고 동일한 내용 버전을 검사합니다. 수강생용 운영 주소 공개와 알림톡 연결·발송은 별도 승인 후 진행합니다.
 `;

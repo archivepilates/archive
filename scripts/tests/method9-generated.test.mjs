@@ -9,6 +9,25 @@ import test from "node:test";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
+test("October 23 sequences retain the confirmed order and exclude removed movements", () => {
+  const data = JSON.parse(fs.readFileSync(path.join(root, "docs/tasks/2026-10-22-method9-content.json"), "utf8"));
+  const [mj, ey] = data.instructors;
+  assert.deepEqual(mj.phases.map((phase) => phase.moves.length), [4, 5, 2]);
+  assert.equal(mj.phases.flatMap((phase) => phase.moves).flatMap((move) => move.steps).length, 16);
+  assert.deepEqual(mj.phases[2].moves.map((move) => move.title), ["child’s pose", "breathing"]);
+  assert.deepEqual(mj.phases[1].moves[4].steps, ["Swan with stick Roll", "Swimming"]);
+  assert.deepEqual(ey.phases[0].moves.map((move) => move.title), ["Side Bend", "T-Balance (Lengthen)", "Jump mermaid + saw"]);
+  assert.deepEqual(ey.phases[1].moves.map((move) => move.title), ["Scooter", "Four-Point leg serise", "Four-Point Bird Dog", "Carriage Pull", "Carriage One-Arm Pull", "Hanging Leg Raise", "Foot work", "Tendon Stretch"]);
+  assert.deepEqual(ey.phases[2].moves.map((move) => move.title), ["Hip Rolls", "Hip Rotation"]);
+  assert.equal(ey.phases.flatMap((phase) => phase.moves).filter((move) => move.setup).length, 5);
+  const outputs = ["docs/reports/2026-10-22-method9-cuecard.html", "archivein/method/external-feedback-2610-preview/index.html", ...data.dates.map((item) => `archivein/method/${item.code}/index.html`)];
+  for (const file of outputs) {
+    const html = fs.readFileSync(path.join(root, file), "utf8");
+    for (const removed of ["Roll-Back Hold with Single-Leg Lower", "Quadruped stick Roll", "Plank → Push-Ups", "Classical Side Sit-Up", "Prone Arm Pull", "One-Leg Pull", "Pec Stretch", "얼굴 아래"])
+      assert.ok(!html.includes(removed), `${file}: removed instruction ${removed}`);
+  }
+});
+
 test("one content edit updates both dated cards and both previews; stale output fails", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "method9-build-"));
   try {
