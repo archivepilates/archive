@@ -32,21 +32,21 @@
 #calendar .fc-timegrid-event .event-top>span:last-child{flex:0 0 auto}
 
 @media(max-width:900px){
-  .calendar-viewport{height:max(420px,calc(100dvh - 300px));max-height:max(420px,calc(100dvh - 300px));overflow:auto;overscroll-behavior:contain;isolation:isolate;scrollbar-width:thin}
-  #calendar{width:100%;min-width:0}
-  #calendar:is([data-view=timeGridWeek],:has(.fc-timeGridWeek-view)){min-width:calc(7 * 124px + 44px)}
-  #calendar .fc-scroller{overflow:visible!important;height:auto!important}
-  #calendar .fc-scroller-harness{overflow:visible!important}
-  #calendar .fc-scrollgrid-section-header{position:sticky;top:0;z-index:10;background:#fff}
-  #calendar .fc-scrollgrid-section-header>th,#calendar .fc-scrollgrid-section-header>td{position:sticky;top:0;z-index:10;background:#fff}
+  .calendar-viewport{height:32rem;height:min(40rem,max(24rem,calc(100svh - 17rem)));min-height:0;isolation:isolate}
+  #calendar{width:100%;height:100%;min-width:0;max-width:100%}
+  #calendar .fc-view-harness,#calendar .fc-scrollgrid{min-width:0;max-width:100%}
+  #calendar .fc-scroller{overscroll-behavior:contain;scrollbar-width:thin;scrollbar-gutter:stable}
   #calendar .fc-col-header-cell{background:#fff}
-  #calendar .fc-col-header-cell-cushion{white-space:nowrap;font-size:12px;line-height:18px;padding:10px 4px}
-  #calendar .fc-timegrid-slots{z-index:auto}
-  #calendar .fc-timegrid-axis,#calendar .fc-timegrid-slot-label{position:sticky;left:0;width:44px;min-width:44px;max-width:44px;z-index:6;background:#fff;box-shadow:1px 0 0 var(--line)}
-  #calendar .fc-timegrid-axis-cushion,#calendar .fc-timegrid-slot-label-cushion{width:42px;max-width:42px;padding:0 4px;font-size:10px;text-align:right;white-space:nowrap}
-  #calendar .fc-col-header .fc-timegrid-axis{z-index:12;background:#fff}
-  /* The foreground axis is a spacer, not the actual sticky time-label column. */
-  #calendar .fc-timegrid-cols .fc-timegrid-axis{position:static;z-index:auto;background:transparent;box-shadow:none;pointer-events:none}
+  #calendar .fc-col-header-cell-cushion{white-space:nowrap;font-size:11px;line-height:18px;padding:8px 0}
+  #calendar .calendar-header-weekday{display:none}
+  #calendar .fc-timegrid-axis,#calendar .fc-timegrid-slot-label{width:32px;min-width:32px;max-width:32px;background:#fff}
+  #calendar .fc-timegrid-axis-cushion,#calendar .fc-timegrid-slot-label-cushion{max-width:32px;padding:0 2px;font-size:10px;white-space:nowrap}
+  #calendar[data-view=timeGridWeek] .fc-event-main{padding:2px 1px}
+  #calendar[data-view=timeGridWeek] .fc-event{border-left-width:2px}
+  #calendar[data-view=timeGridWeek] .event-top{justify-content:flex-end;gap:0}
+  #calendar[data-view=timeGridWeek] .event-top>span:first-child,#calendar[data-view=timeGridWeek] .event-staff{display:none}
+  #calendar[data-view=timeGridWeek] .event-content strong{font-size:11px;word-break:keep-all;overflow-wrap:anywhere}
+  #calendar[data-view=timeGridWeek] .fc-more-link{font-size:10px;line-height:1.4}
 }
 @media(min-width:901px){.week-rail{display:none}}
 @media(max-width:600px){
@@ -56,7 +56,7 @@
   #calendar-section .calendar-navigation>button{min-height:44px;min-width:44px}
   #calendar-section .segments{display:flex;width:100%;min-width:0}
   #calendar-section .segments button{flex:1;min-height:44px;min-width:44px}
-  #calendar:is([data-view=timeGridWeek],:has(.fc-timeGridWeek-view)) .fc-timegrid-slot{height:42px}
+  #calendar[data-view=timeGridWeek] .fc-timegrid-slot{height:34px}
   .week-rail button{min-height:52px;padding:5px 0}
   .week-rail .weekday{font-size:10px}
   .week-rail .day-number{font-size:15px}

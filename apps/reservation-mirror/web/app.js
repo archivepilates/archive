@@ -47,8 +47,7 @@ let nextCursor = null;
 let listSnapshot = null;
 let pageCount = 0;
 let loading = false;
-let calendarScrollReady = false;
-let calendarRangeKey = '';
+let calendarScrollPending = false;
 let calendarPartial = false;
 let summaryBusy = false;
 let snapshot = null;
@@ -397,10 +396,6 @@ function calendarRange(info) {
   applied.to = DateTime.fromJSDate(info.end, { zone }).minus({ days: 1 }).toISODate();
   $('from').value = applied.from; $('to').value = applied.to;
   const anchor = DateTime.fromJSDate(info.view.calendar.getDate(), { zone }).toISODate();
-  const rangeKey = `${info.view.type}:${applied.from}`;
-  const changedRange = calendarRangeKey !== rangeKey;
-  calendarRangeKey = rangeKey;
-  if (changedRange) calendarScrollReady = false;
   $('calendar-title').textContent = calendarTitle(anchor, info.view.type);
   $('calendar').dataset.view = info.view.type;
   $('week-rail').hidden = info.view.type !== 'timeGridWeek';
@@ -414,31 +409,11 @@ function calendarRange(info) {
     button.addEventListener('click', () => {
       calendar.gotoDate(day.date);
       document.querySelectorAll('#week-rail [data-date]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.date === day.date)));
-      scrollCalendarDay(day.date);
     });
     return button;
   }));
   document.querySelectorAll('[data-view]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === info.view.type)));
   loadList();
-  initializeCalendarScroll();
-  if (changedRange && info.view.type === 'timeGridWeek') scrollCalendarDay(anchor);
-}
-function scrollCalendarDay(day) {
-  requestAnimationFrame(() => {
-    const viewport = $('calendar-viewport');
-    const column = [...$('calendar').querySelectorAll('.fc-timegrid-col[data-date]')].find((entry) => entry.dataset.date === day);
-    if (column && viewport.scrollWidth > viewport.clientWidth) viewport.scrollLeft = Math.max(0, column.getBoundingClientRect().left - viewport.getBoundingClientRect().left + viewport.scrollLeft - 44);
-  });
-}
-function initializeCalendarScroll() {
-  if (calendarScrollReady || page !== 'calendar' || calendar?.view.type === 'dayGridMonth') return;
-  requestAnimationFrame(() => {
-    const viewport = $('calendar-viewport');
-    const row = $('calendar').querySelector('.fc-timegrid-slot-label[data-time="08:00:00"]');
-    if (!row || !viewport.clientHeight || viewport.scrollHeight <= viewport.clientHeight) return;
-    viewport.scrollTop = Math.max(0, row.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop - 45);
-    calendarScrollReady = true;
-  });
 }
 function ensureCalendar() {
   if (calendar) { calendar.updateSize(); return; }
@@ -447,15 +422,30 @@ function ensureCalendar() {
   calendar = new Calendar($('calendar'), {
     plugins: [dayGridPlugin, timeGridPlugin, luxonPlugin], locale: koLocale, timeZone: zone,
     initialView, firstDay: 1,
-    initialDate: today(), headerToolbar: false, height: 'auto', allDaySlot: false,
+    initialDate: today(), headerToolbar: false,
+    height: window.matchMedia('(max-width: 900px)').matches ? '100%' : 'auto', allDaySlot: false,
+    scrollTime: '08:00:00', scrollTimeReset: true,
     slotMinTime: '00:00:00', slotMaxTime: '24:00:00', slotDuration: '00:30:00',
     editable: false, selectable: false, navLinks: false, nowIndicator: false,
     dayMaxEvents: 4, slotEventOverlap: false, eventMaxStack: window.matchMedia('(max-width: 900px)').matches ? 1 : 3,
     eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
     slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
     dayHeaderFormat: { weekday: 'short', day: 'numeric', omitCommas: true },
-    views: { dayGridMonth: { dayHeaderFormat: { weekday: 'short' } }, timeGridDay: { dayHeaderFormat: { weekday: 'long', month: 'numeric', day: 'numeric' } } },
+    views: {
+      timeGridWeek: { dayHeaderContent(info) {
+        const day = DateTime.fromJSDate(info.date, { zone }).setLocale('ko');
+        const label = element('span', day.toFormat('d일'));
+        label.append(element('span', ` (${day.toFormat('ccc')})`, 'calendar-header-weekday'));
+        return { domNodes: [label] };
+      } },
+      dayGridMonth: { dayHeaderFormat: { weekday: 'short' } },
+      timeGridDay: { dayHeaderFormat: { weekday: 'long', month: 'numeric', day: 'numeric' } },
+    },
     datesSet: calendarRange,
+    moreLinkDidMount(info) {
+      info.el.setAttribute('role', 'button');
+      info.el.setAttribute('aria-label', '겹친 수업 더 보기');
+    },
     eventContent(info) {
       const item = info.event.extendedProps.item;
       const root = element('div', null, 'event-content');
@@ -473,7 +463,6 @@ function ensureCalendar() {
     eventClick(info) { info.jsEvent.preventDefault(); openOccurrence(info.event.extendedProps.item); },
   });
   calendar.render();
-  initializeCalendarScroll();
 }
 function choosePage(next, focus = false, search = '') {
   if (!pageDefinitions[next]) next = 'calendar';
@@ -498,6 +487,7 @@ function choosePage(next, focus = false, search = '') {
   if (schedule) {
     if (!calendar) ensureCalendar();
     else { calendar.updateSize(); calendarRange({ start: calendar.view.activeStart, end: calendar.view.activeEnd, view: calendar.view }); }
+    if (calendarScrollPending) { calendar.scrollToTime('08:00:00'); calendarScrollPending = false; }
   } else loadList();
 }
 function detailStart(title) {
@@ -604,16 +594,11 @@ function initializeUI() {
     calendar?.changeView(view);
   }));
   window.matchMedia('(max-width: 900px)').addEventListener('change', (event) => {
-    if (event.matches) calendarScrollReady = false;
-    calendar?.setOption('eventMaxStack', event.matches ? 1 : 3); calendar?.updateSize(); initializeCalendarScroll();
-    if (event.matches && calendar?.view.type === 'timeGridWeek') scrollCalendarDay(DateTime.fromJSDate(calendar.getDate(), { zone }).toISODate());
-  });
-  $('calendar-viewport').addEventListener('keydown', (event) => {
-    const viewport = $('calendar-viewport');
-    if (event.target !== viewport || event.altKey || event.ctrlKey || event.metaKey || !['ArrowLeft', 'ArrowRight'].includes(event.key) || viewport.scrollWidth <= viewport.clientWidth) return;
-    event.preventDefault();
-    const width = $('calendar').querySelector('.fc-timegrid-col[data-date]')?.getBoundingClientRect().width || 124;
-    viewport.scrollBy({ left: (event.key === 'ArrowLeft' ? -1 : 1) * width, behavior: 'auto' });
+    calendar?.setOption('height', event.matches ? '100%' : 'auto');
+    calendar?.setOption('eventMaxStack', event.matches ? 1 : 3);
+    calendar?.updateSize();
+    calendarScrollPending = event.matches;
+    if (calendarScrollPending && page === 'calendar' && calendar && user && sessionReady && !forbidden && !$('workspace').hidden) { calendar.scrollToTime('08:00:00'); calendarScrollPending = false; }
   });
   $('close-detail').addEventListener('click', () => $('detail-dialog').close());
   $('detail-dialog').addEventListener('close', () => { detailController?.abort(); detailRequest += 1; $('detail-content').replaceChildren(); });
