@@ -1,7 +1,7 @@
 {
   "project": "ARCHIVE PILATES reservation mirror",
   "date": "2026-10-24",
-  "status": "validated_not_deployed",
+  "status": "deployed_verified_pushed_ci_passed_operator_device_check_pending",
   "branch": "codex/mini/reservation-mobile-fit-20261024",
   "scope": ["apps/reservation-mirror/web/app.js", "apps/reservation-mirror/web/style.css", "core/rules/index.html"],
   "target": "archive-pilates-booking-test",
@@ -9,7 +9,9 @@
   "changes": ["Seven week columns fit the mobile viewport", "Native bounded TimeGrid scrolling starts at 08:00 without hiding overnight classes", "Preserve desktop weekday labels and visible session-aware scroll restoration"],
   "browser": {"engine": "Chromium", "syntheticOccurrences": 70, "widths": [320, 390, 768, 1440], "documentAndCalendarHorizontalOverflow": 0, "allSevenHeaderAndBodyColumnsFit": true, "mobileMorningScrollTop": 545, "menuResizeReturn": "passed", "monthWeekDaySwitch": "passed", "syntheticLogoutResizeLogin": "passed", "overlapPopupAndDetail": "opened"},
   "checks": {"status": "passed", "automatedTests": 202, "failed": 0, "skipped": 0, "build": "passed", "mirrorProductionVulnerabilities": 0, "coreHostingValidator": "passed", "independentReview": "no remaining blockers", "runtime": "Node.js 25.9.0; declared Functions Node 22 not deployed"},
-  "deployment": {"status": "not_deployed"},
+  "deployment": {"status": "verified", "sourceCommit": "012c85494364861e81a2572d11e780e66ac3c49e", "mirrorVersion": "e7a8c74a44f7b15b", "mirrorReleaseAt": "2026-10-23T16:40:31.135Z", "mirrorChangedPaths": ["/app.js", "/style.css"], "coreVersion": "1bd91f601bcf1af7", "coreReleaseAt": "2026-10-23T16:40:28.606Z", "coreChangedPaths": ["/rules/index.html"], "hostingConfigsAndOtherFilesPreserved": true, "customDomainHashesMatchSource": true, "anonymousRead": 401, "nonGetWrite": 405, "health": 200, "liveMobileLogin": "passed", "liveBrowserErrors": 0, "mainPromoted": true, "featureBranchPushed": true},
+  "ci": {"runId": "39988681327", "status": "completed", "conclusion": "success", "sourceCommit": "012c85494364861e81a2572d11e780e66ac3c49e"},
+  "cleanup": {"ownedPreviewServersAndTabs": "closed", "userSessionsPreserved": true},
   "unchanged": ["Existing server and Hosting configuration", "Firestore data and rules", "Authentication and authorization", "StudioMate and all existing automation", "Sales homepage and DNS", "Member messages"],
   "limitations": ["Physical iPhone Safari not tested", "Real operator post-login verification not performed", "No native app or PWA rollout"]
 }
