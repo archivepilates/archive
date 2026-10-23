@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { once } from "node:events";
+import { getEventListeners, once } from "node:events";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { acquireStudioMateBrowserLock } from "../lib/studiomate-browser-lock.mjs";
 
 const STALE_MS = 100;
@@ -167,3 +168,182 @@ test("bad timing inputs are rejected", () =>
       );
     }
   }));
+
+const lockSource = await readFile(new URL("../lib/studiomate-browser-lock.mjs", import.meta.url), "utf8");
+
+// In-memory filesystem and timers make cancellation boundaries deterministic.
+function memoryLock({ metadata = null, onMkdir, onRead, onWrite } = {}) {
+  const lockPath = "/synthetic/studiomate-browser-profile.lock";
+  const state = {
+    metadata,
+    folders: new Set(metadata ? [lockPath] : []),
+    removals: [],
+    mkdirs: [],
+    reads: 0,
+    timers: new Map(),
+  };
+  let timerId = 0;
+  let signalTimer;
+  const timerScheduled = new Promise((resolve) => { signalTimer = resolve; });
+  const acquire = runInNewContext(`${lockSource.replace(/^import .*;\n/gm, "").replace(/^export /gm, "")}\nacquireStudioMateBrowserLock;`, {
+    os: { hostname: () => "synthetic-host", homedir: () => "/synthetic-home" },
+    path,
+    process: {
+      pid: 123,
+      env: {},
+      kill: (pid) => { if (pid !== 123) throw Object.assign(new Error("dead"), { code: "ESRCH" }); },
+    },
+    randomUUID: () => "synthetic-token",
+    mkdir: async (target, options) => {
+      state.mkdirs.push(target);
+      if (!options?.recursive && state.folders.has(target)) throw Object.assign(new Error("exists"), { code: "EEXIST" });
+      state.folders.add(target);
+      onMkdir?.(target, state);
+    },
+    readFile: async () => {
+      state.reads += 1;
+      onRead?.(state.reads, state);
+      if (!state.metadata) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+      return JSON.stringify(state.metadata);
+    },
+    writeFile: async (_target, content) => { state.metadata = JSON.parse(content); onWrite?.(state); },
+    rm: async (target) => {
+      state.removals.push(target);
+      state.folders.delete(target);
+      if (target === lockPath) state.metadata = null;
+    },
+    setTimeout: (callback) => { const id = ++timerId; state.timers.set(id, callback); signalTimer(); return id; },
+    clearTimeout: (id) => { state.timers.delete(id); },
+  });
+  return {
+    state,
+    lockPath,
+    acquire: (input = {}) => acquire({ lockPath, pollMs: 5000, waitMs: 30000, ...input }),
+    timerScheduled,
+    finishTimer() {
+      const [id, callback] = state.timers.entries().next().value;
+      state.timers.delete(id);
+      callback();
+    },
+  };
+}
+
+function memoryOwner(overrides = {}) {
+  return { owner: "other-owner", token: "other-token", pid: 123, host: "synthetic-host", acquiredAt: "2026-01-01T00:00:00.000Z", ...overrides };
+}
+
+test("busy timeout has a typed code and preserves its original message", async () => {
+  const metadata = memoryOwner();
+  const fixture = memoryLock({ metadata });
+  await assert.rejects(fixture.acquire({ waitMs: 0 }), (error) => {
+    assert.equal(error.code, "STUDIOMATE_BROWSER_BUSY");
+    assert.equal(error.message, `StudioMate browser profile is locked by ${metadata.owner} since ${metadata.acquiredAt}.`);
+    return true;
+  });
+  assert.deepEqual(fixture.state.metadata, metadata);
+  assert.equal(fixture.state.removals.length, 0);
+});
+
+test("pre-aborted acquisition performs no filesystem operations", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const fixture = memoryLock({ metadata: memoryOwner() });
+  await assert.rejects(fixture.acquire({ signal: controller.signal }), (error) => error === controller.signal.reason);
+  assert.equal(fixture.state.mkdirs.length, 0);
+  assert.equal(fixture.state.reads, 0);
+  assert.equal(fixture.state.removals.length, 0);
+});
+
+test("abort during parent setup stops before trying the profile lock", async () => {
+  const controller = new AbortController();
+  const fixture = memoryLock({ onMkdir: () => controller.abort() });
+  await assert.rejects(fixture.acquire({ signal: controller.signal }), (error) => error === controller.signal.reason);
+  assert.deepEqual(fixture.state.mkdirs, ["/synthetic"]);
+  assert.equal(fixture.state.removals.length, 0);
+});
+
+test("abort while waiting clears its timer/listener and preserves another owner", async () => {
+  const metadata = memoryOwner();
+  const controller = new AbortController();
+  const fixture = memoryLock({ metadata });
+  const pending = fixture.acquire({ signal: controller.signal });
+  await fixture.timerScheduled;
+  assert.equal(fixture.state.timers.size, 1);
+  assert.equal(getEventListeners(controller.signal, "abort").length, 1);
+  controller.abort(new Error("synthetic cancellation"));
+  await assert.rejects(pending, (error) => error === controller.signal.reason);
+  assert.equal(fixture.state.timers.size, 0);
+  assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+  assert.deepEqual(fixture.state.metadata, metadata);
+  assert.deepEqual(fixture.state.removals, []);
+});
+
+test("normal poll expiry removes the abort listener before successful acquisition", async () => {
+  const controller = new AbortController();
+  const fixture = memoryLock({ metadata: memoryOwner() });
+  const pending = fixture.acquire({ signal: controller.signal });
+  await fixture.timerScheduled;
+  fixture.state.folders.delete(fixture.lockPath);
+  fixture.state.metadata = null;
+  fixture.finishTimer();
+  const release = await pending;
+  assert.equal(fixture.state.timers.size, 0);
+  assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+  await release();
+  assert.equal(fixture.state.metadata, null);
+});
+
+test("abort immediately after acquisition removes only its own token", async () => {
+  for (const stage of ["mkdir", "write"]) {
+    const controller = new AbortController();
+    const fixture = memoryLock({
+      onMkdir: (target) => { if (stage === "mkdir" && target.endsWith(".lock")) controller.abort(); },
+      onWrite: () => { if (stage === "write") controller.abort(); },
+    });
+    await assert.rejects(fixture.acquire({ signal: controller.signal }), (error) => error === controller.signal.reason);
+    assert.deepEqual(fixture.state.removals, [fixture.lockPath]);
+    assert.equal(fixture.state.metadata, null);
+    assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+  }
+});
+
+test("abort after owner replacement never removes the replacement lock", async () => {
+  const controller = new AbortController();
+  const replacement = memoryOwner({ token: "replacement" });
+  const fixture = memoryLock({ onWrite: (state) => { state.metadata = replacement; controller.abort(); } });
+  await assert.rejects(fixture.acquire({ signal: controller.signal }), (error) => error === controller.signal.reason);
+  assert.deepEqual(fixture.state.metadata, replacement);
+  assert.deepEqual(fixture.state.removals, []);
+});
+
+test("abort before stale recovery deletion preserves the dead owner's profile lock", async () => {
+  const controller = new AbortController();
+  const metadata = memoryOwner({ pid: 456 });
+  const fixture = memoryLock({ metadata, onRead: (count) => { if (count === 3) controller.abort(); } });
+  await assert.rejects(fixture.acquire({ signal: controller.signal, staleMs: 0 }), (error) => error === controller.signal.reason);
+  assert.deepEqual(fixture.state.metadata, metadata);
+  assert.deepEqual(fixture.state.removals, [`${fixture.lockPath}.recovery`]);
+});
+
+test("abort after handoff does not unlock a profile that may already be in use", async () => {
+  const controller = new AbortController();
+  const fixture = memoryLock();
+  const release = await fixture.acquire({ signal: controller.signal });
+  controller.abort();
+  assert.equal(fixture.state.metadata.token, "synthetic-token");
+  assert.deepEqual(fixture.state.removals, []);
+  await release();
+  await release();
+  assert.deepEqual(fixture.state.removals, [fixture.lockPath]);
+});
+
+test("release still requires matching PID and host even when the token matches", async () => {
+  for (const replacement of [{ pid: 456 }, { host: "foreign-host" }]) {
+    const fixture = memoryLock();
+    const release = await fixture.acquire();
+    Object.assign(fixture.state.metadata, replacement);
+    await release();
+    assert.deepEqual(fixture.state.removals, []);
+    assert.ok(fixture.state.metadata);
+  }
+});

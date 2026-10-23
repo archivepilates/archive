@@ -59,12 +59,14 @@ test('MIME has identical plain/HTML content, wrapped encoding and stable deliver
 test('holding error notification keys satisfy the sender contract and are stable', () => {
   const source = readFileSync(new URL('../run-automatic-holding-notices.ts', import.meta.url), 'utf8');
   const expressions = [...source.matchAll(/AUTOMATION_REPORT_EVENT_ID:\s*(holdingFingerprint\([^\n]+\)),/g)].map(match => match[1]);
-  assert.equal(expressions.length, 2);
-  const evaluate = (expression, rows = [{ id: 'b', reason: 'waiting' }, { id: 'a', reason: 'waiting' }]) => new Function('holdingFingerprint', 'job', 'reason', 'receiptReviews', `return ${expression}`)(holdingFingerprint, { jobId: 'fixture' }, 'review', rows);
+  assert.equal(expressions.length, 3);
+  const evaluate = (expression, rows = [{ id: 'b', reason: 'waiting' }, { id: 'a', reason: 'waiting' }]) => new Function('holdingFingerprint', 'job', 'reason', 'receiptReviews', 'busy', `return ${expression}`)(holdingFingerprint, { jobId: 'fixture' }, 'review', rows, { patch: { browserBusySince: '2026-10-24T00:00:00.000Z' } });
   for (const expression of expressions) {
     assert.doesNotThrow(() => reportMessageId(evaluate(expression)));
     assert.equal(evaluate(expression), evaluate(expression));
   }
-  assert.equal(evaluate(expressions[1]), evaluate(expressions[1], [{ id: 'a', reason: 'waiting' }, { id: 'b', reason: 'waiting' }]));
+  const receiptExpression = expressions.find(expression => expression.includes('holding_receipt_review'));
+  assert.ok(receiptExpression);
+  assert.equal(evaluate(receiptExpression), evaluate(receiptExpression, [{ id: 'a', reason: 'waiting' }, { id: 'b', reason: 'waiting' }]));
   assert.doesNotMatch(source, /AUTOMATION_REPORT_EVENT_ID:\s*`holding_/);
 });

@@ -77,7 +77,10 @@ test("runtime disabled guard precedes source scans and provider transport is bou
 test("source files are content-addressed and collector always closes its owned context/lock", async () => {
   const source = await read("scripts/collect-studiomate-holding-source.mjs");
   assert.match(source, /\$\{memberId\}-\$\{normalized\.observationFingerprint\}/);
-  assert.match(source, /finally \{ await release\(\); \}/);
+  assert.match(source, /try \{ await session.close\(\); \}/);
+  const session = await read("scripts/lib/studiomate-browser-session.mjs");
+  assert.ok(session.indexOf("await owned.close()") < session.indexOf("await release()"));
+  assert.match(session, /studiomate_browser_cleanup_unconfirmed/);
   assert.match(source, /process\.once\("SIGTERM", terminate\)/);
   assert.match(source, /mode: 0o600/);
 });

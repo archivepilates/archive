@@ -3,6 +3,11 @@ import { spawn } from "node:child_process";
 export const HOLDING_RECEIPT_CHECKS = "holdingNoticeReceiptChecks";
 export const HOLDING_RECEIPT_CURSOR = "opsState/holdingAutomaticReceiptCursor";
 
+export function holdingReadbackFailure(error, signal) {
+  return signal?.aborted && signal.reason?.name === "TimeoutError"
+    ? new Error("holding_worker_readback_deadline_reached") : error;
+}
+
 export function createHoldingWorkerDeadline({ budgetMs = 8 * 60_000, now = () => performance.now() } = {}) {
   const end = now() + budgetMs, controller = new AbortController();
   const stop = (error = new Error("holding_worker_deadline_reached")) => controller.abort(error);
@@ -23,7 +28,8 @@ export function createHoldingWorkerDeadline({ budgetMs = 8 * 60_000, now = () =>
 const oldest = (a, b) => (Date.parse(a.lastCheckedAt || a.requestedAt) || 0) -
   (Date.parse(b.lastCheckedAt || b.requestedAt) || 0) || String(a.jobId).localeCompare(String(b.jobId));
 
-export function selectHoldingWorkerJobs(jobs, limit = 10) {
+export function selectHoldingWorkerJobs(jobs, limit = 10, now = Date.now()) {
+  jobs = jobs.filter(job => !job.nextAttemptAt || !Number.isFinite(Date.parse(job.nextAttemptAt)) || Date.parse(job.nextAttemptAt) <= now);
   const continued = jobs.filter(job => job.transition === "continued").sort(oldest);
   const reserved = continued.slice(0, Math.min(2, limit));
   const reservedIds = new Set(reserved.map(job => job.jobId));

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { holdingProfileNativeId } from "./holding-member-identity.mjs";
+import { holdingBrowserRetryCarry } from "./holding-browser-retry.mjs";
 
 export const HOLDING_ROSTER_LANE = "holding-allowance-notice";
 export const HOLDING_ROSTER_STATE = `workLanes/${HOLDING_ROSTER_LANE}/state/excelHoldingRoster`;
@@ -189,7 +190,8 @@ export async function observeHoldingRoster({ db, rows, source, profiles, now = n
       if (job.transition === "ticket_changed" && job.ticketRevision === old?.ticketRevision &&
           job.memberId === old.memberId && old.status === "review" && old.reason === job.reason) continue;
       // Excel dates have no event time; a new export must recheck same-day native changes.
-      tx.set(refs[index], { ...job, requestedAt: old?.status === "pending" && instant(old.requestedAt) ? old.requestedAt : now,
+      tx.set(refs[index], { ...job, ...holdingBrowserRetryCarry(old, job),
+        requestedAt: old?.status === "pending" && instant(old.requestedAt) ? old.requestedAt : now,
         ...(instant(old?.lastCheckedAt) ? { lastCheckedAt: old.lastCheckedAt } : {}),
         updatedAt: now });
       readbackJobs++;

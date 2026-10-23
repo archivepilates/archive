@@ -11,29 +11,35 @@ import { HOLDING_ROSTER_JOBS, HOLDING_ROSTER_STATE, holdingRosterReadbackIssue, 
 import { HOLDING_AUTO_EVENTS, holdingAutomaticConfigIssue, automaticHoldingReadback, automaticHoldingEvidence, automaticHoldingEvent } from "./lib/holding-notice-automatic.mjs";
 import { dispatchVerifiedOperatorHolding, reconcileVerifiedOperatorHolding, reconcileExistingHoldingAttempt, verifiedOperatorHoldingPlan } from "./lib/holding-notice-operator-dispatch.mjs";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
+import { createHoldingReadbackSession } from "./lib/studiomate-holding-session.mjs";
+import { holdingBrowserBusyState } from "./lib/holding-browser-retry.mjs";
 import { createHoldingWorkerDeadline, selectHoldingWorkerJobs, loadHoldingReceiptCandidates,
-  recordHoldingReceiptCheck, transitionHoldingWorkerEvent, runHoldingWorkerChild } from "./lib/holding-automatic-worker-state.mjs";
+  recordHoldingReceiptCheck, transitionHoldingWorkerEvent, runHoldingWorkerChild, holdingReadbackFailure } from "./lib/holding-automatic-worker-state.mjs";
 
 const apply = process.argv.includes("--apply");
 const settingsRef = db.doc("settings/holdingNotice");
 async function main() {
   const deadline = createHoldingWorkerDeadline();
+  const readback = createHoldingReadbackSession({ signal: deadline.signal });
   const stop = () => deadline.stop(new Error("holding_worker_stopped"));
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
-  try { await run(deadline); }
+  try { await run(deadline, readback); }
   finally {
-    deadline.dispose();
-    process.removeListener("SIGTERM", stop);
-    process.removeListener("SIGINT", stop);
-    try { await db.terminate(); }
-    catch {
-      console.error("holding_worker_firestore_termination_failed");
-      process.exitCode = 1;
+    try { await readback.close(); }
+    finally {
+      deadline.dispose();
+      process.removeListener("SIGTERM", stop);
+      process.removeListener("SIGINT", stop);
+      try { await db.terminate(); }
+      catch {
+        console.error("holding_worker_firestore_termination_failed");
+        process.exitCode = 1;
+      }
     }
   }
 }
-async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
+async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>, readback: ReturnType<typeof createHoldingReadbackSession>) {
   if (process.argv.slice(2).some(arg => arg !== "--apply")) throw new Error("Unknown argument");
   const credential = JSON.parse(await readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS || "", "utf8"));
   if (credential.project_id !== "archive-pilates" || credential.client_email !== "archive-codex-operator@archive-pilates.iam.gserviceaccount.com" ||
@@ -72,13 +78,10 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
     return response.json();
   };
   const readLatest = async ({ memberId, ticketName }: { memberId: string; ticketName: string }) => {
-    // Leave cleanup time inside the same deadline; never SIGKILL a collector holding the shared profile.
-    const output = await child(process.execPath, ["scripts/collect-studiomate-holding-source.mjs", "--member-id", memberId,
-      "--ticket-name", ticketName, "--stdout"], Math.min(120000, deadline.remaining() - 30_000));
-    const response = JSON.parse(output.trim());
-    if (response.ok !== true || response.mode !== "read-only-memory" || response.raw?.memberId !== memberId || response.raw?.ticketName !== ticketName)
-      throw new Error("automatic_live_readback_scope_mismatch");
-    return response.raw;
+    const signal = AbortSignal.any([deadline.signal,
+      AbortSignal.timeout(deadline.timeout(Math.min(120_000, deadline.remaining() - 30_000)))]);
+    try { return await readback.readLatest({ memberId, ticketName }, { signal }); }
+    catch (error) { throw holdingReadbackFailure(error, signal); }
   };
   const results: any[] = [];
   const eventStatus = (id: string, status: string, promoted = true) => transitionHoldingWorkerEvent({ db,
@@ -105,12 +108,13 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
       }
     }
   }
-  const mark = async (job: any, status: string, reason: string) => {
+  const mark = async (job: any, status: string, reason: string, retryPatch: any = {}) => {
     if (!apply) return;
     await db.runTransaction(async tx => {
       const ref = db.doc(`${HOLDING_ROSTER_JOBS}/${job.jobId}`), current = (await tx.get(ref)).data();
       if (holdingRosterReadbackIsCurrent(current, job))
-        tx.update(ref, { status, reason, lastCheckedAt: new Date().toISOString(), sendAllowed: false });
+        tx.update(ref, { status, reason, lastCheckedAt: new Date().toISOString(), sendAllowed: false,
+          browserBusySince: null, browserBusyCount: 0, browserBusyAlertedAt: null, nextAttemptAt: null, ...retryPatch });
     });
   };
   for (const job of jobs) {
@@ -191,7 +195,28 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
       results.push({ memberId: job.memberId, status: result.deliveryComplete ? "delivered" : result.duplicateBlocked ? "duplicate_blocked" : "accepted", id: result.id });
     } catch (error: any) {
       const reason = error.message || "holding_automatic_failed";
-      if (deadline.signal.aborted || reason === "holding_worker_deadline_reached" || reason === "holding_worker_child_timeout") {
+      if (error.code === "STUDIOMATE_BROWSER_BUSY" && !eventId) {
+        const busy = holdingBrowserBusyState(job);
+        await mark(job, "pending", "holding_browser_busy_deferred", { ...busy.patch,
+          browserBusyAlertedAt: busy.shouldAlert ? null : busy.patch.browserBusyAlertedAt });
+        results.push({ memberId: job.memberId, status: "deferred", reason: "holding_browser_busy_deferred",
+          nextAttemptAt: busy.patch.nextAttemptAt });
+        if (!busy.shouldAlert || !apply) break;
+        // Escalation is internal only; the normal error-report path below must not overwrite pending.
+        await child(process.execPath, ["firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs"], 45000,
+          { ...process.env, AUTOMATION_REPORT_FROM: "home@archivepilates.com", AUTOMATION_REPORT_TO: "home@archivepilates.com",
+            AUTOMATION_REPORT_EVENT_ID: holdingFingerprint(["holding_browser_busy", job.jobId, busy.patch.browserBusySince]),
+            AUTOMATION_REPORT_SUBJECT: "[홀딩 안내][확인필요] 브라우저 조회 대기 지연",
+            AUTOMATION_REPORT_LABEL: "자동화 확인필요",
+            AUTOMATION_REPORT_BODY: ["주체: ARCHIVE CORE / 홀딩 신규 자동발송", "결론: 원본 조회가 브라우저 경합으로 2시간 이상 지연됐습니다.",
+              "현재: 발송 시도 없이 기존 정기 실행 대기열을 유지합니다. 재발송하지 않습니다.",
+              `원천: 회원 ${job.memberId} / 작업 ${job.jobId}`, `대기 시작: ${busy.patch.browserBusySince}`,
+              "다음: 공유 브라우저 잠금 소유 작업의 진행·종료 상태를 확인하세요. 살아 있는 작업의 잠금은 삭제하지 마세요."].join("\n") })
+          .then(() => mark(job, "pending", "holding_browser_busy_deferred", busy.patch))
+          .catch(() => results.push({ memberId: job.memberId, status: "review", reason: "holding_browser_busy_email_unconfirmed" }));
+        break;
+      }
+      if (deadline.signal.aborted || reason === "holding_worker_readback_deadline_reached" || reason === "holding_worker_deadline_reached" || reason === "holding_worker_child_timeout") {
         if (eventId && await eventStatus(eventId, "reconciliation_required", promoted))
           results.push({ id: eventId, status: "review", reason: "holding_worker_stopped_after_claim_reconciliation_required" });
         await mark(job, "pending", "holding_worker_deadline_deferred");
@@ -233,12 +258,14 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>) {
     } catch { results.push({ status: "review", reason: "holding_receipt_review_email_unconfirmed" }); }
   }
   const review = results.filter(row => row.status === "review");
+  const deferred = Math.max(0, pending.size - results.filter(row => row.memberId && row.status !== "deferred" &&
+    !["holding_review_email_unconfirmed", "holding_browser_busy_email_unconfirmed"].includes(row.reason)).length);
   if (apply) await recordAutomationStatus(db, { automationId: "holding-notice-automatic", title: "수강권 홀딩 자동 안내",
     ownerArea: "alimtalk", status: review.length ? "warning" : "healthy",
-    lastResult: `전달 ${results.filter(row => row.status === "delivered").length} · 접수 ${results.filter(row => row.status === "accepted").length} · 확인필요 ${review.length}`,
+    lastResult: `전달 ${results.filter(row => row.status === "delivered").length} · 접수 ${results.filter(row => row.status === "accepted").length} · 대기 ${deferred} · 확인필요 ${review.length}`,
     warnings: review.map(row => `${row.memberId || row.id || "worker"}: ${row.reason}`) });
   console.log(JSON.stringify({ ok: true, mode: apply ? "automatic-live-readback" : "dry-run-no-send", results,
-    reviewRequired: review.length, deferred: pending.size - results.filter(row => row.memberId && row.reason !== "holding_review_email_unconfirmed").length,
+    reviewRequired: review.length, deferred,
     deadlineReached: deadline.remaining() === 0, sendAllowed: apply && !deadline.signal.aborted }));
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

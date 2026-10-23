@@ -77,12 +77,16 @@ try {
   result.error = error instanceof Error ? error.message : String(error);
   process.exitCode = 1;
 } finally {
-  result.finishedAt = new Date().toISOString();
-  await writeFile(path.join(config.downloadDir, "last-emergency-excel-download-result.json"), `${JSON.stringify(result, null, 2)}\n`);
-  await appendFile(config.runLogPath, `${JSON.stringify(result)}\n`);
-  console.log(JSON.stringify(result, null, 2));
-  if (context) await context.close();
-  if (releaseBrowserLock) await releaseBrowserLock();
+  await cleanupStudioMateExcelDownload({
+    context,
+    releaseBrowserLock,
+    recordResult: async () => {
+      result.finishedAt = new Date().toISOString();
+      await writeFile(path.join(config.downloadDir, "last-emergency-excel-download-result.json"), `${JSON.stringify(result, null, 2)}\n`);
+      await appendFile(config.runLogPath, `${JSON.stringify(result)}\n`);
+      console.log(JSON.stringify(result, null, 2));
+    },
+  });
 }
 
 async function downloadMemberExcel(page) {
@@ -473,4 +477,38 @@ function timestamp() {
 
 function sanitizeFileName(value) {
   return String(value).replace(/[/:\\?%*"<>|]/g, "_");
+}
+
+export async function cleanupStudioMateExcelDownload({ context, releaseBrowserLock, recordResult }) {
+  let canRelease = !context;
+  try {
+    await recordResult();
+  } finally {
+    try {
+      if (context) {
+        let browser;
+        try { browser = context.browser?.(); } catch { /* Context close may still prove shutdown. */ }
+        try {
+          await context.close();
+          if (browser && browser.isConnected() !== false) throw new Error("StudioMate browser is still connected after context close.");
+          canRelease = true;
+        } catch (closeError) {
+          if (!browser) throw closeError;
+          try {
+            await browser.close();
+            if (browser.isConnected() !== false) throw new Error("StudioMate browser is still connected after browser close.");
+            canRelease = true;
+          } catch (browserError) {
+            throw Object.assign(new AggregateError(
+              [closeError, browserError],
+              "StudioMate browser closure could not be confirmed; browser profile lock retained.",
+            ), { code: "STUDIOMATE_BROWSER_CLOSE_UNCONFIRMED" });
+          }
+        }
+      }
+    } finally {
+      // A rejected close/disconnected transport alone does not prove browser exit.
+      if (canRelease && releaseBrowserLock) await releaseBrowserLock();
+    }
+  }
 }

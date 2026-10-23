@@ -17,10 +17,13 @@ export async function acquireStudioMateBrowserLock(input = {}) {
     throw new Error("Invalid StudioMate lock timing options");
   }
   const owner = String(input.owner || "studiomate-playwright");
+  const signal = input.signal;
+  signal?.throwIfAborted();
   const started = Date.now();
   await mkdir(path.dirname(lockPath), { recursive: true });
 
   while (true) {
+    signal?.throwIfAborted();
     try {
       await mkdir(lockPath);
       const token = randomUUID();
@@ -39,7 +42,7 @@ export async function acquireStudioMateBrowserLock(input = {}) {
         )}\n`,
       );
       let released = false;
-      return async () => {
+      const release = async () => {
         if (released) return;
         released = true;
         const current = await readLockMetadata(lockPath);
@@ -47,18 +50,26 @@ export async function acquireStudioMateBrowserLock(input = {}) {
           await rm(lockPath, { recursive: true, force: true });
         }
       };
+      if (signal?.aborted) {
+        await release();
+        signal.throwIfAborted();
+      }
+      return release;
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
+      signal?.throwIfAborted();
       const metadata = await readLockMetadata(lockPath);
-      if (await recoverDeadLock(lockPath, staleMs)) continue;
+      signal?.throwIfAborted();
+      if (await recoverDeadLock(lockPath, staleMs, signal)) continue;
+      signal?.throwIfAborted();
       if (Date.now() - started >= waitMs) {
-        throw new Error(
+        throw Object.assign(new Error(
           `StudioMate browser profile is locked by ${metadata.owner || "unknown"} since ${
             metadata.acquiredAt || "unknown"
           }.`,
-        );
+        ), { code: "STUDIOMATE_BROWSER_BUSY" });
       }
-      await sleep(pollMs);
+      await sleep(pollMs, signal);
     }
   }
 }
@@ -75,8 +86,10 @@ function isDeadLocalOwner(metadata, staleMs) {
   }
 }
 
-async function recoverDeadLock(lockPath, staleMs) {
-  if (!isDeadLocalOwner(await readLockMetadata(lockPath), staleMs)) return false;
+async function recoverDeadLock(lockPath, staleMs, signal) {
+  const metadata = await readLockMetadata(lockPath);
+  signal?.throwIfAborted();
+  if (!isDeadLocalOwner(metadata, staleMs)) return false;
   const recoveryPath = `${lockPath}.recovery`;
   try {
     await mkdir(recoveryPath);
@@ -86,7 +99,9 @@ async function recoverDeadLock(lockPath, staleMs) {
   }
   try {
     // Serialize recovery and re-read: another contender may already own a new lock.
-    if (!isDeadLocalOwner(await readLockMetadata(lockPath), staleMs)) return false;
+    const current = await readLockMetadata(lockPath);
+    signal?.throwIfAborted();
+    if (!isDeadLocalOwner(current, staleMs)) return false;
     await rm(lockPath, { recursive: true, force: true });
     return true;
   } finally {
@@ -104,8 +119,21 @@ async function readLockMetadata(lockPath) {
   }
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms, signal) {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
 }
 
 function expandHome(value) {

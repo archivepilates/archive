@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 홀딩 브라우저 안정화</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f7f8;color:#242a2e;font:16px/1.7 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px 60px}h1{font-size:27px;line-height:1.4}h2{font-size:20px;margin-top:32px}p{max-width:72ch}section{padding-bottom:20px;border-bottom:1px solid #d9e0e4}li{margin:8px 0}code{font-size:13px;overflow-wrap:anywhere}small{color:#58666d}.summary{border-left:4px solid #356b61;padding:12px 18px;background:white}</style>
+<main><small>ARCHIVE PILATES · 2026-10-24 · 홀딩 자동화</small>
+<h1>브라우저 경합을 발송 오류와 분리</h1>
+<p class="summary">홀딩 원본 조회마다 새 브라우저를 열던 경로를 한 회차의 전용 세션으로 통합했습니다. 잠금 경합은 발송 시도 없이 대기열에 남기며, 같은 회차의 다음 원본 검증도 캐시가 아닌 실제 화면을 다시 읽습니다.</p>
+<section><h2>확인한 원인</h2>
+<p>최근 운영 메일 3건은 원본 수집기의 공유 프로필 잠금 취득 실패였습니다. 이전 수집기는 대기 없이 실패하고 자동 실행기는 이를 일반 확인필요로 분류했습니다. 실제 잠금 소유 작업은 당시 기록만으로 확정하지 않았습니다.</p>
+<p>부모 Excel 작업이 자신의 브라우저 잠금을 보유한 채 홀딩 자식을 실행하는 재진입 구조는 아닙니다. Excel 실행 락과 브라우저 프로필 락은 별개입니다.</p></section>
+<section><h2>수정 내용</h2><ul>
+<li><strong>회차 단위 재사용:</strong> 기존 자동화 전용 프로필·공유 잠금을 한 번 취득해 브라우저를 재사용하고, 각 조회에는 새 페이지를 엽니다. 동시에 들어온 요청은 세션 안에서도 순서대로 처리합니다.</li>
+<li><strong>잠금 대기:</strong> 최대 15초 대기한 후 busy 전용 오류로 분류합니다. 확정 이벤트를 만들기 전의 경합만 pending으로 넘기고 해당 회차를 멈춥니다.</li>
+<li><strong>다음 실행 이월:</strong> 5·10·20·30분의 재조회 가능 시각을 기록합니다. 새 Excel에도 동일 회원·수강권의 대기를 보존하며, 실제 재시도는 기존 1시간 정기 실행에서만 합니다.</li>
+<li><strong>알림:</strong> 연속 경합이 최초 발생부터 2시간 이상 지속될 때 내부 운영 알림을 보냅니다. 일반 원본 검증 오류·접수 불명확 경고는 이 유예 대상이 아닙니다.</li>
+<li><strong>종료 안전:</strong> 중단·시간초과·조회 실패 시 브라우저 종료를 먼저 시도합니다. 종료를 확인하지 못하면 공유 잠금을 남겨 다른 작업의 동시 진입을 막습니다. Excel 결과 파일 기록 실패도 종료 정리를 건너뛰지 않습니다.</li>
+</ul></section>
+<section><h2>유지한 안전장치</h2><ul>
+<li>기존 canonical 회원·원본 수강권·정지 전체 이력, 발송 직전 재조회, 고정 중복방지 키와 선점 원장을 그대로 사용합니다.</li>
+<li>접수·전달 완료 또는 접수 여부가 불명확한 건은 재발송하지 않습니다. 공급자 결과 조회와 기존 메모 후속 처리만 유지합니다.</li>
+<li>회원 발송은 한국시간 09:00~23:00에만 허용합니다. 스텝 제외, 과거 기준선 제외, 등록 후 48시간 규칙은 변경하지 않았습니다.</li>
+<li>새 프로필·로그인 계정·상시 데몬·스케줄러·DB·발송기를 만들지 않았습니다. 모든 Excel·메모·MCP 자동화를 상시 중앙 브라우저로 전환했다고 주장하지 않습니다.</li>
+</ul></section>
+<section><h2>검증</h2><p>합성 브라우저·페이지·임시 잠금·Fixture 원장을 이용한 Node 회귀 1,078건과 TypeScript 홀딩 큐·공급자·원천 라운드트립 228건, 합계 <strong>1,306건 통과</strong>. 실행기 번들 구문 검사, CORE Hosting 검증과 기존 릴리스 롤백 방지 검사도 통과했습니다.</p>
+<p>초기 회귀 중 이전 코드 구조에 고정된 검사 2건이 실패해 새 세션 cleanup과 추가 운영 알림 키를 검사하도록 갱신했고 재실행에서 통과했습니다. 실제 운영 브라우저를 열거나 회원 메시지를 테스트 발송하지 않았습니다. 다음 자연 실행의 busy 해소·원장 결과는 아직 검증하지 않았습니다.</p></section>
+<section><h2>운영 반영</h2><p id="release-status">기능 소스 검증 완료. 커밋·원격 승격·맥미니 실행기 반영·CORE Hosting과 CI의 실제 결과는 릴리스 후 이 절에 기록합니다.</p>
+<p>대상은 맥미니 실행기와 CORE 운영규칙입니다. Functions·Firestore 규칙·인덱스·운영 데이터·기준선·기존 실행 주기는 변경 대상이 아닙니다. 판매 홈페이지 archivepilates.com의 DNS와 Hosting은 수정하지 않습니다.</p></section>
+<section><h2>근거 파일</h2><ul>
+<li><code>scripts/lib/studiomate-browser-session.mjs</code>: 전용 세션·직렬 실행·취소·종료.</li>
+<li><code>scripts/lib/studiomate-holding-session.mjs</code>: 기존 화면 조회와 완전성·대상 일치 검증.</li>
+<li><code>scripts/run-automatic-holding-notices.ts</code>: 한 회차 재사용·busy 분류·발송 원장 경계.</li>
+<li><code>scripts/lib/holding-browser-retry.mjs</code> 및 <code>studiomate-holding-roster.mjs</code>: 대기 상태와 새 원천 보존.</li>
+<li><code>scripts/lib/studiomate-browser-lock.mjs</code> 및 <code>scripts/emergency-download-studiomate-excels.mjs</code>: 취소 가능한 공유 잠금·Excel 종료 정리.</li>
+<li><code>core/rules/index.html#holding-allowance-notice</code>: 동일 업무 규칙 갱신. Notion에는 복제하지 않습니다.</li>
+</ul></section></main></html>

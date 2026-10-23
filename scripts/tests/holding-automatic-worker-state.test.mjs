@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import { HOLDING_RECEIPT_CHECKS, HOLDING_RECEIPT_CURSOR, createHoldingWorkerDeadline,
   selectHoldingWorkerJobs, loadHoldingReceiptCandidates, recordHoldingReceiptCheck,
-  transitionHoldingWorkerEvent, runHoldingWorkerChild } from "../lib/holding-automatic-worker-state.mjs";
+  transitionHoldingWorkerEvent, runHoldingWorkerChild, holdingReadbackFailure } from "../lib/holding-automatic-worker-state.mjs";
 
 const EVENTS = "syntheticHoldingEvents";
 const at = n => new Date(Date.UTC(2026, 9, 8, 0, n)).toISOString();
@@ -223,7 +223,9 @@ test("successful child output and spawn failures settle without retained timers"
 test("worker wires warning/email, read-only collector, promotion gating and a shared child deadline", async () => {
   const worker = await readFile(new URL("../run-automatic-holding-notices.ts", import.meta.url), "utf8");
   assert.doesNotMatch(worker, /execFileSync|eventRef\.update|event\.ref\.update|started = Date\.now/);
-  assert.match(worker, /"--ticket-name", ticketName, "--stdout"/);
+  assert.match(worker, /readback.readLatest\(\{ memberId, ticketName \}, \{ signal \}\)/);
+  assert.match(worker, /await readback.close\(\)/);
+  assert.doesNotMatch(worker, /collect-studiomate-holding-source/);
   assert.match(worker, /let promoted = false/);
   assert.match(worker, /eventStatus\(eventId, "reconciliation_required", promoted\)/);
   assert.match(worker, /recordHoldingReceiptCheck\(\{ db, id: event.id, error: error.message \}\)/);
@@ -241,4 +243,35 @@ test("worker wires warning/email, read-only collector, promotion gating and a sh
   assert.match(worker.slice(prior, ageGate), /continue;/);
   assert.match(worker.slice(prior, ageGate), /prior.deliveryComplete \? "observed" : "pending"/);
   assert.match(worker.slice(prior, ageGate), /"holding_prior_receipt_pending"/);
+});
+
+test("future browser backoff is skipped without blocking eligible hints", () => {
+  const now = Date.parse(at(10));
+  assert.deepEqual(selectHoldingWorkerJobs([
+    { jobId: "future", nextAttemptAt: at(11), transition: "entered" },
+    { jobId: "ready", nextAttemptAt: at(10), transition: "continued" },
+  ], 10, now).map(job => job.jobId), ["ready"]);
+});
+
+test("page readiness timeout remains reviewable, only explicit readback deadline is deferred", () => {
+  const error = Object.assign(new Error("synthetic ticket not visible"), { name: "TimeoutError" });
+  const controller = new AbortController();
+  assert.equal(holdingReadbackFailure(error, controller.signal), error);
+  controller.abort(new DOMException("synthetic budget", "TimeoutError"));
+  assert.match(holdingReadbackFailure(error, controller.signal).message, /^holding_worker_readback_deadline_reached$/);
+  assert.equal(holdingReadbackFailure(error), error);
+});
+
+test("browser contention is pre-event deferred, stops the batch, and preserves send reconciliation", async () => {
+  const worker = await readFile(new URL("../run-automatic-holding-notices.ts", import.meta.url), "utf8");
+  const start = worker.indexOf('error.code === "STUDIOMATE_BROWSER_BUSY" && !eventId');
+  const end = worker.indexOf('if (deadline.signal.aborted', start);
+  const busy = worker.slice(start, end);
+  assert.ok(start > 0 && end > start);
+  assert.match(busy, /holdingBrowserBusyState\(job\)/);
+  assert.match(busy, /await mark\(job, "pending", "holding_browser_busy_deferred", \{ \.\.\.busy.patch/);
+  assert.match(busy, /browserBusyAlertedAt: busy.shouldAlert \? null/);
+  assert.match(busy, /\.then\(\(\) => mark\(job, "pending", "holding_browser_busy_deferred", busy.patch\)\)/);
+  assert.match(busy, /if \(!busy.shouldAlert \|\| !apply\) break/);
+  assert.doesNotMatch(busy, /dispatchVerifiedOperatorHolding|request\(|eventStatus\(/);
 });

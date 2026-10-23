@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { holdingBrowserBusyState } from "../lib/holding-browser-retry.mjs";
 import {
   HOLDING_ROSTER_STATE,
   HOLDING_ROSTER_JOBS,
@@ -402,6 +403,78 @@ test("a completed readback is reopened for a fresh observation with a new reques
   assert.equal(job.requestedAt, at(3));
   assert.equal(job.lastCheckedAt, at(1), "fresh roster must preserve rotation across completed observations");
   assertDiscoveryOnly({ ...result, jobs: [job] });
+});
+
+test("fresh Excel observations preserve browser backoff but replace all source identity fields", async () => {
+  const db = fakeDb();
+  await observe(db);
+  const path = [...db.records.keys()].find(key => key.startsWith(`${HOLDING_ROSTER_JOBS}/`));
+  const original = structuredClone(db.records.get(path));
+  const retry = holdingBrowserBusyState({ browserBusySince: at(-120), browserBusyCount: 2 }, Date.parse(at(1))).patch;
+  Object.assign(db.records.get(path), retry, { lastCheckedAt: at(1), staleSourceField: "must-not-carry" });
+  for (const [minute, rows] of [[2, [row()]], [4, [row({ 수강권최종수정일: "2026-10-07 12:30" })]]]) {
+    const oldVersion = db.records.get(path).discoveryVersion;
+    const result = await observe(db, { rows, source: source(minute), now: at(minute + 1) });
+    const current = db.records.get(path);
+    assert.equal(result.ok, true, result.reason);
+    for (const field of ["status", "reason", "browserBusySince", "browserBusyCount", "nextAttemptAt", "browserBusyAlertedAt"]) {
+      assert.deepEqual(current[field], retry[field], field);
+    }
+    assert.equal(current.requestedAt, original.requestedAt);
+    assert.equal(current.lastCheckedAt, at(1));
+    assert.equal(current.sourceImportId, source(minute).sourceImportId);
+    assert.equal(current.downloadedAt, at(minute));
+    assert.notEqual(current.discoveryVersion, oldVersion);
+    assert.equal(current.updatedAt, at(minute + 1));
+    assert.equal(Object.hasOwn(current, "staleSourceField"), false);
+    assertDiscoveryOnly({ ...result, jobs: [current] });
+  }
+});
+
+test("changed native member identity does not inherit another member's browser backoff", async () => {
+  const db = fakeDb();
+  await observe(db);
+  const path = [...db.records.keys()].find(key => key.startsWith(`${HOLDING_ROSTER_JOBS}/`));
+  Object.assign(db.records.get(path), holdingBrowserBusyState({}, Date.parse(at(1))).patch);
+  const result = await observe(db, { profiles: [profile({ memberId: "102" })], source: source(2), now: at(3) });
+  const current = db.records.get(path);
+  assert.equal(result.ok, true);
+  assert.equal(current.memberId, "102");
+  assert.equal(current.reason, "");
+  for (const field of ["browserBusySince", "browserBusyCount", "nextAttemptAt", "browserBusyAlertedAt"]) {
+    assert.equal(Object.hasOwn(current, field), false, field);
+  }
+});
+
+test("a fresh source identity review cannot be hidden by an old browser deferral", async () => {
+  const db = fakeDb();
+  await observe(db);
+  const path = [...db.records.keys()].find(key => key.startsWith(`${HOLDING_ROSTER_JOBS}/`));
+  Object.assign(db.records.get(path), holdingBrowserBusyState({}, Date.parse(at(1))).patch);
+  const result = await observe(db, { profiles: [profile(), profile({ memberId: "102" })], source: source(2), now: at(3) });
+  const current = db.records.get(path);
+  assert.equal(result.ok, true);
+  assert.equal(current.status, "review");
+  assert.equal(current.reason, "native_member_phone_match_required");
+  assert.equal(Object.hasOwn(current, "nextAttemptAt"), false);
+  assert.equal(Object.hasOwn(current, "browserBusyAlertedAt"), false);
+});
+
+test("completed or non-busy old jobs do not retain obsolete browser retry metadata", async () => {
+  for (const patch of [{ status: "observed" }, { reason: "other_reason" }]) {
+    const db = fakeDb();
+    await observe(db);
+    const path = [...db.records.keys()].find(key => key.startsWith(`${HOLDING_ROSTER_JOBS}/`));
+    Object.assign(db.records.get(path), holdingBrowserBusyState({}, Date.parse(at(1))).patch, patch);
+    const result = await observe(db, { source: source(2), now: at(3) });
+    const current = db.records.get(path);
+    assert.equal(result.ok, true);
+    assert.equal(current.status, "pending");
+    assert.equal(current.reason, "");
+    for (const field of ["browserBusySince", "browserBusyCount", "nextAttemptAt", "browserBusyAlertedAt"]) {
+      assert.equal(Object.hasOwn(current, field), false, field);
+    }
+  }
 });
 
 const resolvedExcelProfile = (patch = {}) => profile({
