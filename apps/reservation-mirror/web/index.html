@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#242629">
+  <title>ARCHIVE PILATES · 예약 조회</title>
+  <link rel="icon" href="/symbol.png">
+  <link rel="apple-touch-icon" href="/symbol.png">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 이동</a>
+  <section id="access" class="access" aria-labelledby="access-title">
+    <div class="access-brand"><img src="/symbol.png" alt="ARCHIVE PILATES" width="52" height="52"><span>ARCHIVE PILATES</span></div>
+    <div class="access-content">
+      <span class="eyebrow">RESERVATION MIRROR</span>
+      <h1 id="access-title">예약 조회</h1>
+      <span class="badge neutral">조회 전용</span>
+      <p id="access-status" role="status">설정을 확인하고 있습니다.</p>
+      <form id="login-form" hidden>
+        <label for="phone">전화번호</label>
+        <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="username" required maxlength="24">
+        <label for="password">비밀번호</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button id="login-button" class="primary" type="submit">로그인</button>
+      </form>
+      <p id="login-error" class="error-text" role="alert" hidden></p>
+      <button id="config-retry" type="button" hidden>설정 다시 확인</button>
+    </div>
+    <footer>ARCHIVE IN · 운영자 전용</footer>
+  </section>
+
+  <div id="workspace" class="workspace" hidden>
+    <aside class="sidebar" aria-label="주 메뉴">
+      <a class="brand" href="#calendar"><img src="/symbol.png" alt="" width="34" height="34"><span>ARCHIVE<br>PILATES</span></a>
+      <div class="sidebar-label">센터 관리</div>
+      <nav id="navigation" aria-label="조회 메뉴"></nav>
+      <div class="sidebar-label">운영</div>
+      <div id="unavailable-nav"></div>
+      <div class="sidebar-bottom"><span class="read-only-dot"></span>조회 전용 미러</div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <div class="topbar-title"><span>ARCHIVE PILATES</span><span class="topbar-divider">/</span><strong id="breadcrumb">수업 일정</strong></div>
+        <div class="topbar-actions"><span class="badge neutral">조회 전용</span><button id="refresh" type="button" class="icon-button" title="새로고침" aria-label="새로고침"></button><button id="logout" type="button" class="icon-button" title="로그아웃" aria-label="로그아웃"></button></div>
+      </header>
+      <main id="main" tabindex="-1">
+        <section class="provenance" aria-label="조회 원본 상태">
+          <div class="provenance-heading"><span id="snapshot-state" class="badge amber">스냅샷 미확인</span><span id="summary-status" role="status">원본 상태 확인 중</span><span id="operator-session"></span></div>
+          <dl class="provenance-dates"><div><dt>캡처 · KST</dt><dd id="captured-at">미확인</dd></div><div><dt>원본 갱신</dt><dd id="source-updated-at">미확인</dd></div><div><dt>상태 확인</dt><dd id="checked-at">미확인</dd></div></dl>
+          <details class="source-details"><summary>원본 범위 · REA <span id="rea-version">미확인</span></summary><div id="coverage"></div><p id="rea-applied"></p><p id="snapshot-id"></p></details>
+        </section>
+        <div id="notice" class="notice" role="alert" hidden></div>
+        <section class="page-heading"><div><span class="eyebrow">STUDIO DATA</span><h1 id="page-title">수업 일정</h1></div><p id="entity-count">원본 건수 미확인</p></section>
+        <form id="filters" class="filters" aria-label="조회 조건">
+          <div class="field search-field"><label for="search">회원명 접두어 검색</label><div class="search-input"><span id="search-icon" aria-hidden="true"></span><input id="search" type="search" placeholder="이름의 시작 부분" autocomplete="off" maxlength="100"></div></div>
+          <div class="field date-field"><label for="from">시작일</label><input id="from" type="date" required></div>
+          <div class="field date-field"><label for="to">종료일</label><input id="to" type="date" required></div>
+          <div class="field status-field"><label for="status">예약 상태</label><select id="status"><option value="all">전체</option><option value="booked">예약 · 확정 · 대기</option><option value="after">수업 후</option></select></div>
+          <button id="filter-submit" type="submit" class="filter-submit">조회</button>
+          <button id="filter-reset" type="button" class="icon-button" title="조건 초기화" aria-label="조건 초기화"></button>
+        </form>
+        <section id="calendar-section" aria-label="수업 캘린더">
+          <div class="calendar-toolbar"><div class="calendar-navigation"><button id="calendar-prev" type="button" class="icon-button" title="이전 기간" aria-label="이전 기간"></button><button id="calendar-today" type="button">오늘</button><button id="calendar-next" type="button" class="icon-button" title="다음 기간" aria-label="다음 기간"></button><h2 id="calendar-title"></h2></div><div class="segments" role="group" aria-label="캘린더 보기"><button data-view="timeGridDay" type="button" aria-pressed="false">일</button><button data-view="timeGridWeek" type="button" aria-pressed="false">주</button><button data-view="dayGridMonth" type="button" aria-pressed="false">월</button></div></div>
+          <div id="calendar"></div>
+        </section>
+        <section id="list-section" aria-label="조회 목록" hidden><div id="list"></div></section>
+        <footer class="pagination"><p id="page-indicator" role="status" aria-live="polite">조회 대기</p><button id="load-more" type="button" hidden>50건 더 보기</button><p id="list-snapshot" class="muted"></p></footer>
+      </main>
+      <footer class="app-footer"><span>ARCHIVE IN</span><span>원본 스냅샷 기준</span></footer>
+    </div>
+  </div>
+  <dialog id="detail-dialog" aria-labelledby="detail-title"><div class="dialog-heading"><div><span class="eyebrow">READ ONLY</span><h2 id="detail-title">상세 조회</h2></div><button id="close-detail" class="icon-button" type="button" title="닫기" aria-label="상세 닫기"></button></div><div id="detail-content" aria-live="polite"></div></dialog>
+</body>
+</html>

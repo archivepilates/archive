@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!package.json
+!package-lock.json
+!server.mjs
+!safety.mjs
+!auth.mjs
+!repository.mjs
+!view-model.mjs
+!check-isolation.mjs
+!dist/
+!dist/**

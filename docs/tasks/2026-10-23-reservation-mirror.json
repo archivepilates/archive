@@ -1,0 +1,83 @@
+{
+  "project": "ARCHIVE PILATES reservation mirror",
+  "updatedAt": "2026-10-23T12:35:00Z",
+  "status": "verified_initial_capture_deployment_blocked",
+  "branch": "codex/mini/rea-studiomate-feasibility-20261023",
+  "application": "apps/reservation-mirror",
+  "mode": "operator_only_read_only_mirror",
+  "source": {
+    "project": "archive-pilates",
+    "database": "(default)",
+    "scope": "Existing canonical collections for studio 5330 plus explicitly referenced legacy member profiles and retained 2026-05-27 issued-pass history",
+    "mutations": 0,
+    "allStudioMateData": false,
+    "continuouslySynchronized": false
+  },
+  "rea": {
+    "evidence": "../studiomate-rea-ui-inventory-20261023/docs/tasks/2026-10-23-studiomate-rea-ui-inventory.json",
+    "version": "6.7.0",
+    "actualWebBundleAnalyzed": true,
+    "mobileAppAnalyzed": false,
+    "serverInternalsConfirmed": false,
+    "applied": ["Separate original, remaining, bookable and cancellable counts", "Preserve unknown values", "Separate booked, booking_confirmed and booking_waiting", "Separate attendance and post-class statuses", "KST dates, date filters and bounded pagination"]
+  },
+  "target": {
+    "project": "archive-pilates",
+    "database": "reservation-mirror",
+    "region": "asia-northeast3",
+    "deleteProtection": true,
+    "directClientAccess": "deny_all",
+    "snapshotId": "snapshot-20261023T121550461Z-5f808f60",
+    "snapshotStatus": "VERIFIED",
+    "counts": {"members": 1151, "entitlements": 3064, "bookings": 93089, "occurrences": 16252, "staff": 13, "products": 28},
+    "quality": {"orphanBookings": 0, "unidentifiedTicketIds": 190, "duplicateBookingsSuppressed": 3086, "unresolvedHoldings": 0},
+    "sourceChangedDuringCapture": false,
+    "coverageCaveat": "Historical issued-pass observations are not current balances. Products are inferred references, not a complete product master. No holding periods, payment, contract, health or memo payloads imported. Zero unresolved holdings does not prove holdings coverage."
+  },
+  "deployment": {
+    "hostingSite": "archive-pilates-booking-test",
+    "hostingSiteCreated": true,
+    "hostingAppDeployed": false,
+    "cloudRunService": "archive-reservation-mirror",
+    "cloudRunDeployed": false,
+    "domain": "booking-test.archivepilates.com",
+    "domainResourceCreated": true,
+    "dnsUpdated": false,
+    "httpsVerified": false,
+    "committed": false,
+    "pushed": false,
+    "blockers": ["Dedicated runtime service-account creation denied for current operator; await authorized administrator approval, not self-escalation", "Cloudflare login needed for the isolated booking-test CNAME; no root/wildcard changes", "Serving-identity named-DB allow/default-DB deny proof and deployed real operator login remain pending"]
+  },
+  "checks": {
+    "unitTestsPassed": 100,
+    "unitTestsFailed": 0,
+    "build": "passed",
+    "productionDependencyAudit": "0 vulnerabilities",
+    "responsiveWidths": [320, 390, 768, 1440],
+    "responsiveViewChecks": 24,
+    "horizontalDocumentOverflow": 0,
+    "realMirrorCollectionCounts": "all six entities match manifest",
+    "realMirrorQueries": "six entity pagination and search, date/status filters and member detail passed",
+    "localAnonymousPrivateRead": "401",
+    "localWriteRequest": "405",
+    "unknownStaticPath": "404",
+    "operatingSourceFiles": "unchanged",
+    "operatingFirestoreRules": "unchanged release timestamp 2026-10-21T09:31:16.623019Z",
+    "productionMemberActions": 0
+  },
+  "coreOperatingRules": {
+    "status": "pending_deployment",
+    "reason": "No CORE files or active rules changed to avoid an unrelated operating Hosting deployment while mirror release is blocked",
+    "draft": {
+      "purpose": "Read-only validation of a separate reservation application against retained operating source data",
+      "implementation": "Initial verified capture and authenticated read-only UI/API implemented; not live",
+      "rule": "StudioMate remains authoritative. Mirror views must not dispatch messages or modify members, passes, bookings, refunds or contracts",
+      "canonicalSource": "Existing studio-scoped canonical collections and explicitly dated retained exports, not the mirror",
+      "affected": "Separate reservation-mirror database, archive-reservation-mirror server and archive-pilates-booking-test site only",
+      "syncTiming": "Initial capture only; no additional periodic job enabled",
+      "verification": "100 tests, six actual indexed entity queries and count comparison, four responsive widths",
+      "nextAction": "Approve dedicated account, prove IAM isolation, deploy and verify authenticated HTTPS; publish this rule with actual live status"
+    }
+  },
+  "next": ["Resolve dedicated runtime identity approval", "Prove named-database-only read access", "Build and deploy isolated Cloud Run and Hosting", "Connect only booking-test DNS and verify HTTPS", "Verify real CORE operator login", "Document and test incremental synchronization before scheduling", "Update CORE operating rule, scoped commit, live verification and push"]
+}

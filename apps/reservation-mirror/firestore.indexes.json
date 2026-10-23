@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {"collectionGroup":"entitlements","queryScope":"COLLECTION","fields":[{"fieldPath":"memberId","order":"ASCENDING"},{"fieldPath":"nameKey","order":"ASCENDING"}]},
+    {"collectionGroup":"bookings","queryScope":"COLLECTION","fields":[{"fieldPath":"memberId","order":"ASCENDING"},{"fieldPath":"localDate","order":"ASCENDING"}]},
+    {"collectionGroup":"bookings","queryScope":"COLLECTION","fields":[{"fieldPath":"statusGroup","order":"ASCENDING"},{"fieldPath":"localDate","order":"ASCENDING"}]},
+    {"collectionGroup":"bookings","queryScope":"COLLECTION","fields":[{"fieldPath":"localDate","order":"ASCENDING"},{"fieldPath":"nameKey","order":"ASCENDING"}]},
+    {"collectionGroup":"bookings","queryScope":"COLLECTION","fields":[{"fieldPath":"nameKey","order":"ASCENDING"},{"fieldPath":"localDate","order":"ASCENDING"}]},
+    {"collectionGroup":"bookings","queryScope":"COLLECTION","fields":[{"fieldPath":"statusGroup","order":"ASCENDING"},{"fieldPath":"nameKey","order":"ASCENDING"},{"fieldPath":"localDate","order":"ASCENDING"}]},
+    {"collectionGroup":"occurrences","queryScope":"COLLECTION","fields":[{"fieldPath":"nameKey","order":"ASCENDING"},{"fieldPath":"localDate","order":"ASCENDING"}]}
+  ],
+  "fieldOverrides": [{"collectionGroup":"rawRecords","fieldPath":"payload","indexes":[]}]
+}

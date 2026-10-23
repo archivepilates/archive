@@ -1,0 +1,22 @@
+{
+  "name": "archive-reservation-mirror",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22"},
+  "scripts": {"build": "node build.mjs", "start": "node server.mjs", "test": "node --test test/*.test.mjs"},
+  "dependencies": {
+    "@google-cloud/firestore": "9.4.0",
+    "@fullcalendar/core": "6.1.22",
+    "@fullcalendar/daygrid": "6.1.22",
+    "@fullcalendar/timegrid": "6.1.22",
+    "@fullcalendar/interaction": "6.1.22",
+    "@fullcalendar/luxon3": "6.1.22",
+    "firebase": "13.1.0",
+    "jose": "6.2.13",
+    "luxon": "3.7.2",
+    "lucide": "1.61.0"
+  },
+  "devDependencies": {"esbuild": "0.28.2"},
+  "overrides": {"@grpc/grpc-js": "1.14.6"}
+}
