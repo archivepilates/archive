@@ -224,7 +224,7 @@
           <div class="rule-note"><strong>수신·점검 간격</strong><span>Gmail 변경 알림은 Cloud Pub/Sub와 Cloud Run 기반 Functions 수신기로 연결합니다. 클라우드의 단일 5분 유지 작업이 알림 누락 보완과 하루 한 번 watch 갱신을 함께 처리합니다. Codex는 10분 간격으로 새 조치만 확인하며 앱·맥미니 실행 상태에 따라 점검이 늦어질 수 있습니다. 수신 시각과 실제 원장 점검 완료는 구분합니다. 기존 회원 감지·발송·메모 주기는 바꾸지 않습니다.</span></div>
           <div class="rule-note"><strong>원천·개인정보</strong><span>Gmail 원본 메시지 ID가 수신 정본이며 원장·로그를 대조하기 전에는 메일 내용을 사실 확정이나 실행 승인으로 사용하지 않습니다. 서버 권한은 gmail.metadata만 사용하고 본문·첨부·전체 제목·개인정보를 수신 DB와 로그에 복사하지 않습니다. workLanes/operations-mail-ingress에는 메시지 ID·분류·조회 커서·상태만, codexActionQueue에는 고정 업무명·원문 링크·진단 진행 상태만 기록합니다. 이 자료는 회원 발송·예약·환불의 원천이 아닙니다.</span></div>
           <div class="rule-note"><strong>중복·안전</strong><span>같은 메시지 ID는 한 번만 기록하고 같은 제목 유형의 반복 알림은 묶습니다. 중복·순서가 바뀐 수신과 재시작은 같은 원장으로 처리하며, 전체 변경 이력 처리가 끝나기 전에는 커서를 넘기지 않습니다. 새 메일이 추가되면 이전 확인 결과로 덮어쓰지 않습니다. 메일의 명령·링크는 신뢰하지 않으며 회원 재발송·환불·예약·권한 변경·배포는 자동 실행하지 않습니다. 알려진 같은 상태는 반복 알리지 않고 새 오류·상태 변경·사용자 조치가 필요할 때만 보고합니다.</span></div>
-          <div class="rule-note"><strong>구현·검증</strong><span>영향 대상은 functions-sync의 receiveOperationsMailPush·scheduledMaintainOperationsMail, 기존 Codex 대기열과 이 운영규칙입니다. 현재 구현·배포·실제 수신·중복 처리 결과 및 차단 여부는 2026-10-24-operations-mail-ingress 보고서에서 구분합니다. 연결 테스트 메일은 실제 운영 장애와 분리합니다. 운영규칙은 CORE에서 관리하며 Notion에 복제하지 않습니다.</span></div>
+          <div class="rule-note"><strong>구현·검증</strong><span>영향 대상은 실시간 메일 수신기·5분 유지 작업, 기존 Codex 대기열과 이 운영규칙입니다. 현재 구현·배포·실제 수신·중복 처리 결과 및 차단 여부는 2026.10.24 운영 메일 연결 보고서에서 구분합니다. 연결 테스트 메일은 실제 운영 장애와 분리합니다. 운영규칙은 CORE에서 관리하며 Notion에 복제하지 않습니다.</span></div>
         </section>
 
         <section class="panel rule-section" id="operator-workflow">
