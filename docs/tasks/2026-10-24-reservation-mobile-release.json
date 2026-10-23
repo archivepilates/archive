@@ -1,0 +1,16 @@
+{
+  "project": "ARCHIVE PILATES reservation mirror",
+  "updatedAt": "2026-10-24",
+  "status": "verified_ready_to_release",
+  "branch": "codex/mini/reservation-mobile-release-20261024",
+  "application": "apps/reservation-mirror",
+  "target": "archive-pilates-booking-test",
+  "url": "https://booking-test.archivepilates.com/",
+  "scope": "Mobile calendar static UI and bounded read-only pagination",
+  "unchanged": ["Real Firebase authentication and canonical CORE operator authorization", "Cloud Run code and routing configuration", "Operating and mirror database contents", "StudioMate", "Member dispatch and scheduled automations", "Sales homepage and DNS"],
+  "labPublished": false,
+  "coverage": "Initial partial snapshot; not live or complete StudioMate synchronization",
+  "checks": {"status": "passed", "unitTests": 196, "failed": 0, "build": "passed", "productionAuditVulnerabilities": 0, "viewports": [320, 390, 768, 1440], "documentOverflow": 0, "syntheticOccurrences": 70, "coreHostingValidator": "passed", "productionAuthMockMarkers": 0},
+  "deployment": {"status": "not_deployed"},
+  "limitations": ["Physical iPhone Safari not tested", "Real operator post-login verification pending existing authenticated session"]
+}

@@ -65,7 +65,9 @@
         </form>
         <section id="calendar-section" aria-label="수업 캘린더">
           <div class="calendar-toolbar"><div class="calendar-navigation"><button id="calendar-prev" type="button" class="icon-button" title="이전 기간" aria-label="이전 기간"></button><button id="calendar-today" type="button">오늘</button><button id="calendar-next" type="button" class="icon-button" title="다음 기간" aria-label="다음 기간"></button><h2 id="calendar-title"></h2></div><div class="segments" role="group" aria-label="캘린더 보기"><button data-view="timeGridDay" type="button" aria-pressed="false">일</button><button data-view="timeGridWeek" type="button" aria-pressed="false">주</button><button data-view="dayGridMonth" type="button" aria-pressed="false">월</button></div></div>
-          <div id="calendar"></div>
+          <p id="calendar-status" class="calendar-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div id="week-rail" class="week-rail" role="group" aria-label="주간 날짜" hidden></div>
+          <div id="calendar-viewport" class="calendar-viewport" tabindex="0" role="region" aria-label="수업 일정 시간표" aria-describedby="calendar-status"><div id="calendar"></div></div>
         </section>
         <section id="list-section" aria-label="조회 목록" hidden><div id="list"></div></section>
         <footer class="pagination"><p id="page-indicator" role="status" aria-live="polite">조회 대기</p><button id="load-more" type="button" hidden>50건 더 보기</button><p id="list-snapshot" class="muted"></p></footer>

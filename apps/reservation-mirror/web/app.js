@@ -6,6 +6,8 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import luxonPlugin from '@fullcalendar/luxon3';
 import { DateTime } from 'luxon';
+import { calendarView, calendarTitle, weekDays } from './calendar-ui.mjs';
+import { loadCalendarPages } from './calendar-pages.mjs';
 import { createElement, CalendarDays, UsersRound, Ticket, ClipboardList, ContactRound, Package, ChartNoAxesCombined, MessageSquare, Settings, RefreshCw, LogOut, Search, RotateCcw, ChevronLeft, ChevronRight, X } from 'lucide';
 
 const $ = (id) => document.getElementById(id);
@@ -45,6 +47,9 @@ let nextCursor = null;
 let listSnapshot = null;
 let pageCount = 0;
 let loading = false;
+let calendarScrollReady = false;
+let calendarRangeKey = '';
+let calendarPartial = false;
 let summaryBusy = false;
 let snapshot = null;
 let listError = '';
@@ -98,6 +103,11 @@ function abortReads() {
 function clearSensitive() {
   sessionReady = false;
   items = []; nextCursor = null; listSnapshot = null; pageCount = 0; snapshot = null;
+  calendarPartial = false;
+  $('calendar-status').textContent = '';
+  $('page-indicator').textContent = '조회 대기';
+  $('load-more').hidden = true;
+  $('load-more').disabled = true;
   $('list').replaceChildren();
   calendar?.removeAllEvents();
   $('detail-content').replaceChildren();
@@ -307,10 +317,12 @@ function renderCalendar() {
   });
 }
 function pagination() {
-  $('page-indicator').textContent = loading ? `조회 중 · 현재 ${items.length}건` : pageCount ? `${pageCount}페이지 · ${items.length}건 조회${nextCursor ? ' · 다음 페이지 있음' : ' · 마지막 페이지'}${page === 'calendar' && items.some((item) => !DateTime.fromISO(String(item.startAt || ''), { zone }).isValid) ? ' · 날짜 미확인 수업은 캘린더에서 제외' : ''}` : listError ? '조회 실패' : '조회 대기';
+  $('page-indicator').textContent = loading ? `조회 중 · 현재 ${items.length}건` : pageCount ? `${pageCount}페이지 · ${items.length}건 조회${nextCursor ? ' · 다음 페이지 있음' : listError || (page === 'calendar' && calendarPartial) ? ' · 조회 미완료' : ' · 마지막 페이지'}${page === 'calendar' && items.some((item) => !DateTime.fromISO(String(item.startAt || ''), { zone }).isValid) ? ' · 날짜 미확인 수업은 캘린더에서 제외' : ''}` : listError || (page === 'calendar' && calendarPartial) ? '조회 미완료' : '조회 대기';
   $('load-more').hidden = !nextCursor || forbidden;
   $('load-more').disabled = loading;
   $('list-snapshot').textContent = listSnapshot ? `조회 목록 스냅샷 ${display(listSnapshot)}` : '';
+  const missingDates = items.some((item) => !DateTime.fromISO(String(item.startAt || ''), { zone }).isValid);
+  $('calendar-status').textContent = loading ? `수업 조회 중 · ${items.length}건 · 일부 표시` : listError || calendarPartial || nextCursor ? `일부만 표시 · ${items.length}건 · 빈 시간대 수업 유무 미확인${nextCursor ? ' · 계속 불러오기 가능' : ' · 새로고침 필요'}` : pageCount ? `선택 기간 ${items.length}건 조회 완료 · 원본은 부분 스냅샷${missingDates ? ' · 날짜 미확인 수업 제외' : ''}` : '조회 대기';
 }
 async function loadList(append = false) {
   if (!user || !sessionReady || forbidden || (append && (loading || !nextCursor))) return;
@@ -318,26 +330,53 @@ async function loadList(append = false) {
   const controller = new AbortController(); listController = controller;
   const request = ++listRequest;
   const epoch = generation;
-  if (!append) { items = []; nextCursor = null; listSnapshot = null; pageCount = 0; }
+  if (!append) { items = []; nextCursor = null; listSnapshot = null; pageCount = 0; calendarPartial = false; }
   listError = ''; loading = true;
   if (page === 'calendar') renderCalendar(); else if (!append) $('list').replaceChildren(element('p', '조회 중', 'empty'));
   pagination(); notice();
   try {
+    if (page === 'calendar' && !append) {
+      const data = await loadCalendarPages({
+        fetchPage: (params, signal) => api('list', params, signal),
+        query: { ...applied }, signal: controller.signal,
+      });
+      if (request !== listRequest || epoch !== generation) return;
+      items = data.items; listSnapshot = data.snapshotId; pageCount = data.pagesRead;
+      nextCursor = data.restartRequired ? null : data.nextCursor;
+      calendarPartial = !data.complete;
+      if (data.restartRequired) listError = '목록 일관성을 확인하지 못해 조회를 중지했습니다. 새로고침해 주세요.';
+      else if (data.partialReason === 'read_error') listError = '일부 수업을 조회하지 못했습니다. 연결 상태를 확인해 주세요.';
+      if (snapshot?.id && listSnapshot && snapshot.id !== listSnapshot) summaryError = '요약과 목록의 스냅샷이 다릅니다. 새로고침해 주세요.';
+      renderCalendar();
+      return;
+    }
     const data = await api('list', { entity: pageDefinitions[page].entity, limit: 50, ...applied, ...(append ? { after: nextCursor } : {}) }, controller.signal);
     if (request !== listRequest || epoch !== generation) return;
     if (!Array.isArray(data.items)) throw new Error('Invalid list');
     if (append && (!data.snapshotId || !listSnapshot || data.snapshotId !== listSnapshot)) {
+      calendarPartial = true;
       nextCursor = null;
       listError = '스냅샷이 변경되어 이어 읽기를 중지했습니다. 새로고침해 주세요.';
       return;
     }
     if (append && data.nextCursor && data.nextCursor === nextCursor) {
+      calendarPartial = true;
       nextCursor = null;
       listError = '페이지 커서가 반복되어 조회를 중지했습니다. 새로고침해 주세요.';
       return;
     }
+    if (page === 'calendar' && append) {
+      const known = new Set(items.map((item) => item.id));
+      const incoming = new Set(data.items.map((item) => item?.id));
+      if (incoming.size !== data.items.length || data.items.some((item) => !item?.id || known.has(item.id))) {
+        nextCursor = null; calendarPartial = true;
+        listError = '중복 수업이 감지되어 이어 읽기를 중지했습니다. 새로고침해 주세요.';
+        return;
+      }
+    }
     items = append ? items.concat(data.items) : data.items;
     nextCursor = data.nextCursor || null;
+    if (page === 'calendar') calendarPartial = Boolean(nextCursor);
     listSnapshot = data.snapshotId ?? null;
     pageCount += 1;
     if (snapshot?.id && listSnapshot && snapshot.id !== listSnapshot) summaryError = '요약과 목록의 스냅샷이 다릅니다. 새로고침해 주세요.';
@@ -345,6 +384,7 @@ async function loadList(append = false) {
   } catch (error) {
     if (request === listRequest && epoch === generation && !isAbort(error)) {
       listError = errorMessage(error);
+      if (page === 'calendar') calendarPartial = true;
       if (!append && page !== 'calendar') $('list').replaceChildren(element('p', listError, 'empty'));
     }
   } finally {
@@ -356,24 +396,72 @@ function calendarRange(info) {
   applied.from = DateTime.fromJSDate(info.start, { zone }).toISODate();
   applied.to = DateTime.fromJSDate(info.end, { zone }).minus({ days: 1 }).toISODate();
   $('from').value = applied.from; $('to').value = applied.to;
-  $('calendar-title').textContent = info.view.title;
+  const anchor = DateTime.fromJSDate(info.view.calendar.getDate(), { zone }).toISODate();
+  const rangeKey = `${info.view.type}:${applied.from}`;
+  const changedRange = calendarRangeKey !== rangeKey;
+  calendarRangeKey = rangeKey;
+  if (changedRange) calendarScrollReady = false;
+  $('calendar-title').textContent = calendarTitle(anchor, info.view.type);
+  $('calendar').dataset.view = info.view.type;
+  $('week-rail').hidden = info.view.type !== 'timeGridWeek';
+  $('week-rail').replaceChildren(...weekDays(anchor).map((day) => {
+    const button = element('button', null, 'week-day');
+    button.type = 'button'; button.dataset.date = day.date;
+    button.setAttribute('aria-label', `${day.date} ${day.weekday}요일`);
+    button.setAttribute('aria-pressed', String(day.date === anchor));
+    button.classList.toggle('is-today', day.today);
+    button.append(element('span', day.weekday, 'weekday'), element('span', day.number, 'day-number'));
+    button.addEventListener('click', () => {
+      calendar.gotoDate(day.date);
+      document.querySelectorAll('#week-rail [data-date]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.date === day.date)));
+      scrollCalendarDay(day.date);
+    });
+    return button;
+  }));
   document.querySelectorAll('[data-view]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.view === info.view.type)));
   loadList();
+  initializeCalendarScroll();
+  if (changedRange && info.view.type === 'timeGridWeek') scrollCalendarDay(anchor);
+}
+function scrollCalendarDay(day) {
+  requestAnimationFrame(() => {
+    const viewport = $('calendar-viewport');
+    const column = [...$('calendar').querySelectorAll('.fc-timegrid-col[data-date]')].find((entry) => entry.dataset.date === day);
+    if (column && viewport.scrollWidth > viewport.clientWidth) viewport.scrollLeft = Math.max(0, column.getBoundingClientRect().left - viewport.getBoundingClientRect().left + viewport.scrollLeft - 44);
+  });
+}
+function initializeCalendarScroll() {
+  if (calendarScrollReady || page !== 'calendar' || calendar?.view.type === 'dayGridMonth') return;
+  requestAnimationFrame(() => {
+    const viewport = $('calendar-viewport');
+    const row = $('calendar').querySelector('.fc-timegrid-slot-label[data-time="08:00:00"]');
+    if (!row || !viewport.clientHeight || viewport.scrollHeight <= viewport.clientHeight) return;
+    viewport.scrollTop = Math.max(0, row.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop - 45);
+    calendarScrollReady = true;
+  });
 }
 function ensureCalendar() {
   if (calendar) { calendar.updateSize(); return; }
+  let initialView = 'timeGridWeek';
+  try { initialView = calendarView(sessionStorage.getItem('archive-reservation-mirror:calendar-view')); } catch {}
   calendar = new Calendar($('calendar'), {
     plugins: [dayGridPlugin, timeGridPlugin, luxonPlugin], locale: koLocale, timeZone: zone,
-    initialView: window.matchMedia('(min-width: 768px)').matches ? 'timeGridWeek' : 'timeGridDay',
+    initialView, firstDay: 1,
     initialDate: today(), headerToolbar: false, height: 'auto', allDaySlot: false,
     slotMinTime: '00:00:00', slotMaxTime: '24:00:00', slotDuration: '00:30:00',
     editable: false, selectable: false, navLinks: false, nowIndicator: false,
-    dayMaxEvents: 4, eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+    dayMaxEvents: 4, slotEventOverlap: false, eventMaxStack: window.matchMedia('(max-width: 900px)').matches ? 1 : 3,
+    eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+    slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+    dayHeaderFormat: { weekday: 'short', day: 'numeric', omitCommas: true },
+    views: { dayGridMonth: { dayHeaderFormat: { weekday: 'short' } }, timeGridDay: { dayHeaderFormat: { weekday: 'long', month: 'numeric', day: 'numeric' } } },
     datesSet: calendarRange,
     eventContent(info) {
       const item = info.event.extendedProps.item;
-      const root = element('div');
-      root.append(element('div', `${date(item.startAt, 'HH:mm')} ${display(item.title)}`, 'event-title'), element('div', `${display(item.staffName)} · ${display(item.roomName)}`, 'event-meta'), element('div', `예약 ${display(item.occupiedCount)} / 정원 ${display(item.capacity)} · 대기 ${display(item.waitingCount)}`, 'event-meta'));
+      const root = element('div', null, 'event-content');
+      const top = element('div', null, 'event-top');
+      top.append(element('span', date(item.startAt, 'HH:mm')), element('span', `${display(item.occupiedCount)}/${display(item.capacity)}${item.waitingCount ? ` +${display(item.waitingCount)}` : ''}`));
+      root.append(top, element('strong', display(item.title)), element('span', `${display(item.staffName)} · ${display(item.roomName)}`, 'event-staff'));
       return { domNodes: [root] };
     },
     eventDidMount(info) {
@@ -385,6 +473,7 @@ function ensureCalendar() {
     eventClick(info) { info.jsEvent.preventDefault(); openOccurrence(info.event.extendedProps.item); },
   });
   calendar.render();
+  initializeCalendarScroll();
 }
 function choosePage(next, focus = false, search = '') {
   if (!pageDefinitions[next]) next = 'calendar';
@@ -399,7 +488,7 @@ function choosePage(next, focus = false, search = '') {
   $('from').readOnly = schedule; $('to').readOnly = schedule;
   $('from').required = dated; $('to').required = dated;
   if (!dated) { applied.from = ''; applied.to = ''; }
-  $('filters').hidden = !['members', 'entitlements', 'bookings', 'calendar'].includes(page);
+  $('filters').hidden = !['members', 'entitlements', 'bookings'].includes(page);
   $('calendar-section').hidden = !schedule; $('list-section').hidden = schedule;
   $('page-title').textContent = pageDefinitions[page].title; $('breadcrumb').textContent = pageDefinitions[page].title;
   document.querySelectorAll('[data-page]').forEach((button) => { if (button.dataset.page === page) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
@@ -509,7 +598,23 @@ function initializeUI() {
   $('calendar-prev').addEventListener('click', () => calendar?.prev());
   $('calendar-next').addEventListener('click', () => calendar?.next());
   $('calendar-today').addEventListener('click', () => calendar?.today());
-  document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => calendar?.changeView(button.dataset.view)));
+  document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
+    const view = calendarView(button.dataset.view);
+    try { sessionStorage.setItem('archive-reservation-mirror:calendar-view', view); } catch {}
+    calendar?.changeView(view);
+  }));
+  window.matchMedia('(max-width: 900px)').addEventListener('change', (event) => {
+    if (event.matches) calendarScrollReady = false;
+    calendar?.setOption('eventMaxStack', event.matches ? 1 : 3); calendar?.updateSize(); initializeCalendarScroll();
+    if (event.matches && calendar?.view.type === 'timeGridWeek') scrollCalendarDay(DateTime.fromJSDate(calendar.getDate(), { zone }).toISODate());
+  });
+  $('calendar-viewport').addEventListener('keydown', (event) => {
+    const viewport = $('calendar-viewport');
+    if (event.target !== viewport || event.altKey || event.ctrlKey || event.metaKey || !['ArrowLeft', 'ArrowRight'].includes(event.key) || viewport.scrollWidth <= viewport.clientWidth) return;
+    event.preventDefault();
+    const width = $('calendar').querySelector('.fc-timegrid-col[data-date]')?.getBoundingClientRect().width || 124;
+    viewport.scrollBy({ left: (event.key === 'ArrowLeft' ? -1 : 1) * width, behavior: 'auto' });
+  });
   $('close-detail').addEventListener('click', () => $('detail-dialog').close());
   $('detail-dialog').addEventListener('close', () => { detailController?.abort(); detailRequest += 1; $('detail-content').replaceChildren(); });
   window.addEventListener('hashchange', () => choosePage(location.hash.slice(1), true));
