@@ -24,3 +24,11 @@
 - Deploy from clean canonical main equal to origin/main with existing guards; fast-forward runtime after reviewed release. Record exact checks, hashes, live evidence and remaining natural-run follow-up in the HTML report.
 - Verification: 1,094 Node + 236 TypeScript tests passed, including 56 new transformed-callback regressions; no skips/failures. Existing 82-test focused run is a subset, not additional coverage. CI runs the new credential-free regression after installing dependencies. The workflow itself triggers all-codebase check scope; no Functions runtime/source change or Functions deploy.
 - Scoped live reads: all five affected members passed under actual tsx loader, 2026-10-24 04:00:59 through 04:01:08 KST. Only readLatest was called; no DB or provider calls, no worker run, full browser/lock cleanup completed.
+
+## Released
+
+- Functional source: `7fe22819b33b45877be110348472feff4468fcde`, pushed feature branch and main. Main was promoted before Hosting because the existing predeploy guard requires exact origin/main; no guard bypass.
+- Runtime fast-forwarded; 69 runtime callback/session tests and a read-only actual StudioMate sample passed after promotion. Shared profile lock absent after closure.
+- CORE Hosting `archive-pilates-core`, version `37cb8070b68764de`, released `2026-10-23T19:05:11.605Z`. Live rules and release manifest returned 200 with source revision/markers matching.
+- Existing LaunchAgent loaded; runtime path and 3600-second interval unchanged. No kickstart, queue replay, provider send, memo write, status reset or Functions deploy.
+- CI main `40008526645` / feature `40008512007` both succeeded, including the new 56-test serialization step and all-codebase checks. Report-only follow-up is separate from the deployed source revision. Natural hourly processing remains unobserved.
