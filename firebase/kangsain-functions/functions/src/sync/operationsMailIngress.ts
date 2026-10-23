@@ -52,8 +52,11 @@ export function assertOperationsMailRequest(path: string, init: RequestInit = {}
 export function parseOperationsMailPush(value: unknown): { emailAddress: string; historyId: string } | null {
   if (!value || typeof value !== "object") return null;
   const data = value as Json;
-  return data.emailAddress === OPS_MAIL.mailbox && historyId(data.historyId)
-    ? { emailAddress: OPS_MAIL.mailbox, historyId: data.historyId } : null;
+  // Live Gmail pushes also use JSON numbers; only normalize exactly representable integers.
+  const cursor = typeof data.historyId === "number" && Number.isSafeInteger(data.historyId) && data.historyId > 0
+    ? String(data.historyId) : data.historyId;
+  return data.emailAddress === OPS_MAIL.mailbox && historyId(cursor)
+    ? { emailAddress: OPS_MAIL.mailbox, historyId: cursor } : null;
 }
 
 async function labelsFor(gmail: MailGmailClient): Promise<Record<string, string>> {

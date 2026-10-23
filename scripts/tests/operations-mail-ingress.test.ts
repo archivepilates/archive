@@ -193,16 +193,45 @@ test("missing/disabled state is a no-op with zero Gmail calls and zero writes", 
   }
 });
 
-test("push admission requires the fixed mailbox and an exact bounded integer string", async () => {
-  assert.deepEqual(engine.parseOperationsMailPush({ emailAddress: OPS_MAIL.mailbox, historyId: CURSOR }),
-    { emailAddress: OPS_MAIL.mailbox, historyId: CURSOR });
+test("push admission accepts exact integer strings or positive safe integer numbers normalized to strings", async () => {
+  for (const historyId of [CURSOR, "1", "12", "9".repeat(40), 1, 12, Number.MAX_SAFE_INTEGER]) {
+    assert.deepEqual(engine.parseOperationsMailPush({ emailAddress: OPS_MAIL.mailbox, historyId }),
+      { emailAddress: OPS_MAIL.mailbox, historyId: String(historyId) });
+  }
   for (const push of [null, {}, { emailAddress: "other@example.invalid", historyId: NEXT },
-    ...[0, 12, "0", "01", "-1", "1e30", "9".repeat(41), "1\n", [NEXT]].map(historyId => ({ emailAddress: OPS_MAIL.mailbox, historyId }))]) {
+    { emailAddress: "other@example.invalid", historyId: 12 },
+    ...[Number.MAX_SAFE_INTEGER + 1, Number.MAX_VALUE, 1.5, 0, -0, -1, NaN, Infinity, -Infinity,
+      "", "0", "01", "-1", "+1", "1.5", "1.0", "1e30", "0x10", "NaN", "Infinity", " 12", "12 ",
+      "9".repeat(41), "1\n", [NEXT], null, true, {}].map(historyId => ({ emailAddress: OPS_MAIL.mailbox, historyId }))]) {
     const f = fixture();
     assert.equal(engine.parseOperationsMailPush(push), null);
     assert.equal((await f.run({ push })).status, "ignored_push");
     assert.equal(f.db.transactions, 0); assert.equal(f.gmail.calls.length, 0);
   }
+});
+
+test("numeric source push completes synthetic history processing and atomically creates ledger plus queue", async () => {
+  const f = fixture({ historyCursor: "100" });
+  f.gmail.profile.historyId = "102";
+  f.gmail.histories[""] = history([ID], "102");
+  const push = { emailAddress: OPS_MAIL.mailbox, historyId: 102 };
+  assert.deepEqual(engine.parseOperationsMailPush(push), { emailAddress: OPS_MAIL.mailbox, historyId: "102" });
+  const result = await f.run({ source: "push", push });
+  assert.equal(result.status, "synced");
+  assert.equal(result.actionable, 1);
+  assert.equal(f.db.get(ledgerPath())!.messageId, ID);
+  assert.equal(f.db.get(ledgerPath())!.classification, "failure");
+  assert.equal(ledgers(f.db).length, 1);
+  assert.equal(queues(f.db).length, 1);
+  assert.equal(f.db.get(queuePath())!.messageCount, 1);
+  const admission = f.db.commits.filter(writes => writes.some(write => write.path === ledgerPath()));
+  assert.equal(admission.length, 1);
+  assert.deepEqual(admission[0].map(write => write.path).sort(), [ledgerPath(), queuePath()].sort());
+  const request = f.gmail.calls.find(call => call.path.startsWith("history?"))!;
+  assert.equal(new URL(request.path, "https://synthetic.invalid").searchParams.get("startHistoryId"), "100");
+  assert.equal(f.state().historyCursor, "102");
+  assert.equal(typeof f.state().historyCursor, "string");
+  assertReleased(f);
 });
 
 test("active lease is exclusive; expired lease can be acquired", async () => {
