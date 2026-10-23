@@ -19,6 +19,7 @@ import { isMacMiniAdminSyncRequest } from "../sync/adminSyncRequestRouting";
 
 export { imwebWebhookApi } from "../sync/imwebWebhookApi";
 export { imwebOAuthApi } from "../sync/imwebOAuthApi";
+export { receiveOperationsMailPush, scheduledMaintainOperationsMail } from "../sync/operationsMailFunctions";
 
 export const scheduledProcessContactSyncJobs = onSchedule(
   {

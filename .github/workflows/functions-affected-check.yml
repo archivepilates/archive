@@ -71,6 +71,11 @@ jobs:
       - name: Test holding browser callback serialization
         run: node --test scripts/tests/holding-reader-serialization.test.mjs
 
+      - name: Test operations mail ingress and triage
+        run: |
+          node --test scripts/tests/operations-mail-triage.test.mjs
+          firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/operations-mail-*.test.ts
+
       - name: Detect affected codebases
         id: affected
         env:

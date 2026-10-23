@@ -72,6 +72,8 @@
       "owns": [
         "imwebWebhookApi",
         "imwebOAuthApi",
+        "receiveOperationsMailPush",
+        "scheduledMaintainOperationsMail",
         "scheduledProcessContactSyncJobs",
         "queueStaffContactSync",
         "scheduledCreateParkingDiscountJobs",
