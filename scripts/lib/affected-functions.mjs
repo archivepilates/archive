@@ -43,6 +43,11 @@ export function codebasesForFile(file) {
   if (normalized.endsWith("/memberSignup/membershipWelcomeHistory.ts")) return ["functions-alimtalk"];
   if (normalized.endsWith("/privateLessonChart/privateLessonChartOwnership.ts")) return ["functions-app", "functions-private-chart"];
   if (normalized.endsWith("/alimtalk/templates.ts")) return ["functions-alimtalk", "functions-private-chart"];
+  // Lecture sync also rebuilds instructor-material candidates.
+  if ([
+    "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonManagement.ts",
+    "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
+  ].includes(normalized)) return ["functions-alimtalk", "functions-sync"];
   if (normalized.includes("/social/") || normalized.endsWith("/exports/social.ts")) return ["functions-social"];
   if (normalized.includes("/alimtalk/") || normalized.endsWith("/exports/alimtalk.ts")) return ["functions-alimtalk"];
   if (normalized.includes("/operations/memberOperationProgress")) return ["functions-alimtalk"];

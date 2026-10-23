@@ -389,7 +389,7 @@ function reservationOpenCandidateForDate(profile: MemberProfileDoc, sourceDate: 
   };
 }
 
-function instructorLessonMaterialCandidatesForDate(
+export function instructorLessonMaterialCandidatesForDate(
   profile: MemberProfileDoc,
   sourceDate: string,
   bookingIndex: BookingIndex,

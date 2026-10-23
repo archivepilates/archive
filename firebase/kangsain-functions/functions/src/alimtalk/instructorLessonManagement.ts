@@ -40,6 +40,8 @@ export function isValidInstructorLessonManagementNumber(managementNumber: string
 const INSTRUCTOR_LESSON_TOPIC_SLUG_BY_DATE: Readonly<Record<string, string>> = {
   "2026-08-29": "support-movement",
   "2026-08-30": "support-movement",
+  "2026-10-24": "external-feedback",
+  "2026-10-25": "external-feedback",
 };
 
 export function instructorLessonManagementNumberFor(input: {
@@ -78,7 +80,9 @@ function instructorLessonTopicSlug(title: string): string {
     hasStarted = true;
     topicWords.push(token);
   }
-  return topicWords.join("-");
+  const topic = topicWords.join("-");
+  // StudioMate team labels are not material topics.
+  return /^(?:[a-z]|team(?:-[a-z])?)$/.test(topic) ? "" : topic;
 }
 
 function normalizedLessonDate(value: string): string {

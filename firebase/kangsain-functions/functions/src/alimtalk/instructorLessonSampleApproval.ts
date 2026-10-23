@@ -43,6 +43,7 @@ type InstructorLessonApprovalStatus =
   | "blocked_no_approval"
   | "blocked_content_changed"
   | "blocked_source_stale"
+  | "blocked_preflight"
   | "no_targets";
 
 export interface InstructorLessonApprovalDoc {
@@ -67,6 +68,8 @@ export interface InstructorLessonApprovalDoc {
   reminderSentAt?: FirebaseFirestore.Timestamp;
   sourceRecoveredAt?: FirebaseFirestore.Timestamp;
   sourceRecoveryCount?: number;
+  supersededByApprovalId?: string;
+  supersededAt?: FirebaseFirestore.Timestamp;
   approvedAt?: FirebaseFirestore.Timestamp;
   approvedBy?: string;
   liveSendStartedAt?: FirebaseFirestore.Timestamp;
@@ -141,7 +144,8 @@ export function canRecoverBlockedInstructorLessonSample(input: {
   sampleSentAt?: unknown;
 }): boolean {
   return (
-    input.status === "blocked_source_stale" && !String(input.sampleSolapiMessageId || "").trim() && !input.sampleSentAt
+    ["blocked_source_stale", "blocked_preflight"].includes(String(input.status || ""))
+      && !String(input.sampleSolapiMessageId || "").trim() && !input.sampleSentAt
   );
 }
 
@@ -214,7 +218,7 @@ async function prepareInstructorLessonSampleApproval(input: {
       lessonDate: group.lessonDate,
       managementNumber: group.managementNumber,
       templateCode: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
-      status: sourceIssue ? "blocked_source_stale" : "sample_failed",
+      status: sourceIssue ? "blocked_source_stale" : "blocked_preflight",
       candidateIds: group.candidates.map((candidate) => candidate.candidateId),
       approvedTargetKeys: group.candidates.map(instructorLessonTargetKey),
       contentFingerprint: instructorLessonContentFingerprint(group.candidates[0]),
@@ -274,7 +278,7 @@ async function prepareInstructorLessonSampleApproval(input: {
       lastError: null,
       createdAt: current?.createdAt || now,
       updatedAt: now,
-      ...(current && current.status === "blocked_source_stale"
+      ...(current && canRecoverBlockedInstructorLessonSample(current)
         ? {
             sourceRecoveredAt: now,
             sourceRecoveryCount: Number(current.sourceRecoveryCount || 0) + 1,
@@ -406,13 +410,14 @@ export async function remindPendingInstructorLessonApprovals(
   let reminded = 0;
   let blocked = 0;
   for (const approval of approvals) {
+    if (approval.supersededByApprovalId) continue;
     const ref = db.collection(APPROVAL_COLLECTION).doc(approval.approvalId);
     if (approval.status === "sample_sent") {
       if (approval.reminderSentAt) continue;
       await sendSampleApprovalEmail(ref, approval, true);
       await ref.set({ reminderSentAt: nowTimestamp(), updatedAt: nowTimestamp() }, { merge: true });
       reminded += 1;
-    } else if (["sample_failed", "sample_unknown", "blocked_source_stale"].includes(approval.status)) {
+    } else if (["sample_failed", "sample_unknown", "blocked_source_stale", "blocked_preflight"].includes(approval.status)) {
       await sendInstructorLessonAttentionEmail({
         subject: `[알림톡][긴급] 강사레슨 D-1 발송 불가 ${approval.lessonDate}`,
         lessonDate: approval.lessonDate,

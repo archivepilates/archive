@@ -32,6 +32,22 @@ test("keeps the existing English topic fallback for future StudioMate titles", (
   );
 });
 
+test("maps both October teams to the shared date-specific material", () => {
+  for (const lessonDate of ["2026-10-24", "2026-10-25"]) {
+    for (const team of ["A", "B", "C", "D"]) {
+      assert.equal(instructorLessonManagementNumberFor({
+        title: `10월 강사레슨 ${team}`, lessonDate,
+      }), `external-feedback-${lessonDate.slice(2).replace(/-/g, "")}`);
+    }
+  }
+});
+
+test("does not turn an unmapped team-only title into a material URL", () => {
+  for (const title of ["11월 강사레슨 A", "11월 강사레슨 B", "강사레슨 team"]) {
+    assert.equal(instructorLessonManagementNumberFor({ title, lessonDate: "2026-11-21" }), "");
+  }
+});
+
 test("normalizes historical test identifiers out of management numbers", () => {
   assert.equal(
     normalizeInstructorLessonManagementNumber("circulation-kg02-260530"),

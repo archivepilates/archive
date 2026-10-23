@@ -139,7 +139,7 @@ test("blocks a persisted V2 candidate from the approved live-send path", () => {
   );
 });
 
-test("recovers only a source-stale sample with no delivery evidence", () => {
+test("recovers only a pre-dispatch block with no delivery evidence", () => {
   assert.equal(
     canRecoverBlockedInstructorLessonSample({ status: "blocked_source_stale" }),
     true,
@@ -162,6 +162,10 @@ test("recovers only a source-stale sample with no delivery evidence", () => {
     canRecoverBlockedInstructorLessonSample({ status: "sample_unknown" }),
     false,
   );
+  assert.equal(canRecoverBlockedInstructorLessonSample({ status: "blocked_preflight" }), true);
+  assert.equal(canRecoverBlockedInstructorLessonSample({ status: "blocked_preflight", sampleSentAt: {} }), false);
+  assert.equal(canRecoverBlockedInstructorLessonSample({ status: "blocked_preflight", sampleSolapiMessageId: "accepted" }), false);
+  assert.equal(canRecoverBlockedInstructorLessonSample({ status: "sample_failed" }), false);
 });
 
 test("separates even one instructor lesson candidate from the normal auto-send queue", () => {
