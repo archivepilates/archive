@@ -1,7 +1,7 @@
 {
   "project": "ARCHIVE PILATES reservation mirror",
-  "updatedAt": "2026-10-23T14:27:00Z",
-  "status": "hosting_deployed_postchecks_pending",
+  "updatedAt": "2026-10-23T14:37:03Z",
+  "status": "deployed_https_verified_operator_login_pending",
   "branch": "codex/mini/rea-studiomate-feasibility-20261023",
   "application": "apps/reservation-mirror",
   "mode": "operator_only_read_only_mirror",
@@ -38,7 +38,8 @@
     "hostingSite": "archive-pilates-booking-test",
     "hostingSiteCreated": true,
     "hostingAppDeployed": true,
-    "liveUrl": "https://archive-pilates-booking-test.web.app/",
+    "liveUrl": "https://booking-test.archivepilates.com/",
+    "backupUrl": "https://archive-pilates-booking-test.web.app/",
     "cloudRunService": "archive-reservation-mirror",
     "cloudRunDeployed": true,
     "cloudRunRevision": "archive-reservation-mirror-00001-b6b",
@@ -54,10 +55,14 @@
     "dnsUpdated": true,
     "dnsScope": "booking-test CNAME and its _acme-challenge TXT only; existing root, wildcard and CORE unchanged",
     "ownershipState": "OWNERSHIP_ACTIVE",
-    "httpsVerified": false,
+    "httpsVerified": true,
+    "httpsEvidence": "OS TLS verification and real browser login page succeeded; custom host page/health 200, anonymous private read 401, write 405",
+    "providerCertificateStateAtCheck": "CERT_PROPAGATING",
     "committed": true,
-    "pushed": false,
-    "blockers": ["Custom-domain certificate remains CERT_VALIDATING; use the verified web.app HTTPS URL in the meantime", "Real operator login and CORE rules publication verification remain pending"]
+    "pushed": true,
+    "pushedBranches": ["main", "codex/mini/rea-studiomate-feasibility-20261023"],
+    "coreRulesCommit": "5c072eec90c7724eeccb041e00a019950072f9ad",
+    "blockers": ["Real operator login and post-login UI verification await the user; no authentication bypass or token extraction used"]
   },
   "checks": {
     "unitTestsPassed": 100,
@@ -80,9 +85,10 @@
     "operatingFirestoreRules": "unchanged release timestamp 2026-10-21T09:31:16.623019Z",
     "productionMemberActions": 0
   },
+  "ci": {"commit": "5c072eec90c7724eeccb041e00a019950072f9ad", "runId": "39969872676", "workflow": "ARCHIVE IN Functions Affected Check", "conclusion": "success", "successfulSteps": 28},
   "coreOperatingRules": {
-    "status": "pending_deployment",
-    "reason": "CORE rule source updated; publish only after clean exact-origin-main release guard passes",
+    "status": "deployed",
+    "reason": "Published only archive-pilates-core from a clean exact-origin-main release worktree; live reservation-mirror section and JSON release head 5c072eec verified",
     "draft": {
       "purpose": "Read-only validation of a separate reservation application against retained operating source data",
       "implementation": "Initial verified capture and authenticated read-only UI/API deployed; real operator login pending",
@@ -91,8 +97,9 @@
       "affected": "Separate reservation-mirror database, archive-reservation-mirror server and archive-pilates-booking-test site only",
       "syncTiming": "Initial capture only; no additional periodic job enabled",
       "verification": "100 tests, six actual indexed entity queries and count comparison, four responsive widths",
-      "nextAction": "Verify real operator login, custom-domain TLS, publish CORE rule and confirm Git push"
+      "nextAction": "Verify real operator login; implement and validate incremental synchronization separately before scheduling"
     }
   },
-  "next": ["Verify custom-domain TLS", "Verify real CORE operator login", "Publish CORE operating rule from a clean guarded release", "Confirm scoped push and CI", "Document and test incremental synchronization before scheduling"]
+  "workspace": {"trackedChangesCommitted": true, "unrelatedUntrackedLabAndEarlierDesignReports": "preserved, not committed", "cleanReleaseWorktree": "/Users/archivepilates/codex-worktrees/reservation-mirror-release-20261023"},
+  "next": ["Verify real CORE operator login", "Document and test incremental synchronization before scheduling"]
 }
