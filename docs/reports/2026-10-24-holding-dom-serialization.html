@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 홀딩 원본 조회 오류 수정</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f6f8fa;color:#252b31;font:16px/1.7 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:30px 20px 60px}h1{font-size:27px;line-height:1.4}h2{font-size:20px;margin-top:30px}section{padding-bottom:20px;border-bottom:1px solid #dce3e8}p{max-width:74ch}li{margin:8px 0}code,a{overflow-wrap:anywhere}code{font-size:13px}.result{padding:14px 18px;border-left:4px solid #b73534;background:#fff}small{color:#5d6974}a{color:#276374}</style>
+<main><small>ARCHIVE PILATES · 2026-10-24 · 홀딩 자동화</small>
+<h1>브라우저로 전달되는 조회 함수의 실행 오류 수정</h1>
+<p class="result">최신 정기 실행의 확인필요 5건은 같은 <code>__name is not defined</code> 조회 오류였습니다. 수정 소스로 5명 모두 실제 StudioMate 전체 이력·저장된 정지기간 읽기와 두 번 조회 일치 검사를 통과했습니다. 새 발송·메모 쓰기와는 별도 검증입니다.</p>
+<section><h2>원인</h2><p>정기 런처는 tsx로 TypeScript 홀딩 처리기를 실행합니다. 이름 보존 변환은 이력·정지기간 DOM 함수 안에서 변수에 할당한 함수에 모듈 범위 보조 코드 <code>__name</code>을 추가합니다. Playwright는 콜백 본문을 브라우저로 직렬화할 뿐 모듈의 외부 변수를 옮기지 않으므로 조회가 중단됐습니다.</p><p>기존 mock 검사는 콜백의 반환값만 흉내 내고 실제 변환·직렬화된 콜백을 실행하지 않았습니다. 일반 Node DOM 테스트만으로 운영 tsx 실행 경계의 문제를 놓쳤습니다. 이전 브라우저 잠금 경합과는 별개의 오류입니다.</p></section>
+<section><h2>수정 범위</h2><ul>
+<li>이력·정지기간 두 콜백의 화면 표시 여부 검사를 인라인화했습니다. 정지 일수 비교도 익명 콜백으로 두 날짜를 계산해 외부 보조 코드 의존을 없앴습니다.</li>
+<li>전역 함수 주입·eval 문자열 치환·컴파일러 설정 변경으로 문제를 숨기지 않습니다. 변경이력 표 구조·열 개수·전체 정지 목록·현재 날짜칸·표시 일수 검증을 그대로 유지합니다.</li>
+<li>원본 두 번 조회 일치, 등록 48시간 제한, 스텝 제외, 과거 기준선 제외, 후보·선점·발송 중복방지와 접수 불명확 건 재발송 금지는 그대로입니다.</li>
+<li>맥미니 조회 모듈과 CORE 운영규칙만 대상입니다. Functions·Firestore 규칙/인덱스·회원/수강권·예약·설정·기준선·수집/메모 주기·판매 홈페이지 DNS는 변경하지 않습니다.</li>
+</ul></section>
+<section><h2>실제 원본 무발송 검증</h2><p>2026-10-24 04:00:59~04:01:08 KST에 수정 worktree에서 운영과 같은 tsx loader로 실행했습니다. 기존 공유 프로필 잠금 아래 5명을 직렬 조회했고 전체 변경이력 행 수는 각각 5·6·12·4·3개, 정지기간 수는 1·1·5·1·2개였습니다. 모두 <code>historyComplete</code>·<code>activeHoldsComplete</code>와 두 번 읽기 일치를 통과했습니다.</p><p>전체 회원 이력이나 연락처를 보고서에 저장하지 않았습니다. Firestore·SOLAPI·회원 쓰기·큐 실행을 호출하지 않았고, task 소유 페이지·브라우저를 닫은 뒤 공유 잠금을 해제했습니다. 이 검증은 현재 화면을 읽을 수 있다는 증거이며 새 홀딩 후보 적격·새 발송·새 메모 완료 증거는 아닙니다.</p></section>
+<section><h2>회귀·독립 검증</h2><p id="test-status"><strong>Node 1,094건 + TypeScript 236건 = 서로 다른 회귀 검사 1,330건 통과.</strong> 새 직렬화 검사 56건이 Node 합계에 포함됩니다. 운영 tsx CLI import와 keepNames 변환 후 콜백만 독립 VM의 합성 DOM에서 실행하며, 수정 전 리비전의 두 콜백이 같은 __name 오류로 실패하는 음성 대조군도 확인합니다. 기간 양 끝날 포함·윤일·연도 경계·미확정 날짜칸·이력 구조 불일치 차단을 유지합니다.</p><p>CORE Hosting·릴리스 롤백 방지·diff 검사가 통과했고 독립 검토에서 차단할 결함이 없었습니다. waitTab의 두 분기도 독립 tsx 검사에서 확인했습니다. 새 직렬화 검사는 GitHub CI에 연결했으며 실제 운영 브라우저나 인증 없이 실행합니다. CI 설정 변경은 전체 코드베이스 검증 범위에 해당하지만 운영 Functions 변경·배포를 뜻하지 않습니다.</p></section>
+<section><h2>운영 반영</h2><p id="release-status"><strong>구현·실제 무발송 조회 완료, 운영 배포 준비 중.</strong> 사용자가 운영 반영·배포·커밋·푸시를 승인했습니다. 최종 검토와 릴리스 가드 후 clean main을 origin/main과 맞추고 맥미니 실행기와 CORE Hosting 단일 대상 <code>archive-pilates-core</code>만 반영합니다.</p><p>수동 큐·재발송·실행기 재시작·작업 상태 초기화는 하지 않습니다. 다음 기존 시간별 Excel 수집이 현재 상태를 다시 감지하고 원본/원장 검증을 거쳐 처리합니다. 이미 전달된 건은 재발송하지 않으며 새 미처리 건의 48시간 초과 등 업무 보류는 별도로 남을 수 있습니다. 야간 회원 발송 금지(23:00~08:59:59 KST)는 유지합니다.</p><p>변경 파일: <code>scripts/lib/studiomate-holding-reader.mjs</code>, <code>scripts/tests/holding-reader-serialization.test.mjs</code>, <code>core/rules/index.html#holding-allowance-notice</code> 및 이 작업·보고 기록. 추천식단 등 다른 로컬 작업은 포함하지 않습니다.</p></section>
+</main></html>

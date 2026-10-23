@@ -68,6 +68,9 @@ jobs:
       - name: Install Functions dependencies
         run: npm --prefix firebase/kangsain-functions/functions ci
 
+      - name: Test holding browser callback serialization
+        run: node --test scripts/tests/holding-reader-serialization.test.mjs
+
       - name: Detect affected codebases
         id: affected
         env:

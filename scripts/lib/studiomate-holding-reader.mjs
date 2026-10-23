@@ -14,18 +14,18 @@ export function registeredHoldingRanges({ activeHolds, currentHold }) {
   return ranges.sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
 }
 
+// These browser callbacks must remain self-contained after tsx's keepNames transform.
 // Verified rendered DOM only. No framework internals, API calls, or form changes.
 export function extractHoldingHistoryDom() {
-  const visible = e => e.getClientRects().length > 0;
-  const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(visible);
+  const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(e => e.getClientRects().length > 0);
   if (dialogs.length !== 1) throw new Error("single_ticket_dialog_required");
   const dialog = dialogs[0];
   const active = dialog.querySelector(".ticket-edit-modal__tabs .active")?.textContent?.trim();
-  const tables = [...dialog.querySelectorAll("table.el-table__body")].filter(visible);
+  const tables = [...dialog.querySelectorAll("table.el-table__body")].filter(e => e.getClientRects().length > 0);
   const headers = [...dialog.querySelectorAll("table.el-table__header th")].map(e => e.textContent.trim());
   if (active !== "변경이력" || tables.length !== 1 || headers.join("|") !== "변경일시|스태프|종류|내용")
     throw new Error("ticket_history_layout_changed");
-  const pagination = [...dialog.querySelectorAll(".el-pagination")].filter(visible);
+  const pagination = [...dialog.querySelectorAll(".el-pagination")].filter(e => e.getClientRects().length > 0);
   const history = [...tables[0].querySelectorAll("tbody tr")].map(row => {
     const cells = row.querySelectorAll("td");
     if (cells.length !== 4) throw new Error("history_column_mismatch");
@@ -40,32 +40,34 @@ export function extractHoldingHistoryDom() {
 }
 
 export function extractRegisteredHoldsDom() {
-  const visible = e => e.getClientRects().length > 0;
-  const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(visible);
+  const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(e => e.getClientRects().length > 0);
   if (dialogs.length !== 1) throw new Error("single_ticket_dialog_required");
   const d = dialogs[0];
   if (d.querySelector(".ticket-edit-modal__tabs .active")?.textContent.trim() !== "정지기간정보")
     throw new Error("hold_tab_not_ready");
-  const lists = [...d.querySelectorAll(".holding-detail__holding-list")].filter(visible);
+  const lists = [...d.querySelectorAll(".holding-detail__holding-list")].filter(e => e.getClientRects().length > 0);
   if (lists.length !== 1) throw new Error("complete_hold_list_required");
   const activeHolds = [...lists[0].children].map(li => {
     const text = li.innerText;
     const dates = text.match(/\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\./g) || [];
     if (dates.length !== 2 || !/\d+일 정지/.test(text)) throw new Error("hold_row_layout_changed");
-    const utc = value => { const parts = value.match(/\d+/g).map(Number); return Date.UTC(parts[0], parts[1] - 1, parts[2]); };
+    const [startUtc, endUtc] = dates.map(value => {
+      const parts = value.match(/\d+/g).map(Number);
+      return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+    });
     const displayed = Number(text.match(/(\d+)일 정지/)[1]);
-    if ((utc(dates[1]) - utc(dates[0])) / 86400000 + 1 !== displayed) throw new Error("hold_displayed_days_mismatch");
+    if ((endUtc - startUtc) / 86400000 + 1 !== displayed) throw new Error("hold_displayed_days_mismatch");
     return { start: dates[0], end: dates[1] };
   });
-  const starts = [...d.querySelectorAll('.holding-detail__form__element.start_date input[placeholder="정지 시작일"]')].filter(visible);
-  const ends = [...d.querySelectorAll('.holding-detail__form__element.end_date input[placeholder="정지 종료일"]')].filter(visible);
+  const starts = [...d.querySelectorAll('.holding-detail__form__element.start_date input[placeholder="정지 시작일"]')].filter(e => e.getClientRects().length > 0);
+  const ends = [...d.querySelectorAll('.holding-detail__form__element.end_date input[placeholder="정지 종료일"]')].filter(e => e.getClientRects().length > 0);
   if (starts.length !== 1 || ends.length !== 1) throw new Error("single_current_hold_controls_required");
   const start = starts[0].value.trim(), end = ends[0].value.trim();
   if (Boolean(start) !== Boolean(end)) throw new Error("incomplete_current_hold_controls");
   if (start && !starts[0].disabled && !starts[0].readOnly) throw new Error("uncommitted_current_hold_controls");
   const currentHold = start ? { start, end } : null;
   const currentControlState = { disabled: starts[0].disabled, readOnly: starts[0].readOnly };
-  return { activeHolds, currentHold, currentControlState, paginationPresent: [...d.querySelectorAll(".el-pagination")].some(visible) };
+  return { activeHolds, currentHold, currentControlState, paginationPresent: [...d.querySelectorAll(".el-pagination")].some(e => e.getClientRects().length > 0) };
 }
 
 export async function readOpenHoldingTicket(page, { studioId, memberId, memberName }) {
