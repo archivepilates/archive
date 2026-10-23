@@ -13,8 +13,11 @@ main, section, article, .time-head > * { min-width: 0; }
 h1 { font-size: 32px; line-height: 1.2; }
 .team-routes { display: grid; gap: 18px; }
 .team-route h3 { margin: 0 0 8px; font-size: 16px; }
+.team-count { margin: 0; color: var(--muted); font-size: 13px; }
+.team-members { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0 18px; padding: 0; list-style: none; font-weight: 700; }
+.team-members li { min-width: 3em; }
 .team-route ol { margin: 0; padding-left: 22px; color: var(--muted); }
-.team-route li + li { margin-top: 6px; }
+.team-route ol li + li { margin-top: 6px; }
 .time-block { overflow: visible; }
 .time-head { align-items: center; flex-wrap: wrap; border-radius: 7px 7px 0 0; }
 .time { font-size: 24px; line-height: 1.3; }

@@ -9,6 +9,14 @@ import { chromium, webkit } from "playwright";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicRoot = path.join(root, "archivein");
 const content = JSON.parse(fs.readFileSync(path.join(root, "docs/tasks/2026-10-22-method9-content.json"), "utf8"));
+const liveBase = process.env.METHOD9_ASSIGNMENT_BASE_URL?.replace(/\/$/, "");
+// Native StudioMate reservation Excel read on October 23; full-name publication approved by operator.
+const rosters = {
+  A: ["김가인", "김혜원", "윤소언", "정유리", "김지우"],
+  B: ["박규리", "김윤화", "백소진", "김송이", "조정미"],
+  C: ["김선희", "김예지", "천지현", "하언진", "손승원"],
+  D: ["류지음", "이초림", "최하늘", "최고은", "이주홍"],
+};
 // Operator's 2026-10-23 canonical lecture read: date field, eight open lectures.
 // Oct24 A/B and Oct25 C/D cross teachers; each 50-minute lecture has 10-minute feedback.
 const dates = [
@@ -33,13 +41,19 @@ for (const lesson of dates) {
       assert.equal(room[5], teacher.apparatus);
       assert.equal(room[1], teacher.id === "mj" ? "barrel" : "reformer");
     }
-    const orders = [...html.matchAll(/class="team-route" data-team="([A-D])"><h3>.*?<\/h3><ol><li>(.*?)<\/li><li>(.*?)<\/li>/g)];
+    const orders = [...html.matchAll(/class="team-route" data-team="([A-D])"><h3>.*?<\/h3>[\s\S]*?<ol><li>(.*?)<\/li><li>(.*?)<\/li>/g)];
     const [mj, ey] = content.instructors.map((teacher) => `${teacher.name} · ${teacher.apparatus}`);
     assert.deepEqual(orders.map((m) => m.slice(1)), [[first, mj, ey], [second, ey, mj]]);
     for (const interval of ["13:00~14:00", "14:10~15:10", "13:00~13:50 실전 수업", "13:50~14:00 시퀀스 피드백", "14:10~15:00 실전 수업", "15:00~15:10 시퀀스 피드백", "14:00~14:10 · 휴식 및 기구 이동"]) assert.ok(html.includes(interval), interval);
     assert.doesNotMatch(html, lesson.day === "25" ? /[AB]팀|data-team="[AB]"/ : /[CD]팀|data-team="[CD]"/);
     assert.doesNotMatch(html, /class="names?"|\b01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}\b|[\w.+-]+@[\w.-]+\.[a-z]{2,}|<script\b|<form\b|<input\b|<iframe\b|firebase|memberId|phone|notion\.so|preview=/i);
-    assert.ok(html.includes("개별 안내받은 팀"));
+    assert.ok(html.includes("명단에서 본인의 팀"));
+    for (const team of lesson.teams) {
+      const list = html.match(new RegExp(`aria-label="${team}팀 명단">([\\s\\S]*?)</ul>`))?.[1];
+      assert.ok(list);
+      assert.deepEqual([...list.matchAll(/<li>(.*?)<\/li>/g)].map(m => m[1]), rosters[team]);
+      for (const name of rosters[team]) assert.equal(html.split(name).length - 1, 1);
+    }
     assert.ok(html.includes("수업 당일 12:00"));
   });
 
@@ -69,8 +83,8 @@ test("public assignment pages render at mobile, tablet and desktop widths with u
     response.writeHead(200, { "Content-Type": mime || "application/octet-stream" }).end(fs.readFileSync(file));
   });
   try {
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const base = `http://127.0.0.1:${server.address().port}`;
+    if (!liveBase) await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const base = liveBase || `http://127.0.0.1:${server.address().port}`;
     for (const [engineName, engine] of [["chromium", chromium], ["webkit", webkit]]) {
       const browser = await engine.launch({ headless: true });
       try {
@@ -87,6 +101,11 @@ test("public assignment pages render at mobile, tablet and desktop widths with u
               assert.equal(response.status(), 200);
               assert.equal(await page.getByRole("heading", { level: 1 }).textContent(), content.topic);
               for (const team of lesson.teams) assert.equal(await page.getByRole("heading", { name: `${team}팀`, exact: true }).count(), 1);
+              for (const team of lesson.teams) {
+                const list = page.getByRole("list", { name: `${team}팀 명단`, exact: true });
+                assert.deepEqual(await list.getByRole("listitem").allTextContents(), rosters[team]);
+                assert.ok(await list.isVisible());
+              }
               const metrics = await page.evaluate(() => {
                 const visible = [...document.querySelectorAll("body *")].filter((item) => item.checkVisibility());
                 const width = document.documentElement.clientWidth;
@@ -110,6 +129,9 @@ test("public assignment pages render at mobile, tablet and desktop widths with u
               assert.equal(await materialLink.evaluate((link) => link === document.activeElement && getComputedStyle(link).outlineStyle !== "none"), true);
               const screenshot = await page.screenshot({ fullPage: true, animations: "disabled" });
               assert.ok(screenshot.byteLength > 1000);
+              const output = path.join(root, "artifacts/method9-2610");
+              fs.mkdirSync(output, { recursive: true });
+              fs.writeFileSync(path.join(output, `assignment-${lesson.day}-${engineName}-${width}${liveBase ? "-live" : ""}.png`), screenshot);
               await materialLink.click();
               assert.equal(new URL(page.url()).pathname, `/method/${lesson.code}/`);
               assert.deepEqual(errors, []);
