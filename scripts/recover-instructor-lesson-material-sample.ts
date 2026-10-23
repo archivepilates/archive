@@ -10,6 +10,8 @@ import { instructorLessonApprovalId, instructorLessonApprovalCutoffIssue, instru
 } from "../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval";
 import { cancellationBlocksRegistration } from "../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonCancellationPolicy";
 import { targetEligibilityIssue } from "../firebase/kangsain-functions/functions/src/alimtalk/targetValidationChecks";
+import { alimtalkTemplateReadiness } from "../firebase/kangsain-functions/functions/src/alimtalk/templateStatus";
+import { INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE } from "../firebase/kangsain-functions/functions/src/alimtalk/templates";
 import { primaryAlimtalkTestRecipient, isAlimtalkTestRecipient } from "../firebase/kangsain-functions/functions/src/alimtalk/testRecipients";
 import { auditInstructorLessonProvider } from "./audit-instructor-lesson-provider";
 import { attachInstructorLessonParkingPayload, upsertInstructorLessonParkingPreRegistration } from "../firebase/kangsain-functions/functions/src/parking/instructorLessonParkingPreRegistration";
@@ -255,13 +257,18 @@ export async function runRecovery(args: string[]) {
   }
   const recipient = primaryAlimtalkTestRecipient();
   assert(recipient.name === "\uAE40\uAE30\uD6A8", "Configured sample recipient must be Kim GiHyo");
+  const providerPrecheck = await auditInstructorLessonProvider(SCOPE.sourceDate);
+  assertProviderPrecheck(providerPrecheck, plan);
+  // Read-only eligibility intentionally rejects an expired template cache.
+  const readiness = await alimtalkTemplateReadiness(INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE);
+  assert(readiness.approved && !readiness.retryable, "Current V3 template cache refresh not approved");
   for (const candidate of plan.candidates) {
     const prepared = attachInstructorLessonParkingPayload(candidate, process.env.PRIVATE_SURVEY_WEBHOOK_SECRET);
     const issue = await targetEligibilityIssue(prepared, SCOPE.sourceDate, { readOnly: true });
     assert(!issue, issue);
   }
   assertApplyGate(options, plan);
-  assertProviderPrecheck(await auditInstructorLessonProvider(SCOPE.sourceDate), plan);
+  assertProviderPrecheck(providerPrecheck, plan);
   assertApplyGate(options, plan);
   const candidates = await persistRecoveryCandidates(plan, process.env.PRIVATE_SURVEY_WEBHOOK_SECRET!);
   for (const candidate of candidates) {

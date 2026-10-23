@@ -128,4 +128,7 @@ test("write boundary uses transaction readback; exact old approvals only receive
   assert.match(source, /for \(const id of OLD_APPROVAL_IDS\) tx\.update[^]*?supersededByApprovalId: correctedApprovalId, supersededAt: now,\s*\}/);
   assert.doesNotMatch(source, /processAlimtalkQueue|queueDailyAlimtalkCandidates|sendApprovedInstructorLessonAlimtalks|sendSolapiAlimtalk/);
   assert.equal((source.match(/await auditInstructorLessonProvider\(SCOPE\.sourceDate\)/g) || []).length, 2);
+  const run = source.slice(source.indexOf("export async function runRecovery"));
+  assert.ok(run.indexOf("await alimtalkTemplateReadiness") < run.indexOf("await targetEligibilityIssue"));
+  assert.match(run, /assert\(readiness\.approved && !readiness\.retryable/);
 });
