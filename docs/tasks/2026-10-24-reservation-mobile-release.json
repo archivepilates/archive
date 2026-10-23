@@ -1,7 +1,7 @@
 {
   "project": "ARCHIVE PILATES reservation mirror",
   "updatedAt": "2026-10-24",
-  "status": "verified_ready_to_release",
+  "status": "deployed_verified_pushed_ci_passed_operator_login_pending",
   "branch": "codex/mini/reservation-mobile-release-20261024",
   "application": "apps/reservation-mirror",
   "target": "archive-pilates-booking-test",
@@ -11,6 +11,8 @@
   "labPublished": false,
   "coverage": "Initial partial snapshot; not live or complete StudioMate synchronization",
   "checks": {"status": "passed", "unitTests": 196, "failed": 0, "build": "passed", "productionAuditVulnerabilities": 0, "viewports": [320, 390, 768, 1440], "documentOverflow": 0, "syntheticOccurrences": 70, "coreHostingValidator": "passed", "productionAuthMockMarkers": 0},
-  "deployment": {"status": "not_deployed"},
+  "deployment": {"status": "verified", "sourceCommit": "784326875b440eb29a5531d929a7733ca7e743de", "mirrorVersion": "81bf4c25e8c37cd2", "mirrorReleaseAt": "2026-10-23T16:09:44.854Z", "mirrorChangedPaths": ["/index.html", "/app.js", "/style.css"], "coreVersion": "ab159ff7e48af0dd", "coreReleaseAt": "2026-10-23T16:10:12.643Z", "coreChangedPaths": ["/rules/index.html"], "hostingConfigsPreserved": true, "allOtherFilesPreserved": true, "customDomainAssetsExactSourceMatch": true, "anonymousRead": 401, "nonGetWrite": 405, "health": 200, "liveBrowserErrors": 0, "mainPromoted": true, "featureBranchPushed": true},
+  "ci": {"runId": "39984341059", "status": "completed", "conclusion": "success", "completedAt": "2026-10-23T16:11:35Z"},
+  "workspace": {"releaseCheckout": "/Users/archivepilates/codex-worktrees/reservation-mobile-deploy-20261024", "unrelatedLabWork": "preserved untracked in original worktree", "ownedPreviewServerAndTabs": "closed"},
   "limitations": ["Physical iPhone Safari not tested", "Real operator post-login verification pending existing authenticated session"]
 }
