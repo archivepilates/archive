@@ -23,7 +23,10 @@
 </ul></section>
 <section><h2>검증</h2><p>합성 브라우저·페이지·임시 잠금·Fixture 원장을 이용한 Node 회귀 1,078건과 TypeScript 홀딩 큐·공급자·원천 라운드트립 228건, 합계 <strong>1,306건 통과</strong>. 실행기 번들 구문 검사, CORE Hosting 검증과 기존 릴리스 롤백 방지 검사도 통과했습니다.</p>
 <p>초기 회귀 중 이전 코드 구조에 고정된 검사 2건이 실패해 새 세션 cleanup과 추가 운영 알림 키를 검사하도록 갱신했고 재실행에서 통과했습니다. 실제 운영 브라우저를 열거나 회원 메시지를 테스트 발송하지 않았습니다. 다음 자연 실행의 busy 해소·원장 결과는 아직 검증하지 않았습니다.</p></section>
-<section><h2>운영 반영</h2><p id="release-status">기능 소스 검증 완료. 커밋·원격 승격·맥미니 실행기 반영·CORE Hosting과 CI의 실제 결과는 릴리스 후 이 절에 기록합니다.</p>
+<section><h2>독립·인접 검증</h2><p>독립 검토에서 발견한 종료 실패 시 잠금 해제, 일반 화면 Timeout의 잘못된 유예, 조회 사이 중단 처리 3건을 보완하고 재검토에서 차단 지적이 없음을 확인했습니다. 공유 잠금을 쓰는 알림 감지·강사·환불·강사레슨 취소 관련 추가 60건도 통과했습니다. 추가 검사에서 기존 베이스부터 오래된 staffEmployment 단독 조건을 요구하던 정적 검사 1건을 발견해, 실제 staffEmployment·holdingSource sidecar 분리 구조를 검증하도록 갱신했습니다. 해당 운영 실행기 코드는 수정하지 않았습니다. 전체 서로 다른 회귀 검사는 1,366건이며, 운영 체크아웃에서 세션·대기 64건을 별도로 재실행해 통과했습니다.</p></section>
+<section><h2>운영 반영</h2><p id="release-status"><strong>운영 반영·라이브 확인 완료.</strong> 기능 커밋 <code>f2e5c68bcc3f2bcd271f7789537502d027cc3b0d</code>를 작업 브랜치와 origin/main에 푸시했습니다. 맥미니 runtime은 같은 소스로 fast-forward했고 기존 LaunchAgent의 실행 경로와 3,600초 주기를 확인했습니다. 수동 큐·발송·재시작은 수행하지 않았습니다.</p>
+<p>CORE Hosting 단일 대상 <code>archive-pilates-core</code>, 버전 <code>7a5d6e024a982dd3</code>를 2026-10-24 02:53:58 KST에 릴리스했습니다. <a href="https://core.archivepilates.com/rules/">라이브 운영규칙</a>과 release.json 모두 HTTP 200, 대기 정책 5개 문구와 기능 소스 리비전 일치를 확인했습니다. 원격 Functions 영향 코드베이스는 0개입니다.</p>
+<p>기능 커밋의 GitHub Actions <a href="https://github.com/archivepilates/archive/actions/runs/39998781043">main 39998781043</a>, <a href="https://github.com/archivepilates/archive/actions/runs/39998774592">작업 브랜치 39998774592</a> 모두 성공했습니다. 배포 소스와 보고서 후속 기록 커밋은 구분합니다. 회차 재사용의 실제 자연 실행은 다음 정기 수집 후 별도 확인해야 합니다.</p>
 <p>대상은 맥미니 실행기와 CORE 운영규칙입니다. Functions·Firestore 규칙·인덱스·운영 데이터·기준선·기존 실행 주기는 변경 대상이 아닙니다. 판매 홈페이지 archivepilates.com의 DNS와 Hosting은 수정하지 않습니다.</p></section>
 <section><h2>근거 파일</h2><ul>
 <li><code>scripts/lib/studiomate-browser-session.mjs</code>: 전용 세션·직렬 실행·취소·종료.</li>

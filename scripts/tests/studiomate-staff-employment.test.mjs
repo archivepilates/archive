@@ -84,6 +84,7 @@ test("runner uses existing sync, daily gate, shared lock and web source without 
   assert.match(script, /await context\.close\(\).*finally \{ await release\(\)/s);
   assert.doesNotMatch(script, /api\.studiomate\.kr|capturedAuthorization|waitForTimeout/);
   assert.match(runner, /staffEmployment.*sync-studiomate-staffs-from-browser\.mjs.*--if-due/);
-  assert.match(runner, /const failed = steps\.filter\(\(step\) => step\.name !== "staffEmployment"/);
-  assert.match(runner, /step\.name === "staffEmployment" && step\.exitCode !== 0/);
+  assert.match(runner, /const sidecars = new Set\(\["staffEmployment", "holdingSource"\]\)/);
+  assert.match(runner, /const failed = steps\.filter\(\(step\) => !sidecars\.has\(step\.name\) && step\.exitCode/);
+  assert.match(runner, /sidecars\.has\(step\.name\) && step\.exitCode !== 0/);
 });
