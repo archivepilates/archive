@@ -1,5 +1,20 @@
 {
   "capturedOn": "2026-10-23",
+  "outputs": {
+    "contentRevision": "3cbbd6d7b22dab48",
+    "releaseCommit": "d3bd245ac0d1f27fe9880daa640188c8cc0270d9",
+    "notionAttachmentFileId": "402d49ea-e4bf-81ba-8fef-00b2cf7bffd4",
+    "previewBaseUrl": "https://archive-pilates-in--method9-2610-review-n4guikym.web.app",
+    "previewExpiresAt": "2026-11-22T13:56:29+09:00",
+    "localBrowserChecks": 39,
+    "liveBrowserChecks": 39,
+    "regressionTests": 2,
+    "ci": "https://github.com/archivepilates/archive/actions/runs/39902987773",
+    "report": "docs/reports/2026-10-23-method9-sequence-update.html",
+    "liveRelease": "pending",
+    "memberMessages": "not_requested",
+    "operatingRules": "unchanged; sequence content only"
+  },
   "confirmation": {
     "teacher": "은영",
     "warmup": [

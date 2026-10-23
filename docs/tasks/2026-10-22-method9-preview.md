@@ -11,7 +11,7 @@
 - CORE operating rule: source entry `method9-shared-cuecards` records this workflow. Live CORE publication remains pending because this request only authorizes a preview release.
 - Production promotion: not part of this preview-only request. Keep dated Notion DB records non-sendable until live Hosting verification and separate go-live approval.
 
-## Verified Preview Release
+## Initial Preview Release - 2026-10-22
 
 - URL: https://archive-pilates-in--method9-2610-review-n4guikym.web.app/method/external-feedback-2610-preview/
 - Expires: 2026-11-21 17:59 KST. Redeploy the same channel when extending review.
@@ -20,3 +20,11 @@
 - Local browser checks: 39/39. Preview-host browser checks: 39/39. Chromium/WebKit, four viewport widths, both instructor tabs, content revision and noon gates passed; all task browsers and local servers closed.
 - Generated-output guard and source-edit regression test passed; GitHub run https://github.com/archivepilates/archive/actions/runs/39751935494 passed.
 - Notion parent and two lesson records now link to the review URL and newest HTML attachment. Parent child sequence pages were preserved. Public URL fields remain blank and Alimtalk use remains disabled pending live release.
+
+## Latest Sequence Update - 2026-10-23
+
+- Same review URL, redeployed with content revision `3cbbd6d7b22dab48`; expires 2026-11-22 13:56 KST.
+- Source: `docs/tasks/2026-10-23-method9-source.json`. Human-confirmed EY warm-up order: Side Bend, T-Balance (Lengthen), Jump mermaid + saw. The merged Notion entry was corrected to this order; Main/Cool Down remained intact.
+- MJ: 11 move groups, 16 substeps; EY: 13 moves. Removed moves and stale descriptions are absent from current cards and Notion theory. Historical snapshots remain unchanged.
+- Both dated HTML files, hosted/local staff previews, Notion theory and three Notion attachments now share current content. Local/live browser checks 39/39 each and two regression tests passed. CI: https://github.com/archivepilates/archive/actions/runs/39902987773 succeeded.
+- Same preview-only scope: no live Hosting release, send-setting change, or member messages. No operating-policy change; existing CORE rule publication remains separate from content review.
