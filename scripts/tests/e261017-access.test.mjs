@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { GROUP, POLICY_ID, entitlementFromGrant, removalPlan, verifyRemoval, reconcile } from '../e261017-access.mjs';
 import { STAFF_GRADE, STAFF_GROUP } from '../lib/imweb-staff-video-policy.mjs';
+import { E261017_SHARE, A261024_SHARE, B261024_SHARE, STUDENT_SHARE_SOURCES } from '../lib/imweb-student-share-policy.mjs';
 
 const start = '2026-10-18T01:16:33.501Z';
 const end = '2026-11-27T01:16:33.501Z';
@@ -15,6 +16,19 @@ const grant = { status: 'group_verified', beforeGroups: ['paid'], afterGroups: [
 const member = { memberCode: code, uid: 'fixture-only', siteCode: 'S20260516852c71a014d08',
   unitCode: 'u2026051698c99ea234719', group: ['paid', GROUP, 'staff'], point: 3000, coupon: [] };
 const entitlement = () => entitlementFromGrant(code, grant, Date.parse(start));
+const staffStart = '2026-10-25T01:16:33.501Z';
+const staffStartMs = Date.parse(staffStart);
+const staffEndMs = staffStartMs + 40 * 86400000;
+const staffEnd = new Date(staffEndMs).toISOString();
+
+function staffReceipt(source) {
+  const groups = ['paid', source.groupCode, STAFF_GROUP];
+  return { kind: 'student_share_existing_staff', status: 'group_verified',
+    beforeGroups: [...groups], afterGroups: [...groups], existingGroupsPreserved: true,
+    beforeGrade: STAFF_GRADE, afterGrade: STAFF_GRADE, verifiedAt: staffStart,
+    attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
+      memberCode: code, date: '2026-10-24', lessonIds: [...source.lessonIds] } };
+}
 
 test('forty days use the first verified grant instant, not lesson date or check date', () => {
   const e = entitlement(); assert.equal(e.expiresAt, end); assert.equal(e.grantedAt, start);
@@ -62,24 +76,190 @@ test('revoked entries remain terminal; unknown writes are not automatically repe
   e.status = 'revoked'; assert.equal(removalPlan(member, e, Date.parse(end)).action, 'terminal');
 });
 
-function fixture({ fail = false, unknown = false } = {}) {
-  let live = structuredClone(member); let writes = 0; let saves = 0;
-  const s = { accessPolicy: { id: POLICY_ID, approved: true, days: 40,
-    basis: 'first_verified_grant', revocation: 'e_team_group_only' }, manualImmediateGrants: { [code]: grant },
-    entitlements: { [code]: entitlement() }, untouched: { keep: true } };
+function fixture({ fail = false, unknown = false, source = E261017_SHARE, groups,
+  grantAt = start } = {}) {
+  const evidence = { ...structuredClone(grant), verifiedAt: grantAt, afterGroups: ['paid', source.groupCode] };
+  let live = { ...structuredClone(member), group: groups ?? ['paid', source.groupCode, 'staff'] };
+  let writes = 0; let saves = 0;
+  const s = { accessPolicy: { id: source.policyId, approved: true, days: 40,
+    basis: 'first_verified_grant', revocation: source.revocation }, manualImmediateGrants: { [code]: evidence },
+    entitlements: { [code]: entitlementFromGrant(code, evidence, Date.parse(grantAt), source) }, untouched: { keep: true } };
   if (unknown) s.entitlements[code].revocation = { status: 'result_unknown' };
   const run = args => {
     if (args[0] === 'config') return { resolved_profile: { site_code: member.siteCode, unit_code: member.unitCode } };
     if (args[0] === 'order') return { data: { list: [], currentPage: 1, totalCount: 0, totalPage: 0 } };
     if (args[1] === 'list') return { data: { list: [structuredClone(live)], hasNext: false } };
     if (args[1] === 'get') return { data: structuredClone(live) };
-    if (args[1] === 'groups') return { data: { list: live.group.includes(GROUP) ? [structuredClone(live)] : [] } };
+    if (args[1] === 'groups') {
+      assert.ok(STUDENT_SHARE_SOURCES.some(source => source.groupCode === args[3]));
+      return { data: { list: live.group.includes(args[3]) ? [structuredClone(live)] : [] } };
+    }
     if (args.includes('--dry-run')) return { confirmation_token: 'fixture-only' };
     writes++; if (fail) throw Error('fixture transport failure');
     live.group = JSON.parse(args[args.indexOf('--data') + 1]).groupCodes; return { statusCode: 200 };
   };
-  return { s, run, save: () => saves++, get writes() { return writes; }, get saves() { return saves; } };
+  return { s, run, save: () => saves++, get live() { return structuredClone(live); },
+    get writes() { return writes; }, get saves() { return saves; } };
 }
+
+test('omitting the optional source retains the canonical E policy', () => {
+  assert.equal(GROUP, E261017_SHARE.groupCode);
+  assert.equal(POLICY_ID, E261017_SHARE.policyId);
+  assert.deepEqual(entitlement(), entitlementFromGrant(code, grant, Date.parse(start), E261017_SHARE));
+  assert.deepEqual(removalPlan(member, entitlement(), Date.parse(end)),
+    removalPlan(member, entitlement(), Date.parse(end), E261017_SHARE));
+});
+
+for (const source of [A261024_SHARE, B261024_SHARE]) {
+  test(`${source.policyId} converts an unchanged STAFF receipt without requiring a fake transition`, () => {
+    const receipt = staffReceipt(source);
+    const before = structuredClone(receipt);
+    const entry = entitlementFromGrant(code, receipt, staffStartMs, source);
+    assert.deepEqual(entry, { policyId: source.policyId, memberCode: code, groupCode: source.groupCode,
+      grantedAt: staffStart, expiresAt: staffEnd, status: 'active',
+      grantEvidence: 'manualImmediateGrants:independent_attendance_share_on_staff' });
+    assert.deepEqual(receipt, before);
+    const unannotated = structuredClone(receipt); delete unannotated.kind;
+    assert.throws(() => entitlementFromGrant(code, unannotated, staffStartMs, source), /Student-share evidence/);
+  });
+
+  test(`${source.policyId} converter rejects a valid attendance receipt belonging to another member`, () => {
+    const receipt = staffReceipt(source);
+    receipt.attendanceEvidence.memberCode = 'm002';
+    const before = structuredClone(receipt);
+    assert.throws(() => entitlementFromGrant(code, receipt, staffStartMs, source));
+    assert.deepEqual(receipt, before);
+  });
+
+  test(`${source.policyId} rejects a miskeyed STAFF receipt before all provider reads and saves`, () => {
+    const f = fixture({ source, grantAt: staffStart });
+    const receipt = staffReceipt(source); receipt.attendanceEvidence.memberCode = 'm002';
+    f.s.manualImmediateGrants[code] = receipt;
+    f.s.entitlements = {};
+    const before = structuredClone(f.s);
+    assert.throws(() => reconcile(f.s, { source, apply: true, adopt: true, now: staffStartMs,
+      run: () => assert.fail('Receipt identity must fail before provider access'), save: f.save }), /Student-share evidence/);
+    assert.deepEqual(f.s, before); assert.equal(f.writes, 0); assert.equal(f.saves, 0);
+  });
+
+  test(`${source.policyId} STAFF receipt adoption and deferral preserve the first clock without group writes`, () => {
+    const receipt = staffReceipt(source);
+    const f = fixture({ source, grantAt: staffStart, groups: [...receipt.afterGroups] });
+    f.s.manualImmediateGrants[code] = receipt;
+    f.s.entitlements = {};
+    const originalReceipt = structuredClone(receipt);
+    let isStaff = true;
+    const calls = [];
+    const run = args => {
+      calls.push(structuredClone(args));
+      const response = f.run(args);
+      if (args[1] === 'get') response.data.grade = isStaff ? STAFF_GRADE : 'ordinary';
+      return response;
+    };
+    for (const now of [staffStartMs, staffStartMs + 86400000, staffEndMs, staffEndMs + 86400000]) {
+      reconcile(f.s, { source, apply: true, adopt: true, now, run, save: f.save });
+      assert.equal(f.s.entitlements[code].grantedAt, staffStart);
+      assert.equal(f.s.entitlements[code].expiresAt, staffEnd);
+      assert.deepEqual(f.s.manualImmediateGrants[code], originalReceipt);
+      assert.deepEqual(f.live.group, originalReceipt.beforeGroups);
+      assert.equal(f.writes, 0);
+    }
+    assert.equal(calls.some(args => args[1] === 'update'), false);
+    isStaff = false;
+    reconcile(f.s, { source, apply: true, adopt: true, now: staffEndMs + 86400000 + 1, run, save: f.save });
+    assert.equal(f.writes, 1);
+    assert.deepEqual(f.live.group, ['paid', STAFF_GROUP]);
+    assert.equal(f.s.entitlements[code].status, 'revoked');
+    assert.equal(f.s.entitlements[code].grantedAt, staffStart);
+    assert.equal(f.s.entitlements[code].expiresAt, staffEnd);
+    assert.deepEqual(f.s.manualImmediateGrants[code], originalReceipt);
+  });
+}
+
+for (const source of [A261024_SHARE, B261024_SHARE]) {
+  const other = source === A261024_SHARE ? B261024_SHARE : A261024_SHARE;
+  test(`${source.policyId} expiry removes only its own team and preserves E and the other team`, () => {
+    const groups = ['paid', GROUP, source.groupCode, other.groupCode, 'staff'];
+    const f = fixture({ source, groups });
+    const before = f.live;
+    const original = structuredClone(f.s.entitlements[code]);
+    assert.equal(removalPlan(f.live, original, Date.parse(end) - 1, source).action, 'not_due');
+    reconcile(f.s, { source, run: f.run, now: Date.parse(end), apply: true, save: f.save });
+    assert.equal(f.writes, 1);
+    assert.deepEqual(f.live.group, groups.filter(group => group !== source.groupCode));
+    verifyRemoval(before, f.live, f.live.group);
+    assert.equal(f.s.entitlements[code].status, 'revoked');
+    assert.equal(f.s.entitlements[code].revocation.status, 'verified');
+    assert.equal(f.s.entitlements[code].grantedAt, original.grantedAt);
+    assert.equal(f.s.entitlements[code].expiresAt, original.expiresAt);
+    reconcile(f.s, { source, run: f.run, now: Date.parse(end) + 1, apply: true, save: f.save });
+    assert.equal(f.writes, 1);
+  });
+
+  test(`${source.policyId} adoption and staff deferral never restart the first grant clock`, () => {
+    const f = fixture({ source });
+    const expected = structuredClone(f.s.entitlements[code]);
+    f.s.entitlements = {};
+    const run = args => {
+      const response = f.run(args);
+      if (args[1] === 'get') response.data.grade = STAFF_GRADE;
+      return response;
+    };
+    for (const now of [Date.parse(start) + 86400000, Date.parse(end), Date.parse(end) + 86400000]) {
+      reconcile(f.s, { source, run, now, apply: true, adopt: true, save: f.save });
+      assert.deepEqual(f.s.entitlements[code], expected);
+      assert.equal(f.writes, 0);
+    }
+    assert.equal(removalPlan(f.live, f.s.entitlements[code], Date.parse(end) + 86400000, source).action,
+      'remove_group_only');
+  });
+
+  test(`${source.policyId} cannot adopt, revoke or reset another team's evidence`, () => {
+    const f = fixture({ source });
+    const before = structuredClone(f.s);
+    assert.throws(() => reconcile(f.s, { source: other, now: Date.parse(end), apply: true,
+      run: () => assert.fail('Cross-team policy must fail before provider reads'), save: f.save }), /Approved/);
+    assert.throws(() => removalPlan(f.live, f.s.entitlements[code], Date.parse(end), other), /scope mismatch/);
+    assert.throws(() => entitlementFromGrant(code, f.s.manualImmediateGrants[code], Date.parse(start), other));
+    assert.deepEqual(f.s, before); assert.equal(f.writes, 0); assert.equal(f.saves, 0);
+    const entry = f.s.entitlements[code];
+    entry.grantedAt = new Date(Date.parse(start) + 1).toISOString();
+    entry.expiresAt = new Date(Date.parse(end) + 1).toISOString();
+    assert.throws(() => reconcile(f.s, { source, now: Date.parse(end), apply: true,
+      run: () => assert.fail('Shifted first grant must fail before provider reads'), save: f.save }), /Student-share/);
+    assert.equal(f.writes, 0); assert.equal(f.saves, 0);
+  });
+
+  test(`${source.policyId} unknown removal is not replayed across team isolation`, () => {
+    const f = fixture({ source, unknown: true });
+    const before = structuredClone(f.s);
+    assert.throws(() => reconcile(f.s, { source, run: f.run, now: Date.parse(end), apply: true,
+      save: f.save }), /unresolved/);
+    assert.deepEqual(f.s, before); assert.equal(f.writes, 0); assert.equal(f.saves, 0);
+  });
+}
+
+test('A and B on one member expire independently without migrating or extending either first grant', () => {
+  const laterStart = new Date(Date.parse(start) + 86400000).toISOString();
+  const a = fixture({ source: A261024_SHARE,
+    groups: ['paid', GROUP, A261024_SHARE.groupCode, B261024_SHARE.groupCode, 'staff'] });
+  const b = fixture({ source: B261024_SHARE, grantAt: laterStart });
+  const originalA = structuredClone(a.s.entitlements[code]);
+  const originalB = structuredClone(b.s.entitlements[code]);
+  reconcile(a.s, { source: A261024_SHARE, run: a.run, now: Date.parse(end), apply: true, save: a.save });
+  reconcile(b.s, { source: B261024_SHARE, run: a.run, now: Date.parse(end), apply: true, save: b.save });
+  assert.deepEqual(a.live.group, ['paid', GROUP, B261024_SHARE.groupCode, 'staff']);
+  assert.deepEqual(b.s.entitlements[code], originalB);
+  assert.equal(a.writes, 1);
+  reconcile(b.s, { source: B261024_SHARE, run: a.run, now: Date.parse(end) + 86400000,
+    apply: true, save: b.save });
+  assert.deepEqual(a.live.group, ['paid', GROUP, 'staff']);
+  assert.equal(a.writes, 2);
+  for (const [state, original] of [[a.s, originalA], [b.s, originalB]]) {
+    assert.equal(state.entitlements[code].grantedAt, original.grantedAt);
+    assert.equal(state.entitlements[code].expiresAt, original.expiresAt);
+  }
+});
 test('dry-run never writes, saves or removes permission', () => {
   const f = fixture(); const before = structuredClone(f.s);
   reconcile(f.s, { run: f.run, now: Date.parse(end), save: f.save });
@@ -228,17 +408,66 @@ test('CLI rejects time overrides and respects a held shared lock before any prov
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'e-team-offline-test-'));
   try {
     const directory = path.join(home, 'Library/Application Support/ARCHIVE PILATES/student-share-e-261017');
-    fs.mkdirSync(directory, { recursive: true });
-    const file = path.join(directory, 'run.lock'); fs.writeFileSync(file, 'fixture-owned');
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    fs.chmodSync(directory, 0o700);
+    const stateFile = path.join(directory, 'state.json');
+    fs.writeFileSync(stateFile, JSON.stringify(fixture().s), { mode: 0o600 });
+    const file = path.join(directory, 'run.lock'); fs.writeFileSync(file, 'fixture-owned', { mode: 0o600 });
     const script = path.resolve('scripts/e261017-access.mjs');
-    const options = { encoding: 'utf8', env: { ...process.env, HOME: home } };
+    const options = { encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, HOME: home, IMWEB_CLI_BIN: path.join(home, 'forbidden-provider') } };
     const override = spawnSync(process.execPath, [script, '--now=2099-01-01'], options);
     assert.equal(override.status, 1); assert.match(override.stderr, /time override is forbidden/);
     const held = spawnSync(process.execPath, [script, '--apply'], options);
     assert.equal(held.status, 1); assert.match(held.stderr, /EEXIST/);
     assert.equal(fs.readFileSync(file, 'utf8'), 'fixture-owned');
     fs.unlinkSync(file);
+    fs.chmodSync(stateFile, 0o640);
     const failed = spawnSync(process.execPath, [script], options);
-    assert.equal(failed.status, 1); assert.equal(fs.existsSync(file), false);
+    assert.equal(failed.status, 1); assert.match(failed.stderr, /Unsafe share ledger/);
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(fs.lstatSync(stateFile).mode & 0o777, 0o640);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('CLI read-only main iterates every registered synthetic ledger without saving or provider writes', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'registered-share-offline-test-'));
+  try {
+    const files = STUDENT_SHARE_SOURCES.map(source => {
+      const directory = path.join(home, 'Library/Application Support/ARCHIVE PILATES', source.lane);
+      fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+      const file = path.join(directory, 'state.json');
+      const state = fixture({ source }).s;
+      state.manualImmediateGrants = {}; state.entitlements = {};
+      fs.writeFileSync(file, JSON.stringify(state), { mode: 0o600 });
+      return { directory, file, before: fs.readFileSync(file, 'utf8') };
+    });
+    const provider = path.join(home, 'synthetic-imweb');
+    fs.writeFileSync(provider, `#!${process.execPath}
+      const args = process.argv.slice(2);
+      if (args.slice(-2).join(' ') === 'config context') {
+        console.log(JSON.stringify({ resolved_profile: ${JSON.stringify({ site_code: member.siteCode, unit_code: member.unitCode })} }));
+      } else if (args.includes('member') && args.includes('list')) {
+        console.log(JSON.stringify({ data: { list: [], hasNext: false } }));
+      } else { throw Error('Unexpected provider command in offline fixture'); }
+    `, { mode: 0o700 });
+    const result = spawnSync(process.execPath, [path.resolve('scripts/e261017-access.mjs')], {
+      encoding: 'utf8', timeout: 5000, env: { ...process.env, HOME: home, IMWEB_CLI_BIN: provider },
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    const results = result.stdout.trim().split(/\n(?=\{)/).map(value => JSON.parse(value));
+    assert.deepEqual(results.map(value => value.source),
+      STUDENT_SHARE_SOURCES.map(source => source.policyId));
+    for (const value of results) {
+      assert.equal(value.ok, true);
+      assert.equal(value.mode, 'read_only');
+      assert.deepEqual(value.outcomes, []);
+    }
+    for (const item of files) {
+      assert.equal(fs.readFileSync(item.file, 'utf8'), item.before);
+      assert.deepEqual(fs.readdirSync(item.directory), ['state.json']);
+    }
+    assert.equal(fs.existsSync(path.join(home, 'ArchiveIN/automation/locks/imweb-member-groups.lock')), false);
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });

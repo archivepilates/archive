@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 import { reconcileStaffVideos as reconcileRuntimeStaffVideos, STAFF_VIDEO_POLICY } from '../lib/imweb-staff-video-sync.mjs';
-import { E261017_SHARE } from '../lib/imweb-student-share-policy.mjs';
+import { E261017_SHARE, A261024_SHARE, B261024_SHARE, STUDENT_SHARE_SOURCES } from '../lib/imweb-student-share-policy.mjs';
 import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT } from '../lib/imweb-staff-video-policy.mjs';
 
 const NOW = Date.parse('2026-10-20T00:00:00Z');
@@ -13,34 +13,50 @@ const isWrite = args => args.slice(0, 3).join(' ') === 'member update groups' &&
 const isDry = args => args.slice(0, 3).join(' ') === 'member update groups' && args.includes('--dry-run');
 const isDetail = args => args[0] === 'member' && args[1] === 'get';
 let purchaseSequence = 0;
+const STAFF_SHARE_START = Date.parse('2026-10-25T01:16:33.501Z');
+const STAFF_SHARE_END = STAFF_SHARE_START + 40 * 86400000;
 
-const emptyShares = () => [{ source: E261017_SHARE, state: {
-  accessPolicy: { id: E261017_SHARE.policyId, approved: true, days: 40,
-    basis: 'first_verified_grant', revocation: E261017_SHARE.revocation },
+const emptyShares = () => STUDENT_SHARE_SOURCES.map(source => ({ source, state: {
+  accessPolicy: { id: source.policyId, approved: true, days: 40,
+    basis: 'first_verified_grant', revocation: source.revocation },
   entitlements: {}, manualImmediateGrants: {},
-} }];
+} }));
 const reconcileStaffVideos = (state, options = {}) => reconcileRuntimeStaffVideos(state,
   { readStudentShares: emptyShares, ...options });
 
-function shareLedger(code, start = NOW - 86400000) {
-  const source = E261017_SHARE;
+function shareLedger(code, start = NOW - 86400000, source = E261017_SHARE) {
   const verifiedAt = new Date(start).toISOString();
   const expiresAt = new Date(start + 40 * 86400000).toISOString();
   const grant = { status: 'group_verified', verifiedAt, beforeGroups: ['baseline'],
     afterGroups: ['baseline', source.groupCode], existingGroupsPreserved: true };
   const ledgers = emptyShares();
-  ledgers[0].state.manualImmediateGrants[code] = grant;
-  ledgers[0].state.entitlements[code] = { memberCode: code, policyId: source.policyId,
+  const selected = ledgers.find(item => item.source === source);
+  selected.state.manualImmediateGrants[code] = grant;
+  selected.state.entitlements[code] = { memberCode: code, policyId: source.policyId,
     groupCode: source.groupCode, grantedAt: verifiedAt, expiresAt, status: 'active' };
   return ledgers;
 }
 
-function exitWithShare() {
-  const source = member('m001', { grade: 'ordinary', group: ['baseline', E261017_SHARE.groupCode, VIDEO_CODES[1]] });
+function exitWithShare(share = E261017_SHARE) {
+  const source = member('m001', { grade: 'ordinary', group: ['baseline', share.groupCode, VIDEO_CODES[1]] });
   const f = fixture({ members: [source], entries: { [source.memberCode]: tracked(source,
-    [E261017_SHARE.groupCode, VIDEO_CODES[1]]) } });
-  f.groups.push({ siteCode: SITE, siteGroupCode: E261017_SHARE.groupCode, title: 'PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D' });
-  return { f, source, ledgers: shareLedger(source.memberCode) };
+    [share.groupCode, VIDEO_CODES[1]]) } });
+  const [team, date] = share.policyId.split('-')[0].match(/^([a-z])(\d+)$/).slice(1);
+  f.groups.push({ siteCode: SITE, siteGroupCode: share.groupCode,
+    title: `PRIVATE LESSON EXTERNAL FEEDBACK ${team.toUpperCase()} ${date} 40D` });
+  return { f, source, ledgers: shareLedger(source.memberCode, NOW - 86400000, share) };
+}
+
+function staffReceiptLedgers(code, share) {
+  const ledgers = shareLedger(code, STAFF_SHARE_START, share);
+  const state = ledgers.find(item => item.source === share).state;
+  const receipt = state.manualImmediateGrants[code];
+  Object.assign(receipt, { kind: 'student_share_existing_staff', beforeGrade: STAFF_GRADE,
+    afterGrade: STAFF_GRADE, beforeGroups: [...receipt.afterGroups],
+    attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
+      memberCode: code, date: '2026-10-24', lessonIds: [...share.lessonIds] } });
+  state.entitlements[code].grantEvidence = 'manualImmediateGrants:independent_attendance_share_on_staff';
+  return ledgers;
 }
 
 beforeEach(t => {
@@ -709,3 +725,138 @@ test('legacy student-share without an approved timestamp source blocks automatic
   assert.throws(()=>f.reconcile({readStudentShares:()=>copy(ledgers)}), /Unregistered student-share/);
   assert.equal(f.writes.length,0);assert.equal(f.saved.length,0);
 });
+
+for (const share of [A261024_SHARE, B261024_SHARE]) {
+  const other = share === A261024_SHARE ? B261024_SHARE : A261024_SHARE;
+  test(`STAFF exit preserves active ${share.policyId} without touching first-grant evidence`, () => {
+    const { f, source, ledgers } = exitWithShare(share);
+    const before = copy(ledgers);
+    const options = { readStudentShares: () => copy(ledgers) };
+    f.reconcile(options);
+    assert.deepEqual(sort(f.live.get(source.uid).group), sort(['baseline', share.groupCode]));
+    assert.deepEqual(ledgers, before);
+    assert.equal(f.writes.length, 1);
+    assert.deepEqual(f.state.members[source.memberCode].ownedAddedGroups, []);
+    f.reconcile(options);
+    assert.equal(f.writes.length, 1);
+    assert.deepEqual(ledgers, before);
+  });
+
+  test(`${share.policyId} grant-only access preserves the original clock without adoption`, () => {
+    const { f, source, ledgers } = exitWithShare(share);
+    const selected = ledgers.find(item => item.source === share);
+    selected.state.entitlements = {};
+    const before = copy(ledgers);
+    f.reconcile({ readStudentShares: () => copy(ledgers) });
+    assert.deepEqual(sort(f.live.get(source.uid).group), sort(['baseline', share.groupCode]));
+    assert.deepEqual(ledgers, before);
+  });
+
+  test(`expired ${share.policyId} access is not preserved by a valid grant for the other team`, () => {
+    const { f, source } = exitWithShare(share);
+    const expired = shareLedger(source.memberCode, NOW - 40 * 86400000, share);
+    const activeOther = shareLedger(source.memberCode, NOW - 86400000, other);
+    const ledgers = expired.map(item => item.source === other
+      ? activeOther.find(value => value.source === other) : item);
+    const before = copy(ledgers);
+    f.reconcile({ readStudentShares: () => copy(ledgers) });
+    assert.deepEqual(f.live.get(source.uid).group, ['baseline']);
+    assert.deepEqual(ledgers, before);
+    assert.equal(f.writes.length, 1);
+  });
+
+  test(`missing or unresolved ${share.policyId} evidence blocks all STAFF writes`, () => {
+    for (const corrupt of [
+      rows => rows.filter(item => item.source.policyId !== share.policyId),
+      rows => { rows.find(item => item.source.policyId === share.policyId).state.entitlements = null; return rows; },
+      rows => {
+        rows.find(item => item.source.policyId === share.policyId).state.entitlements.m001.revocation = { status: 'result_unknown' };
+        return rows;
+      },
+    ]) {
+      const { f, ledgers } = exitWithShare(share);
+      const before = copy(f.state);
+      assert.throws(() => f.reconcile({ readStudentShares: () => corrupt(copy(ledgers)) }),
+        /Student-share evidence missing or inconsistent/);
+      assert.equal(f.writes.length, 0); assert.equal(f.saved.length, 0);
+      assert.deepEqual(f.state, before);
+    }
+  });
+}
+
+test('STAFF exit protects B but removes expired A when the same member belongs to both teams', () => {
+  const source = member('m001', { grade: 'ordinary',
+    group: ['baseline', A261024_SHARE.groupCode, B261024_SHARE.groupCode, VIDEO_CODES[1]] });
+  const owned = [A261024_SHARE.groupCode, B261024_SHARE.groupCode, VIDEO_CODES[1]];
+  const f = fixture({ members: [source], entries: { [source.memberCode]: tracked(source, owned) } });
+  for (const [share, team] of [[A261024_SHARE, 'A'], [B261024_SHARE, 'B']]) {
+    f.groups.push({ siteCode: SITE, siteGroupCode: share.groupCode,
+      title: `PRIVATE LESSON EXTERNAL FEEDBACK ${team} 261024 40D` });
+  }
+  const expiredA = shareLedger(source.memberCode, NOW - 40 * 86400000, A261024_SHARE);
+  const activeB = shareLedger(source.memberCode, NOW - 86400000, B261024_SHARE);
+  const ledgers = expiredA.map(item => item.source === B261024_SHARE
+    ? activeB.find(value => value.source === B261024_SHARE) : item);
+  const before = copy(ledgers);
+  f.reconcile({ readStudentShares: () => copy(ledgers) });
+  assert.deepEqual(sort(f.live.get(source.uid).group), sort(['baseline', B261024_SHARE.groupCode]));
+  assert.deepEqual({ ...f.live.get(source.uid), group: source.group }, source);
+  assert.equal(f.writes.length, 1);
+  assert.deepEqual(ledgers, before);
+});
+
+for (const share of [A261024_SHARE, B261024_SHARE]) {
+  test(`STAFF exit preserves ${share.policyId} existing-STAFF receipt without remove/re-add or clock reset`, t => {
+    t.mock.timers.setTime(STAFF_SHARE_START + 86400000);
+    for (const adopted of [false, true]) {
+      const { f, source } = exitWithShare(share);
+      const ledgers = staffReceiptLedgers(source.memberCode, share);
+      if (!adopted) ledgers.find(item => item.source === share).state.entitlements = {};
+      const before = copy(ledgers);
+      const options = { now: STAFF_SHARE_START + 86400000, readStudentShares: () => copy(ledgers) };
+      f.reconcile(options);
+      assert.deepEqual(sort(f.live.get(source.uid).group), sort(['baseline', share.groupCode]));
+      assert.deepEqual({ ...f.live.get(source.uid), group: source.group }, source);
+      assert.equal(f.writes.length, 1);
+      const body = JSON.parse(flag(f.writes[0].args, '--data'));
+      assert.ok(body.groupCodes.includes(share.groupCode), 'Never remove independent attendee access');
+      f.reconcile(options);
+      assert.equal(f.writes.length, 1, 'No remove/re-add transition may be fabricated');
+      assert.deepEqual(ledgers, before);
+    }
+  });
+
+  test(`${share.policyId} existing-STAFF receipt has an exact exclusive expiry after STAFF exit`, t => {
+    for (const now of [STAFF_SHARE_END - 1, STAFF_SHARE_END]) {
+      t.mock.timers.setTime(now);
+      const { f, source } = exitWithShare(share);
+      const ledgers = staffReceiptLedgers(source.memberCode, share);
+      const before = copy(ledgers);
+      f.reconcile({ now, readStudentShares: () => copy(ledgers) });
+      assert.deepEqual(sort(f.live.get(source.uid).group),
+        sort(now < STAFF_SHARE_END ? ['baseline', share.groupCode] : ['baseline']));
+      assert.deepEqual(ledgers, before);
+    }
+  });
+
+  test(`invalid ${share.policyId} existing-STAFF proof blocks every STAFF exit write`, t => {
+    const now = STAFF_SHARE_START + 86400000;
+    t.mock.timers.setTime(now);
+    for (const mutate of [
+      receipt => { delete receipt.kind; },
+      receipt => { receipt.beforeGrade = 'ordinary'; },
+      receipt => { receipt.attendanceEvidence.memberCode = 'm002'; },
+      receipt => { receipt.attendanceEvidence.status = 'one_session_attended'; },
+      receipt => { receipt.attendanceEvidence.lessonIds = [...(share === A261024_SHARE ? B261024_SHARE : A261024_SHARE).lessonIds]; },
+    ]) {
+      const { f, source } = exitWithShare(share);
+      const ledgers = staffReceiptLedgers(source.memberCode, share);
+      mutate(ledgers.find(item => item.source === share).state.manualImmediateGrants[source.memberCode]);
+      const before = copy(f.state);
+      assert.throws(() => f.reconcile({ now, readStudentShares: () => copy(ledgers) }), /Student-share evidence/);
+      assert.equal(f.writes.length, 0); assert.equal(f.saved.length, 0);
+      assert.deepEqual(f.state, before);
+      assert.deepEqual(f.live.get(source.uid), source);
+    }
+  });
+}

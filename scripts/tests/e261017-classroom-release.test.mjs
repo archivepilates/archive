@@ -4,8 +4,11 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { ASSET, BASELINE_SHA256, makeManifest, assertManifest, assertETeamNoteOnly, releaseTarget } from '../release-e261017-classroom.mjs';
 
-test('only E261017 is added to the pinned live classroom source', () => {
-  const source = fs.readFileSync(`official-home${ASSET}`, 'utf8');
+test('historical E261017 addition stays intact beneath the separately reviewed A/B additions', () => {
+  const current = fs.readFileSync(`official-home${ASSET}`, 'utf8');
+  const later = ',\n' + ['A', 'B'].map(team => `    {"code":"${team}261024","path":"/private-lesson-external-feedback2-${team.toLowerCase()}-261024","title":"10/24 외부 피드백2 ${team}팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 ${team} 261024 40D","private":true}`).join(',\n');
+  assert.equal(current.split(later).length, 2);
+  const source = current.replace(later, '');
   const added = ',\n    {"code":"E261017","path":"/private-lesson-external-feedback-e-261017","title":"10/17 외부 피드백 E팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D","private":true}';
   assert.equal(source.split(added).length, 2);
   assert.equal(createHash('sha256').update(source.replace(added, '')).digest('hex'), BASELINE_SHA256);

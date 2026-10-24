@@ -8,13 +8,12 @@ import { imwebJson, readReferralMembers, IMWEB_REFERRAL_SCOPE } from './lib/imwe
 import { STAFF_GRADE, protectedPurchaseGroups } from './lib/imweb-staff-video-policy.mjs';
 import { MEMBER_GROUP_LOCK, staffPages } from './lib/imweb-staff-video-sync.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
-import { E261017_SHARE, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, shareInstant,
+import { E261017_SHARE, STUDENT_SHARE_SOURCES, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, shareInstant,
   firstVerifiedShareWindow, assertSharePolicy, validatedShareEntries } from './lib/imweb-student-share-policy.mjs';
 
 export const GROUP = E261017_SHARE.groupCode;
 export const POLICY_ID = E261017_SHARE.policyId;
 export const DAYS = STUDENT_SHARE_DAYS;
-const STATE_DIR = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES/student-share-e-261017');
 const MEMBER_FIELDS = ['uid', 'memberCode', 'name', 'unitCode', 'siteCode', 'callnum', 'email', 'grade', 'point', 'coupon'];
 const memberHash = member => createHash('sha256').update(JSON.stringify(MEMBER_FIELDS.map(key => member[key]))).digest('hex');
 
@@ -29,21 +28,26 @@ function instant(value) {
   return shareInstant(value);
 }
 
-export function entitlementFromGrant(memberCode, grant, now) {
+export function entitlementFromGrant(memberCode, grant, now, source = E261017_SHARE) {
+  const GROUP = source.groupCode, POLICY_ID = source.policyId;
   if (!/^m[0-9a-f]+$/.test(memberCode) || grant.status !== 'group_verified'
-      || !Array.isArray(grant.beforeGroups) || grant.beforeGroups.includes(GROUP)
+      || (grant.kind === 'student_share_existing_staff' && grant.attendanceEvidence?.memberCode !== memberCode)
+      || !Array.isArray(grant.beforeGroups)
       || !grant.afterGroups?.includes(GROUP) || grant.existingGroupsPreserved !== true) {
-    throw Error('First verified E-team grant evidence required');
+    throw Error('First verified student-share grant evidence required');
   }
   if (grant.grantedAt !== undefined && instant(grant.grantedAt) !== instant(grant.verifiedAt)) throw Error('Conflicting first grant timestamps');
   if (instant(grant.verifiedAt) > now) throw Error('Grant timestamp is in the future');
   const window = firstVerifiedShareWindow(grant, GROUP, now);
   return { policyId: POLICY_ID, memberCode, groupCode: GROUP,
     ...window,
-    status: 'active', grantEvidence: 'manualImmediateGrants:first_verified_transition' };
+    status: 'active', grantEvidence: grant.kind === 'student_share_existing_staff'
+      ? 'manualImmediateGrants:independent_attendance_share_on_staff'
+      : 'manualImmediateGrants:first_verified_transition' };
 }
 
-export function removalPlan(member, entitlement, now) {
+export function removalPlan(member, entitlement, now, source = E261017_SHARE) {
+  const GROUP = source.groupCode, POLICY_ID = source.policyId;
   if (member.memberCode !== entitlement.memberCode || member.siteCode !== IMWEB_REFERRAL_SCOPE.siteCode
       || member.unitCode !== IMWEB_REFERRAL_SCOPE.unitCode || entitlement.policyId !== POLICY_ID
       || entitlement.groupCode !== GROUP || !['active', 'revoked', 'removed_externally'].includes(entitlement.status)
@@ -68,10 +72,12 @@ export function verifyRemoval(before, after, expected) {
 }
 
 export function reconcile(state, { now = Date.now(), apply = false, adopt = false,
-  run = imwebJson, save = () => {} } = {}) {
+  run = imwebJson, save = () => {}, source = E261017_SHARE } = {}) {
+  if (!STUDENT_SHARE_SOURCES.includes(source)) throw Error('Unregistered share source');
+  const GROUP = source.groupCode;
   if (!apply) state = structuredClone(state);
-  try { assertSharePolicy(state, E261017_SHARE); } catch { throw Error('Approved access policy required'); }
-  validatedShareEntries({ ...state, entitlements: state.entitlements === undefined ? {} : state.entitlements }, E261017_SHARE, now);
+  try { assertSharePolicy(state, source); } catch { throw Error('Approved access policy required'); }
+  validatedShareEntries({ ...state, entitlements: state.entitlements === undefined ? {} : state.entitlements }, source, now);
   const members = readReferralMembers({ run, maxPages: 100 }).members;
   state.entitlements ??= {};
   const outcomes = [];
@@ -92,7 +98,7 @@ export function reconcile(state, { now = Date.now(), apply = false, adopt = fals
   if (adopt) {
     for (const [code, grant] of Object.entries(state.manualImmediateGrants || {})) {
       if (state.entitlements[code]) continue;
-      const entry = entitlementFromGrant(code, grant, now);
+      const entry = entitlementFromGrant(code, grant, now, source);
       if (!groupCodes(memberFor(code)).includes(GROUP)) throw Error('Recorded grant is not currently present');
       outcomes.push({ memberCode: code, action: 'adopt_verified_grant', expiresAt: entry.expiresAt });
       if (apply) { state.entitlements[code] = entry; save(state); }
@@ -101,7 +107,7 @@ export function reconcile(state, { now = Date.now(), apply = false, adopt = fals
   for (const [code, entry] of Object.entries(state.entitlements)) {
     if (code !== entry.memberCode) throw Error('Entitlement key mismatch');
     const before = memberFor(code);
-    const plan = removalPlan(before, entry, now);
+    const plan = removalPlan(before, entry, now, source);
     outcomes.push({ memberCode: code, action: plan.action, expiresAt: entry.expiresAt });
     if (plan.action === 'review_unknown_result') throw Error('Prior removal result unresolved; do not repeat write');
     if (!apply || ['terminal', 'not_due', 'staff_access_preserved'].includes(plan.action)) continue;
@@ -161,27 +167,40 @@ export function reconcile(state, { now = Date.now(), apply = false, adopt = fals
 async function main() {
   const args = process.argv.slice(2);
   if (args.some(arg => !['--apply', '--adopt-verified-grants'].includes(arg))) throw Error('Unsupported argument; time override is forbidden');
-  const file = path.join(STATE_DIR, 'state.json');
-  const lock = path.join(STATE_DIR, 'run.lock');
   const release = await acquireStudioMateBrowserLock({ lockPath: MEMBER_GROUP_LOCK,
-    owner: 'imweb-e261017-access', waitMs: 0, staleMs: 600000 });
-  let fd;
+    owner: 'imweb-student-share-access', waitMs: 0, staleMs: 600000 });
   try {
-    fd = fs.openSync(lock, 'wx', 0o600);
-    fs.writeSync(fd, JSON.stringify({ pid: process.pid, operation: 'e261017-access', startedAt: new Date().toISOString() }));
-    const state = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const save = data => {
-      const temporary = `${file}.${process.pid}.tmp`;
-      fs.writeFileSync(temporary, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
-      fs.renameSync(temporary, file);
-    };
-    console.log(JSON.stringify({ ok: true, mode: args.includes('--apply') ? 'apply' : 'read_only',
-      outcomes: reconcile(state, { apply: args.includes('--apply'), adopt: args.includes('--adopt-verified-grants'), save }) }, null, 2));
-  } finally {
-    try {
-      if (fd !== undefined) { fs.closeSync(fd); fs.unlinkSync(lock); }
-    } finally { await release(); }
-  }
+    // Reuse the existing expiry runner; no additional polling schedule is created.
+    for (const source of STUDENT_SHARE_SOURCES) {
+      const directory = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES', source.lane);
+      const file = path.join(directory, 'state.json');
+      const lock = path.join(directory, 'run.lock');
+      let fd;
+      try {
+        for (const [name, folder] of [[directory, true], [file, false]]) {
+          const stat = fs.lstatSync(name);
+          if (stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)
+              || (folder ? !stat.isDirectory() : !stat.isFile())) throw Error('Unsafe share ledger');
+        }
+        fd = fs.openSync(lock, 'wx', 0o600);
+        fs.writeSync(fd, JSON.stringify({ pid: process.pid, operation: source.lane, startedAt: new Date().toISOString() }));
+        const state = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const save = data => {
+          const temporary = `${file}.${process.pid}.tmp`;
+          const writer = fs.openSync(temporary, 'wx', 0o600);
+          try { fs.writeSync(writer, JSON.stringify(data, null, 2) + '\n'); fs.fsyncSync(writer); }
+          finally { fs.closeSync(writer); }
+          fs.renameSync(temporary, file);
+          const parent = fs.openSync(directory, 'r');
+          try { fs.fsyncSync(parent); } finally { fs.closeSync(parent); }
+        };
+        console.log(JSON.stringify({ ok: true, source: source.policyId, mode: args.includes('--apply') ? 'apply' : 'read_only',
+          outcomes: reconcile(state, { apply: args.includes('--apply'), adopt: args.includes('--adopt-verified-grants'), save, source }) }, null, 2));
+      } finally {
+        if (fd !== undefined) { fs.closeSync(fd); fs.unlinkSync(lock); }
+      }
+    }
+  } finally { await release(); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

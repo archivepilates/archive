@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { SITE, UNIT } from './imweb-staff-video-policy.mjs';
+import { SITE, UNIT, STAFF_GRADE } from './imweb-staff-video-policy.mjs';
 
 export const STUDENT_SHARE_DAYS = 40;
 export const STUDENT_SHARE_WINDOW_MS = STUDENT_SHARE_DAYS * 86400000;
@@ -9,7 +9,17 @@ export const E261017_SHARE = Object.freeze({
   policyId: 'e261017-grant-40d-v1', groupCode: 'g2026101715ef28611dff4',
   revocation: 'e_team_group_only', lane: 'student-share-e-261017',
 });
-export const STUDENT_SHARE_SOURCES = Object.freeze([E261017_SHARE]);
+export const A261024_SHARE = Object.freeze({
+  policyId: 'a261024-grant-40d-v1', groupCode: 'g20261025ad8ce226150cf',
+  revocation: 'a_team_group_only', lane: 'student-share-a-261024',
+  lessonIds: Object.freeze(['97134106', '97134121']),
+});
+export const B261024_SHARE = Object.freeze({
+  policyId: 'b261024-grant-40d-v1', groupCode: 'g20261025ee18a8f4e30b9',
+  revocation: 'b_team_group_only', lane: 'student-share-b-261024',
+  lessonIds: Object.freeze(['97177049', '97177091']),
+});
+export const STUDENT_SHARE_SOURCES = Object.freeze([E261017_SHARE, A261024_SHARE, B261024_SHARE]);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = () => { throw Error('Student-share evidence missing or inconsistent; no staff group removal'); };
 const groups = value => Array.isArray(value) && value.every(code => typeof code === 'string' && code.trim() === code && code.length > 0)
@@ -30,9 +40,19 @@ export function shareInstant(value) {
 export function firstVerifiedShareWindow(grant, groupCode, now) {
   if (!Number.isFinite(now) || !record(grant) || grant.status !== 'group_verified'
       || !groups(grant.beforeGroups) || !groups(grant.afterGroups)
-      || grant.beforeGroups.includes(groupCode) || !grant.afterGroups.includes(groupCode)
+      || !grant.afterGroups.includes(groupCode)
       || !grant.beforeGroups.every(code => typeof code === 'string' && grant.afterGroups.includes(code))
       || grant.existingGroupsPreserved !== true) fail();
+  if (grant.beforeGroups.includes(groupCode)) {
+    const source = STUDENT_SHARE_SOURCES.find(source => source.groupCode === groupCode);
+    const evidence = grant.attendanceEvidence;
+    if (grant.kind !== 'student_share_existing_staff' || grant.beforeGrade !== STAFF_GRADE
+        || grant.afterGrade !== STAFF_GRADE || !source?.lessonIds || !record(evidence)
+        || evidence.source !== 'studiomate_live_lesson_detail' || evidence.status !== 'both_sessions_attended'
+        || !/^m[0-9a-f]+$/.test(evidence.memberCode) || evidence.date !== '2026-10-24'
+        || JSON.stringify(evidence.lessonIds) !== JSON.stringify(source.lessonIds)
+        || grant.beforeGroups.length !== grant.afterGroups.length) fail();
+  } else if (grant.kind === 'student_share_existing_staff') fail();
   const start = shareInstant(grant.verifiedAt);
   if (start > now || (grant.grantedAt !== undefined && shareInstant(grant.grantedAt) !== start)) fail();
   return { grantedAt: new Date(start).toISOString(), expiresAt: new Date(start + STUDENT_SHARE_WINDOW_MS).toISOString() };
@@ -69,6 +89,7 @@ export function validatedShareEntries(state, source, now) {
   const result = new Map();
   for (const [code, grant] of Object.entries(state.manualImmediateGrants)) {
     if (!/^m[0-9a-f]+$/.test(code)) fail();
+    if (grant.kind === 'student_share_existing_staff' && grant.attendanceEvidence?.memberCode !== code) fail();
     const window = firstVerifiedShareWindow(grant, source.groupCode, now);
     result.set(code, { ...window, status: 'active', adopted: false });
   }
