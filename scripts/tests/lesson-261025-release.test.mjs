@@ -68,6 +68,16 @@ for (const target of ['rules', 'core-rules']) {
     assert.doesNotThrow(() => assertLessonReleaseScope(rules, rules + note, target));
     assert.equal((rules + note).replace(note, ''), rules);
   });
+  test(`${target} permits replacing only the existing note and rejects no-op or unrelated edits`, () => {
+    const before = rules + note, after = rules + note.replace('Synthetic operating note.', 'Verified five approved grants.');
+    assert.doesNotThrow(() => assertLessonReleaseScope(before, after, target));
+    assert.throws(() => assertLessonReleaseScope(before, before, target));
+    assert.throws(() => assertLessonReleaseScope(before, after.replace('<title>', '<title>Other'), target));
+    assert.throws(() => assertLessonReleaseScope(before + note, after, target));
+    const boundary = rules.indexOf('\n') + 1;
+    const embedded = rules.slice(0, boundary) + note + rules.slice(boundary);
+    assert.throws(() => assertLessonReleaseScope(embedded, after, target));
+  });
 
   for (const [name, after] of [
     ['no-op', rules], ['duplicate notes on separate lines', rules + note + note],
@@ -96,8 +106,8 @@ test('target table pins the reviewed baseline, three sites, resources and source
   const table = structuredClone(runInNewContext(`${releaseSource.slice(start, end + 3)}\ntargets;`, { ASSET }));
   assert.deepEqual(table, {
     classroom: { site: 'archive-pilates-home', resource: ASSET, source: `official-home${ASSET}`, url: `https://archivepilates.com${ASSET}` },
-    rules: { site: 'archive-pilates', resource: '/core/rules/index.html', source: 'core/rules/index.html', url: 'https://archive-pilates.web.app/core/rules/' },
-    'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html', source: 'core/rules/index.html', url: 'https://archive-pilates-core.web.app/rules/' },
+    rules: { site: 'archive-pilates', resource: '/core/rules/index.html', baseline: '66e8ea39551f97291148c6fcbded18d334a1d061', source: 'core/rules/index.html', url: 'https://archive-pilates.web.app/core/rules/' },
+    'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html', baseline: '66e8ea39551f97291148c6fcbded18d334a1d061', source: 'core/rules/index.html', url: 'https://archive-pilates-core.web.app/rules/' },
   });
   assert.match(releaseSource, /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/);
   assert.match(releaseSource, /import \{ makeManifest, assertManifest \} from '\.\/release-e261017-classroom\.mjs'/);

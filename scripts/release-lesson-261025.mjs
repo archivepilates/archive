@@ -13,9 +13,9 @@ const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com'
 const targets = {
   classroom: { site: 'archive-pilates-home', resource: ASSET,
     source: `official-home${ASSET}`, url: `https://archivepilates.com${ASSET}` },
-  rules: { site: 'archive-pilates', resource: '/core/rules/index.html',
+  rules: { site: 'archive-pilates', resource: '/core/rules/index.html', baseline: '66e8ea39551f97291148c6fcbded18d334a1d061',
     source: 'core/rules/index.html', url: 'https://archive-pilates.web.app/core/rules/' },
-  'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html',
+  'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html', baseline: '66e8ea39551f97291148c6fcbded18d334a1d061',
     source: 'core/rules/index.html', url: 'https://archive-pilates-core.web.app/rules/' },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -29,8 +29,10 @@ export function assertLessonReleaseScope(before, after, target) {
   } else {
     if (!['rules', 'core-rules'].includes(target)) throw Error('Unexpected release target');
     const note = /^          <div class="rule-note" id="lesson-share-261025"><strong>[^<\n]+<\/strong><span>[^<\n]+<\/span><\/div>\n/gm;
-    if ((after.match(note) || []).length !== 1 || (after.match(/id="lesson-share-261025"/g) || []).length !== 1
-        || after.replace(note, '') !== before) throw Error('Only the 10/25 operating note may change');
+    if (before === after || (before.match(/id="lesson-share-261025"/g) || []).length > 1
+        || (after.match(note) || []).length !== 1 || (after.match(/id="lesson-share-261025"/g) || []).length !== 1
+        || after.replace(note, '') !== before.replace(note, '')) throw Error('Only the 10/25 operating note may change');
+    if ((before.match(note) || []).length === 1 && before.replace(note, () => after.match(note)[0]) !== after) throw Error('Existing note must be replaced in place');
   }
 }
 

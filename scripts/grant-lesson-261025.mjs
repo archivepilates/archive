@@ -13,6 +13,8 @@ import { C261025_SHARE, D261025_SHARE, STUDENT_SHARE_SOURCES, readStudentShareLe
 import { matchLessonShareMember } from './lib/lesson-share-261024.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 
+export { attendance as readLessonAttendance, assertSources as assertLessonSources };
+
 const ROOT = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES/lesson-videos-261025');
 const SOURCES = Object.freeze({ C: C261025_SHARE, D: D261025_SHARE });
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
