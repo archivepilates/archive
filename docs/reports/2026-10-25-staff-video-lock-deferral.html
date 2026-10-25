@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>스텝 영상권한 잠금 관제 개선 | ARCHIVE PILATES</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#202124;font:16px/1.7 system-ui,sans-serif}main{max-width:65ch;margin:auto;padding:2rem 1rem}h1{font-size:1.6rem;line-height:1.4}h2{font-size:1.1rem;margin-top:2rem}p,li{overflow-wrap:anywhere}code{font-size:.9em;overflow-wrap:anywhere}small{color:#61666b}strong{color:#9b1425}</style>
+<main>
+<small>ARCHIVE PILATES / ARCHIVE CORE / 2026-10-25</small>
+<h1>스텝 영상권한 잠금 대기와 실패 분리</h1>
+<p><strong>로컬 수정·회귀 검증 완료, 운영 반영 미완료.</strong> 회원 권한이나 실행 주기를 바꾸지 않고 정상 잠금 충돌의 실패메일 오분류를 보완한다.</p>
+<h2>확인한 원인</h2>
+<p>13:38 KST 오류메일은 아임웹 회원그룹 변경 잠금을 다른 작업이 점유하여 자동 연결 작업이 시작하지 못한 경우였다. 공용 StudioMate 잠금 도우미의 오류 코드가 그대로 사용되어 대상 서비스도 혼동됐다. 저장 원장상 직전 전체 실행은 13:33:26 KST 완료 기록이다. 이 기록은 현재 실시간 회원 권한 전체 조회를 뜻하지 않는다.</p>
+<h2>수정 동작</h2>
+<ul>
+<li>회원그룹 작업 잠금 획득 전 충돌만 <code>IMWEB_MEMBER_GROUPS_BUSY</code>로 구분한다. 원본 조회·권한 변경은 시작하지 않으며 잠금 소유 작업을 건드리지 않는다.</li>
+<li>짧은 대기는 별도 기록하고 실패·성공·복구로 계산하지 않는다. 실제 오류 횟수, 미확정 알림, 기존 알림 식별자와 최근 전체 완료 시각을 보존한다.</li>
+<li>연속 30분 이상 대기는 <code>IMWEB_MEMBER_GROUPS_LOCK_DELAYED</code> 확인필요 메일로 알린다. 기존 알림 중복방지와 하루 재통지 제한을 사용하고 새 예약·재시도를 만들지 않는다.</li>
+<li>인증·권한·원장·결과 불명·관제 기록 실패는 대기로 숨기지 않는다. 실제 전체 정기 처리 완료만 복구로 판정하고 개별 처리나 dry-run은 제외한다.</li>
+</ul>
+<h2>검증</h2>
+<p>확장 회귀 215개 통과, 실패·건너뜀 0개. 실행기·알림 중복방지와 메일 제목/라벨·기존 스텝 권한·수강생 공유권 보호·CORE 제한 배포 가드·공유 잠금을 함께 검사했다. 독립 검토에서 찾은 미확정 알림 식별자 보존 및 늦은 완료/오류 순서 문제도 수정했고 독립 집중 재시험 41개가 통과했다. 임시 디렉터리의 실제 점유 잠금, 합성 회원 원장과 알림 모의 응답만 사용했다. 실행기·관제·제한 배포 모듈 문법 검사와 diff 공백 검사도 통과했다. CORE 소스는 기존 스텝 영상권한 한 항목만 변경됐음을 대조했다. 회원 권한 변경·실제 메일·수동 큐·강제 재실행은 하지 않았다.</p>
+<h2>운영 반영</h2>
+<p>전용 worktree에서 검증했고 사용자가 운영 반영·배포·커밋·푸시를 승인했다. 이 소스 시점에는 실행기 반영과 제한 Hosting 배포를 준비 중이다. 기존 CORE 운영규칙의 스텝 영상권한 항목만 갱신하며 실제 배포·첫 자연 실행 결과는 후속 증거에 기록한다. 작업 주기·권한 정책·기존 실패 상태는 초기화하지 않는다.</p>
+<p>기존 권한 정본은 아임웹 최신 회원·그룹·유효 주문과 승인된 최초 부여 원장이다. 관제 기록은 실행 상태 증거일 뿐 회원 권한 변경의 원천이 아니며 성공시각을 새로 만들거나 기존 미해결 업무를 완료로 바꾸지 않는다.</p>
+</main>
+</html>

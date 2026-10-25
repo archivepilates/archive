@@ -13,6 +13,7 @@ import { readStudentShareLedgers, protectedStudentShareGroups, STUDENT_SHARE_SOU
 export const STAFF_VIDEO_POLICY = 'imweb-staff-video-v1';
 export const STAFF_VIDEO_DIR = path.join(os.homedir(), 'ArchiveIN/automation/imweb-staff-video');
 export const MEMBER_GROUP_LOCK = path.join(os.homedir(), 'ArchiveIN/automation/locks/imweb-member-groups.lock');
+export const STAFF_VIDEO_LOCK_BUSY = 'IMWEB_MEMBER_GROUPS_BUSY';
 const stamp = () => new Date().toISOString();
 const sameGroups = (a,b) => isDeepStrictEqual([...a].sort(),[...b].sort());
 const memberHash = member => createHash('sha256').update(JSON.stringify(Object.fromEntries(
@@ -179,9 +180,17 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
   return result;
 }
 
-export async function runStaffVideoSync({apply=false,onlyMemberCode='',directory=STAFF_VIDEO_DIR,run=staffImweb}={}) {
+export async function runStaffVideoSync({apply=false,onlyMemberCode='',directory=STAFF_VIDEO_DIR,run=staffImweb,
+  acquireLock=acquireStudioMateBrowserLock}={}) {
   fs.mkdirSync(directory,{recursive:true,mode:0o700});
-  const release=await acquireStudioMateBrowserLock({lockPath:MEMBER_GROUP_LOCK,owner:'imweb-staff-video-sync',waitMs:0,staleMs:600000});
+  let release;
+  try {
+    release=await acquireLock({lockPath:MEMBER_GROUP_LOCK,owner:'imweb-staff-video-sync',waitMs:0,staleMs:600000});
+  } catch(error) {
+    if(error.code!=='STUDIOMATE_BROWSER_BUSY')throw error;
+    throw Object.assign(Error('아임웹 회원그룹 변경 작업이 진행 중입니다.'),
+      {code:STAFF_VIDEO_LOCK_BUSY,phase:'lock_acquisition'});
+  }
   try {
     const config=JSON.parse(fs.readFileSync(path.join(directory,'config.json'),'utf8'));
     if(config.policyVersion!==STAFF_VIDEO_POLICY||config.approved!==true||config.siteCode!==SITE||config.unitCode!==UNIT)throw Error('Staff sync not activated');

@@ -17,6 +17,9 @@ const WEBHOOK_BASE = 'e38a36e7b4f334ceac8757c4e685b0af46fec16e';
 const WEBHOOK_BASE_HASH = '44a9c5c076e562279933c02c3f24562f0a504d20c7f946a71c6d296537849892';
 const OAUTH_BASE = 'dac9e03c96416b066cc9717f0759698d2fed12d1';
 const OAUTH_BASE_HASH = '00af19ccf93380b0f6aa025b6c9356289d41a9a8db1c05a0bcefedfe05e66534';
+const STAFF_LOCK_BASE = '9aaf7a8c38145f60e5b1c0ebab8d562ab832e929';
+const STAFF_LOCK_BASE_HASH = '42b17144216b720cff439930466b09a832979072a2e1ebe72d16e1e09f338a74';
+const STAFF_LOCK_LIVE_HASH = '42b17144216b720cff439930466b09a832979072a2e1ebe72d16e1e09f338a74';
 const sha = value => createHash('sha256').update(value).digest('hex');
 
 export function assertStaffNoteOnly(before, after) {
@@ -24,6 +27,18 @@ export function assertStaffNoteOnly(before, after) {
   if (before.match(note) || (after.match(note) || []).length !== 1 || after.replace(note, '') !== before) {
     throw Error('Release must add only the staff video operating note');
   }
+}
+
+export function staffLockPolicySource(live, before, after) {
+  const note = /^ +<div class="rule-note" id="imweb-staff-video-policy">[^\n]*<\/div>\n/gm;
+  const previous = before.match(note);
+  const next = after.match(note);
+  const deployed = live.match(note);
+  if (previous?.length !== 1 || next?.length !== 1 || deployed?.length !== 1
+    || deployed[0] !== previous[0] || before.replace(note, '') !== after.replace(note, '')) {
+    throw Error('Release must update only the reviewed staff video note');
+  }
+  return live.replace(note, () => next[0]);
 }
 
 export function assertStudentShareNoteOnly(before, after) {
@@ -48,26 +63,28 @@ export function assertWebhookOAuthNoteOnly(before, after) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.some(arg => !['--apply', '--student-share-policy', '--webhook-onboarding', '--webhook-oauth', '--site=archive-pilates', '--site=archive-pilates-core'].includes(arg)
+  if (args.some(arg => !['--apply', '--staff-lock-policy', '--student-share-policy', '--webhook-onboarding', '--webhook-oauth', '--site=archive-pilates', '--site=archive-pilates-core'].includes(arg)
       && !arg.startsWith('--expected-version='))) throw Error('Unsupported release argument');
   const apply = args.includes('--apply');
   const studentShare = args.includes('--student-share-policy');
   const webhook = args.includes('--webhook-onboarding');
   const oauth = args.includes('--webhook-oauth');
-  if ([studentShare, webhook, oauth].filter(Boolean).length > 1) throw Error('Choose one policy release');
+  const staffLock = args.includes('--staff-lock-policy');
+  if ([studentShare, webhook, oauth, staffLock].filter(Boolean).length > 1) throw Error('Choose one policy release');
   const SITE = args.includes('--site=archive-pilates-core') ? 'archive-pilates-core' : 'archive-pilates';
-  if (!studentShare && !webhook && !oauth && SITE !== 'archive-pilates') throw Error('Historical release is main-site only');
+  if (!studentShare && !webhook && !oauth && !staffLock && SITE !== 'archive-pilates') throw Error('Historical release is main-site only');
   const ASSET = SITE === 'archive-pilates' ? '/core/rules/index.html' : '/rules/index.html';
   const LIVE = `https://${SITE}.web.app${ASSET.slice(0, -10)}`;
-  const baselineCommit = oauth ? OAUTH_BASE : webhook ? WEBHOOK_BASE : studentShare ? SHARE_BASE : BASE;
-  const baselineHash = oauth ? OAUTH_BASE_HASH : webhook ? WEBHOOK_BASE_HASH : studentShare ? SHARE_BASE_HASH : BASE_HASH;
+  const baselineCommit = staffLock ? STAFF_LOCK_BASE : oauth ? OAUTH_BASE : webhook ? WEBHOOK_BASE : studentShare ? SHARE_BASE : BASE;
+  const baselineHash = staffLock ? STAFF_LOCK_BASE_HASH : oauth ? OAUTH_BASE_HASH : webhook ? WEBHOOK_BASE_HASH : studentShare ? SHARE_BASE_HASH : BASE_HASH;
   const expected = args.find(arg => arg.startsWith('--expected-version='))?.slice(19);
   const git = values => execFileSync('git', values, { encoding: 'utf8' }).trim();
   const root = git(['rev-parse', '--show-toplevel']);
-  const source = fs.readFileSync(path.join(root, 'core/rules/index.html'));
+  let source = fs.readFileSync(path.join(root, 'core/rules/index.html'));
   const baselineSource = execFileSync('git', ['show', `${baselineCommit}:core/rules/index.html`]);
   if (sha(baselineSource) !== baselineHash) throw Error('Pinned baseline mismatch');
-  (oauth ? assertWebhookOAuthNoteOnly : webhook ? assertWebhookOnboardingNoteOnly : studentShare ? assertStudentShareNoteOnly : assertStaffNoteOnly)(baselineSource.toString(), source.toString());
+  if (staffLock) staffLockPolicySource(baselineSource.toString(), baselineSource.toString(), source.toString());
+  else (oauth ? assertWebhookOAuthNoteOnly : webhook ? assertWebhookOnboardingNoteOnly : studentShare ? assertStudentShareNoteOnly : assertStaffNoteOnly)(baselineSource.toString(), source.toString());
   if (apply && (!expected || git(['branch', '--show-current']) !== 'main' || git(['status', '--porcelain']))) {
     throw Error('Apply requires clean local main and reviewed live version');
   }
@@ -99,14 +116,16 @@ async function main() {
   const baseline = await request(release.version.name);
   const files = await filesFor(baseline.name);
   const live = await fetch(LIVE, { cache: 'no-store' });
-  if (!live.ok || sha(Buffer.from(await live.arrayBuffer())) !== baselineHash) throw Error('Unreviewed live CORE rules');
+  const liveBytes = Buffer.from(await live.arrayBuffer());
+  if (!live.ok || sha(liveBytes) !== (staffLock ? STAFF_LOCK_LIVE_HASH : baselineHash)) throw Error('Unreviewed live CORE rules');
+  if (staffLock) source = Buffer.from(staffLockPolicySource(liveBytes.toString(), baselineSource.toString(), source.toString()));
   const compressed = gzipSync(source, { level: 9 }); const hash = sha(compressed);
   const manifest = makeManifest(files, hash, ASSET);
   const evidence = { site: SITE, sourceCommit: git(['rev-parse', 'HEAD']), baselineVersion: baseline.name,
     changedPaths: [ASSET], unchangedFileCount: files.length-1, mode: apply ? 'apply' : 'plan', sourceHash: sha(source) };
   if (!apply) { console.log(JSON.stringify(evidence)); return; }
   const directory = path.join(os.homedir(), 'ArchiveIN/automation/imweb-staff-video');
-  const evidenceFile = path.join(directory, oauth ? `webhook-oauth-hosting-${SITE}.json` : webhook ? `webhook-onboarding-hosting-${SITE}.json` : studentShare ? `student-share-hosting-${SITE}.json` : 'hosting-release.json');
+  const evidenceFile = path.join(directory, staffLock ? `lock-policy-hosting-${SITE}.json` : oauth ? `webhook-oauth-hosting-${SITE}.json` : webhook ? `webhook-onboarding-hosting-${SITE}.json` : studentShare ? `student-share-hosting-${SITE}.json` : 'hosting-release.json');
   const save = () => fs.writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2)+'\n', { mode: 0o600 });
   const lock = path.join(os.homedir(), `ArchiveIN/automation/locks/firebase-hosting-${SITE}.lock`);
   fs.mkdirSync(path.dirname(lock), { recursive: true }); fs.mkdirSync(directory, { recursive: true, mode: 0o700 });

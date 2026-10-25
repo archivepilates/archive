@@ -9,18 +9,25 @@ import { formatOperationsReport, kstTimestamp } from './operations-email-format.
 
 export const FAILURE_THRESHOLD = 3;
 export const ALERT_STATE_FILE = 'query-alert-state.json';
+export const LOCK_WAIT_ALERT_AFTER_MS = 30 * 60 * 1000;
+export const LOCK_WAIT_DELAYED_CODE = 'IMWEB_MEMBER_GROUPS_LOCK_DELAYED';
 
 export function automationHealthEmailBody({ title, link }, event) {
   const recovered = event.type === 'recovery';
+  const delayed = !recovered && event.errorCode === LOCK_WAIT_DELAYED_CODE;
   const details = sanitizeImwebFailureDetails(event.failureDetails);
-  return formatOperationsReport({ area: '자동화', status: recovered ? '성공' : '실패', title,
+  return formatOperationsReport({ area: '자동화', status: recovered ? '성공' : delayed ? '확인필요' : '실패', title,
     observedAt: event.observedAt, context: title,
-    conclusion: recovered ? '알림을 보낸 오류 이후 전체 정기 실행이 정상 완료됐습니다.' : `${event.consecutiveFailures}회 연속 실패했습니다.`,
+    conclusion: recovered ? '알림을 보낸 오류 이후 전체 정기 실행이 정상 완료됐습니다.'
+      : delayed ? '아임웹 회원그룹 잠금으로 정기 실행이 30분 이상 지연됐습니다.' : `${event.consecutiveFailures}회 연속 실패했습니다.`,
     key: [`최초 발생: ${kstTimestamp(event.firstFailureAt)}`, `원인 코드: ${event.errorCode}`,
       ...Object.entries(details).map(([name, value]) => `${name}: ${value}`)],
-    verification: [recovered ? '전체 조회와 해당 실행의 처리가 완료됐습니다.' : '해당 실행이 완료되지 않았습니다.'],
-    caution: [recovered ? '개별 적립·수강권 발급의 과거 누락 해소를 뜻하지 않습니다.' : '처리 결과가 불명확한 적립·접수는 자동 쓰기 재시도하지 않습니다.'],
-    next: [recovered ? '추가 조치 없음. 기존 확인필요 건은 별도 검토합니다.' : '원본과 실행 장부를 확인하세요.'],
+    verification: [recovered ? '전체 조회와 해당 실행의 처리가 완료됐습니다.'
+      : delayed ? '잠금을 획득하지 못해 해당 실행의 원본 조회·권한 변경은 시작하지 않았습니다.' : '해당 실행이 완료되지 않았습니다.'],
+    caution: [recovered ? '개별 적립·수강권 발급의 과거 누락 해소를 뜻하지 않습니다.'
+      : delayed ? '회원 권한은 변경하지 않았으며 잠금 대기를 처리 완료로 판단하지 않습니다.' : '처리 결과가 불명확한 적립·접수는 자동 쓰기 재시도하지 않습니다.'],
+    next: [recovered ? '추가 조치 없음. 기존 확인필요 건은 별도 검토합니다.'
+      : delayed ? '잠금 소유 작업과 실행 장부를 확인하세요. 강제 잠금 해제·권한 변경 재시도는 하지 않습니다.' : '원본과 실행 장부를 확인하세요.'],
     details: [link],
   }).body;
 }
@@ -35,19 +42,20 @@ export function automationHealthEventId(area, event) {
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
 }
 
-export function sendAutomationHealthEmail({ area, title, link }, event) {
+export function sendAutomationHealthEmail({ area, title, link }, event, { execute = execFileSync } = {}) {
   const recovered = event.type === 'recovery';
+  const delayed = !recovered && event.errorCode === LOCK_WAIT_DELAYED_CODE;
   const eventId = automationHealthEventId(area, event);
   const body = automationHealthEmailBody({ title, link }, event);
-  const output = execFileSync(process.execPath, ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
+  const output = execute(process.execPath, ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
     cwd: new URL('../../', import.meta.url), encoding: 'utf8', timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env,
       GOOGLE_SERVICE_ACCOUNT_KEY: path.join(os.homedir(), 'ArchiveIN/secrets/google/archive-codex-operator.json'),
       AUTOMATION_REPORT_FROM: 'home@archivepilates.com', AUTOMATION_REPORT_TO: 'home@archivepilates.com',
       AUTOMATION_REPORT_EVENT_ID: eventId,
       AUTOMATION_REPORT_RECONCILE_ONLY: event.reconcileOnly ? '1' : '0',
-      AUTOMATION_REPORT_SUBJECT: `[${area}][${recovered ? '성공' : '실패'}] ${title} ${recovered ? '복구' : '확인 필요'} · ${kstTimestamp(event.observedAt).slice(0, 10)}`,
-      AUTOMATION_REPORT_LABEL: recovered ? '자동화 성공' : '자동화 실패', AUTOMATION_REPORT_BODY: body,
+      AUTOMATION_REPORT_SUBJECT: `[${area}][${recovered ? '성공' : delayed ? '확인필요' : '실패'}] ${title} ${recovered ? '복구' : delayed ? '잠금 지연' : '확인 필요'} · ${kstTimestamp(event.observedAt).slice(0, 10)}`,
+      AUTOMATION_REPORT_LABEL: recovered ? '자동화 성공' : delayed ? '자동화 확인필요' : '자동화 실패', AUTOMATION_REPORT_BODY: body,
     },
   });
   return JSON.parse(output);
@@ -71,6 +79,39 @@ export async function observeAutomationRun(directory, observation, notify, now =
     // The referral runner releases its work lock before notification; ignore late observations.
     if (observation.runFinishedAt && state.lastRunFinishedAt
       && Date.parse(observation.runFinishedAt) <= Date.parse(state.lastRunFinishedAt)) return { ...state, skipped: true };
+    if (observation.runFinishedAt && Date.parse(observation.runFinishedAt) <= Date.parse(state.lastRunFailedAt)
+      || observation.runFailedAt && Date.parse(observation.runFailedAt) <= Math.max(
+        Date.parse(state.lastRunFailedAt) || 0, Date.parse(state.lastRunFinishedAt) || 0)) return { ...state, skipped: true };
+    if (observation.lockWait && (Date.parse(observation.runStartedAt) <= Date.parse(state.lastRunFinishedAt)
+      || Date.parse(observation.runStartedAt) <= Date.parse(state.lastRunFailedAt)
+      || Date.parse(now) < Date.parse(state.observedAt))) return { ...state, skipped: true, deferred: true };
+    const persist = async () => {
+      const temporary = `${file}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: 'wx' });
+        await rename(temporary, file);
+      } finally { await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
+    };
+    let preserveFailure = false;
+    if (observation.lockWait) {
+      state.lockWaitSince ||= now;
+      state.lockWaitObservedAt = now;
+      if (Date.parse(now) - Date.parse(state.lockWaitSince) < LOCK_WAIT_ALERT_AFTER_MS) {
+        // A skipped run is neither a completed recovery nor another transport failure.
+        state.lastOutcome = 'deferred_lock';
+        state.observedAt = now;
+        await persist();
+        return { ...state, deferred: true };
+      }
+      preserveFailure = state.errorCode && state.errorCode !== LOCK_WAIT_DELAYED_CODE
+        && Boolean(state.consecutiveFailures || state.notifiedAt || state.pendingNotice);
+      observation = { ...observation, ok: false,
+        errorCode: preserveFailure ? state.errorCode : LOCK_WAIT_DELAYED_CODE,
+        failureDetails: preserveFailure ? state.failureDetails : undefined };
+    } else {
+      delete state.lockWaitSince;
+      delete state.lockWaitObservedAt;
+    }
     const lastRunFinishedAt = observation.runFinishedAt || state.lastRunFinishedAt;
     if ((observation.ok || observation.blocked) && state.pendingNotice && !state.notifiedAt) {
       try {
@@ -100,13 +141,13 @@ export async function observeAutomationRun(directory, observation, notify, now =
     } else {
       const notifiedDetails = state.notifiedFailureDetails || state.failureDetails || {};
       if (!state.consecutiveFailures && !state.notifiedAt) state.firstFailureAt = now;
-      state.consecutiveFailures += 1;
+      if (!preserveFailure) state.consecutiveFailures += 1;
       state.errorCode = observation.errorCode;
       state.failureDetails = sanitizeImwebFailureDetails(observation.failureDetails);
       const deferredRead = observation.transient || observation.deferredRead;
       const newFailureStage = ['phase', 'operation', 'role', 'statusCode', 'failureKind']
         .some(key => notifiedDetails[key] !== state.failureDetails[key]);
-      state.lastOutcome = observation.transient ? 'transient_failure' : observation.deferredRead ? 'read_failure' : 'failure';
+      state.lastOutcome = observation.lockWait ? 'deferred_lock' : observation.transient ? 'transient_failure' : observation.deferredRead ? 'read_failure' : 'failure';
       const due = !state.notifiedAt || !deferredRead && (state.notifiedCode !== observation.errorCode || newFailureStage)
         || Date.parse(now) - Date.parse(state.notifiedAt) >= 86400000;
       if ((!deferredRead || state.consecutiveFailures >= FAILURE_THRESHOLD) && due) {
@@ -119,14 +160,8 @@ export async function observeAutomationRun(directory, observation, notify, now =
       }
     }
     state.observedAt = now;
+    if (observation.runFailedAt) state.lastRunFailedAt = observation.runFailedAt;
     if (lastRunFinishedAt) state.lastRunFinishedAt = lastRunFinishedAt;
-    const persist = async () => {
-      const temporary = `${file}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: 'wx' });
-        await rename(temporary, file);
-      } finally { await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
-    };
     if (event?.type === 'failure') state.pendingNotice = { noticeVersion: event.noticeVersion,
       type: event.type, firstFailureAt: event.firstFailureAt,
       notifiedAt: event.notifiedAt, errorCode: event.errorCode, failureDetails: event.failureDetails,
@@ -147,10 +182,10 @@ export async function observeAutomationRun(directory, observation, notify, now =
         await persist();
       } catch {
         console.error('자동화 상태 알림 발송 확인 실패: 다음 정기 실행에서 다시 확인합니다.');
-        return { ...state, notificationFailed: true };
+        return { ...state, notificationFailed: true, ...(observation.lockWait ? { lockWaitEscalated: true } : {}) };
       }
     }
-    return state;
+    return { ...state, ...(observation.lockWait ? { lockWaitEscalated: true } : {}) };
   } finally { await release(); }
 }
 

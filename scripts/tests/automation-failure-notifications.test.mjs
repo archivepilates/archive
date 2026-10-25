@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, stat, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { observeAutomationRun, ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding, automationHealthEmailBody, automationHealthEventId } from '../lib/automation-failure-notifications.mjs';
+import { observeAutomationRun, ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding, automationHealthEmailBody, automationHealthEventId, LOCK_WAIT_DELAYED_CODE, sendAutomationHealthEmail } from '../lib/automation-failure-notifications.mjs';
 import { imwebRequestFailure, TRANSIENT_READ_CODE } from '../lib/imweb-read-failure.mjs';
 import { imwebJson } from '../lib/imweb-referral-source.mjs';
 import { imwebOrderRead, syncImwebInstructorOrders } from '../lib/imweb-instructor-orders.mjs';
@@ -13,6 +13,39 @@ import { deliverAutomationReport, reportMessageId } from '../../firebase/kangsai
 
 const failure = { ok: false, transient: true, errorCode: TRANSIENT_READ_CODE };
 const now = '2026-10-05T01:00:00.000Z';
+
+test('prolonged Imweb lock notice describes a delay rather than a provider failure', () => {
+  const body = automationHealthEmailBody({ title: '자동 연결', link: 'https://example.test/rules' },
+    { type: 'failure', errorCode: LOCK_WAIT_DELAYED_CODE, consecutiveFailures: 1,
+      firstFailureAt: now, observedAt: now });
+  assert.match(body, /30분 이상 지연/);
+  assert.match(body, /원본 조회·권한 변경은 시작하지 않았/);
+  assert.doesNotMatch(body, /1회 연속 실패/);
+  const ordinary = automationHealthEmailBody({ title: '자동 연결' },
+    { type: 'failure', errorCode: 'AUTH_FAILURE', consecutiveFailures: 1, firstFailureAt: now, observedAt: now });
+  assert.match(ordinary, /1회 연속 실패/);
+  assert.doesNotMatch(ordinary, /30분 이상 지연/);
+});
+
+test('lock-delay mail uses attention subject/label while real failures and recovery keep their routing', () => {
+  for (const [type, errorCode, status, label] of [
+    ['failure', LOCK_WAIT_DELAYED_CODE, '확인필요', '자동화 확인필요'],
+    ['failure', 'AUTH_FAILURE', '실패', '자동화 실패'],
+    ['recovery', LOCK_WAIT_DELAYED_CODE, '성공', '자동화 성공'],
+  ]) {
+    let calls = 0;
+    const receipt = sendAutomationHealthEmail({ area: '스텝 영상권한', title: '자동 연결', link: 'https://example.test/rules' },
+      { type, errorCode, consecutiveFailures: 1, firstFailureAt: now, observedAt: now },
+      { execute: (_command, _args, options) => {
+        calls++;
+        assert.ok(options.env.AUTOMATION_REPORT_SUBJECT.startsWith(`[스텝 영상권한][${status}]`));
+        assert.equal(options.env.AUTOMATION_REPORT_LABEL, label);
+        return JSON.stringify({ messageId: 'synthetic-mail' });
+      } });
+    assert.equal(calls, 1);
+    assert.equal(receipt.messageId, 'synthetic-mail');
+  }
+});
 const scanFailure = { exitCode: 1, mode: 'apply', state: 'failed', errorCode: 'IMWEB_REQUEST_FAILED',
   summary: null, rewards: {}, failureDetails: { phase: 'member_scan', operation: 'member_list' } };
 async function fixture(t) {

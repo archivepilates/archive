@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertStaffNoteOnly, assertStudentShareNoteOnly, assertWebhookOnboardingNoteOnly, assertWebhookOAuthNoteOnly } from '../release-imweb-staff-core-rules.mjs';
+import { assertStaffNoteOnly, assertStudentShareNoteOnly, assertWebhookOnboardingNoteOnly, assertWebhookOAuthNoteOnly, staffLockPolicySource } from '../release-imweb-staff-core-rules.mjs';
 
 test('CORE release accepts exactly one new staff policy note and no other changes', () => {
   const before = '<main>\n</main>\n';
@@ -42,4 +42,18 @@ test('OAuth release updates only the existing webhook note and preserves other l
     after.replace('Other lane', 'Other change'), after.replace('consent pending', 'consent\npending')])
     assert.throws(() => assertWebhookOAuthNoteOnly(before, bad));
   assert.throws(() => assertWebhookOAuthNoteOnly(before.replace(note, ''), after));
+});
+
+test('staff lock release overlays only the tracked note and preserves the live rules of other lanes', () => {
+  const note = '  <div class="rule-note" id="imweb-staff-video-policy"><strong>Before</strong></div>\n';
+  const before = '<main>\n' + note + '<p>Tracked lane</p>\n</main>\n';
+  const after = before.replace('Before', 'Deferred lock; 30-minute attention');
+  const live = before.replace('Tracked lane', 'Independently deployed lane');
+  assert.equal(staffLockPolicySource(live, before, after), live.replace('Before', 'Deferred lock; 30-minute attention'));
+  for (const bad of [after + note, after.replace('Tracked lane', 'Unrelated change'), after.replace(note.slice(0, 10), '<other')]) {
+    assert.throws(() => staffLockPolicySource(live, before, bad));
+  }
+  for (const bad of [live + note, live.replace('Before', 'Concurrent edit'), live.replace(note, '')]) {
+    assert.throws(() => staffLockPolicySource(bad, before, after));
+  }
 });
