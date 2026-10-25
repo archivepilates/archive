@@ -17,11 +17,22 @@ const targets = {
     source: 'core/rules/index.html', url: 'https://archive-pilates.web.app/core/rules/' },
   'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html',
     source: 'core/rules/index.html', url: 'https://archive-pilates-core.web.app/rules/' },
+  'ui-rules': { site: 'archive-pilates', resource: '/core/rules/index.html', baseline: 'b7e70384',
+    source: 'core/rules/index.html', url: 'https://archive-pilates.web.app/core/rules/' },
+  'ui-core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html', baseline: 'b7e70384',
+    source: 'core/rules/index.html', url: 'https://archive-pilates-core.web.app/rules/' },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
 
 export function assertLessonReleaseScope(before, after, target) {
-  if (target === 'classroom') {
+  if (['ui-rules', 'ui-core-rules'].includes(target)) {
+    const note = /^          <div class="rule-note" id="lesson-share-261024"><strong>[^<\n]*<\/strong><span>[^<\n]*<\/span><\/div>\n/gm;
+    const original = [...before.matchAll(note)], updated = [...after.matchAll(note)];
+    if (original.length !== 1 || updated.length !== 1
+        || before.slice(0, original[0].index) !== after.slice(0, updated[0].index)
+        || before.slice(original[0].index + original[0][0].length) !== after.slice(updated[0].index + updated[0][0].length)
+        || before === after) throw Error('Only the existing 10/24 operating note may change');
+  } else if (target === 'classroom') {
     const anchor = '    {"code":"E261017","path":"/private-lesson-external-feedback-e-261017","title":"10/17 외부 피드백 E팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D","private":true}';
     const additions = ['A', 'B'].map(team => `    {"code":"${team}261024","path":"/private-lesson-external-feedback2-${team.toLowerCase()}-261024","title":"10/24 외부 피드백2 ${team}팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 ${team} 261024 40D","private":true}`);
     if (before.split(anchor).length !== 2
@@ -42,7 +53,7 @@ async function main() {
   const git = args => execFileSync('git', args, { encoding: 'utf8' }).trim();
   const root = git(['rev-parse', '--show-toplevel']);
   const source = fs.readFileSync(path.join(root, selected.source));
-  const baselineSource = execFileSync('git', ['show', `${BASE}:${selected.source}`]);
+  const baselineSource = execFileSync('git', ['show', `${selected.baseline || BASE}:${selected.source}`]);
   assertLessonReleaseScope(baselineSource.toString(), source.toString(), target);
   if (apply) {
     git(['fetch', 'origin', 'main']);
