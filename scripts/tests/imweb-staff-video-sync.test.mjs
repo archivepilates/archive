@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 import { reconcileStaffVideos as reconcileRuntimeStaffVideos, STAFF_VIDEO_POLICY } from '../lib/imweb-staff-video-sync.mjs';
-import { E261017_SHARE, A261024_SHARE, B261024_SHARE, STUDENT_SHARE_SOURCES } from '../lib/imweb-student-share-policy.mjs';
+import { E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE, STUDENT_SHARE_SOURCES } from '../lib/imweb-student-share-policy.mjs';
 import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT } from '../lib/imweb-staff-video-policy.mjs';
 
 const NOW = Date.parse('2026-10-20T00:00:00Z');
@@ -54,7 +54,7 @@ function staffReceiptLedgers(code, share) {
   Object.assign(receipt, { kind: 'student_share_existing_staff', beforeGrade: STAFF_GRADE,
     afterGrade: STAFF_GRADE, beforeGroups: [...receipt.afterGroups],
     attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
-      memberCode: code, date: '2026-10-24', lessonIds: [...share.lessonIds] } });
+      memberCode: code, date: share.lessonDate, lessonIds: [...share.lessonIds] } });
   state.entitlements[code].grantEvidence = 'manualImmediateGrants:independent_attendance_share_on_staff';
   return ledgers;
 }
@@ -726,7 +726,7 @@ test('legacy student-share without an approved timestamp source blocks automatic
   assert.equal(f.writes.length,0);assert.equal(f.saved.length,0);
 });
 
-for (const share of [A261024_SHARE, B261024_SHARE]) {
+for (const share of [A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]) {
   const other = share === A261024_SHARE ? B261024_SHARE : A261024_SHARE;
   test(`STAFF exit preserves active ${share.policyId} without touching first-grant evidence`, () => {
     const { f, source, ledgers } = exitWithShare(share);
@@ -805,7 +805,7 @@ test('STAFF exit protects B but removes expired A when the same member belongs t
   assert.deepEqual(ledgers, before);
 });
 
-for (const share of [A261024_SHARE, B261024_SHARE]) {
+for (const share of [A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]) {
   test(`STAFF exit preserves ${share.policyId} existing-STAFF receipt without remove/re-add or clock reset`, t => {
     t.mock.timers.setTime(STAFF_SHARE_START + 86400000);
     for (const adopted of [false, true]) {

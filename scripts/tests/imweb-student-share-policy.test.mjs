@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
-  E261017_SHARE, A261024_SHARE, B261024_SHARE, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, STUDENT_SHARE_SOURCES,
+  E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, STUDENT_SHARE_SOURCES,
   firstVerifiedShareWindow, shareInstant, validatedShareEntries, protectedStudentShareGroups,
 } from '../lib/imweb-student-share-policy.mjs';
 import { SITE, UNIT, STAFF_GRADE } from '../lib/imweb-staff-video-policy.mjs';
@@ -29,7 +29,7 @@ function staffReceipt(source) {
     beforeGroups: ['synthetic-paid', source.groupCode], afterGroups: ['synthetic-paid', source.groupCode],
     beforeGrade: STAFF_GRADE, afterGrade: STAFF_GRADE,
     attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
-      memberCode: MEMBER, date: '2026-10-24', lessonIds: [...(source.lessonIds ?? [])] },
+      memberCode: MEMBER, date: source.lessonDate ?? '2026-10-24', lessonIds: [...(source.lessonIds ?? [])] },
   }, source);
 }
 
@@ -60,19 +60,19 @@ const sources = (state, selected = E261017_SHARE) => STUDENT_SHARE_SOURCES.map(s
 const entries = (state, now = NOW) => validatedShareEntries(state, E261017_SHARE, now);
 const protectedGroups = (state, now = NOW, code = MEMBER) => protectedStudentShareGroups(sources(state), code, now);
 
-test('registry contains exactly E261017, A261024 and B261024 with isolated forty-day policies', () => {
-  assert.deepEqual(STUDENT_SHARE_SOURCES, [E261017_SHARE, A261024_SHARE, B261024_SHARE]);
+test('registry contains isolated E, A/B and C/D forty-day policies', () => {
+  assert.deepEqual(STUDENT_SHARE_SOURCES, [E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]);
   assert.equal(E261017_SHARE.lane, 'student-share-e-261017');
   assert.equal(E261017_SHARE.policyId, 'e261017-grant-40d-v1');
   assert.equal(GROUP, 'g2026101715ef28611dff4');
   assert.deepEqual([A261024_SHARE, B261024_SHARE], [
     { policyId: 'a261024-grant-40d-v1', groupCode: 'g20261025ad8ce226150cf',
-      revocation: 'a_team_group_only', lane: 'student-share-a-261024', lessonIds: ['97134106', '97134121'] },
+      revocation: 'a_team_group_only', lane: 'student-share-a-261024', lessonIds: ['97134106', '97134121'], lessonDate: '2026-10-24' },
     { policyId: 'b261024-grant-40d-v1', groupCode: 'g20261025ee18a8f4e30b9',
-      revocation: 'b_team_group_only', lane: 'student-share-b-261024', lessonIds: ['97177049', '97177091'] },
+      revocation: 'b_team_group_only', lane: 'student-share-b-261024', lessonIds: ['97177049', '97177091'], lessonDate: '2026-10-24' },
   ]);
   for (const field of ['policyId', 'groupCode', 'lane', 'revocation']) {
-    assert.equal(new Set(STUDENT_SHARE_SOURCES.map(source => source[field])).size, 3);
+    assert.equal(new Set(STUDENT_SHARE_SOURCES.map(source => source[field])).size, 5);
   }
   assert.equal(STUDENT_SHARE_DAYS, 40);
   assert.equal(STUDENT_SHARE_WINDOW_MS, 40 * 86400000);
@@ -290,7 +290,7 @@ test('A and B expiry windows are independent for the same member and retain firs
   assert.deepEqual(values, before);
 });
 
-for (const source of [A261024_SHARE, B261024_SHARE]) {
+for (const source of [A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]) {
   const other = source === A261024_SHARE ? B261024_SHARE : A261024_SHARE;
   test(`${source.policyId} grant-only replay preserves its original clock and no other team access`, () => {
     const state = ledger({ entitlements: {} }, source);
@@ -325,7 +325,7 @@ test('the existing-STAFF exception is unavailable to E even with otherwise compl
     /Student-share evidence/);
 });
 
-for (const source of [A261024_SHARE, B261024_SHARE]) {
+for (const source of [A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]) {
   const other = source === A261024_SHARE ? B261024_SHARE : A261024_SHARE;
   test(`${source.policyId} accepts unchanged STAFF groups only with its own attendance receipt`, () => {
     const receipt = staffReceipt(source);
@@ -528,7 +528,7 @@ test('reader rejects a state path that is a directory', t => {
   assert.equal(f.read().ok, false);
 });
 
-for (const source of [A261024_SHARE, B261024_SHARE]) {
+for (const source of [A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]) {
   for (const corrupt of ['missing', 'malformed', 'directory-mode', 'file-mode', 'symlink']) {
     test(`reader fails closed for ${source.policyId}: ${corrupt}`, t => {
       const f = readerFixture(t);

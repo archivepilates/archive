@@ -13,13 +13,27 @@ export const A261024_SHARE = Object.freeze({
   policyId: 'a261024-grant-40d-v1', groupCode: 'g20261025ad8ce226150cf',
   revocation: 'a_team_group_only', lane: 'student-share-a-261024',
   lessonIds: Object.freeze(['97134106', '97134121']),
+  lessonDate: '2026-10-24',
 });
 export const B261024_SHARE = Object.freeze({
   policyId: 'b261024-grant-40d-v1', groupCode: 'g20261025ee18a8f4e30b9',
   revocation: 'b_team_group_only', lane: 'student-share-b-261024',
   lessonIds: Object.freeze(['97177049', '97177091']),
+  lessonDate: '2026-10-24',
 });
-export const STUDENT_SHARE_SOURCES = Object.freeze([E261017_SHARE, A261024_SHARE, B261024_SHARE]);
+export const C261025_SHARE = Object.freeze({
+  policyId: 'c261025-grant-40d-v1', groupCode: 'g202610257569d3a4255d5',
+  revocation: 'c_team_group_only', lane: 'student-share-c-261025',
+  lessonIds: Object.freeze(['97134107', '97134122']), lessonDate: '2026-10-25',
+});
+export const D261025_SHARE = Object.freeze({
+  policyId: 'd261025-grant-40d-v1', groupCode: 'g202610252ef2256e312c1',
+  revocation: 'd_team_group_only', lane: 'student-share-d-261025',
+  lessonIds: Object.freeze(['97177137', '97177166']), lessonDate: '2026-10-25',
+});
+export const STUDENT_SHARE_SOURCES = Object.freeze([
+  E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE,
+]);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = () => { throw Error('Student-share evidence missing or inconsistent; no staff group removal'); };
 const groups = value => Array.isArray(value) && value.every(code => typeof code === 'string' && code.trim() === code && code.length > 0)
@@ -49,7 +63,7 @@ export function firstVerifiedShareWindow(grant, groupCode, now) {
     if (grant.kind !== 'student_share_existing_staff' || grant.beforeGrade !== STAFF_GRADE
         || grant.afterGrade !== STAFF_GRADE || !source?.lessonIds || !record(evidence)
         || evidence.source !== 'studiomate_live_lesson_detail' || evidence.status !== 'both_sessions_attended'
-        || !/^m[0-9a-f]+$/.test(evidence.memberCode) || evidence.date !== '2026-10-24'
+        || !/^m[0-9a-f]+$/.test(evidence.memberCode) || !source.lessonDate || evidence.date !== source.lessonDate
         || JSON.stringify(evidence.lessonIds) !== JSON.stringify(source.lessonIds)
         || grant.beforeGroups.length !== grant.afterGroups.length) fail();
   } else if (grant.kind === 'student_share_existing_staff') fail();

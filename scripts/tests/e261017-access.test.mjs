@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { GROUP, POLICY_ID, entitlementFromGrant, removalPlan, verifyRemoval, reconcile } from '../e261017-access.mjs';
 import { STAFF_GRADE, STAFF_GROUP } from '../lib/imweb-staff-video-policy.mjs';
-import { E261017_SHARE, A261024_SHARE, B261024_SHARE, STUDENT_SHARE_SOURCES } from '../lib/imweb-student-share-policy.mjs';
+import { E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE, STUDENT_SHARE_SOURCES } from '../lib/imweb-student-share-policy.mjs';
 
 const start = '2026-10-18T01:16:33.501Z';
 const end = '2026-11-27T01:16:33.501Z';
@@ -27,7 +27,7 @@ function staffReceipt(source) {
     beforeGroups: [...groups], afterGroups: [...groups], existingGroupsPreserved: true,
     beforeGrade: STAFF_GRADE, afterGrade: STAFF_GRADE, verifiedAt: staffStart,
     attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
-      memberCode: code, date: '2026-10-24', lessonIds: [...source.lessonIds] } };
+      memberCode: code, date: source.lessonDate, lessonIds: [...source.lessonIds] } };
 }
 
 test('forty days use the first verified grant instant, not lesson date or check date', () => {
@@ -110,7 +110,7 @@ test('omitting the optional source retains the canonical E policy', () => {
     removalPlan(member, entitlement(), Date.parse(end), E261017_SHARE));
 });
 
-for (const source of [A261024_SHARE, B261024_SHARE]) {
+for (const source of [A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]) {
   test(`${source.policyId} converts an unchanged STAFF receipt without requiring a fake transition`, () => {
     const receipt = staffReceipt(source);
     const before = structuredClone(receipt);
@@ -176,7 +176,7 @@ for (const source of [A261024_SHARE, B261024_SHARE]) {
   });
 }
 
-for (const source of [A261024_SHARE, B261024_SHARE]) {
+for (const source of [A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE]) {
   const other = source === A261024_SHARE ? B261024_SHARE : A261024_SHARE;
   test(`${source.policyId} expiry removes only its own team and preserves E and the other team`, () => {
     const groups = ['paid', GROUP, source.groupCode, other.groupCode, 'staff'];

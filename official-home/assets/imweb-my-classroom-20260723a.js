@@ -95,7 +95,9 @@
     {"code":"D260920","path":"/private-lesson-external-feedback-d-260920","title":"9/20 외부 피드백 D팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK D 260920 40D","private":true},
     {"code":"E261017","path":"/private-lesson-external-feedback-e-261017","title":"10/17 외부 피드백 E팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK E 261017 40D","private":true},
     {"code":"A261024","path":"/private-lesson-external-feedback2-a-261024","title":"10/24 외부 피드백2 A팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 A 261024 40D","private":true},
-    {"code":"B261024","path":"/private-lesson-external-feedback2-b-261024","title":"10/24 외부 피드백2 B팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 B 261024 40D","private":true}
+    {"code":"B261024","path":"/private-lesson-external-feedback2-b-261024","title":"10/24 외부 피드백2 B팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 B 261024 40D","private":true},
+    {"code":"C261025","path":"/private-lesson-external-feedback2-c-261025","title":"10/25 외부 피드백2 C팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 C 261025 40D","private":true},
+    {"code":"D261025","path":"/private-lesson-external-feedback2-d-261025","title":"10/25 외부 피드백2 D팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 D 261025 40D","private":true}
   ]);
   var M={
     "d43dd28704f02dbdf0ff891b31450e359240d62d":"all",

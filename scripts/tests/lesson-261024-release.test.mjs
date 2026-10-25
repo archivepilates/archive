@@ -61,7 +61,8 @@ test('rule scope rejects missing/duplicate notes and any other byte changes', ()
 });
 
 const uiBaseline = execFileSync('git', ['show', 'b7e70384:core/rules/index.html'], { cwd: root, encoding: 'utf8' });
-const currentRules = readFileSync(new URL('../../core/rules/index.html', import.meta.url), 'utf8');
+// The completed A/B release is immutable evidence; later lanes add their own notes.
+const currentRules = execFileSync('git', ['show', '9aaf7a8c:core/rules/index.html'], { cwd: root, encoding: 'utf8' });
 const releaseSource = readFileSync(new URL('../release-lesson-261024.mjs', import.meta.url), 'utf8');
 function existingNote(html) {
   const lines = html.split('\n').filter(line => line.includes('id="lesson-share-261024"'));
@@ -98,7 +99,7 @@ for (const target of ['ui-rules', 'ui-core-rules']) {
     assert.doesNotThrow(() => assertLessonReleaseScope(uiBaseline, proposedUiRules, target));
   });
 
-  test(`${target}: actual current source changes only the existing note relative to Git b7e70384`, () => {
+  test(`${target}: released A/B source changes only the existing note relative to Git b7e70384`, () => {
     assert.notEqual(uiCurrentNote, uiOriginalNote, 'Current source must contain a real note update');
     assert.equal(currentRules, uiBaseline.replace(uiOriginalNote, uiCurrentNote));
     assert.doesNotThrow(() => assertLessonReleaseScope(uiBaseline, currentRules, target));
