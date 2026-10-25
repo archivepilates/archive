@@ -10,7 +10,7 @@ import { staffMembers, MEMBER_GROUP_LOCK } from './lib/imweb-staff-video-sync.mj
 import { SITE, UNIT, STAFF_GRADE, assertMemberPreserved } from './lib/imweb-staff-video-policy.mjs';
 import { C261025_SHARE, D261025_SHARE, STUDENT_SHARE_SOURCES, readStudentShareLedgers, validatedShareEntries,
   firstVerifiedShareWindow, shareInstant } from './lib/imweb-student-share-policy.mjs';
-import { matchLessonShareMember } from './lib/lesson-share-261024.mjs';
+import { readConfirmedLessonIdentities, resolveConfirmedLessonMember } from './lib/lesson-share-261025-confirmed-identities.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 
 export { attendance as readLessonAttendance, assertSources as assertLessonSources };
@@ -119,14 +119,16 @@ async function main() {
       fs.writeSync(fd, JSON.stringify({ pid: process.pid, operation: source.lane, startedAt: new Date().toISOString() }));
     }
     const members = staffMembers(imwebJson);
+    const confirmed = readConfirmedLessonIdentities(path.join(ROOT, 'confirmed-identities-two.json'));
+    const resolve = (target, source, currentMembers) => resolveConfirmedLessonMember({ target, source, members: currentMembers, confirmed });
     const results = [];
     // The CLI quota belongs to the shared profile, not just this C/D lane.
     let quotaDeferred = all.some(({ state }) => Object.values(state.grantAttempts || {})
       .some(attempt => attempt.status === 'blocked_before_dispatch' && attempt.reason === 'write_quota_exceeded'
         && kstDate(shareInstant(attempt.quotaConfirmedAt)) === kstDate(Date.now())));
     for (const target of targets) {
-      const match = matchLessonShareMember({ attendee: target, members, complete: true });
       const source = SOURCES[target.team], { state } = ledgers.get(source.policyId);
+      const match = resolve(target, source, members);
       const stateFile = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES', source.lane, 'state.json');
       if (match.status !== 'matched') { results.push({ team: target.team, status: match.status, reason: match.reason }); continue; }
       const { memberCode, uid } = match.member;
@@ -139,7 +141,7 @@ async function main() {
         results.push({ team: target.team, status: 'already_verified' }); continue;
       }
       const before = imwebJson(['member', 'get', uid, '--unit-code', UNIT]).data;
-      const currentMatch = matchLessonShareMember({ attendee: target, members: [before], complete: true });
+      const currentMatch = resolve(target, source, [before]);
       if (currentMatch.status !== 'matched' || currentMatch.member.uid !== uid || before.memberCode !== memberCode
           || !Array.isArray(before.group)) throw Error('Member identity changed');
       const already = before.group.includes(source.groupCode);
@@ -158,7 +160,7 @@ async function main() {
         if (dry.safety?.bulk_confirmation_required_for_execute && !(dry.bulk_confirmation_token || dry.safety.bulk_confirmation_token)) throw Error('Missing bulk confirmation');
       }
       if (!apply) { results.push({ team: target.team, status: already ? 'planned_independent_staff_share' : 'planned_grant' }); continue; }
-      const latestMatch = matchLessonShareMember({ attendee: target, members: staffMembers(imwebJson), complete: true });
+      const latestMatch = resolve(target, source, staffMembers(imwebJson));
       if (latestMatch.status !== 'matched' || latestMatch.member.uid !== uid || latestMatch.member.memberCode !== memberCode) throw Error('Current directory identity is no longer unique');
       const fresh = imwebJson(['member', 'get', uid, '--unit-code', UNIT]).data;
       assertMemberPreserved(before, fresh, before.group);
@@ -167,6 +169,7 @@ async function main() {
         beforeGroups: [...before.group], afterGroups, beforeGrade: before.grade, memberInvariantHash: hash(Object.fromEntries(Object.entries(before).filter(([key]) => key !== 'group'))),
         attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
           date: '2026-10-25', lessonIds: [...source.lessonIds], memberCode, verifiedAt: evidence.verifiedAt } };
+      if (match.identityConfirmation) receipt.identityConfirmation = structuredClone(match.identityConfirmation);
       if (already) receipt.kind = 'student_share_existing_staff';
       state.manualImmediateGrants[memberCode] = receipt; save(stateFile, state);
       let quotaBlockedBeforeDispatch = false;

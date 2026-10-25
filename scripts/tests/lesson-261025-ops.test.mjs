@@ -8,6 +8,7 @@ import test from 'node:test';
 import { matchLessonShareMember } from '../lib/lesson-share-261024.mjs';
 import { assertMemberPreserved } from '../lib/imweb-staff-video-policy.mjs';
 import { firstVerifiedShareWindow as sharedFirstVerifiedShareWindow } from '../lib/imweb-student-share-policy.mjs';
+import { resolveConfirmedLessonMember } from '../lib/lesson-share-261025-confirmed-identities.mjs';
 
 const sourceText = readFileSync(new URL('../grant-lesson-261025.mjs', import.meta.url), 'utf8');
 // Evaluate the runner body with memory-only IO; never import or invoke its live entrypoint.
@@ -138,7 +139,7 @@ function fixture(options = {}) {
     }
     throw Error(`Unexpected synthetic operation ${args.slice(0, 3)}`);
   };
-  const bindings = { fs, os: { homedir: () => HOME }, path, createHash,
+  const bindings = { fs, os: { homedir: () => HOME }, path, createHash, structuredClone,
     isDeepStrictEqual: (left, right) => isDeepStrictEqual(copy(left), copy(right)),
     execFileSync: execute, imwebJson, SITE, UNIT, STAFF_GRADE, assertMemberPreserved,
     C261025_SHARE: c, D261025_SHARE: d, STUDENT_SHARE_SOURCES: sources,
@@ -152,6 +153,8 @@ function fixture(options = {}) {
     },
     readStudentShareLedgers: () => options.ledgers ? options.ledgers(sources.map(source => ({ source, state: read(stateFile(source)) })))
       : sources.map(source => ({ source, state: read(stateFile(source)) })),
+    readConfirmedLessonIdentities: () => null,
+    resolveConfirmedLessonMember: ({ target, members }) => matchLessonShareMember({ attendee: target, members, complete: true }),
     validatedShareEntries: (state, source) => {
       options.validate?.(state, source);
       for (const receipt of Object.values(state.manualImmediateGrants)) {
@@ -531,4 +534,42 @@ test('lane cleanup errors cannot bypass releasing the shared lock', async () => 
   const f = fixture({ failCleanup: true });
   await assert.rejects(f.main(), /C\/D grant lock cleanup incomplete/);
   assert.equal(f.counters.released, 1); assert.equal(f.open.size, 0);
+});
+
+test('confirmed two stay deferred with no new clocks under quota, then grant once after recovery preserving the prior seven', async () => {
+  const f = fixture({ evidence: fourC });
+  const first = f.live.get('uid-6'), second = f.live.get('uid-7');
+  first.callnum = '01099999999';
+  f.live.set('duplicate-d-account', { ...copy(second), uid: 'duplicate-d-account', memberCode: 'm9999' });
+  await f.main();
+  // The default fixture applies; initial strict identity checks hold only these two.
+  assert.equal(f.counters.writes, 7);
+  const beforeC = copy(f.read(stateFile(f.c))), beforeD = copy(f.read(stateFile(f.d)));
+  const targets = f.attendance().targets.filter(t => t.team === 'D').slice(0, 2);
+  const selected = targets.map((target, i) => ({ team: 'D', name: target.name,
+    memberCode: [first, second][i].memberCode, uid: [first, second][i].uid,
+    attendeeIdentitySha256: createHash('sha256').update(JSON.stringify([target.name, target.phone])).digest('hex') }));
+  const confirmed = { source: 'direct human reply in C/D sharing task', status: 'approved_waiting_existing_cli_quota_recovery',
+    route: 'existing_cli_only_no_admin_ui', routeApproval: 'call_dc4c07262f9f49688c452582a637c7ed:existing-check-after-quota-recovery',
+    confirmedAt: '2026-10-24T00:00:00Z', routeApprovedAt: '2026-10-24T00:01:00Z', lessonDate: '2026-10-25', lessonIds: [...f.d.lessonIds], selected };
+  const expectedHash = createHash('sha256').update(JSON.stringify(selected.map(x => [x.team, x.name, x.memberCode, x.uid, x.attendeeIdentitySha256])
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))))).digest('hex');
+  f.bindings.readConfirmedLessonIdentities = () => confirmed;
+  f.bindings.resolveConfirmedLessonMember = input => resolveConfirmedLessonMember({ ...input, expectedHash });
+  const blocked = copy(beforeC);
+  blocked.grantAttempts = { synthetic: { status: 'blocked_before_dispatch', reason: 'write_quota_exceeded', quotaConfirmedAt: new Date(START).toISOString() } };
+  f.put(stateFile(f.c), blocked);
+  await f.main();
+  assert.equal(f.counters.writes, 7);
+  assert.equal(f.counters.windows, 7);
+  assert.deepEqual(f.read(stateFile(f.d)), beforeD);
+  assert.deepEqual(f.output.at(-1).results.filter(x => x.status === 'deferred').map(x => x.team), ['D', 'D']);
+  // Simulate profile quota recovery only in memory; production counters are never modified.
+  f.put(stateFile(f.c), beforeC);
+  await f.main();
+  assert.equal(f.counters.writes, 9);
+  for (const [code, receipt] of Object.entries(beforeD.manualImmediateGrants)) assert.deepEqual(f.read(stateFile(f.d)).manualImmediateGrants[code], receipt);
+  assert.deepEqual(f.read(stateFile(f.c)), beforeC);
+  for (const member of [first, second]) assert.equal(f.read(stateFile(f.d)).manualImmediateGrants[member.memberCode].identityConfirmation.route, 'existing_cli_only_no_admin_ui');
+  await f.main(); assert.equal(f.counters.writes, 9);
 });

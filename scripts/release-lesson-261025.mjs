@@ -13,9 +13,9 @@ const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com'
 const targets = {
   classroom: { site: 'archive-pilates-home', resource: ASSET,
     source: `official-home${ASSET}`, url: `https://archivepilates.com${ASSET}` },
-  rules: { site: 'archive-pilates', resource: '/core/rules/index.html', baseline: '66e8ea39551f97291148c6fcbded18d334a1d061',
+  rules: { site: 'archive-pilates', resource: '/core/rules/index.html', baseline: '886f3f4c6b9a3e748875f8011edcfffc808e8eb3',
     source: 'core/rules/index.html', url: 'https://archive-pilates.web.app/core/rules/' },
-  'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html', baseline: '66e8ea39551f97291148c6fcbded18d334a1d061',
+  'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html', baseline: '886f3f4c6b9a3e748875f8011edcfffc808e8eb3',
     source: 'core/rules/index.html', url: 'https://archive-pilates-core.web.app/rules/' },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
