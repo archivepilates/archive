@@ -28,6 +28,14 @@
 ## Release Boundary
 
 - User approved the scoped commit/runtime adoption/CORE Hosting deployment/push in call_605c41cdf45e41bd82ea41df6484b0e5.
-- Runtime adoption and deployment are pending at this source commit. No production state repair, forced job, or artificial recovery email.
+- Released behavior commit: `b720ab02201e15d9dfa5f668071513e2937301cd` on `main`; runtime adopted by fast-forward. No production state repair, forced job, or artificial recovery email.
 - CORE release uses a pinned reviewed live baseline and replaces only the tracked staff-video note in both Hosting manifests, preserving independently deployed content and config. Main and origin/main must match before apply.
 - After approval: review diff, scoped checks and commit; promote safely against latest `origin/main`; runtime code adoption and only the existing staff-video CORE rule note via the project release workflow; live readback and natural-run verification; push and clean-status report.
+
+## Release Evidence
+
+- Hosting main-site version `0b17f4a91bbe9f30`, CORE-site version `b6bdc7b3cb046313`; each preserved manifest/config except one rules asset. Local private receipts: `imweb-staff-video/lock-policy-hosting-{site}.json`.
+- Both public rules surfaces returned 200 with reviewed output SHA-256 `3fd278464676146ec04f81a7ec94275f403a46acf46587746b897c2c8943edb4` and one staff-policy note.
+- First natural run after runtime adoption: `2026-10-25T05:03:51.938Z`, apply/ok true/exitCode 0, health success with zero failures, two unchanged outcomes. Existing LaunchAgent interval remains 300 seconds.
+- Functions affected detection: no codebases; no Functions, rules/index, IAM or DNS changes.
+- New busy/stall notifications were tested with synthetic mail receipts, not forced production contention. Natural success is not proof that old unrelated permission exceptions are resolved.
