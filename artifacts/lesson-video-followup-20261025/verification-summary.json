@@ -1,0 +1,56 @@
+{
+  "checkedAt": "2026-10-25T01:52:31.069Z",
+  "automationId": "e-2",
+  "canonicalBase": "6777a218",
+  "sourceCommit": "83a7cc40fa23e1ea07dfd585c62432d699bf67d3",
+  "activeEntitlements": {
+    "E261017": 5,
+    "A261024": 3,
+    "B261024": 0
+  },
+  "newGrants": 0,
+  "expiryRevocations": 0,
+  "sameKstDayCliQuota": {
+    "used": 99,
+    "limit": 100,
+    "pendingGrants": 5,
+    "additionalProviderAttempts": 0
+  },
+  "siteDirectoryCount": 126,
+  "currentABEligibility": {
+    "matched": 8,
+    "noMember": 1,
+    "identityHold": 1
+  },
+  "approvedNotice": {
+    "transport": "LMS",
+    "providerPosts": 1,
+    "status": "delivered",
+    "providerCode": "4000",
+    "canonicalReceiptCount": 1,
+    "providerReportedAt": "2026-10-25T01:42:27.000Z",
+    "privateEvidence": "owner-only operational queue; no identifiers in this summary"
+  },
+  "coreFullHtmlSha256": "8e354aa582986b5453b83a6afaa98cc9b9e1166d8450292b358c6dc44bebffee",
+  "checks": {
+    "focusedNodeTests": 20,
+    "releaseGuardAssertions": 5,
+    "staticLayoutWidths": [
+      320,
+      390,
+      768,
+      1440
+    ],
+    "noteOverflow": false,
+    "preexistingPageScrollWidthAt320And390": 405,
+    "ciRun": "40151980303",
+    "ciStatus": "success"
+  },
+  "cleanup": {
+    "taskLocksRemaining": 0,
+    "sharedProfileBrowserProcesses": 0,
+    "preexistingLaneLockPreserved": true
+  },
+  "emailsSent": 0,
+  "newSchedules": 0
+}
