@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { normalizeInstructorLessonPhone } from './instructor-lesson-registration-contract.mjs';
 import { SITE, UNIT } from './imweb-staff-video-policy.mjs';
 import { firstVerifiedShareWindow, shareInstant } from './imweb-student-share-policy.mjs';
+import { isRegisteredLessonAttendance } from './lesson-share-registration-policy.mjs';
 
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const name = value => typeof value === 'string' ? value.trim().normalize('NFC') : '';
@@ -14,7 +15,7 @@ function phone(value) {
 }
 
 function attendeeIdentity(attendee) {
-  if (!record(attendee) || attendee.attendance !== '출석') return null;
+  if (!record(attendee) || !isRegisteredLessonAttendance(attendee.attendance)) return null;
   const identity = { name: name(attendee.name), phone: phone(attendee.phone) };
   return identity.name && identity.phone ? identity : null;
 }
@@ -23,7 +24,7 @@ function attendeeIdentity(attendee) {
 // complete is a caller assertion, not freshness proof or permission to send/grant.
 export function matchLessonShareMember({ attendee, members, complete = false } = {}) {
   const target = attendeeIdentity(attendee);
-  if (!target) return hold('invalid_attendee_or_not_attended');
+  if (!target) return hold('invalid_registration_or_not_registered');
   if (complete !== true || !Array.isArray(members)) return hold('incomplete_member_source');
   const seenUids = new Set();
   const seenCodes = new Set();

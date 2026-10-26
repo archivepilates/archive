@@ -9,6 +9,7 @@ import {
   firstVerifiedShareWindow, shareInstant, validatedShareEntries, protectedStudentShareGroups,
 } from '../lib/imweb-student-share-policy.mjs';
 import { SITE, UNIT, STAFF_GRADE } from '../lib/imweb-staff-video-policy.mjs';
+import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from '../lib/lesson-share-registration-policy.mjs';
 
 const START = '2026-10-18T01:16:33.501Z';
 const END = '2026-11-27T01:16:33.501Z';
@@ -32,6 +33,101 @@ function staffReceipt(source) {
       memberCode: MEMBER, date: source.lessonDate ?? '2026-10-24', lessonIds: [...(source.lessonIds ?? [])] },
   }, source);
 }
+
+function registeredReceipt(source, statuses = ['결석', '결석'], staff = false) {
+  const receipt = staff ? staffReceipt(source) : grant({ verifiedAt: STAFF_START }, source);
+  receipt.memberCode = MEMBER;
+  receipt.attendanceEvidence = { source: 'studiomate_live_lesson_detail', status: 'both_sessions_registered',
+    eligibilityPolicy: LESSON_VIDEO_ELIGIBILITY_POLICY_ID, memberCode: MEMBER,
+    date: source.lessonDate, lessonIds: [...source.lessonIds],
+    sessionAttendance: source.lessonIds.map((lessonId, index) => ({ lessonId, status: statuses[index] })) };
+  return receipt;
+}
+
+test('registered absentees qualify without changing native attendance or restarting the forty-day clock', () => {
+  for (const source of STUDENT_SHARE_SOURCES) for (const staff of [false, true])
+    for (const statuses of [['출석', '출석'], ['결석', '결석'], ['출석', '결석']]) {
+      const receipt = registeredReceipt(source, statuses, staff), original = copy(receipt);
+      for (const now of [STAFF_START_MS, STAFF_END_MS, STAFF_END_MS + 86400000]) {
+        if (staff && source === E261017_SHARE) assert.throws(() => firstVerifiedShareWindow(receipt, source.groupCode, now));
+        else assert.deepEqual(firstVerifiedShareWindow(receipt, source.groupCode, now), { grantedAt: STAFF_START, expiresAt: STAFF_END });
+      }
+      assert.deepEqual(receipt, original);
+    }
+});
+
+test('registered evidence rejects unknown, cancellation, wrong policy and unpaired class scope', () => {
+  assert.equal(isRegisteredLessonAttendance('出席'), false);
+  for (const status of ['예약', '취소', '환불', '', null, undefined, ' 결석'])
+    assert.equal(isRegisteredLessonAttendance(status), false);
+  for (const staff of [false, true]) for (const mutate of [
+    evidence => { evidence.eligibilityPolicy = 'other'; },
+    evidence => { evidence.source = 'snapshot'; },
+    evidence => { evidence.memberCode = 'invalid'; },
+    evidence => { evidence.memberCode = OTHER; },
+    evidence => { evidence.date = '2026-10-24'; },
+    evidence => { evidence.lessonIds.reverse(); },
+    evidence => { evidence.sessionAttendance.pop(); },
+    evidence => { evidence.sessionAttendance.reverse(); },
+    evidence => { evidence.sessionAttendance[0].status = '취소'; },
+    evidence => { evidence.sessionAttendance[0].status = '예약'; },
+  ]) {
+    const receipt = registeredReceipt(C261025_SHARE, ['결석', '出席'], staff);
+    receipt.attendanceEvidence.sessionAttendance[1].status = '출석';
+    mutate(receipt.attendanceEvidence);
+    assert.throws(() => firstVerifiedShareWindow(receipt, C261025_SHARE.groupCode, STAFF_START_MS));
+  }
+});
+
+test('registered evidence cannot be adopted under a different ledger member key', () => {
+  const source = C261025_SHARE, receipt = registeredReceipt(source);
+  const state = ledger({ manualImmediateGrants: { [OTHER]: receipt }, entitlements: {} }, source);
+  assert.throws(() => validatedShareEntries(state, source, STAFF_START_MS));
+});
+
+function operatorManualReceipt() {
+  const receipt = registeredReceipt(C261025_SHARE);
+  Object.assign(receipt, { kind: 'student_share_operator_confirmed_manual',
+    beforeGroups: [...receipt.afterGroups], beforeGrade: '', afterGrade: '',
+    independentVerifiedAt: STAFF_START,
+    operatorConfirmation: { approved: true, source: 'direct_operator_confirmation', memberCode: MEMBER,
+      groupCode: C261025_SHARE.groupCode, grantedAt: STAFF_START, confirmedAt: STAFF_START } });
+  return receipt;
+}
+
+test('operator-confirmed existing manual access keeps its approved clock and unchanged groups', () => {
+  const receipt = operatorManualReceipt(), before = copy(receipt);
+  for (const now of [STAFF_START_MS, STAFF_END_MS, STAFF_END_MS + 1])
+    assert.deepEqual(firstVerifiedShareWindow(receipt, C261025_SHARE.groupCode, now), {
+      grantedAt: STAFF_START, expiresAt: STAFF_END });
+  assert.deepEqual(receipt, before);
+});
+
+test('persisted manual clock receipts cannot bypass approval, registration, grade or independent verification', () => {
+  for (const mutate of [
+    x => { delete x.operatorConfirmation; },
+    x => { x.operatorConfirmation.approved = false; },
+    x => { x.operatorConfirmation.source = 'inferred'; },
+    x => { x.operatorConfirmation.memberCode = OTHER; },
+    x => { x.operatorConfirmation.groupCode = D261025_SHARE.groupCode; },
+    x => { x.operatorConfirmation.grantedAt = START; },
+    x => { x.operatorConfirmation.confirmedAt = START; },
+    x => { x.operatorConfirmation.confirmedAt = new Date(STAFF_START_MS + 1).toISOString(); },
+    x => { x.independentVerifiedAt = START; },
+    x => { x.independentVerifiedAt = new Date(STAFF_START_MS + 1).toISOString(); },
+    x => { delete x.independentVerifiedAt; },
+    x => { delete x.beforeGrade; delete x.afterGrade; },
+    x => { x.beforeGrade = undefined; x.afterGrade = undefined; },
+    x => { x.beforeGrade = STAFF_GRADE; x.afterGrade = STAFF_GRADE; },
+    x => { x.afterGrade = 'other'; },
+    x => { x.beforeGroups = ['synthetic-paid']; },
+    x => { delete x.attendanceEvidence; },
+    x => { x.attendanceEvidence.status = 'both_sessions_attended'; },
+  ]) {
+    const receipt = operatorManualReceipt(); mutate(receipt);
+    assert.throws(() => firstVerifiedShareWindow(receipt, C261025_SHARE.groupCode, STAFF_START_MS));
+  }
+});
 
 function grant(changes = {}, source = E261017_SHARE) {
   return { status: 'group_verified', beforeGroups: ['synthetic-paid'],

@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { runInNewContext } from 'node:vm';
 import test from 'node:test';
+import { A261024_SHARE, B261024_SHARE, firstVerifiedShareWindow } from '../lib/imweb-student-share-policy.mjs';
+import { STAFF_GRADE } from '../lib/imweb-staff-video-policy.mjs';
+import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from '../lib/lesson-share-registration-policy.mjs';
 
 // Only bounded source fragments run with synthetic bindings. Never import/run either main.
 const grant = readFileSync(new URL('../grant-lesson-261024.mjs', import.meta.url), 'utf8');
@@ -20,6 +23,12 @@ const quotaGate = fragment(grant, '      if (!already && (args.includes(', '    
 const quotaStart = fragment(grant, '    let quotaDeferred =', '    for (const target of targets)');
 const kstDate = fragment(grant, 'const kstDate =', '\n');
 const qaGuard = fragment(qa, '    if (before.memberCode !== TEST_MEMBER', '    let state;');
+const attendanceBody = fragment(grant, 'function attendance()', '\nasync function main()');
+const receiptBody = fragment(grant, '      const receipt =', '      let quotaBlockedBeforeDispatch');
+const priorGuard = fragment(grant, '      const prior =', '      const before =');
+const SOURCES = { A: A261024_SHARE, B: B261024_SHARE };
+const NOW = '2026-10-26T01:00:00Z';
+const copy = value => structuredClone(value);
 
 function clock(at) {
   return class extends Date {
@@ -32,6 +41,120 @@ const shareInstant = value => {
       || !Number.isFinite(Date.parse(value))) throw Error('synthetic_invalid_clock');
   return Date.parse(value);
 };
+
+function registeredFixture(mutate = () => {}) {
+  const evidence = { date: '2026-10-24', source: 'StudioMate live lesson-detail DOM',
+    verifiedAt: '2026-10-26T00:59:00Z', sessions: Object.entries(SOURCES).flatMap(([team, source], teamIndex) =>
+      source.lessonIds.map(lessonId => ({ team, lessonId, date: '2026-10-24',
+        rows: Array.from({ length: 5 }, (_, index) => ({ name: `Registered ${teamIndex * 5 + index}`,
+          phone: `010${String(teamIndex * 5 + index).padStart(8, '0')}`, attendance: '출석' })) }))) };
+  mutate(evidence);
+  const read = () => runInNewContext(`${attendanceBody}\nattendance();`, {
+    readPrivate: () => copy(evidence), path: { join: () => 'synthetic-attendance' }, ROOT: 'synthetic',
+    SOURCES, Date: clock(NOW), shareInstant, isRegisteredLessonAttendance,
+    isDeepStrictEqual: (left, right) => isDeepStrictEqual(copy(left), copy(right)),
+  });
+  return { evidence, read };
+}
+
+test('10/24 includes registered absentees and preserves original attendance', () => {
+  const f = registeredFixture(evidence => {
+    for (const session of evidence.sessions.filter(row => row.team === 'A')) session.rows[4].attendance = '결석';
+  });
+  const original = copy(f.evidence), { evidence, targets } = f.read();
+  assert.equal(targets.length, 10);
+  const absent = targets.find(row => row.name === 'Registered 4');
+  assert.equal(absent.attendance, '결석');
+  assert.deepEqual(copy(absent.sessionAttendance), A261024_SHARE.lessonIds.map(lessonId => ({ lessonId, status: '결석' })));
+  assert.deepEqual(copy(evidence), original);
+  assert.deepEqual(f.evidence, original);
+});
+
+for (const statuses of [['결석', '결석'], ['출석', '결석'], ['결석', '출석']]) {
+  test(`10/24 accepts ${statuses.join('/')} with source-ordered session evidence and forty-day new receipts`, () => {
+    const f = registeredFixture(evidence => {
+      for (const session of evidence.sessions) {
+        const index = SOURCES[session.team].lessonIds.indexOf(session.lessonId);
+        for (const row of session.rows) row.attendance = statuses[index];
+        session.rows.reverse();
+      }
+      evidence.sessions.reverse();
+    });
+    const original = copy(f.evidence), { evidence, targets } = f.read();
+    assert.equal(targets.length, 10);
+    assert.deepEqual(copy(evidence), original);
+    for (const target of targets) {
+      const source = SOURCES[target.team];
+      assert.equal(target.attendance, statuses[0]);
+      assert.deepEqual(copy(target.sessionAttendance), source.lessonIds.map((lessonId, index) => ({ lessonId, status: statuses[index] })));
+      for (const already of [false, true]) {
+        const memberCode = 'm001', state = { manualImmediateGrants: {} }, saves = [];
+        const before = { grade: already ? STAFF_GRADE : 'ordinary',
+          group: ['paid', 'unrelated-share', ...(already ? [source.groupCode] : [])] };
+        runInNewContext(receiptBody, { before, already, memberCode, state, stateFile: 'synthetic-only',
+          afterGroups: already ? [...before.group] : [...before.group, source.groupCode],
+          hash: () => 'synthetic-invariant', Date: clock(NOW), source, target, evidence,
+          LESSON_VIDEO_ELIGIBILITY_POLICY_ID, save: (_file, value) => saves.push(copy(value)) });
+        const receipt = state.manualImmediateGrants[memberCode];
+        assert.equal(saves.length, 1);
+        assert.equal(receipt.attendanceEvidence.source, 'studiomate_live_lesson_detail');
+        assert.equal(receipt.attendanceEvidence.status, 'both_sessions_registered');
+        assert.equal(receipt.attendanceEvidence.eligibilityPolicy, LESSON_VIDEO_ELIGIBILITY_POLICY_ID);
+        assert.equal(receipt.attendanceEvidence.sessionAttendance, target.sessionAttendance);
+        assert.deepEqual(Array.from(receipt.attendanceEvidence.lessonIds), source.lessonIds);
+        assert.equal(receipt.attendanceEvidence.date, '2026-10-24');
+        assert.equal(receipt.attendanceEvidence.memberCode, memberCode);
+        assert.equal(receipt.attendanceEvidence.verifiedAt, evidence.verifiedAt);
+        Object.assign(receipt, { status: 'group_verified', verifiedAt: NOW,
+          existingGroupsPreserved: true, afterGrade: before.grade });
+        const window = firstVerifiedShareWindow(receipt, source.groupCode, Date.parse(NOW));
+        assert.equal(window.grantedAt, new Date(NOW).toISOString());
+        assert.equal(Date.parse(window.expiresAt) - Date.parse(window.grantedAt), 40 * 86400000);
+        assert.ok(before.group.every(code => receipt.afterGroups.includes(code)));
+      }
+    }
+  });
+}
+
+for (const [name, mutate] of [
+  ['cancelled', evidence => { evidence.sessions[0].rows[4].attendance = '취소'; }],
+  ['unknown', evidence => { evidence.sessions[0].rows[4].attendance = '대기'; }],
+  ['missing attendance', evidence => { delete evidence.sessions[0].rows[4].attendance; }],
+  ['padded attendance', evidence => { evidence.sessions[0].rows[4].attendance = '출석 '; }],
+  ['absent name mismatch', evidence => { evidence.sessions[0].rows[4].attendance = '결석'; evidence.sessions[1].rows[4].name = 'Other'; }],
+  ['absent phone mismatch', evidence => { evidence.sessions[0].rows[4].attendance = '결석'; evidence.sessions[1].rows[4].phone = '01099999999'; }],
+  ['missing registration', evidence => { evidence.sessions[0].rows.pop(); }],
+  ['duplicate registration', evidence => { evidence.sessions[0].rows[4] = copy(evidence.sessions[0].rows[3]); }],
+  ['invalid name', evidence => { evidence.sessions[0].rows[4].name = ''; }],
+  ['invalid phone', evidence => { evidence.sessions[0].rows[4].phone = 'unknown'; }],
+  ['cross-team phone', evidence => { for (const session of evidence.sessions.filter(row => row.team === 'B')) session.rows[0].phone = evidence.sessions[0].rows[0].phone; }],
+  ['wrong lesson', evidence => { evidence.sessions[0].lessonId = 'other'; }],
+  ['duplicate lesson', evidence => { evidence.sessions[1].lessonId = evidence.sessions[0].lessonId; }],
+  ['stale evidence', evidence => { evidence.verifiedAt = '2026-10-25T22:59:59Z'; }],
+]) test(`10/24 registered selection fails closed for ${name}`, () => {
+  assert.throws(() => registeredFixture(mutate).read());
+});
+
+test('10/24 verified prior receipts and first timestamps remain unchanged under the new eligibility policy', () => {
+  const { targets } = registeredFixture(evidence => {
+    for (const session of evidence.sessions) for (const row of session.rows) row.attendance = '결석';
+  }).read();
+  const source = A261024_SHARE, memberCode = 'm001', results = [];
+  const receipt = { status: 'group_verified', memberCode, verifiedAt: '2026-10-25T01:00:00Z',
+    beforeGroups: ['paid'], afterGroups: ['paid', source.groupCode], existingGroupsPreserved: true,
+    attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
+      date: '2026-10-24', lessonIds: [...source.lessonIds], memberCode, verifiedAt: '2026-10-25T00:59:00Z' } };
+  const first = firstVerifiedShareWindow(receipt, source.groupCode, Date.parse(NOW));
+  const state = { manualImmediateGrants: { [memberCode]: receipt }, entitlements: { [memberCode]: first } };
+  const original = copy(state);
+  runInNewContext(`for (const unused of [0]) { ${priorGuard}\nthrow Error('Unexpected regrant'); }`, {
+    state, memberCode, uid: 'synthetic-uid', UNIT: 'synthetic-unit', source, target: targets[0], results,
+    imwebJson: () => ({ data: { memberCode, group: ['paid', source.groupCode] } }),
+  });
+  assert.deepEqual(state, original);
+  assert.equal(results[0].status, 'already_verified');
+  assert.equal(state.entitlements[memberCode].grantedAt, '2026-10-25T01:00:00.000Z');
+});
 
 function classify(error) {
   let calls = 0;

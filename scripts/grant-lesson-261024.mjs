@@ -10,6 +10,7 @@ import { SITE, UNIT, STAFF_GRADE, assertMemberPreserved } from './lib/imweb-staf
 import { A261024_SHARE, B261024_SHARE, readStudentShareLedgers, validatedShareEntries,
   firstVerifiedShareWindow, shareInstant } from './lib/imweb-student-share-policy.mjs';
 import { matchLessonShareMember } from './lib/lesson-share-261024.mjs';
+import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from './lib/lesson-share-registration-policy.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 
 const ROOT = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES/lesson-videos-261024');
@@ -38,18 +39,27 @@ function attendance() {
   if (evidence.date !== '2026-10-24' || evidence.source !== 'StudioMate live lesson-detail DOM'
       || age < 0 || age > 2 * 3600000 || !Array.isArray(evidence.sessions) || evidence.sessions.length !== 4) throw Error('Fresh live attendance evidence required');
   const targets = [];
+  const identity = row => {
+    if (typeof row.name !== 'string' || !row.name.normalize('NFC').trim()
+        || typeof row.phone !== 'string' || !/^[+()\d\s-]+$/.test(row.phone)
+        || !row.phone.replace(/\D/g, '')) throw Error('Invalid registered identity');
+    return JSON.stringify([row.name.normalize('NFC').trim(), row.phone.replace(/\D/g, '')]);
+  };
   for (const [team, source] of Object.entries(SOURCES)) {
-    const sessions = evidence.sessions.filter(row => row.team === team);
-    if (sessions.length !== 2 || !isDeepStrictEqual(sessions.map(row => row.lessonId).sort(), [...source.lessonIds].sort())) throw Error('Wrong class scope');
-    const identity = row => `${row.name.normalize('NFC').trim()}|${row.phone.replace(/\D/g, '')}`;
+    const teamSessions = evidence.sessions.filter(row => row.team === team);
+    if (teamSessions.length !== 2 || !isDeepStrictEqual(teamSessions.map(row => row.lessonId).sort(), [...source.lessonIds].sort())) throw Error('Wrong class scope');
+    const sessions = source.lessonIds.map(lessonId => teamSessions.find(session => session.lessonId === lessonId));
     const lists = sessions.map(session => {
-      if (session.date !== '2026-10-24' || session.rows.length !== 5 || session.rows.some(row => row.attendance !== '출석')) throw Error('Actual attended roster required');
+      if (session.date !== '2026-10-24' || !Array.isArray(session.rows) || session.rows.length !== 5
+          || session.rows.some(row => !isRegisteredLessonAttendance(row?.attendance))) throw Error('Registered roster with known attendance required');
       const keys = session.rows.map(identity).sort();
-      if (new Set(keys).size !== 5) throw Error('Duplicate attendee');
+      if (new Set(keys).size !== 5) throw Error('Duplicate registered identity');
       return keys;
     });
-    if (!isDeepStrictEqual(lists[0], lists[1])) throw Error('Two sessions disagree');
-    targets.push(...sessions[0].rows.map(row => ({ ...row, team })));
+    if (!isDeepStrictEqual(lists[0], lists[1])) throw Error('Two registered rosters disagree');
+    targets.push(...sessions[0].rows.map(row => ({ ...row, team,
+      sessionAttendance: sessions.map(session => ({ lessonId: session.lessonId,
+        status: session.rows.find(registered => identity(registered) === identity(row)).attendance })) })));
   }
   if (new Set(targets.map(row => row.phone.replace(/\D/g, ''))).size !== 10) throw Error('Cross-team duplicate');
   return { evidence, targets };
@@ -124,7 +134,8 @@ async function main() {
       assertMemberPreserved(before, fresh, before.group);
       const receipt = { status: 'intent', intentAt: new Date().toISOString(), memberCode,
         beforeGroups: [...before.group], afterGroups, beforeGrade: before.grade, memberInvariantHash: hash(Object.fromEntries(Object.entries(before).filter(([key]) => key !== 'group'))),
-        attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
+        attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_registered',
+          eligibilityPolicy: LESSON_VIDEO_ELIGIBILITY_POLICY_ID, sessionAttendance: target.sessionAttendance,
           date: '2026-10-24', lessonIds: [...source.lessonIds], memberCode, verifiedAt: evidence.verifiedAt } };
       if (already) receipt.kind = 'student_share_existing_staff';
       state.manualImmediateGrants[memberCode] = receipt; save(stateFile, state);
