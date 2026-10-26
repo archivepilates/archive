@@ -1,1 +1,57 @@
-<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 다인 주문 접수</title><style>body{font:16px/1.65 system-ui,sans-serif;color:#222;margin:0;background:#f5f6f7}main{max-width:820px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;border-top:1px solid #ccc;padding-top:24px}li{margin:8px 0}code{overflow-wrap:anywhere}table{border-collapse:collapse;width:100%}td,th{text-align:left;border-bottom:1px solid #ddd;padding:10px}</style><main><h1>ARCHIVE PILATES 다인 주문 접수</h1><p>2026-10-26 · 11/29 강사레슨 두 분 접수</p><h2>원칙</h2><p>원본 2인 140,000원 주문은 그대로 보존하고 실제 수강자별 70,000원을 연결합니다. 기존 1인 자동접수 규칙은 변경하지 않습니다.</p><ul><li>실제 수강자·구매자 연결·현재 결제·정원과 기존 작업·발송 이력을 확인한 뒤 전체 명단을 원자적으로 접수합니다.</li><li>동반 수강자에게 구매자 이름·전화번호를 복사하지 않습니다.</li><li>주문 변경·환불 또는 한 명의 취소·원장 불일치 시 남은 발급·가입서·안내를 공동 보류합니다.</li><li>이미 접수·결과 불명인 요청은 재전송하지 않습니다. 발급된 수강권은 자동 삭제하지 않습니다.</li></ul><h2>실행 경계</h2><p>23:00~익일 09:00 전에는 저장·검증만 합니다. 회원 생성·발급·안내는 기존 정기 작업이 허용시간에 원본을 다시 검증한 뒤 수행합니다. 새 예약기는 만들지 않습니다.</p><h2>검증과 배포</h2><p id="verification">구현 중. 무발송 테스트·Functions 빌드·영향 범위·운영 배포 및 원장 조회 결과를 확정 후 기록합니다.</p><h2>잔여 검증</h2><p>실제 회원 생성·수강권 발급·가입서/알림톡 접수·전달은 별도 단계입니다. 야간 접수 대기열 저장을 발송 완료로 표현하지 않습니다. 외부 주문과 Firestore 간 단일 분산 트랜잭션은 없으므로 각 외부 효과 직전에 원본을 재확인하고 변경은 보수적으로 차단합니다.</p><h2>운영규칙</h2><p>ARCHIVE CORE 운영규칙의 강사회원 가입서 절에 공동 승인·공동 보류·야간 대기 규칙을 함께 반영합니다. 기존 반배정·예약은 수동입니다.</p></main></html>
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 다인 주문 접수 검증</title>
+<style>
+*{box-sizing:border-box}body{font:16px/1.65 system-ui,sans-serif;color:#222;margin:0;background:#f5f6f7}
+main{max-width:820px;margin:auto;padding:32px 20px}h1{font-size:28px}
+h2{font-size:20px;border-top:1px solid #ccc;padding-top:24px}
+li{margin:8px 0}code{overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;table-layout:fixed}
+td,th{text-align:left;border-bottom:1px solid #ddd;padding:10px;overflow-wrap:anywhere}
+td:first-child,th:first-child{width:30%}p,li{overflow-wrap:anywhere}
+</style>
+<main>
+<h1>ARCHIVE PILATES 다인 주문 접수</h1>
+<p>2026-10-27 00:19 KST 확인 · 11/29 강사레슨 2명</p>
+<h2>결론</h2>
+<p>보완·배포와 두 분의 공동 접수는 완료했습니다. 실제 회원 생성·수강권 발급·가입서·알림톡은 야간 규칙에 따라 <strong>10/27 09:00 이후 기존 정기 작업 실행 대기</strong>입니다. 대기열 저장을 발급·발송 완료로 판단하지 않습니다.</p>
+<table>
+<tr><th>단계</th><th>확인된 상태</th></tr>
+<tr><td>결제·수강자 연결</td><td>원본 2인 140,000원 보존, 실제 수강자별 70,000원</td></tr>
+<tr><td>등록 원장</td><td>기존 등록번호 보존, 두 건 모두 queued</td></tr>
+<tr><td>작업</td><td>두 건 pending, attempts 0, 외부 효과 시작 false</td></tr>
+<tr><td>실행 가능시각</td><td>2026-10-27 09:00 KST / 2026-10-27T00:00:00Z</td></tr>
+<tr><td>가입서·안내</td><td>가입서 작업 없음, 해당 등록의 안내 후보·발송 원장 0건</td></tr>
+<tr><td>중복 확인</td><td>원본 재조회 후 재검증 unchanged, 신규 작업 없음</td></tr>
+</table>
+<h2>보완 내용</h2>
+<ul>
+<li>복수 인원은 자동 승인하지 않습니다. 운영자 확인과 원본 결제·정원·기존 효과 검증을 통과한 전체 명단만 한 트랜잭션으로 접수합니다.</li>
+<li>구매자 정보를 동반 수강자에게 복사하지 않습니다. 승인키와 실제 수강자의 이름·전화·수강일·개인별 금액을 함께 검증합니다.</li>
+<li>주문 변경·환불 또는 한 명의 취소·누락·연결 불일치 시 남은 발급·가입서·안내를 공동 보류합니다. 발급된 수강권은 자동 삭제하지 않습니다.</li>
+<li>배분 표식이나 공동 원장이 있는데 승인키가 빠진 경우 단건 처리로 우회하지 못하게 차단합니다.</li>
+<li>제공자 요청 직전 공동 원장·수신자·선점·중복을 재검증합니다. 호출 전 보류와 실제 호출 후 결과 불명 오류를 구분하고, 접수·결과 불명 요청을 재전송하지 않습니다.</li>
+<li>야간 회원 생성·수강권 발급도 보류합니다. 기존 실행 주기·잠금과 등록키를 유지하며 별도 예약기는 만들지 않았습니다.</li>
+</ul>
+<h2>검증</h2>
+<ul>
+<li>Node 테스트 431건, TypeScript 통합·회귀 테스트 139건: 총 570건 통과. 제공자 호출은 합성 fetch로 검증했으며 실제 테스트 발송은 없습니다.</li>
+<li>Functions TypeScript 빌드, 5개 코드베이스 빌드와 105개 export 경계 확인 통과. 실제 배포 범위는 app와 alimtalk 두 코드베이스만입니다.</li>
+<li>CORE 로컬 및 라이브 반응형 QA 각각 95개 검사 통과: 320·390·768·1440·1920 폭. Hosting·카탈로그·롤백 가드와 라이브 release canary 통과.</li>
+<li>실제 주문과 저장 원장을 읽기 전용으로 재대조했습니다. Mac mini 원본 검증기와 서버 정책 함수의 실제 원장 대조도 통과했습니다. 이는 실발송 검증이 아닙니다.</li>
+</ul>
+<h2>배포 증거</h2>
+<p>소스 커밋 <code>8088b8686f3a8a3625dba38374f958964bc5f5ea</code>를 origin/main에 반영하고 깨끗한 로컬 main에서 배포했습니다. Mac mini runtime도 같은 소스로 정렬했습니다. Functions 62개 갱신 성공, CORE 두 기존 Hosting 대상 배포·실제 운영규칙 확인 완료입니다. DB 규칙·인덱스·DNS·기존 판매 상품은 변경하지 않았습니다.</p>
+<ul>
+<li>scheduledProcessAlimtalkQueue: ACTIVE, updateTime 2026-10-26T15:13:49Z.</li>
+<li>queueInstructorLessonConfirmationOnTicketVerified: ACTIVE, updateTime 2026-10-26T15:16:12Z.</li>
+<li>confirmInstructorLessonBookingAndQueueAlimtalk: ACTIVE, updateTime 2026-10-26T15:16:05Z.</li>
+<li><a href="https://github.com/archivepilates/archive/actions/runs/40346935876">소스 커밋 GitHub Functions Affected Check</a>: success.</li>
+<li><a href="https://core.archivepilates.com/rules/">ARCHIVE CORE 운영규칙</a>: 다인 주문 공동 승인·보류·야간 규칙 반영 확인.</li>
+</ul>
+<h2>한계와 다음 단계</h2>
+<p>외부 주문과 Firestore를 하나의 분산 트랜잭션으로 잠그지는 않습니다. 각 외부 효과 직전 원본을 재확인하며 변경은 보수적으로 차단합니다. 09:00 이후 기존 작업기가 최신 신원·원본·취소·중복을 재검증해야 합니다. 실제 발급, 가입서 접수, 알림톡 접수·전달과 회원 서명은 각 원장으로 따로 확인해야 합니다. 운영자의 반배정·예약 절차는 그대로 수동입니다.</p>
+<p>이 문서는 개인정보·전체 연락처·주문 원문을 포함하지 않습니다. 상세 감사와 배포·조회 증거는 접근 제한 원장 및 소유자 전용 운영 폴더에 보존합니다.</p>
+</main>
+</html>
