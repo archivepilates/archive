@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "f70ffafe1e0b920405c3424beb6c702628729495896eeccdd52a14ff3df48085",
+  "policyFingerprint": "71ecabd57706a8d92c582ded7abb6dfebd35a03dc9c3cbc367380b74a3c129dd",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -46,7 +46,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
-      "sha256": "7bb566450ed82a0f1fa206d9914788496f0e8aa095920d5a837cc2b500d518ea"
+      "sha256": "27c28cd94d682e2c0f6c80d0595cc1df9fea4a569fffe479fa30e39694d8b094"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",

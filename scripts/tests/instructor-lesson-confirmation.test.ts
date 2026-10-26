@@ -66,6 +66,12 @@ test("예약 없이도 운영자 확인과 강사레슨 수강권 발급이 검�
   );
 });
 
+test("홈페이지 주문 검토 표시는 발급 검증 뒤에도 확정 안내를 차단한다", () => {
+  assert.equal(instructorLessonTicketConfirmationIssue({
+    ...issuedTicketRegistration(), externalOrderReviewRequired: true,
+  }), "홈페이지 주문 변경 확인필요");
+});
+
 test("예약 상태와 무관하게 알림톡 결과가 확인되면 등록 완료가 된다", () => {
   const ready = {
     member: { status: "verified" },

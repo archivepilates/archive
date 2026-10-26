@@ -27,6 +27,7 @@ import type {
 } from "../types/models";
 import { errorMessage } from "../utils/errors";
 import { nowTimestamp, todayKst } from "../utils/date";
+import { stableHash } from "../utils/hash";
 import { ensureShortLink } from "../utils/shortLinks";
 import { ALIMTALK_TEMPLATE_CHANNEL_IDS, alimtalkDedupePolicy } from "./templates";
 import { isRetryableTemplateStatusIssue } from "./eligibility";
@@ -48,12 +49,15 @@ import {
 import { RECOMMENDED_MEAL_REQUEST_COLLECTION } from "../mealPlan/recommendedMealSurvey";
 import {
   syncInstructorLessonConfirmationOutcome,
+  instructorLessonConfirmationAllocationSendabilityIssue,
 } from "../instructorLessonRegistration/instructorLessonConfirmation";
 
 const SOLAPI_SEND_URL = "https://api.solapi.com/messages/v4/send-many/detail";
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 const RECOMMENDED_MEAL_ALREADY_SENT = "추천식단 이미 발송 완료";
 type DispatchCandidate = AlimtalkCandidateDoc & { nextEligibleAt?: string | null; queueLeaseId?: string };
+
+export class InstructorOrderAttendeePreflightError extends Error {}
 
 export interface AlimtalkCandidateProcessResult {
   processed: boolean;
@@ -340,6 +344,10 @@ export async function processAlimtalkQueue(): Promise<{
       });
       sent += 1;
     } catch (err) {
+      if (err instanceof InstructorOrderAttendeePreflightError) {
+        if (!(await skipBlockedInstructorAllocation(claimed, err.message))) deferred += 1;
+        continue;
+      }
       if (err instanceof MemberDispatchRequestBlockedError) {
         if (!(await skipBlockedMemberDispatchRequest(claimed, err.message))) deferred += 1;
         continue;
@@ -660,6 +668,11 @@ async function processAlimtalkCandidateOutcome(candidate: AlimtalkCandidateDoc |
     });
     return { processed: true, status: "sent", solapiMessageId: result.messageId };
   } catch (err) {
+    if (err instanceof InstructorOrderAttendeePreflightError) {
+      const recorded = await skipBlockedInstructorAllocation(claimed, err.message);
+      return { processed: true, status: recorded ? "skipped" : "deferred",
+        lastError: recorded ? err.message : "instructor_lesson_confirmation_state_review_required" };
+    }
     if (err instanceof MemberDispatchRequestBlockedError) {
       const recorded = await skipBlockedMemberDispatchRequest(claimed, err.message);
       return { processed: true, status: recorded ? "skipped" : "deferred",
@@ -754,6 +767,26 @@ async function skipBlockedMemberDispatchRequest(candidate: AlimtalkCandidateDoc,
       nextEligibleAt: null, queueLeaseId: null, updatedAt: nowTimestamp() });
     return true;
   });
+}
+
+async function skipBlockedInstructorAllocation(candidate: AlimtalkCandidateDoc, issue: string): Promise<boolean> {
+  const recorded = await db.runTransaction(async tx => {
+    const ref = refs.alimtalkCandidate(candidate.candidateId);
+    const current = (await tx.get(ref)).data() as DispatchCandidate | undefined;
+    const send = await tx.get(refs.alimtalkSend(candidate.candidateId));
+    const lease = (candidate as DispatchCandidate).queueLeaseId;
+    if (!current || current.status !== "processing" || send.exists || current.attempts !== candidate.attempts
+      || !lease || current.queueLeaseId !== lease
+      || stableHash([current.studioId, current.memberId, current.memberName, current.memberPhone, current.type, current.templateCode, current.payload])
+        !== stableHash([candidate.studioId, candidate.memberId, candidate.memberName, candidate.memberPhone, candidate.type, candidate.templateCode, candidate.payload])) return false;
+    tx.update(ref, { status: "skipped", reasonCode: "instructor_lesson_confirmation_source_blocked",
+      lastError: issue, nextEligibleAt: null, queueLeaseId: null, updatedAt: nowTimestamp() });
+    return true;
+  });
+  if (recorded) await safeSyncInstructorLessonConfirmationOutcome(candidate, {
+    status: "skipped", reasonCode: "instructor_lesson_confirmation_source_blocked", detail: issue,
+  });
+  return recorded;
 }
 
 function quietDispatchErrorDetail(error: Error): string {
@@ -1246,6 +1279,15 @@ async function sendSolapiMessage(candidate: AlimtalkCandidateDoc): Promise<{ mes
     body: JSON.stringify(body),
   };
   await assertMemberDispatchRequestAllowed({ db }, candidate);
+  if (candidate.type === "instructor_lesson_confirmation") {
+    try {
+      const allocationIssue = await instructorLessonConfirmationAllocationSendabilityIssue(candidate);
+      if (allocationIssue) throw new InstructorOrderAttendeePreflightError(allocationIssue);
+    } catch (error) {
+      if (error instanceof InstructorOrderAttendeePreflightError) throw error;
+      throw new InstructorOrderAttendeePreflightError("instructor_order_attendee_source_read_failed");
+    }
+  }
   assertMemberDispatchAllowed();
   try {
     const response = await fetch(SOLAPI_SEND_URL, options);
@@ -1262,7 +1304,8 @@ async function sendSolapiMessage(candidate: AlimtalkCandidateDoc): Promise<{ mes
     };
   } catch (error) {
     // A typed error from an invoked provider is no longer proof that no POST occurred.
-    if (isMemberDispatchDeferred(error) || error instanceof MemberDispatchRequestBlockedError)
+    if (isMemberDispatchDeferred(error) || error instanceof MemberDispatchRequestBlockedError
+      || error instanceof InstructorOrderAttendeePreflightError)
       throw new Error("member_dispatch_error_after_transport_started", { cause: error });
     throw error;
   }

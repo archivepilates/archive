@@ -12,6 +12,10 @@ export const LEGACY_PAYMENT_METHOD_REVIEW = '홈페이지 결제수단 매핑 �
 export const needsPaymentMethodReassessment = reason => reason === LEGACY_PAYMENT_METHOD_REVIEW;
 
 export function assessInstructorOrder(order, { now = new Date(), policy = IMWEB_LESSON_POLICY } = {}) {
+  return assessOrderQuantity(order, { now, policy, quantity: 1 });
+}
+
+function assessOrderQuantity(order, { now, policy, quantity }) {
   const items = (order.sections || []).flatMap(section => (section.sectionItems || []).map(item => ({ ...item, section })));
   const targets = items.filter(item => policy.productNos.includes(Number(item.productInfo?.prodNo))
     && /^\[오프라인\].*ARCHIVE METHOD.*강사레슨/.test(item.productInfo?.prodName || ''));
@@ -36,7 +40,7 @@ export function assessInstructorOrder(order, { now = new Date(), policy = IMWEB_
   };
   const review = reason => ({ status: 'review_required', reason, ...input });
   if (!/^\d{15}$/.test(input.orderNo) || !input.itemNo.startsWith(`${input.orderNo}-`)) return review('주문 식별자 확인필요');
-  if (items.length !== 1 || targets.length !== 1 || item.qty !== 1 || order.isGift !== 'N') return review('복수 상품·인원 또는 선물 주문은 실제 수강자 확인필요');
+  if (items.length !== 1 || targets.length !== 1 || item.qty !== quantity || order.isGift !== 'N') return review('복수 상품·인원 또는 선물 주문은 실제 수강자 확인필요');
   if (order.currency !== 'KRW' || order.saleChannel !== 'IMWEB' || order.orderType !== 'SHOPPING') return review('주문 원천·통화 확인필요');
   if (!['OPEN', 'CLOSED'].includes(order.orderStatus)
     || !['SHIPPING_READY', 'SHIPPING_COMPLETE', 'PURCHASE_CONFIRMATION'].includes(item.section.orderSectionStatus)
@@ -47,17 +51,107 @@ export function assessInstructorOrder(order, { now = new Date(), policy = IMWEB_
   if (!lessonDate || !Number.isFinite(Date.parse(`${lessonDate}T00:00:00Z`))
     || new Date(`${lessonDate}T00:00:00Z`).toISOString().slice(0, 10) !== lessonDate
     || lessonDate <= new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)) return review('미래 수강일 옵션 확인필요');
-  if (input.paidAmount !== policy.expectedPrice || Number(paid[0].paidPrice) !== input.paidAmount
+  if (input.paidAmount !== policy.expectedPrice * quantity || Number(paid[0].paidPrice) !== input.paidAmount
     || Number(order.totalDeliveryPrice) !== 0 || Number(order.totalPoint) !== 0) return review('할인·포인트·금액 변경 주문은 구매조건 확인필요');
   return { status: 'ready', reason: '홈페이지 결제·수강일 확인 / StudioMate 신용카드 분류', ...input };
 }
 
-export function assertSamePaidOrder(job, order) {
-  const current = assessInstructorOrder(order);
+export function assertSamePaidOrder(job, order, { attendeeResolution, now = new Date() } = {}) {
+  if (job.externalOrder?.attendeeResolutionKey) {
+    const assessment = validateInstructorOrderAttendeeResolution(order, attendeeResolution, { now });
+    const attendee = attendeeResolution.attendees.find(a => a.registrationId === job.registrationId);
+    if (!attendee || job.studioId !== attendeeResolution.studioId
+      || job.memberName !== attendee.memberName || normalizeInstructorLessonPhone(job.memberPhone) !== attendee.memberPhone
+      || job.lessonDate !== attendeeResolution.lessonDate
+      || job.externalOrder.attendeeResolutionKey !== attendeeResolution.resolutionKey
+      || job.externalOrder.orderNo !== attendeeResolution.orderNo || job.externalOrder.itemNo !== attendeeResolution.itemNo
+      || job.externalOrder.memberName !== attendee.memberName || job.externalOrder.memberPhone !== attendee.memberPhone
+      || job.externalOrder.registrationId !== attendee.registrationId
+      || job.externalOrder.lessonDate !== attendeeResolution.lessonDate
+      || job.externalOrder.paidAmount !== attendee.paidAmount
+      || job.externalOrder.totalPaidAmount !== attendeeResolution.totalPaidAmount) {
+      throw new Error('다인 주문 수강자·개인별 결제 연결 확인필요');
+    }
+    return { ...assessment, ...attendee, paidAmount: attendee.paidAmount,
+      totalPaidAmount: attendeeResolution.totalPaidAmount, attendeeResolutionKey: attendeeResolution.resolutionKey };
+  }
+  const current = assessInstructorOrder(order, { now });
   for (const key of ['orderNo', 'itemNo', 'memberName', 'memberPhone', 'lessonDate', 'paidAmount']) {
     if (current.status !== 'ready' || current[key] !== job.externalOrder?.[key]) {
       throw new Error(`홈페이지 주문 재검증 중단: ${current.reason}; ${key} 확인필요`);
     }
   }
   return current;
+}
+
+export const INSTRUCTOR_ORDER_ATTENDEE_POLICY = 'imweb_instructor_attendees_v1';
+const resolutionBinding = value => ({
+  policy: value.policy, version: value.version, studioId: value.studioId,
+  orderNo: value.orderNo, itemNo: value.itemNo, lessonDate: value.lessonDate,
+  sourceFingerprint: value.sourceFingerprint, totalPaidAmount: value.totalPaidAmount,
+  attendees: value.attendees,
+});
+
+export function createInstructorOrderAttendeeResolution(order, attendees, { actor, basis, now = new Date() } = {}) {
+  if (!String(actor || '').trim() || !String(basis || '').trim()) throw new Error('실제 수강자 확인자·승인 근거 필요');
+  if (!Array.isArray(attendees) || attendees.length < 2 || attendees.length > IMWEB_LESSON_POLICY.capacity) {
+    throw new Error('다인 주문 수강자 수 확인필요');
+  }
+  const assessment = assessOrderQuantity(order, { now, policy: IMWEB_LESSON_POLICY, quantity: attendees.length });
+  if (assessment.status !== 'ready') throw new Error(`다인 주문 원본 확인필요: ${assessment.reason}`);
+  const normalized = attendees.map(a => {
+    const memberName = String(a.memberName || '').replace(/\s+/g, ' ').trim();
+    const memberPhone = normalizeInstructorLessonPhone(a.memberPhone);
+    if (!memberName || memberName.length > 40 || !/^010\d{8}$/.test(memberPhone)) throw new Error('실제 수강자 신원 확인필요');
+    if (a.paidAmount != null && a.paidAmount !== IMWEB_LESSON_POLICY.expectedPrice) throw new Error('개인별 금액 확인필요');
+    return { memberName, memberPhone, paidAmount: IMWEB_LESSON_POLICY.expectedPrice,
+      registrationId: instructorLessonRegistrationId(IMWEB_LESSON_POLICY.studioId, memberPhone, assessment.lessonDate) };
+  }).sort((a, b) => a.registrationId.localeCompare(b.registrationId));
+  if (new Set(normalized.map(a => a.memberPhone)).size !== normalized.length
+    || !normalized.some(a => a.memberPhone === assessment.memberPhone && a.memberName === assessment.memberName)) {
+    throw new Error('중복 수강자 또는 구매자 연결 확인필요');
+  }
+  const result = {
+    version: 1, policy: INSTRUCTOR_ORDER_ATTENDEE_POLICY, status: 'approved', studioId: IMWEB_LESSON_POLICY.studioId,
+    orderNo: assessment.orderNo, itemNo: assessment.itemNo, lessonDate: assessment.lessonDate,
+    sourceFingerprint: orderFingerprint(order), totalPaidAmount: assessment.paidAmount,
+    attendees: normalized, approval: { actor: String(actor).trim(), basis: String(basis).trim(), approvedAt: now.toISOString() },
+  };
+  result.resolutionKey = orderFingerprint(resolutionBinding(result));
+  return result;
+}
+
+export function validateInstructorOrderAttendeeResolution(order, resolution, { now = new Date() } = {}) {
+  if (!resolution || resolution.status !== 'approved' || resolution.policy !== INSTRUCTOR_ORDER_ATTENDEE_POLICY
+    || resolution.version !== 1 || resolution.studioId !== IMWEB_LESSON_POLICY.studioId
+    || resolution.resolutionKey !== orderFingerprint(resolutionBinding(resolution))
+    || resolution.sourceFingerprint !== orderFingerprint(order)
+    || !Number.isFinite(Date.parse(resolution.approval?.approvedAt || ''))
+    || Date.parse(resolution.approval.approvedAt) > now.getTime() + 60000) throw new Error('다인 주문 승인·원본 변경 확인필요');
+  const expected = createInstructorOrderAttendeeResolution(order, resolution.attendees,
+    { ...resolution.approval, now });
+  if (expected.resolutionKey !== resolution.resolutionKey) throw new Error('다인 주문 금액·수강자 배분 확인필요');
+  return assessOrderQuantity(order, { now, policy: IMWEB_LESSON_POLICY, quantity: resolution.attendees.length });
+}
+
+export function assertInstructorOrderAttendeeFamily(resolution, registrations) {
+  if (!resolution || resolution.status !== 'approved' || !Array.isArray(resolution.attendees)
+    || resolution.attendees.length !== registrations.length) throw new Error('다인 주문 공동 원장 확인필요');
+  for (const attendee of resolution.attendees) {
+    const r = registrations.find(r => r.registrationId === attendee.registrationId);
+    if (!r || r.studioId !== resolution.studioId || r.memberName !== attendee.memberName
+      || normalizeInstructorLessonPhone(r.memberPhone) !== attendee.memberPhone || r.lessonDate !== resolution.lessonDate
+      || r.source?.type !== 'imweb_paid_order' || r.source?.sourceId !== resolution.orderNo
+      || r.externalOrder?.orderNo !== resolution.orderNo || r.externalOrder?.itemNo !== resolution.itemNo
+      || r.externalOrder?.attendeeResolutionKey !== resolution.resolutionKey
+      || r.externalOrder?.memberName !== attendee.memberName || r.externalOrder?.memberPhone !== attendee.memberPhone
+      || r.externalOrder?.registrationId !== attendee.registrationId || r.externalOrder?.lessonDate !== resolution.lessonDate
+      || r.externalOrder?.totalPaidAmount !== resolution.totalPaidAmount
+      || r.externalOrder?.paidAmount !== attendee.paidAmount || r.ticketPrice !== attendee.paidAmount
+      || r.operatorChecks?.paymentConfirmed !== true || r.operatorChecks?.seatConfirmed !== true
+      || r.externalOrderReviewRequired || r.cancellation || ['cancelled', 'canceled', 'rejected', 'action_required', 'review_required', 'failed'].includes(r.status)) {
+      throw new Error('다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단');
+    }
+  }
+  return true;
 }

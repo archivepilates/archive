@@ -10,8 +10,7 @@ import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { acquireEformsignBrowserLock } from "./lib/eformsign-browser-lock.mjs";
 import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch } from "./lib/eformsign-send-readiness.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
-import { readImwebOrder } from "./lib/imweb-instructor-orders.mjs";
-import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
+import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION, canonicalSignupPhone, parseSignupProfile } from "./lib/instructor-signup-profile.mjs";
 import { buildOrderContactBinding, canRecheckCompletedSignup, readCompletedRecipientEvidence, readSignupMemberIdentity } from "./lib/instructor-signup-order-identity.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
@@ -197,11 +196,16 @@ async function processCandidate(page, candidate) {
       const sendResult = await sendInstructorMemberForm(page, { ...claimed, jobId: candidate.ref.id }, async () => {
         const registration = (await db.collection("instructorLessonRegistrations").doc(candidate.ref.id).get()).data();
         if (!registration) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
-        if (registration.externalOrder) {
-          if (registration.externalOrderReviewRequired || registration.operatorChecks?.paymentConfirmed !== true) {
-            throw new Error("홈페이지 주문 확인필요: 가입서 발송 중단");
-          }
-          assertSamePaidOrder(registration, readImwebOrder(registration.externalOrder.orderNo));
+        if (registration.externalOrderReviewRequired
+          || (registration.externalOrder && registration.operatorChecks?.paymentConfirmed !== true)) {
+          throw new Error("홈페이지 주문 확인필요: 가입서 발송 중단");
+        }
+        const paidOrder = await verifyInstructorPaidOrder(db, registration);
+        if (paidOrder && (normalizeInstructorLessonPhone(claimed.memberPhone) !== paidOrder.assessment.memberPhone
+          || normalizeInstructorLessonName(claimed.memberName) !== normalizeInstructorLessonName(paidOrder.assessment.memberName)
+          || claimed.lessonDate !== paidOrder.assessment.lessonDate
+          || positiveMoney(claimed.ticketPrice || claimed.paymentAmount || INSTRUCTOR_LESSON_TICKET_PRICE) !== paidOrder.assessment.paidAmount)) {
+          throw new Error("홈페이지 수강자·개인별 결제 연결 확인필요: 가입서 발송 중단");
         }
         assertMemberDispatchAllowed();
         await markSending(candidate.ref, claimed);
@@ -816,8 +820,8 @@ async function verifyCompletedOrderContact(page, ref, job, fields) {
     try { await memberContext?.close(); } finally { await releaseMemberLock?.(); }
   }
   // Read the paid order after browser checks; the transaction below rechecks both stored identities.
-  const order = readImwebOrder(registration.externalOrder.orderNo);
-  return buildOrderContactBinding({ job, registration, order, member, document, submittedPhone: fields.memberPhone });
+  const { order, attendeeResolution } = await verifyInstructorPaidOrder(db, registration);
+  return buildOrderContactBinding({ job, registration, order, attendeeResolution, member, document, submittedPhone: fields.memberPhone });
 }
 
 async function markCompletionReviewRequired(ref, job, message, extra = {}) {

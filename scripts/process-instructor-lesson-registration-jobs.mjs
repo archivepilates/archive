@@ -9,9 +9,10 @@ import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
-import { readImwebOrder, syncImwebInstructorOrders } from "./lib/imweb-instructor-orders.mjs";
+import { syncImwebInstructorOrders } from "./lib/imweb-instructor-orders.mjs";
 import { sanitizeImwebFailureDetails } from "./lib/imweb-read-failure.mjs";
-import { assertSamePaidOrder } from "./lib/imweb-instructor-order-policy.mjs";
+import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
+import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import { processInstructorLessonCancellations } from "./lib/instructor-lesson-cancellation-worker.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
@@ -171,19 +172,28 @@ async function runCandidate(candidate, page) {
     currentStep: claimed.currentStep,
     status: "processing",
   };
+  const nativeDispatch = { attempted: false };
   summary.processed += 1;
   try {
     if (!page) throw new Error("StudioMate 브라우저가 준비되지 않았습니다.");
-    if (claimed.externalOrder) assertSamePaidOrder(claimed, readImwebOrder(claimed.externalOrder.orderNo));
+    await verifyInstructorPaidOrder(db, claimed);
     const processed = await processStudioMateRegistration(page, candidate.ref, {
       ...claimed,
       newMemberSimulation,
+      nativeDispatch,
     });
     item.status = processed.status;
     item.detail = processed.detail;
     if (processed.status === "completed") summary.completed += 1;
     else summary.waiting += 1;
   } catch (error) {
+    if (isMemberDispatchDeferred(error) && !nativeDispatch.attempted) {
+      await deferClaim(candidate.ref, claimed, error.nextAllowedAt);
+      summary.processed -= 1;
+      summary.deferred = (summary.deferred || 0) + 1;
+      summary.jobs.push({ ...item, ...memberDispatchWindow(), status: "deferred" });
+      return;
+    }
     const message = error instanceof Error ? error.message : String(error);
     const current = (await candidate.ref.get()).data() || claimed;
     if (current.claimToken && current.claimToken !== claimed.claimToken) {
@@ -247,14 +257,16 @@ async function processStudioMateRegistration(page, ref, job) {
           : "기존 강사회원 정확매칭 완료",
       nextStep: "ticket",
     });
+    job.nativeDispatch.attempted = false;
   }
 
   await openMemberDetail(page, memberId);
   const activeTicket = await findActiveInstructorTicket(page, job.lessonDate);
+  const paidOrder = await verifyInstructorPaidOrder(db, job);
   if (activeTicket && job.externalOrder) {
     const payment = activeTicket.text.match(/결제\s*금액\s*([\d,]+)\s*원/);
     if (!job.ticketId || String(activeTicket.ticketId) !== String(job.ticketId)
-      || !payment || Number(payment[1].replaceAll(",", "")) !== job.externalOrder.paidAmount) {
+      || !payment || Number(payment[1].replaceAll(",", "")) !== paidOrder.assessment.paidAmount) {
       throw new Error("동일 수강일 수강권의 ID·결제액 연결 확인필요: 자동 재발급 금지");
     }
   }
@@ -265,13 +277,15 @@ async function processStudioMateRegistration(page, ref, job) {
     const issued = await issueInstructorLessonTicket(page, ref, { ...job, mode, studiomateMemberId: memberId });
     ticketId = issued.ticketId;
   }
+  const completedOrder = await verifyInstructorPaidOrder(db, job);
   await completeStep(ref, job.claimToken, "ticket", {
     ticketId,
-    ...(job.externalOrder ? { ticketPaymentAmount: job.externalOrder.paidAmount } : {}),
+    ...(completedOrder ? { ticketPaymentAmount: completedOrder.assessment.paidAmount } : {}),
     detail: (activeTicket ? "기존 동일 수강일 수강권 재사용" : "강사레슨 (2T) 발급 검증 완료")
       + (job.externalOrder ? ` · 홈페이지 ${job.externalOrder.paidAmount.toLocaleString("ko-KR")}원 / 주문 ${job.externalOrder.orderNo}` : ""),
     nextStep: "followup",
   });
+  job.nativeDispatch.attempted = false;
   await preparePostTicketSteps(ref, job.claimToken, {
     ...job,
     mode,
@@ -279,6 +293,7 @@ async function processStudioMateRegistration(page, ref, job) {
     ticketId,
   });
 
+  await verifyInstructorPaidOrder(db, job);
   return completeStudioMateRegistration(ref, job.claimToken, {
     mode,
     memberId,
@@ -344,7 +359,11 @@ async function createInstructorMember(page, ref, job) {
     throw new Error("StudioMate 강사회원 등급 선택 검증에 실패했습니다.");
   }
 
+  await verifyInstructorPaidOrder(db, job);
+  assertMemberDispatchAllowed();
   await startExternalEffect(ref, job.claimToken, "member", "member_create");
+  assertMemberDispatchAllowed();
+  job.nativeDispatch.attempted = true;
   await page.getByRole("button", { name: "회원 등록 완료", exact: true }).click();
   // Prove persistence by a fresh exact-phone lookup, not a versioned write-response URL.
   await page.waitForURL(/\/users\/detail\?id=\d+/, { timeout: 30_000 });
@@ -438,13 +457,13 @@ async function issueInstructorLessonTicket(page, ref, job) {
   await dialog.getByRole("button", { name: "완료", exact: true }).waitFor({ state: "visible" });
   await selectPaymentMethod(dialog, job.paymentMethod);
   if (job.externalOrder) {
-    assertSamePaidOrder(job, readImwebOrder(job.externalOrder.orderNo));
+    const { assessment } = await verifyInstructorPaidOrder(db, job);
     const fields = await dialog.locator(".price-input, .point-input").evaluateAll(nodes => nodes.map(node => ({
       label: node.querySelector("label")?.textContent?.trim(),
       value: node.querySelector("input")?.value,
     })));
-    for (const [label, amount] of Object.entries({ 판매가: job.externalOrder.paidAmount, 결제금액: job.externalOrder.paidAmount,
-      카드: job.externalOrder.paidAmount, 현금: 0, 계좌이체: 0, 포인트: 0, 미수금: 0, 할인금액: 0 })) {
+    for (const [label, amount] of Object.entries({ 판매가: assessment.paidAmount, 결제금액: assessment.paidAmount,
+      카드: assessment.paidAmount, 현금: 0, 계좌이체: 0, 포인트: 0, 미수금: 0, 할인금액: 0 })) {
       const matches = fields.filter(field => field.label === label);
       if (matches.length !== 1 || Number(String(matches[0].value || "").replaceAll(",", "")) !== amount) {
         throw new Error(`홈페이지 결제와 StudioMate ${label} 불일치: 발급 중단`);
@@ -452,11 +471,15 @@ async function issueInstructorLessonTicket(page, ref, job) {
     }
   }
 
+  await verifyInstructorPaidOrder(db, job);
+  assertMemberDispatchAllowed();
   await startExternalEffect(ref, job.claimToken, "ticket", "ticket_issue");
   const responsePromise = page.waitForResponse(
     (response) => response.request().method() === "POST" && /\/v2\/staff\/user-tickets(?:\?|$)/.test(response.url()),
     { timeout: 15_000 },
   ).catch(() => null);
+  assertMemberDispatchAllowed();
+  job.nativeDispatch.attempted = true;
   await dialog.getByRole("button", { name: "완료", exact: true }).click();
   await dialog.waitFor({ state: "hidden", timeout: 30_000 });
   const response = await responsePromise;
@@ -470,8 +493,9 @@ async function issueInstructorLessonTicket(page, ref, job) {
   const verified = await findActiveInstructorTicket(page, job.lessonDate);
   if (!verified) throw new Error("발급 후 StudioMate 상세에서 강사레슨 (2T) 수강권을 확인하지 못했습니다.");
   if (job.externalOrder) {
+    const { assessment } = await verifyInstructorPaidOrder(db, job);
     const payment = verified.text.match(/결제\s*금액\s*([\d,]+)\s*원/);
-    if (!payment || Number(payment[1].replaceAll(",", "")) !== job.externalOrder.paidAmount) {
+    if (!payment || Number(payment[1].replaceAll(",", "")) !== assessment.paidAmount) {
       throw new Error("발급 후 홈페이지 결제금액과 수강권 결제금액 불일치: 자동 재발급 금지");
     }
   }
@@ -480,6 +504,7 @@ async function issueInstructorLessonTicket(page, ref, job) {
 }
 
 async function preparePostTicketSteps(ref, claimToken, job) {
+  const paidOrder = await verifyInstructorPaidOrder(db, job);
   const registrationRef = registration(ref.id);
   const eformRef = db.collection("eformsignInstructorMemberJobs").doc(ref.id);
   await db.runTransaction(async (transaction) => {
@@ -534,7 +559,7 @@ async function preparePostTicketSteps(ref, claimToken, job) {
         lessonDate: job.lessonDate,
         studiomateMemberId: job.studiomateMemberId,
         ticketName: INSTRUCTOR_LESSON_TICKET_NAME,
-        ticketPrice: job.externalOrder?.paidAmount ?? INSTRUCTOR_LESSON_TICKET_PRICE,
+        ticketPrice: paidOrder?.assessment.paidAmount ?? INSTRUCTOR_LESSON_TICKET_PRICE,
         status: "pending",
         attempts: 0,
         maxAttempts: 3,
@@ -560,6 +585,9 @@ async function completeStudioMateRegistration(ref, claimToken, { mode, memberId,
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registrationData = registrationSnapshot.data() || {};
+    if (registrationData.cancellation?.jobId || registrationData.externalOrderReviewRequired) {
+      throw new Error("홈페이지 주문 변경·취소 확인필요: 등록 완료 중단");
+    }
     const steps = registrationData.steps || {};
     state = deriveInstructorLessonRegistrationState({ mode, steps });
     const now = FieldValue.serverTimestamp();
@@ -660,6 +688,15 @@ async function claimJob(ref) {
       });
       return { ...data, blocked: true };
     }
+    const window = memberDispatchWindow();
+    if (!window.allowed) {
+      transaction.update(ref, {
+        nextRunAt: Timestamp.fromMillis(Date.parse(window.nextAllowedAt)),
+        nextAllowedAt: window.nextAllowedAt,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return null;
+    }
     const attempts = Number(data.attempts || 0) + 1;
     const claimToken = randomUUID();
     transaction.set(ref, {
@@ -677,7 +714,49 @@ async function claimJob(ref) {
       status: "processing",
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    return { ...data, attempts, claimToken };
+    return { ...data, attempts, claimToken, dispatchUndo: restoreFields(data,
+      ["status", "attempts", "claimToken", "claimedBy", "claimedAt", "leaseExpiresAt", "lastError"]) };
+  });
+}
+
+function restoreFields(data, fields) {
+  return Object.fromEntries(fields.map(field => [field, data[field] === undefined ? FieldValue.delete() : data[field]]));
+}
+
+async function deferClaim(ref, job, nextAllowedAt = memberDispatchWindow().nextAllowedAt) {
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    const source = await transaction.get(registration(ref.id));
+    const current = snapshot.data();
+    if (current?.claimToken !== job.claimToken || current.status !== "processing") {
+      throw new Error("instructor_registration_quiet_claim_changed");
+    }
+    transaction.update(ref, {
+      ...job.dispatchUndo,
+      externalEffectStarted: false,
+      effectType: null,
+      effectStartedAt: null,
+      nextRunAt: Timestamp.fromMillis(Date.parse(nextAllowedAt)),
+      nextAllowedAt,
+      updatedAt: FieldValue.serverTimestamp(),
+      dispatchDeferrals: [...(current.dispatchDeferrals || []), {
+        claimToken: job.claimToken, claimedAt: current.claimedAt,
+        deferredStep: current.currentStep,
+        effectPreparedAt: current.effectStartedAt || null, deferredAt: new Date().toISOString(),
+        providerPostCount: 0, nextAllowedAt,
+      }],
+    });
+    // Preserve verified prior steps and any concurrent operator hold/cancellation.
+    if (source.exists && !source.data().cancellation && !source.data().externalOrderReviewRequired
+      && source.data().status === "processing") {
+      transaction.update(registration(ref.id), {
+        nextAction: "회원·수강권 자동 처리 가능 시간 대기 (09:00 이후)",
+        ...(current.externalEffectStarted ? {
+          [`steps.${current.currentStep}`]: stepValue("pending", stepLabel(current.currentStep), "발송 가능 시간까지 외부 작업 보류"),
+        } : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
   });
 }
 

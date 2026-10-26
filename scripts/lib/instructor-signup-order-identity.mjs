@@ -29,6 +29,7 @@ export function assertOrderContactBinding(binding, job, submittedPhone, registra
     || name(registration.memberName) !== binding.memberName
     || registration.source?.type !== 'imweb_paid_order' || String(registration.source?.sourceId) !== binding.orderNo
     || registration.externalOrder?.orderNo !== binding.orderNo || registration.externalOrder?.itemNo !== binding.itemNo
+    || (registration.externalOrder?.attendeeResolutionKey ?? undefined) !== binding.attendeeResolutionKey
     || phone(registration.externalOrder?.memberPhone) !== binding.canonicalPhone
     || name(registration.externalOrder?.memberName) !== binding.memberName
     || registration.externalOrder?.lessonDate !== binding.lessonDate
@@ -38,23 +39,26 @@ export function assertOrderContactBinding(binding, job, submittedPhone, registra
   return binding.canonicalPhone;
 }
 
-export function buildOrderContactBinding({ job, registration, order, member, document, submittedPhone, now = new Date() }) {
+export function buildOrderContactBinding({ job, registration, order, attendeeResolution, member, document, submittedPhone, now = new Date() }) {
   if (!registration?.externalOrder) fail();
-  assertSamePaidOrder(registration, order);
-  const canonicalPhone = phone(order.ordererCall);
+  const assessment = assertSamePaidOrder(registration, order, { attendeeResolution, now });
+  const canonicalPhone = phone(assessment.memberPhone);
+  const canonicalName = name(assessment.memberName);
+  if (canonicalName !== name(job.memberName)) fail();
   if (member?.status !== 'verified' || String(member.member?.memberId) !== memberId(job)
-    || phone(member.member?.phone) !== canonicalPhone || name(member.member?.name) !== name(job.memberName)
+    || phone(member.member?.phone) !== canonicalPhone || name(member.member?.name) !== canonicalName
     || document?.documentId !== job.documentId || document?.selectedDocumentId !== job.documentId
     || document?.templateId !== INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID
     || document?.status !== 'completed' || document?.recipients?.length !== 1
     || !Number.isFinite(Date.parse(document.observedAt || ''))
     || now.getTime() - Date.parse(document.observedAt) > 5 * 60000 || Date.parse(document.observedAt) > now.getTime() + 60000
     || phone(document.recipients[0]?.phone) !== canonicalPhone
-    || name(document.recipients[0]?.name) !== name(job.memberName)) fail();
+    || name(document.recipients[0]?.name) !== canonicalName) fail();
   const binding = {
     version: 1, policy: ORDER_CONTACT_POLICY, studioId: job.studioId, registrationId: job.registrationId,
     memberId: memberId(job), memberName: name(job.memberName), lessonDate: job.lessonDate,
     orderNo: String(order.orderNo), itemNo: registration.externalOrder.itemNo,
+    ...(assessment.attendeeResolutionKey ? { attendeeResolutionKey: assessment.attendeeResolutionKey } : {}),
     documentId: job.documentId, templateId: document.templateId, documentStatus: document.status,
     recipientCount: 1, recipientPhone: canonicalPhone, canonicalPhone, submittedPhone: phone(submittedPhone),
     verifiedAt: now.toISOString(),

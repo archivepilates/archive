@@ -85,9 +85,9 @@ export function readRecentImwebOrders(read = imwebOrderRead, now = new Date()) {
 
 const step = (status, label, detail = '') => ({ status, label, detail });
 export function resolvedPaymentMethodIssue(item) {
-  return item.status === 'queued' || (item.status === 'unchanged' && item.paymentMethodReviewResolved === true);
+  return item.status === 'queued' || (item.status === 'unchanged' && (item.paymentMethodReviewResolved === true || item.attendeeResolutionVerified === true));
 }
-function registrationDocument(input, now) {
+export function registrationDocument(input, now) {
   return {
     registrationId: input.registrationId, idempotencyKey: input.registrationId, studioId: policy.studioId,
     memberName: input.memberName, memberPhone: input.memberPhone, phoneLast4: input.memberPhone.slice(-4),
@@ -107,7 +107,7 @@ function registrationDocument(input, now) {
   };
 }
 
-function activeIdentities(registrations, holders, date, bookings, lectures) {
+export function activeIdentities(registrations, holders, date, bookings, lectures) {
   const members = new Set();
   const cancelledPhones = new Set(registrations.docs.map(doc => doc.data()).filter(d => d.studioId === policy.studioId
     && d.lessonDate === date && d.status === 'cancelled' && d.cancellation?.nativeVerified === true)
@@ -138,6 +138,11 @@ function activeIdentities(registrations, holders, date, bookings, lectures) {
 }
 
 export async function importInstructorOrder(db, order, { apply = false, now = new Date(), tracked = false } = {}) {
+  const allocationLedger = await db.collection('imwebInstructorLessonOrders').doc(orderLedgerId(order.orderNo)).get();
+  if (allocationLedger.data()?.attendeeResolution) {
+    const { reconcileInstructorOrderAttendees } = await import('./imweb-instructor-order-attendees.mjs');
+    return reconcileInstructorOrderAttendees(db, order, { apply, now });
+  }
   let input = assessInstructorOrder(order, { now });
   if (input.status === 'ignored') {
     if (!tracked) return input;
@@ -285,7 +290,8 @@ export async function syncImwebInstructorOrders(db, { apply = false, orderNo = '
     const items = [];
     for (const order of orders) {
       if (!orderNo && fingerprints[order.orderNo] === orderFingerprint(order)
-        && !needsPaymentMethodReassessment(issues[order.orderNo])) continue;
+        && !needsPaymentMethodReassessment(issues[order.orderNo])
+        && !/복수 상품·인원|다인 주문|실제 수강자/.test(issues[order.orderNo] || '')) continue;
       if (assessInstructorOrder(order).status === 'ignored' && !watch[order.orderNo]) continue;
       // Re-read the exact source immediately before admitting any external work.
       const fresh = readImwebOrder(order.orderNo, read);

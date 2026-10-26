@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { db } from "../config/firebase";
 import { refs } from "../firestore/refs";
@@ -121,6 +122,11 @@ export async function queueInstructorLessonConfirmationForIssuedTicket(
     }
     const ticketIssue = instructorLessonTicketConfirmationIssue(freshRegistration);
     if (ticketIssue) throw new AppError("INVALID_ARGUMENT", ticketIssue);
+    const attendeeGuard = await instructorOrderAttendeeGuard(registrationId, freshRegistration, async (path) => {
+      const snapshot = await transaction.get(db.doc(path));
+      return snapshot.exists ? snapshot.data() || {} : null;
+    });
+    if (attendeeGuard.issue) throw new AppError("INVALID_ARGUMENT", attendeeGuard.issue);
     const lessonDate = cleanText(freshRegistration.lessonDate, 10);
     if (lessonDate !== sourceDate) throw new AppError("INVALID_ARGUMENT", "일정 확인 중 수업일이 변경되었습니다. 다시 처리하세요.");
     const candidateId = instructorLessonConfirmationCandidateId({
@@ -200,6 +206,7 @@ export async function queueInstructorLessonConfirmationForIssuedTicket(
         sourceDate: todayKst(),
         payload: {
           registrationId,
+          ...(attendeeGuard.resolutionKey ? { attendeeResolutionKey: attendeeGuard.resolutionKey } : {}),
           memberName: cleanText(freshRegistration.memberName, 40),
           lessonDate,
           lessonDateText: config.lessonDateText,
@@ -246,14 +253,66 @@ export async function queueInstructorLessonConfirmationForIssuedTicket(
   };
 }
 
+async function confirmationSource(candidate: AlimtalkCandidateDoc, allocationOnly = false): Promise<{
+  registration: Record<string, any>; issue: string;
+}> {
+  const registrationId = cleanText(candidate.payload?.registrationId, 80);
+  const missing = { registration: {}, issue: "강사레슨 등록 원천 없음" };
+  if (!registrationId) return missing;
+  try {
+    return await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(db.collection(REGISTRATIONS).doc(registrationId));
+      if (!snapshot.exists) return missing;
+      const registration = snapshot.data() || {};
+      const guard = await instructorOrderAttendeeGuard(registrationId, registration, async (path) => {
+        const linked = await transaction.get(db.doc(path));
+        return linked.exists ? linked.data() || {} : null;
+      });
+      if (allocationOnly && !guard.allocated && !candidate.payload?.attendeeResolutionKey) return { registration, issue: "" };
+      if (guard.issue) return { registration, issue: guard.issue };
+      const ticketIssue = instructorLessonTicketConfirmationIssue(registration);
+      if (ticketIssue) return { registration, issue: ticketIssue };
+      if (guard.resolutionKey || candidate.payload?.attendeeResolutionKey) {
+        if (candidate.payload?.attendeeResolutionKey !== guard.resolutionKey
+          || candidate.studioId !== registration.studioId || candidate.memberName !== registration.memberName
+          || candidate.payload?.memberName !== registration.memberName
+          || candidate.memberId !== registration.evidence?.studiomateMemberId
+          || normalizePhone(candidate.memberPhone) !== normalizePhone(registration.memberPhone)
+          || candidate.payload?.lessonDate !== registration.lessonDate
+          || candidate.payload?.ticketId !== registration.evidence?.ticketId) {
+          return { registration, issue: "다인 주문 승인키·실제 수신자 불일치" };
+        }
+        if (allocationOnly) {
+          const live = (await transaction.get(refs.alimtalkCandidate(candidate.candidateId))).data() as
+            (AlimtalkCandidateDoc & { queueLeaseId?: string }) | undefined;
+          const send = await transaction.get(refs.alimtalkSend(candidate.candidateId));
+          const lease = (candidate as AlimtalkCandidateDoc & { queueLeaseId?: string }).queueLeaseId;
+          if (!lease || live?.status !== "processing" || live.queueLeaseId !== lease
+            || live.attempts !== candidate.attempts || send.exists
+            || stableHash([live.studioId, live.memberId, live.memberName, live.memberPhone, live.type, live.templateCode, live.payload])
+              !== stableHash([candidate.studioId, candidate.memberId, candidate.memberName, candidate.memberPhone,
+                candidate.type, candidate.templateCode, candidate.payload])) {
+            return { registration, issue: "다인 주문 발송 선점·후보·기존 발송 이력 변경 확인필요" };
+          }
+        }
+      }
+      return { registration, issue: "" };
+    });
+  } catch {
+    return { registration: {}, issue: "강사레슨 등록·공동 주문 원천 재조회 확인필요" };
+  }
+}
+
+export async function instructorLessonConfirmationAllocationSendabilityIssue(candidate: AlimtalkCandidateDoc): Promise<string> {
+  if (candidate.type !== "instructor_lesson_confirmation") return "";
+  return (await confirmationSource(candidate, true)).issue;
+}
+
 export async function instructorLessonConfirmationSendabilityIssue(candidate: AlimtalkCandidateDoc): Promise<string> {
   if (candidate.type !== "instructor_lesson_confirmation") return "";
-  const registrationId = cleanText(candidate.payload?.registrationId, 80);
-  const registrationSnapshot = registrationId ? await db.collection(REGISTRATIONS).doc(registrationId).get() : null;
-  if (!registrationSnapshot?.exists) return "강사레슨 등록 원천 없음";
-  const registration = registrationSnapshot.data() || {};
-  const ticketIssue = instructorLessonTicketConfirmationIssue(registration);
-  if (ticketIssue) return ticketIssue;
+  const source = await confirmationSource(candidate);
+  if (source.issue) return source.issue;
+  const registration = source.registration;
   const lessonDate = cleanText(candidate.payload?.lessonDate, 10);
   let config: InstructorLessonConfirmationSchedule;
   try { config = await resolveConfirmationSchedule(lessonDate); }
@@ -377,6 +436,7 @@ export function instructorLessonConfirmationCandidateId(input: {
 
 export function instructorLessonTicketConfirmationIssue(registration: Record<string, any>): string {
   if (cancellationBlocksRegistration(registration)) return "취소 요청·처리된 강사레슨 등록 건";
+  if (registration.externalOrderReviewRequired) return "홈페이지 주문 변경 확인필요";
   if (registration.operatorChecks?.paymentConfirmed !== true || registration.operatorChecks?.seatConfirmed !== true) {
     return "입금·수강 접수 운영자 확인 없음";
   }
@@ -485,4 +545,116 @@ function normalizeComparable(value: unknown): string {
 
 export function registrationIdForConfirmation(studioId: string, phone: string, lessonDate: string): string {
   return instructorLessonRegistrationId(studioId, phone, lessonDate);
+}
+
+type Document = Record<string, any>;
+type ReadDocument = (path: string) => Promise<Document | null>;
+type GuardResult = { issue: string; resolutionKey?: string; allocated?: boolean };
+
+const POLICY = "imweb_instructor_attendees_v1";
+const PRICE = 70000;
+const STUDIO = "5330";
+const ISSUE = "다인 주문 승인·원본·수강자 연결 확인필요";
+const FAMILY_ISSUE = "다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단";
+
+export async function instructorOrderAttendeeGuard(
+  registrationId: string,
+  registration: Document,
+  read: ReadDocument,
+  now = new Date(),
+): Promise<GuardResult> {
+  const external = registration.externalOrder || {};
+  const imwebSource = ["imweb_paid_order", "imweb_order_review"].includes(registration.source?.type);
+  const allocation = Boolean(external.attendeeResolutionKey || registration.operatorOrderAllocation || registration.orderAllocation
+    || Number(external.totalPaidAmount) > PRICE || Number(external.quantity) > 1);
+  if (!imwebSource && !registration.externalOrder && !allocation) return { issue: "" };
+  const orderNo = external.orderNo || (imwebSource ? registration.source?.sourceId : "");
+  if (!/^\d{15}$/.test(String(orderNo || ""))) return { issue: ISSUE, allocated: allocation };
+  if (imwebSource && external.orderNo && registration.source?.sourceId !== external.orderNo) return { issue: ISSUE, allocated: allocation };
+  const ledger = await read(`imwebInstructorLessonOrders/imweb_${orderNo}`);
+  const manifest = ledger?.attendeeResolution;
+  if (!allocation && !manifest && !(Array.isArray(ledger?.registrationIds) && ledger.registrationIds.length > 1)) return { issue: "" };
+  if (!ledger || ledger.status !== "queued" || !validManifest(manifest, now)
+    || ledger.orderNo !== manifest.orderNo || ledger.itemNo !== manifest.itemNo
+    || ledger.fingerprint !== manifest.sourceFingerprint || ledger.paymentAmount !== manifest.totalPaidAmount
+    || external.attendeeResolutionKey !== manifest.resolutionKey
+    || !manifest.attendees.some((attendee: Document) => attendee.registrationId === registrationId)
+    || (ledger.registrationIds !== undefined && (!Array.isArray(ledger.registrationIds)
+      || ledger.registrationIds.length !== manifest.attendees.length
+      || new Set(ledger.registrationIds).size !== manifest.attendees.length
+      || ledger.registrationIds.some((id: string) => !manifest.attendees.some((attendee: Document) => attendee.registrationId === id))))) {
+    return { issue: ISSUE, allocated: true };
+  }
+
+  // Exact manifest IDs only; the transaction supplied by the caller owns all family reads.
+  for (const attendee of manifest.attendees) {
+    const id = attendee.registrationId;
+    const linked = id === registrationId ? registration : await read(`instructorLessonRegistrations/${id}`);
+    if (!linked || !matchesAttendee(linked, attendee, manifest)) return { issue: FAMILY_ISSUE, allocated: true };
+  }
+  return { issue: "", resolutionKey: manifest.resolutionKey, allocated: true };
+}
+
+function validManifest(value: any, now: Date): boolean {
+  if (!value || value.version !== 1 || value.policy !== POLICY || value.status !== "approved"
+    || value.studioId !== STUDIO || !/^\d{15}$/.test(value.orderNo || "")
+    || typeof value.itemNo !== "string" || !value.itemNo.startsWith(`${value.orderNo}-`)
+    || !/^[a-f0-9]{64}$/.test(value.sourceFingerprint || "")
+    || !Array.isArray(value.attendees) || value.attendees.length < 2 || value.attendees.length > 10
+    || value.totalPaidAmount !== PRICE * value.attendees.length
+    || !/^\d{4}-\d{2}-\d{2}$/.test(value.lessonDate || "")) return false;
+  const date = Date.parse(`${value.lessonDate}T00:00:00Z`);
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(now);
+  if (!Number.isFinite(date) || new Date(date).toISOString().slice(0, 10) !== value.lessonDate
+    || value.lessonDate <= today || typeof value.approval?.actor !== "string" || !value.approval.actor.trim()
+    || typeof value.approval?.basis !== "string" || !value.approval.basis.trim()) return false;
+  const approvedAt = Date.parse(value.approval?.approvedAt || "");
+  if (!Number.isFinite(approvedAt) || approvedAt > now.getTime() + 60000) return false;
+  const phones = new Set<string>();
+  const attendees = [];
+  for (const attendee of value.attendees) {
+    if (!attendee || typeof attendee.memberName !== "string" || !attendee.memberName
+      || attendee.memberName.length > 40 || attendee.memberName !== attendee.memberName.replace(/\s+/g, " ").trim()
+      || typeof attendee.memberPhone !== "string" || !/^010\d{8}$/.test(attendee.memberPhone)
+      || attendee.paidAmount !== PRICE || phones.has(attendee.memberPhone)
+      || attendee.registrationId !== `ilr_${hashText(`${STUDIO}|${attendee.memberPhone}|${value.lessonDate}`).slice(0, 24)}`) return false;
+    phones.add(attendee.memberPhone);
+    attendees.push({ memberName: attendee.memberName, memberPhone: attendee.memberPhone,
+      paidAmount: PRICE, registrationId: attendee.registrationId });
+  }
+  attendees.sort((a, b) => a.registrationId.localeCompare(b.registrationId));
+  if (attendees.some((attendee, index) => attendee.registrationId !== value.attendees[index].registrationId)) return false;
+  // Keep field order identical to scripts/lib/imweb-instructor-order-policy.mjs.
+  const binding = { policy: value.policy, version: value.version, studioId: value.studioId,
+    orderNo: value.orderNo, itemNo: value.itemNo, lessonDate: value.lessonDate,
+    sourceFingerprint: value.sourceFingerprint, totalPaidAmount: value.totalPaidAmount, attendees };
+  return value.resolutionKey === hashText(JSON.stringify(binding));
+}
+
+function matchesAttendee(registration: Document, attendee: Document, manifest: Document): boolean {
+  const external = registration.externalOrder || {};
+  return registration.registrationId === attendee.registrationId && registration.studioId === manifest.studioId
+    && registration.memberName === attendee.memberName && phone(registration.memberPhone) === attendee.memberPhone
+    && registration.lessonDate === manifest.lessonDate && registration.ticketPrice === attendee.paidAmount
+    && registration.source?.type === "imweb_paid_order" && registration.source?.sourceId === manifest.orderNo
+    && registration.source?.itemNo === manifest.itemNo && external.orderNo === manifest.orderNo
+    && external.itemNo === manifest.itemNo && external.attendeeResolutionKey === manifest.resolutionKey
+    && external.registrationId === attendee.registrationId && external.memberName === attendee.memberName
+    && phone(external.memberPhone) === attendee.memberPhone && external.lessonDate === manifest.lessonDate
+    && external.paidAmount === attendee.paidAmount && external.totalPaidAmount === manifest.totalPaidAmount
+    && (!registration.orderAllocation || registration.orderAllocation.resolutionKey === manifest.resolutionKey)
+    && registration.operatorChecks?.paymentConfirmed === true && registration.operatorChecks?.seatConfirmed === true
+    && !registration.externalOrderReviewRequired && !registration.cancellation && !cancellationBlocksRegistration(registration)
+    && !["canceled", "rejected", "action_required", "review_required", "failed"].includes(registration.status);
+}
+
+function phone(value: unknown): string {
+  const digits = String(value || "").replace(/\D/g, "");
+  return /^8210\d{8}$/.test(digits) ? `0${digits.slice(2)}` : digits;
+}
+
+function hashText(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
