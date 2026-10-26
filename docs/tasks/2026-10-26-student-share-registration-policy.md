@@ -31,3 +31,18 @@ Read-only production verification checks current group presence and snapshots al
 ## Release
 
 Only the three existing rule notes `imweb-student-share-first-grant-policy`, `lesson-share-261025` and `lesson-share-261024` may change in CORE HTML. The existing release helper's new registered-share-policy flag is separately pinned to the reviewed baseline and preserves all unrelated live files and configuration. Runtime source is promoted to origin/main and fast-forwarded; Functions and other app surfaces are not deployed.
+
+## Verified Release Receipt
+
+- Functional commit: `6eb1d40e`; origin/main and Mac mini runtime synchronized.
+- Fourteen focused suites:684 passed, zero failed/skipped. Syntax and diff whitespace checks passed.
+- Existing e-2 prompt updated to registered-present/absent eligibility; schedule, project, model and failed-runs-only notification policy retained.
+- Main CORE release: `sites/archive-pilates/versions/215d0b2b9f0985dc`;222 other files retained.
+- Dedicated CORE release: `sites/archive-pilates-core/versions/2a80cda630d93fc5`;62 other files retained. Its initial stale post-release response was reconciled by independent latest-release and HTTP/hash readback; no re-deployment occurred.
+- Both live rule hashes: `1cdfe428b4595c6ea466858a02bd6dde099b71ccb959e4101da01e9391d7dacb`.
+- One operator-confirmed manual C clock recorded from2026-10-26T08:20:37Z until2026-12-05T08:20:37Z. Current member and complete group readback verified; provider writes0. Existing entries and other four ledgers retained.
+- Live C expiry runner read-only verification returned `not_due` for the approved manual clock, with9 reads, no provider writes or ledger saves. All five canonical ledgers and STAFF-exit unexpired-share protection validated.
+- Report screenshots at320/390/768/1440px show no horizontal overflow or external dependencies; the390px render was visually reviewed and the task-owned browser was closed.
+- Pre-existing historical E261017 classroom hash test drift reproduced at immutable baseline6e50653f; not changed or counted as passing. All applicable focused policy/release checks passed.
+- No member sends, attendance edits, provider group changes, Functions deploys, unrelated page changes or new polling scheduler.
+- GitHub Actions `ARCHIVE IN Functions Affected Check` run40292211630 completed successfully at2026-10-26T08:28:38Z for functional commit6eb1d40e; all job steps passed.
