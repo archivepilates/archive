@@ -1,5 +1,16 @@
 # Instructor Lesson Video Completion Notices
 
+## Current Default: Ask After Upload, Send Only After Approval
+
+- 2026-10-26 operator instruction: once a requested instructor-lesson YouTube upload is actually verified, propose the completion Alimtalk in the current chat. Show lesson/date, team, canonical registered recipient count, signup/access exceptions, approved text and the classroom/signup buttons. Verify existing website/classroom readiness and clearly retain any access blockers.
+- Upload permission, APPROVED template status and silence do not authorize sending. Wait for the operator's explicit approval of this notice's audience and content; unanswered/declined proposals remain unsent, and material changes require renewed approval.
+- At dispatch, refresh registered rosters including absentees while excluding cancellation/refund/identity ambiguity, exact template/channel/content/image/buttons, real [09:00,23:00) KST and canonical cross-channel histories. Preserve original action keys, existing accepted/unknown sends and first-grant 960-hour clocks.
+- Existing completion template KA01TP261025172058035A7GWKDTFl7Y was independently read as APPROVED at 2026-10-26 19:49 KST; provider review comment records approval at 12:15:52 KST. Content, channel, image-style definition and both buttons matched the frozen specification. This supersedes the older INSPECTING snapshot below, not any historical send record.
+- This default is an operator/agent workflow, not a newly deployed upload-event watcher or automatic ATA dispatcher. No approval request is sent to the operator by Alimtalk, no scheduler is added, and the 20 previously delivered LMS notices are not resent.
+- Scope: common/project AGENTS instructions, this existing lane record and its existing CORE rule-note only. The existing scoped Hosting helper's pinned baseline is refreshed without changing its release protections. No Functions, membership, product, access, YouTube or member-message mutation.
+- Release: policy commit 7a34d151 promoted/pushed to main and runtime; 196 no-send synthetic tests, syntax and diff checks passed. Initial fresh-worktree dependency resolution was repaired by reusing runtime NODE_PATH, without package changes.
+- 20:22-20:23 KST exact-note Hosting releases: main 2656c72f988d2e26, CORE 0bbcca9c9e764fff. All other 222/62 files and configuration preserved; both HTTP 200 responses match SHA-256 4a2618a743ff15ea192cf7e8b1b25aaa112c92a497fd42c4ec12979c4d788225. CI run 40314604174 was in progress when checked; no final success claim. No UI/session or real-phone test was created.
+
 ## Current Override: Immediate Dispatch
 
 - 2026-10-26 direct user change: send now instead of the previously scheduled 11:00. Actual KST was after 09:00; the old automation `2` is PAUSED before dispatch.

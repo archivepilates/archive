@@ -26,6 +26,24 @@
 - Continue to stop before deploy/push when the user explicitly says `로컬만`, `검토만`, `배포하지마`, `push 하지마`, or when production target, auth, secrets, member privacy, payment/reservation policy, or unrelated dirty changes make the safe scope unclear.
 - Put task notes under `docs/tasks/`, durable decisions under `docs/decisions/`, and generated outputs under `artifacts/`.
 
+## Product Sale Opening Safety
+
+- For a new offering, a replacement lesson round, or a product with a future opening time, block purchasing before editing content or asking follow-up questions. Do not close unrelated products that are legitimately on sale.
+- First independently verify the intended product/site and current status, then use the approved hidden, sold-out, or native scheduled-sale state that actually blocks purchase. Read back the saved state and test the direct buyer URL. If closure cannot be verified, report that risk immediately; a draft or a question is not a closed product.
+- Keep the product closed while timing, required fields, approval, login, or other operator input is pending, and after an interrupted or failed preparation. Never keep it purchasable merely to wait for a reply.
+- Opening requires the exact approved KST time and scope, a final clock/source check, and independent status and buyer-flow verification. Scheduling an opening is not proof that the product has opened.
+- If native scheduling requires an unapproved end time, keep purchasing blocked and ask. Never invent an end time or temporarily open the product. A separately approved one-time opening must not become a recurring job.
+- Preserve current orders, prices, option codes and live stock. Compare API and editor values immediately before saving; discard stale drafts instead of restoring earlier stock. Change only the approved sale-state or scheduling fields, and never replay an unknown write.
+- Record approval, closure proof, opening time, pending questions, execution intent and verified result in the existing private product ledger. Do not add recurring polling or member-facing messages without separate authorization.
+
+## Instructor Lesson Video Completion Notices
+
+- After a requested instructor-lesson YouTube upload, independently verify processing, intended visibility/playback and the existing website/classroom connection before proposing a completion notice. Describe pending signup/access exceptions rather than promising immediate playback.
+- Ask the operator in the current chat whether to send the completion Alimtalk to instructors. Present lesson/date, teams, eligible recipient count, signup/access exceptions, exact approved text and buttons. An upload request, Kakao template approval or silence is not recipient-send approval.
+- Send only after explicit approval of that notice's audience and content. Declined/unanswered proposals stay unsent; material audience/content changes need renewed approval. No new poller, scheduled dispatch or operator-directed Alimtalk is authorized by this default.
+- Before dispatch, revalidate canonical registered rosters including absentees, cancellations/refunds/identity exclusions, the exact APPROVED template/channel/content/image/buttons, the real KST communication window and cross-channel send history. Never replay accepted/unknown sends or resend an existing SMS as Alimtalk.
+- Reuse existing private upload/access/notice ledgers, original first-grant 40-day clocks and canonical action keys. Upload, classroom access, send approval, provider acceptance and final delivery are distinct states.
+
 ## ARCHIVE IN Work Coordination
 
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
