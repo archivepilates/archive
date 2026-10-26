@@ -258,7 +258,9 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
       } : {};
       const deliveryComplete = await db.runTransaction(async tx => {
         const current = (await tx.get(sendRef)).data(), claim = (await tx.get(claimRef)).data();
+        const candidate = (await tx.get(candidateRef)).data();
         if (!current || current.solapiMessageId !== receipt.solapiMessageId || claim?.solapiMessageId !== receipt.solapiMessageId ||
+            !candidate || !sameChangeMetadata(candidate, current) || !sameChangeMetadata(claim, current, true) ||
             current.holdingMemoPolicy !== memoPolicy || current.id !== plan.id || current.memberId !== plan.memberId ||
             current.memberPhone !== plan.memberPhone || current.message !== plan.message ||
             holdingMemoAcceptanceFingerprint(current) !== holdingMemoAcceptanceFingerprint({...plan,templateCode:HOLDING_NOTICE_TEMPLATE_ID,...receipt}))
@@ -304,6 +306,8 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
       const verified = await db.runTransaction(async tx => {
         const send = (await tx.get(sendRef)).data(), claim = (await tx.get(claimRef)).data();
         const candidate = (await tx.get(candidateRef)).data();
+        if (!send || !claim || !candidate || !sameChangeMetadata(candidate, send) || !sameChangeMetadata(claim, send, true))
+          throw new Error("holding_acceptance_ledger_changed");
         if (send?.status === "done" && send.providerStatus === "COMPLETE" && send.providerStatusCode === "4000" &&
             send.solapiMessageId && claim?.status === "delivered" && claim.solapiMessageId === send.solapiMessageId)
           return { solapiMessageId: send.solapiMessageId, solapiGroupId: send.solapiGroupId, deliveryComplete:true };

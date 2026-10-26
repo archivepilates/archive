@@ -44,11 +44,20 @@
 
 ## Validation Before Release
 
-- Node22.23.4 holding/source regressions: 1,553 passed, failures/skips0. New purpose/claim, concurrency, repeated/unknown acceptance, multiple changes, map-order and midnight-resume cases are included.
+- Node22.23.4 holding/source regressions: 1,554 passed, failures/skips0. New purpose/claim, concurrency, repeated/unknown acceptance, multiple changes, map-order and midnight-resume cases are included.
 - TypeScript queue/provider/scheduling/roundtrip/selection:236 passed. Dispatcher/worker focused subset64 passed before the last minute-precision case; counts overlap.
 - Existing CORE 320/390/768/1440/1920 responsive check95, rollback guards, Hosting validation, ticket-liability price5, diff and TypeScript transpilation passed.
 - SOLAPI GET-only verification at08:21:50Z confirmed exact existing template APPROVED and original message/recipient/variables/ledger COMPLETE4000. Provider completion timestamp was not inferred from this lookup time.
 - Read-only live collector08:29:12Z and proposed policy dry-run08:31:10Z confirmed the exact approved current change, total30/used17/remaining13, new action ID distinct from original. No POST, queue run or original record changes.
 - Independent review found three boundary defects, fixed before release: direct receipt polling now binds change metadata across records; zero-transport quiet deferrals resume only with full proof and remain pending; neutral source selection permits eligible prospective edits of delivered older registrations without relaxing registration cutover. Additional guard verifies original sent dates before interpreting a minute-precision edit as already included.
+- Follow-up review extended those fixes through the post-promotion worker recheck and immediate post-acceptance transaction, not just the selection helper and later receipt poller. Immediate candidate/claim mutation after mock POST cannot make a memo ready; two zero-POST reconciliation passes still permit one safe resume.
 - One source read encountered the existing shared browser lock and deferred normally; another dry-run correctly rejected stale evidence. Fresh collection/dry-run then passed. No lock removal, original job reset or retry dispatch.
 - Latest origin/main gained unrelated video-share policy commit6eb1d40e. Preserve it and merge before release; no unrelated changes belong to this feature commit.
+
+## Repeated Holding Review Mail Follow-Up
+
+- Exact latest Gmail messages and the scheduled run confirm two ended-holding discoveries and one genuine allowance overage, not three provider send failures.
+- Live read-only native ticket/history verification at11:37:57Z-11:38:00Z: a retrospective Oct17-25 hold is finished; another hold shortened from Oct31 to Oct25 is finished; a separate current Oct26-31 hold makes total used28 against allowance24, overage4. No ticket, holding, reservation, message or memo changes.
+- The worker treated finished ticket-change discoveries as missing-current-controls review. Restrict the new no-send exclusion to ticket_changed, full fresh native calculation, no current controls and no noncancelled current/future period. Missing or inconsistent evidence still fails closed.
+- Existing report dedupe relied on Gmail RFC message IDs; received headers contain provider-generated IDs and identical reviews repeated despite stable job/reason identities. Add an internal-only durable reviewAlerts claim under the existing lane, binding job/reason/native observation independently of import time. Claim before the mail child; mark sent only with explicit confirmed message ID. Ambiguous attempts stay claimed and cannot replay. These records never authorize member-facing actions.
+- The user asked to investigate continued emails. This scoped follow-up preserves the already-approved holding release, original allowance/duplicate guards and natural schedules. No manual queue/sync/send, override or allowance extension.

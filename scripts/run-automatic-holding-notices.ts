@@ -6,7 +6,8 @@ import { automaticMemberExclusionReason } from "../firebase/kangsain-functions/f
 import { normalizeRecipientPhone } from "../firebase/kangsain-functions/functions/src/alimtalk/testRecipients";
 import { HOLDING_NOTICE_TEMPLATE_ID, holdingTemplateIssue } from "./lib/holding-allowance-notice.mjs";
 import { readHoldingMemberProfile } from "./lib/holding-member-identity.mjs";
-import { holdingFingerprint } from "./lib/studiomate-holding-source.mjs";
+import { holdingFingerprint, normalizeHoldingObservation } from "./lib/studiomate-holding-source.mjs";
+import { finishedHoldingDiscovery, reportHoldingReviewOnce } from "./lib/holding-review-notifications.mjs";
 import { HOLDING_ROSTER_JOBS, HOLDING_ROSTER_STATE, holdingRosterReadbackIssue, holdingRosterReadbackIsCurrent } from "./lib/studiomate-holding-roster.mjs";
 import { HOLDING_AUTO_EVENTS, holdingAutomaticConfigIssue, automaticHoldingSourceReadback, automaticHoldingEvidence, automaticHoldingEvent } from "./lib/holding-notice-automatic.mjs";
 import { dispatchVerifiedOperatorHolding, reconcileVerifiedOperatorHolding, reconcileExistingHoldingAttempt, verifiedOperatorHoldingPlan } from "./lib/holding-notice-operator-dispatch.mjs";
@@ -122,6 +123,7 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>, rea
     if (deadline.remaining() < 60_000) break;
     let eventId: string | undefined;
     let promoted = false;
+    let observationFingerprint = "";
     try {
       const profile = await readHoldingMemberProfile({ db, memberId: job.memberId });
       const invalid = holdingRosterReadbackIssue(job, profile);
@@ -140,6 +142,12 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>, rea
         results.push({ memberId: job.memberId, status: "excluded", reason: exclusion }); continue;
       }
       const raw = await readLatest(job);
+      observationFingerprint = normalizeHoldingObservation(raw).observationFingerprint;
+      if (finishedHoldingDiscovery(raw, job)) {
+        await mark(job, "observed", "holding_finished_no_current_or_future_no_send");
+        results.push({ memberId: job.memberId, status: "excluded", reason: "holding_finished_no_current_or_future_no_send" });
+        continue;
+      }
       const proof = automaticHoldingSourceReadback(raw, config);
       const approval = { ...proof.approval, memberPhone: profile!.phone };
       let plan = verifiedOperatorHoldingPlan(raw, profile, approval);
@@ -181,16 +189,12 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>, rea
       });
       promoted = true;
       // From this point the canonical event, not the provisional hint, authorizes a send.
-      const priorSend = (await db.doc(`alimtalkSends/${plan.id}`).get()).data();
-      const priorClaim = (await db.doc(`holdingNoticeClaims/${plan.id}`).get()).data();
-      if (priorSend || priorClaim) {
-        if (priorSend?.solapiMessageId) {
-          const receipt = await reconcileVerifiedOperatorHolding({ db, stamp: nowTimestamp, id: plan.id, request });
-          if (receipt.deliveryComplete) await eventStatus(plan.id, "delivered");
-        }
-        else throw new Error("holding_prior_claim_reconciliation_required");
-        await mark(job, "observed", "holding_prior_attempt_no_resend");
-        results.push({ memberId: job.memberId, status: "duplicate_blocked", id: plan.id }); continue;
+      const promotedPrior = await reconcileExistingHoldingAttempt({ db, stamp: nowTimestamp, plan, request });
+      if (promotedPrior) {
+        if (promotedPrior.deliveryComplete) await eventStatus(plan.id, "delivered");
+        await mark(job, promotedPrior.deliveryComplete ? "observed" : "pending",
+          promotedPrior.deliveryComplete ? "holding_prior_attempt_no_resend" : "holding_prior_receipt_pending");
+        results.push({ memberId: job.memberId, status: promotedPrior.deliveryComplete ? "duplicate_blocked" : "receipt_pending", id: plan.id }); continue;
       }
       const template = await request(`/kakao/v2/templates/${HOLDING_NOTICE_TEMPLATE_ID}`);
       const templateIssue = holdingTemplateIssue(template);
@@ -248,11 +252,12 @@ async function run(deadline: ReturnType<typeof createHoldingWorkerDeadline>, rea
           `상세: https://arcpilates.studiomate.kr/users/detail?id=${job.memberId}`,
           "다음: 최초 발급·실제 정지기간과 발송 원장을 확인하세요."].join("\n");
         try {
-          await child(process.execPath, ["firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs"], 45000, { ...process.env,
+          await reportHoldingReviewOnce({ db, job, reason, observationFingerprint, send: async (fingerprint: string) => JSON.parse(
+            await child(process.execPath, ["firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs"], 45000, { ...process.env,
               AUTOMATION_REPORT_FROM: "home@archivepilates.com", AUTOMATION_REPORT_TO: "home@archivepilates.com",
-              AUTOMATION_REPORT_EVENT_ID: holdingFingerprint(['holding_auto_review', job.jobId, reason]),
+              AUTOMATION_REPORT_EVENT_ID: fingerprint,
               AUTOMATION_REPORT_SUBJECT: "[홀딩 안내][확인필요] 원본·발송 원장 확인 필요",
-              AUTOMATION_REPORT_LABEL: "자동화 확인필요", AUTOMATION_REPORT_BODY: body });
+              AUTOMATION_REPORT_LABEL: "자동화 확인필요", AUTOMATION_REPORT_BODY: body })) });
         } catch { results.push({ memberId: job.memberId, status: "review", reason: "holding_review_email_unconfirmed" }); }
       }
     }

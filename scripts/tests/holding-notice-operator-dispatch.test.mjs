@@ -672,8 +672,25 @@ test("23:00 crossing after claim resumes only a proven zero-POST deferral at 09:
   const proof = automaticHoldingPeriodChangeEvidence(h.raw, h.db.docs.get("settings/holdingNotice"), h.originalSend, next);
   const plan = verifiedOperatorHoldingPlan(h.raw, member, { ...proof.approval, memberPhone: member.phone }, next);
   assert.equal(await reconcileExistingHoldingAttempt({ db: h.db, stamp: () => next.toISOString(), plan, request: h.request }), null);
+  assert.equal(await reconcileExistingHoldingAttempt({ db: h.db, stamp: () => next.toISOString(), plan, request: h.request }), null);
   const resumed = await h.run({ plan, now: () => next, readLatest: async () => h.raw });
   assert.equal(resumed.providerPostCount, 1);
   assert.equal(h.posts.length, 1);
   assert.equal(h.db.docs.get(`holdingNoticeClaims/${plan.id}`).status, "delivered");
+});
+
+test("immediate provider readback cannot ready a memo with changed candidate or claim metadata", async () => {
+  for (const collection of ["alimtalkCandidates", "holdingNoticeClaims"]) {
+    const h = await periodChangeHarness();
+    const request = async (url, method, body) => {
+      const result = await h.request(url, method, body);
+      if (method !== "POST" && h.posts.length) h.db.docs.get(`${collection}/${h.plan.id}`).changeFingerprint = "f".repeat(64);
+      return result;
+    };
+    await assert.rejects(h.run({ request }), /holding_acceptance_ledger_changed/);
+    assert.equal(h.posts.length, 1);
+    assert.notEqual(h.db.docs.get(`alimtalkSends/${h.plan.id}`).holdingMemoStatus, "ready");
+    assert.notEqual(h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).status, "delivered");
+    for (const [name, prior] of h.originalRecords) assert.deepEqual(h.db.docs.get(`${name}/${h.original.plan.id}`), prior);
+  }
 });
