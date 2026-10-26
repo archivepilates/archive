@@ -1,0 +1,83 @@
+{
+  "verifiedAt": "2026-10-26T01:42:03.110504+00:00",
+  "sourceCommit": "44cc5c16ec431b70555c0e246c172b0e8045ff7a",
+  "completeDirectory": 127,
+  "activeShares": {
+    "E": 5,
+    "A": 5,
+    "B": 4,
+    "C": 4,
+    "D": 3
+  },
+  "deferredConfirmedD": 2,
+  "grantClocksCreated": 0,
+  "remoteMemberWrites": 0,
+  "memberSends": 0,
+  "dueRevocations": 0,
+  "sameKstDateQuotaUnits": 100,
+  "releases": [
+    {
+      "target": "rules",
+      "site": "archive-pilates",
+      "baselineCommit": "18d71e2e0ad9a482026132754b9c58d66f8f64b9",
+      "baselineVersion": "sites/archive-pilates/versions/b2675a7c6eddbc4d",
+      "sourceCommit": "44cc5c16ec431b70555c0e246c172b0e8045ff7a",
+      "changedPaths": [
+        "/core/rules/index.html"
+      ],
+      "fileCount": 221,
+      "sourceSha256": "f7ec05b874c47818ecba42e0aa258a9fd711a406035618a1182bc1302be71c69",
+      "baselineSourceSha256": "c2ff0fd06532b4e4c7c9e15cd73fc6a42c0956736cf8377aacf329a1a5c27854",
+      "compressedSha256": "36824fa4e3958b0f5de0573c8189b8418d30b3e7614b88a00ba44018e688fa8d",
+      "mode": "apply",
+      "createdVersion": "sites/archive-pilates/versions/582e1d5291fba6ce",
+      "releaseIntentAt": "2026-10-26T01:40:57.175Z",
+      "releaseName": "sites/archive-pilates/releases/1792978856948000",
+      "verified": true,
+      "verifiedAt": "2026-10-26T01:40:59.577Z"
+    },
+    {
+      "target": "core-rules",
+      "site": "archive-pilates-core",
+      "baselineCommit": "18d71e2e0ad9a482026132754b9c58d66f8f64b9",
+      "baselineVersion": "sites/archive-pilates-core/versions/4a84f00c0cf5a29a",
+      "sourceCommit": "44cc5c16ec431b70555c0e246c172b0e8045ff7a",
+      "changedPaths": [
+        "/rules/index.html"
+      ],
+      "fileCount": 63,
+      "sourceSha256": "f7ec05b874c47818ecba42e0aa258a9fd711a406035618a1182bc1302be71c69",
+      "baselineSourceSha256": "c2ff0fd06532b4e4c7c9e15cd73fc6a42c0956736cf8377aacf329a1a5c27854",
+      "compressedSha256": "36824fa4e3958b0f5de0573c8189b8418d30b3e7614b88a00ba44018e688fa8d",
+      "mode": "apply",
+      "createdVersion": "sites/archive-pilates-core/versions/be9348982e346a67",
+      "releaseIntentAt": "2026-10-26T01:41:22.300Z",
+      "releaseName": "sites/archive-pilates-core/releases/1792978882324000",
+      "verified": true,
+      "verifiedAt": "2026-10-26T01:41:24.709Z"
+    }
+  ],
+  "tests": {
+    "releaseGuard": 99,
+    "policyAndIdentity": 91,
+    "reportWidths": [
+      320,
+      390,
+      768,
+      1440
+    ],
+    "reportOverflow": false
+  },
+  "githubActions": {
+    "runId": 40255385108,
+    "conclusion": "success",
+    "sourceCommit": "44cc5c16ec431b70555c0e246c172b0e8045ff7a"
+  },
+  "cleanup": {
+    "memberGroupLock": false,
+    "teamLocks": false,
+    "hostingLocks": false,
+    "studioMateProfileLock": false,
+    "sharedProfileBrowserProcesses": 0
+  }
+}
