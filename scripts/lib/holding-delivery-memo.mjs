@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID, calculateHoldingAllowance } from "./holding-allowance-notice.mjs";
 import { holdingFingerprint } from "./studiomate-holding-source.mjs";
 import { readHoldingMemberProfile } from "./holding-member-identity.mjs";
+import { holdingOperatorNoticeId, holdingPeriodChangeFingerprint } from "./holding-notice-identity.mjs";
 
 export const HOLDING_MEMO_POLICY = "holding_delivery_memo_v1";
 export const HOLDING_ACCEPTANCE_MEMO_POLICY = "holding_acceptance_memo_v2";
@@ -13,11 +14,33 @@ const validDay = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.tes
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
 const shortDate = value => `${Number(value.slice(5,7))}/${Number(value.slice(8,10))}`;
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+const isPeriodChange = row => row?.noticePurpose === "holding_period_change";
+// Fixed field order survives Firestore map ordering without weakening identity binding.
+const changeIdentity = row => [row.noticePurpose, row.originalNoticeId, row.changeFingerprint,
+  ...["id","creationEvidenceFingerprint","previousChangeId","changedAt","beforeStart","beforeEnd","start","end"]
+    .map(key=>row.periodChange?.[key])];
+const changeMetadata = row => ({noticePurpose:row.noticePurpose,originalNoticeId:row.originalNoticeId,
+  changeFingerprint:row.changeFingerprint,periodChange:structuredClone(row.periodChange)});
+
+function expectedNoticeId(send) {
+  try {
+    const expected = holdingOperatorNoticeId(send);
+    if (isPeriodChange(send)) {
+      const p = send.periodChange;
+      if (!p || p.id !== send.changeFingerprint || p.creationEvidenceFingerprint !== send.creationEvidenceFingerprint ||
+          holdingPeriodChangeFingerprint(p) !== send.changeFingerprint ||
+          send.originalNoticeId !== holdingOperatorNoticeId({studioId:send.studioId,memberId:send.memberId,
+            issuanceFingerprint:send.issuanceFingerprint,creationEvidenceFingerprint:send.creationEvidenceFingerprint})) fail();
+    }
+    return expected;
+  } catch { fail(); }
+}
 
 export function holdingMemoAcceptanceFingerprint(send) {
   return digest(JSON.stringify([send.id, send.memberId, send.memberPhone, send.templateCode,
     send.message, Object.entries(send.variables || {}).sort(([a],[b])=>a.localeCompare(b)),
-    send.issuanceFingerprint, send.creationEvidenceFingerprint, send.solapiMessageId]));
+    send.issuanceFingerprint, send.creationEvidenceFingerprint, send.solapiMessageId,
+    ...(isPeriodChange(send) ? changeIdentity(send) : [])]));
 }
 
 export function hasHoldingMemoAcceptance(send, claim) {
@@ -45,11 +68,15 @@ export function holdingDeliveryMemoPlan(send, candidate, claim, { markerFormat =
       send.attempts !== 1 || send.maxAttempts !== 1 || !send.solapiMessageId ||
       (acceptance ? !hasHoldingMemoAcceptance(send, claim) : send.status !== "done" || send.providerStatus !== "COMPLETE" ||
       send.providerStatusCode !== "4000" || candidate?.status !== "sent" || claim?.status !== "delivered")) fail();
-  const expected = `holding_operator_notice_${holdingFingerprint([send.studioId,send.memberId,send.issuanceFingerprint,send.creationEvidenceFingerprint])}`;
+  const expected = expectedNoticeId(send);
   if (send.id !== expected || send.sendId !== expected || send.candidateId !== expected || candidate.id !== expected || candidate.candidateId !== expected ||
       claim.candidateId !== expected || claim.solapiMessageId !== send.solapiMessageId ||
       [candidate,claim].some(row=>row.memberId !== send.memberId || row.memberPhone !== send.memberPhone ||
-        row.issuanceFingerprint !== send.issuanceFingerprint || row.creationEvidenceFingerprint !== send.creationEvidenceFingerprint) ||
+        row.issuanceFingerprint !== send.issuanceFingerprint || row.creationEvidenceFingerprint !== send.creationEvidenceFingerprint ||
+        row.noticePurpose !== send.noticePurpose || row.changeFingerprint !== send.changeFingerprint) ||
+      isPeriodChange(send) && (!same(changeIdentity(candidate),changeIdentity(send)) ||
+        claim.originalNoticeId !== undefined && claim.originalNoticeId !== send.originalNoticeId ||
+        claim.periodChange !== undefined && !same(changeIdentity({...claim,originalNoticeId:send.originalNoticeId}),changeIdentity(send))) ||
       candidate.studioId !== send.studioId || candidate.templateCode !== send.templateCode || candidate.memberName !== send.memberName ||
       candidate.isTest !== false || candidate.calculationMode !== send.calculationMode || candidate.message !== send.message ||
       !same(candidate.variables,send.variables) || !same(candidate.summary,send.summary) || !same(candidate.payload,send.payload)) fail();
@@ -63,6 +90,7 @@ export function holdingDeliveryMemoPlan(send, candidate, claim, { markerFormat =
   const v=send.variables, start=v?.["#{홀딩시작일}"], end=v?.["#{홀딩종료일}"];
   if (!v || v["#{이름}"] !== send.memberName || typeof v["#{수강권명}"] !== "string" || !v["#{수강권명}"].trim() ||
       !sorted.some(r=>r.start===start && r.end===end) ||
+      isPeriodChange(send) && (send.periodChange.start !== start || send.periodChange.end !== end) ||
       v["#{이번홀딩일수}"] !== String((Date.parse(end)-Date.parse(start))/86400000+1) ||
       v["#{전체홀딩일수}"] !== String(summary.totalDays) || v["#{사용홀딩일수}"] !== String(summary.usedDays) ||
       v["#{잔여홀딩일수}"] !== String(summary.remainingDays) || Object.keys(v).length !== 8 ||
@@ -77,15 +105,19 @@ export function holdingDeliveryMemoPlan(send, candidate, claim, { markerFormat =
   const content = [`[홀딩 안내] ${v["#{수강권명}"]} · 최초 ${summary.originalDays}일권`,
     `홀딩 가능 ${summary.totalDays}일 · 사용 ${summary.usedDays}일 (${sorted.map(r=>`${shortDate(r.start)}~${shortDate(r.end)}`).join(", ")})`,
     `잔여 ${summary.remainingDays}일`, `이번 홀딩: ${start}~${end}`, `확인일: ${checkedDate}`,
+    ...(isPeriodChange(send) ? ["유형: 홀딩 기간 변경",
+      `기간 변경: ${send.periodChange.beforeStart}~${send.periodChange.beforeEnd} -> ${send.periodChange.start}~${send.periodChange.end}`] : []),
     ...(acceptance ? ["알림톡: 발송 접수 (전달 완료 여부와 별도)"] : []),
     `[홀딩기록: ${marker}]`].join("\n");
   return {memoId,content,contentHash:digest(content),studioId:send.studioId,memberId:send.memberId,memberName:send.memberName,
-    memberPhone:send.memberPhone,holdingNoticeId:expected,solapiMessageId:send.solapiMessageId,holdingMemoPolicy:send.holdingMemoPolicy};
+    memberPhone:send.memberPhone,holdingNoticeId:expected,solapiMessageId:send.solapiMessageId,holdingMemoPolicy:send.holdingMemoPolicy,
+    ...(isPeriodChange(send) ? changeMetadata(send) : {})};
 }
 
 function matchesRecord(row, plan, job) {
   const keys=["studioId","memberId","memberName","holdingNoticeId","solapiMessageId","content","contentHash"];
   return row && keys.every(k=>row[k]===plan[k]) && row.source===source && row.holdingMemoPolicy===plan.holdingMemoPolicy &&
+    (!isPeriodChange(plan) || same(changeIdentity(row),changeIdentity(plan))) &&
     (job ? row.jobId===plan.memoId && row.memberPhone===plan.memberPhone && row.studiomateMemberId===plan.memberId : row.memoId===plan.memoId);
 }
 
@@ -127,6 +159,7 @@ export async function enqueueDeliveredHoldingMemo({db,stamp,id}) {
     const candidate=(await tx.get(db.doc(`alimtalkCandidates/${id}`))).data();
     const claim=(await tx.get(db.doc(`holdingNoticeClaims/${id}`))).data();
     const plan=holdingDeliveryMemoPlan(send,candidate,claim);
+    if (plan.holdingNoticeId !== id) fail();
     const profile=await readHoldingMemberProfile({db,memberId:plan.memberId,reader:tx});
     assertHoldingMemoMemberProfile(profile,plan);
     const memoRef=db.doc(`memberMemos/${plan.memoId}`), jobRef=db.doc(`studiomateMemoWriteJobs/${plan.memoId}`);
@@ -139,7 +172,8 @@ export async function enqueueDeliveredHoldingMemo({db,stamp,id}) {
     if (send.holdingMemoStatus!=="ready") fail();
     const at=stamp(), common={studioId:plan.studioId,memberId:plan.memberId,memberName:plan.memberName,source,
       holdingMemoPolicy:plan.holdingMemoPolicy,holdingNoticeId:id,solapiMessageId:plan.solapiMessageId,
-      content:plan.content,contentHash:plan.contentHash,createdAt:at,updatedAt:at};
+      content:plan.content,contentHash:plan.contentHash,createdAt:at,updatedAt:at,
+      ...(isPeriodChange(plan) ? changeMetadata(plan) : {})};
     tx.create(memoRef,{...common,memoId:plan.memoId,lectureId:"",bookingId:"",lectureDate:"",staffId:"",staffName:"",
       memoType:"member_note",visibility:"staff_and_manager",syncStatus:"pending",createdByUid:"system:holding_notice"});
     tx.create(jobRef,{...common,jobId:plan.memoId,memberPhone:plan.memberPhone,studiomateMemberId:plan.memberId,

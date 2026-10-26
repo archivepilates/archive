@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID } from "../lib/holding-allowance-notice.mjs";
 import { HOLDING_SOURCE, holdingFingerprint, normalizeHoldingObservation } from "../lib/studiomate-holding-source.mjs";
 import { dispatchVerifiedOperatorHolding, verifiedOperatorHoldingPlan, reconcileVerifiedOperatorHolding, reconcileExistingHoldingAttempt } from "../lib/holding-notice-operator-dispatch.mjs";
+import { automaticHoldingEvent, HOLDING_AUTO_MODE, HOLDING_AUTO_POLICY, HOLDING_AUTO_EVENTS, HOLDING_AUTO_CUTOVER } from "../lib/holding-notice-automatic.mjs";
+import { automaticHoldingPeriodChangeEvidence, HOLDING_PERIOD_CHANGE_POLICY } from "../lib/holding-period-change-policy.mjs";
 
 const NOW = new Date("2026-10-07T11:00:00Z");
 const member = { memberId: "101", name: "Fixture Member", phone: "01000000001", studioId: "5330" };
@@ -494,4 +496,184 @@ test("a native document that appears before claim remains authoritative over the
   } }), /operator_member_changed/);
   assert.equal(h.posts.length, 0);
   assert.equal(h.db.docs.has(`holdingNoticeClaims/${h.plan.id}`), false);
+});
+
+const CHANGE_NOW = new Date("2026-10-26T08:30:00.000Z");
+async function periodChangeHarness() {
+  const original = harness();
+  await original.run();
+  const { db } = original, raw = evidence();
+  raw.observedAt = CHANGE_NOW.toISOString();
+  raw.history.push({ at: "2026. 10. 26. 16:55", staff: "Fixture Operator", type: "수강권정지",
+    changes: [change("정지종료일", "2026-10-31", "2026-11-01")] });
+  raw.currentHold.end = raw.activeHolds[0].end = "2026-11-01";
+  const settings = { mode: HOLDING_AUTO_MODE, autoSendEnabled: true, canonicalSourcePromoted: true,
+    calculationMode: "live_studiomate_readback", sourceScanEnabled: true, rosterDiscoveryEnabled: true,
+    studioId: "5330", templateId: HOLDING_NOTICE_TEMPLATE_ID, automaticPolicyId: HOLDING_AUTO_POLICY,
+    cutoverAt: HOLDING_AUTO_CUTOVER, automaticSourceCollection: HOLDING_AUTO_EVENTS, nativeE2eVerified: true,
+    activationCommit: "a".repeat(40), baselineInitializedAt: "2026-10-07T14:00:00.000Z",
+    periodChangeNotice: { enabled: true, policyId: HOLDING_PERIOD_CHANGE_POLICY,
+      activatedAt: "2026-10-26T07:00:00.000Z", approvedBy: "fixture-human", templateId: HOLDING_NOTICE_TEMPLATE_ID,
+      allowedPriorChanges: [] } };
+  const originalSend = structuredClone(db.docs.get(`alimtalkSends/${original.plan.id}`));
+  const proof = automaticHoldingPeriodChangeEvidence(raw, settings, originalSend, CHANGE_NOW);
+  const plan = verifiedOperatorHoldingPlan(raw, member, { ...proof.approval, memberPhone: member.phone }, CHANGE_NOW);
+  db.docs.set("settings/holdingNotice", settings);
+  db.docs.set(`${HOLDING_AUTO_EVENTS}/${plan.id}`, automaticHoldingEvent(plan, proof.selected, settings));
+  const row = { ...structuredClone(original.row), messageId: "fixture-change-message", text: plan.message,
+    kakaoOptions: { templateId: HOLDING_NOTICE_TEMPLATE_ID, disableSms: true, variables: structuredClone(plan.variables) } };
+  const posts = [], providerRows = [structuredClone(original.row)];
+  let failure = false;
+  const request = async (_url, method, body) => {
+    if (method === "POST") {
+      assert.equal(db.docs.get(`holdingNoticeClaims/${plan.id}`).status, "claimed");
+      posts.push(body);
+      if (failure) throw new Error("fixture_change_unknown_acceptance");
+      providerRows.push(row);
+      return { messageList: [row] };
+    }
+    return { messageList: providerRows };
+  };
+  const originalRecords = ["alimtalkCandidates", "alimtalkSends", "holdingNoticeClaims"].map(collection =>
+    [collection, structuredClone(db.docs.get(`${collection}/${original.plan.id}`))]);
+  const run = (overrides = {}) => dispatchVerifiedOperatorHolding({ db, stamp: () => CHANGE_NOW.toISOString(), plan,
+    template: template(), request, recipientIssue: async () => "", readLatest: async () => structuredClone(raw),
+    automatic: true, now: () => CHANGE_NOW, ...overrides });
+  return { db, original, originalRecords, originalSend, raw, proof, plan, row, posts, request, run,
+    unknown: () => { failure = true; } };
+}
+
+test("period update uses unchanged approved template, own claim, and preserves all original ledgers", async () => {
+  const h = await periodChangeHarness();
+  assert.notEqual(h.plan.id, h.original.plan.id);
+  assert.equal(h.plan.originalNoticeId, h.original.plan.id);
+  assert.equal(h.plan.noticePurpose, "holding_period_change");
+  assert.equal(h.plan.variables["#{이번홀딩일수}"], "26");
+  assert.equal(h.plan.variables["#{잔여홀딩일수}"], "47");
+  const sent = await h.run();
+  assert.equal(sent.providerPostCount, 1);
+  assert.equal(sent.deliveryComplete, true);
+  assert.equal(h.posts[0].messages[0].kakaoOptions.templateId, HOLDING_NOTICE_TEMPLATE_ID);
+  for (const [collection, prior] of h.originalRecords)
+    assert.deepEqual(h.db.docs.get(`${collection}/${h.original.plan.id}`), prior);
+  const repeated = await reconcileExistingHoldingAttempt({ db: h.db, stamp: () => CHANGE_NOW.toISOString(), plan: h.plan, request: h.request });
+  assert.equal(repeated.duplicateBlocked, true);
+  assert.equal(repeated.providerPostCount, 0);
+  await assert.rejects(h.run(), /prior_holding_local/);
+  assert.equal(h.posts.length, 1);
+});
+
+test("concurrent change dispatch has at most one provider transport", async () => {
+  const h = await periodChangeHarness();
+  const results = await Promise.allSettled([h.run(), h.run()]);
+  assert.equal(h.posts.length, 1);
+  assert.ok(results.some(r => r.status === "fulfilled" && r.value.providerPostCount === 1));
+});
+
+test("ambiguous change acceptance is never retried or converted into registration", async () => {
+  const h = await periodChangeHarness();
+  h.unknown();
+  await assert.rejects(h.run(), /fixture_change_unknown_acceptance/);
+  await assert.rejects(h.run(), /prior_holding_local/);
+  await assert.rejects(reconcileExistingHoldingAttempt({ db: h.db, stamp: () => CHANGE_NOW.toISOString(), plan: h.plan, request: h.request }), /prior_claim_reconciliation/);
+  assert.equal(h.posts.length, 1);
+  for (const [collection, prior] of h.originalRecords)
+    assert.deepEqual(h.db.docs.get(`${collection}/${h.original.plan.id}`), prior);
+});
+
+test("changed source, altered policy, nonapproved template and exclusions block change before POST", async () => {
+  for (const reason of ["source", "policy", "template", "exclusion", "original"]) {
+    const h = await periodChangeHarness();
+    let overrides = {};
+    if (reason === "source") overrides.readLatest = async () => {
+      const altered = structuredClone(h.raw);
+      altered.history.push({ at: "2026. 10. 26. 17:00", staff: "Fixture Operator", type: "수강권정지수정",
+        changes: [change("정지종료일", "2026-11-01", "2026-11-02")] });
+      altered.currentHold.end = altered.activeHolds[0].end = "2026-11-02";
+      return altered;
+    };
+    if (reason === "policy") h.db.docs.get("settings/holdingNotice").periodChangeNotice.enabled = false;
+    if (reason === "template") overrides.template = { ...template(), status: "PENDING" };
+    if (reason === "exclusion") overrides.recipientIssue = async () => "fixture_staff_excluded";
+    if (reason === "original") h.db.docs.get(`holdingNoticeClaims/${h.original.plan.id}`).status = "accepted";
+    await assert.rejects(h.run(overrides));
+    assert.equal(h.posts.length, 0, reason);
+    assert.equal(h.db.docs.has(`holdingNoticeClaims/${h.plan.id}`), false, reason);
+  }
+});
+
+test("period change quiet hours defer without a claim or transport", async () => {
+  const h = await periodChangeHarness();
+  const result = await h.run({ now: () => new Date("2026-10-26T14:00:00.000Z") });
+  assert.equal(result.status, "deferred");
+  assert.equal(result.providerPostCount, 0);
+  assert.equal(h.posts.length, 0);
+  assert.equal(h.db.docs.has(`holdingNoticeClaims/${h.plan.id}`), false);
+});
+
+test("a second change validates delivered predecessor despite Firestore map ordering", async () => {
+  const h = await periodChangeHarness();
+  await h.run();
+  for (const collection of ["alimtalkCandidates", "alimtalkSends"])
+    h.db.docs.get(`${collection}/${h.plan.id}`).periodChange = Object.fromEntries(Object.entries(h.plan.periodChange).sort());
+  const raw = structuredClone(h.raw), now = new Date("2026-10-27T03:00:00.000Z");
+  raw.observedAt = now.toISOString();
+  raw.history.push({ at: "2026. 10. 27. 11:00", staff: "Fixture Operator", type: "수강권정지수정",
+    changes: [change("정지종료일", "2026-11-01", "2026-11-02")] });
+  raw.activeHolds[0].end = raw.currentHold.end = "2026-11-02";
+  const settings = h.db.docs.get("settings/holdingNotice");
+  const proof = automaticHoldingPeriodChangeEvidence(raw, settings, h.originalSend, now,
+    [h.db.docs.get(`alimtalkSends/${h.plan.id}`)]);
+  const plan = verifiedOperatorHoldingPlan(raw, member, { ...proof.approval, memberPhone: member.phone }, now);
+  assert.notEqual(plan.id, h.plan.id);
+  h.db.docs.set(`${HOLDING_AUTO_EVENTS}/${plan.id}`, automaticHoldingEvent(plan, proof.selected, settings));
+  const row = { ...structuredClone(h.row), messageId: "fixture-second-change", text: plan.message,
+    kakaoOptions: { templateId: HOLDING_NOTICE_TEMPLATE_ID, disableSms: true, variables: plan.variables } };
+  let posts = 0;
+  const request = async (_url, method) => {
+    if (method === "POST") { posts++; return { messageList: [row] }; }
+    return { messageList: [h.original.row, h.row, ...(posts ? [row] : [])] };
+  };
+  const result = await dispatchVerifiedOperatorHolding({ db: h.db, stamp: () => now.toISOString(), plan,
+    template: template(), request, recipientIssue: async () => "", readLatest: async () => raw, automatic: true, now: () => now });
+  assert.equal(result.providerPostCount, 1);
+  assert.equal(posts, 1);
+  assert.equal(h.db.docs.get(`holdingNoticeClaims/${h.plan.id}`).status, "delivered");
+});
+
+test("direct receipt polling rejects mismatched change purpose and proof without ledger updates", async () => {
+  for (const [collection, field, value] of [["alimtalkCandidates", "noticePurpose", "other"],
+    ["holdingNoticeClaims", "changeFingerprint", "f".repeat(64)],
+    ["holdingNoticeClaims", "originalNoticeId", "other"],
+    ["alimtalkCandidates", "periodChange", {}]]) {
+    const h = await periodChangeHarness();
+    await h.run();
+    h.db.docs.get(`${collection}/${h.plan.id}`)[field] = value;
+    const before = structuredClone(h.db.docs);
+    await assert.rejects(reconcileVerifiedOperatorHolding({ db: h.db, stamp: () => CHANGE_NOW.toISOString(), id: h.plan.id, request: h.request }), /holding_receipt_ledger_changed/);
+    assert.deepEqual(h.db.docs, before);
+    assert.equal(h.posts.length, 1);
+  }
+});
+
+test("23:00 crossing after claim resumes only a proven zero-POST deferral at 09:00", async () => {
+  const h = await periodChangeHarness();
+  const result = await h.run({ now: () => h.db.docs.has(`holdingNoticeClaims/${h.plan.id}`)
+    ? new Date("2026-10-26T14:00:00.000Z") : CHANGE_NOW });
+  assert.equal(result.status, "deferred");
+  assert.equal(h.posts.length, 0);
+  for (const collection of ["alimtalkCandidates", "alimtalkSends", "holdingNoticeClaims"]) {
+    const row = h.db.docs.get(`${collection}/${h.plan.id}`);
+    assert.equal(row.attempts, 0);
+    assert.equal(row.providerOutcome, "quiet_deferred_no_transport");
+  }
+  const next = new Date("2026-10-27T00:00:00.000Z");
+  h.raw.observedAt = next.toISOString();
+  const proof = automaticHoldingPeriodChangeEvidence(h.raw, h.db.docs.get("settings/holdingNotice"), h.originalSend, next);
+  const plan = verifiedOperatorHoldingPlan(h.raw, member, { ...proof.approval, memberPhone: member.phone }, next);
+  assert.equal(await reconcileExistingHoldingAttempt({ db: h.db, stamp: () => next.toISOString(), plan, request: h.request }), null);
+  const resumed = await h.run({ plan, now: () => next, readLatest: async () => h.raw });
+  assert.equal(resumed.providerPostCount, 1);
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.db.docs.get(`holdingNoticeClaims/${plan.id}`).status, "delivered");
 });

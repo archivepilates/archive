@@ -1,6 +1,6 @@
 import { HOLDING_NOTICE_TEMPLATE_ID } from "./holding-allowance-notice.mjs";
 import { calculateLiveHolding } from "./holding-notice-live-readback.mjs";
-import { normalizeHoldingObservation, sourceInstant } from "./studiomate-holding-source.mjs";
+import { automaticHoldingPeriodChangeEvidence } from "./holding-period-change-policy.mjs";
 
 export const HOLDING_AUTO_MODE = "live_readback_auto";
 export const HOLDING_AUTO_EVENTS = "holdingNoticeEvents";
@@ -21,13 +21,9 @@ export function holdingAutomaticConfigIssue(config, now = new Date()) {
 }
 
 /** Discovery only chooses reads. Fresh native creation evidence establishes the canonical event. */
-export function automaticHoldingReadback(raw, config, now = new Date()) {
+export function automaticHoldingSourceReadback(raw, config, now = new Date()) {
   const issue = holdingAutomaticConfigIssue(config, now);
   if (issue) throw new Error(issue);
-  const observed = normalizeHoldingObservation(raw);
-  if (!observed.history.some(row => row.type.replace(/\s/g, "") === "수강권정지" &&
-      Date.parse(sourceInstant(row.at)) >= Date.parse(config.cutoverAt)))
-    throw new Error("holding_historical_registration_excluded");
   const live = calculateLiveHolding(raw, { now });
   const today = new Date(now.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
   const matches = live.holds.filter(hold => !hold.cancelledAt && (live.currentHold
@@ -36,12 +32,17 @@ export function automaticHoldingReadback(raw, config, now = new Date()) {
   if (!live.currentHold && !matches.length) throw new Error("holding_current_controls_required");
   if (matches.length !== 1) throw new Error("holding_single_current_creation_required");
   const selected = matches[0];
-  if (Date.parse(selected.registeredAt) < Date.parse(config.cutoverAt)) throw new Error("holding_historical_registration_excluded");
   // Enforce overlap, allowance and cancelled-period guards for this specific creation.
   calculateLiveHolding(raw, { creationEvidenceFingerprint: selected.id, now });
   return { live, selected, approval: { confirmed: true, approvedBy: config.automaticPolicyId,
     reason: "Human-approved new holding automation after KST cutover", memberId: raw.memberId,
     observationFingerprint: live.observation.observationFingerprint, creationEvidenceFingerprint: selected.id } };
+}
+
+export function automaticHoldingReadback(raw, config, now = new Date()) {
+  const proof = automaticHoldingSourceReadback(raw, config, now);
+  if (Date.parse(proof.selected.registeredAt) < Date.parse(config.cutoverAt)) throw new Error("holding_historical_registration_excluded");
+  return proof;
 }
 
 /** Only receipt matching may precede this age gate; every new send still requires it. */
@@ -53,20 +54,26 @@ export function automaticHoldingEvidence(raw, config, now = new Date()) {
 }
 
 export function automaticHoldingEvent(plan, selected, config) {
+  const change = plan.noticePurpose === "holding_period_change";
   return { schemaVersion: 1, id: plan.id, source: "studiomate_live_ticket_readback", memberId: plan.memberId,
     memberPhone: plan.memberPhone, studioId: plan.studioId, ticketName: plan.sourceEvidence.ticketName,
     issuanceFingerprint: plan.issuanceFingerprint, creationEvidenceFingerprint: plan.creationEvidenceFingerprint,
-    registeredAt: selected.registeredAt, policyId: config.automaticPolicyId, cutoverAt: config.cutoverAt,
+    registeredAt: selected.registeredAt, policyId: change ? config.periodChangeNotice.policyId : config.automaticPolicyId, cutoverAt: config.cutoverAt,
+    ...(change ? { noticePurpose: plan.noticePurpose, changeFingerprint: plan.changeFingerprint,
+      originalNoticeId: plan.originalNoticeId, changedAt: plan.periodChange.changedAt } : {}),
     status: "ready", canonical: true };
 }
 
-export function automaticHoldingEventIssue(event, plan, config, now = new Date()) {
+export function automaticHoldingEventIssue(event, plan, config, now = new Date(), originalSend, completedChanges = []) {
   const issue = holdingAutomaticConfigIssue(config, now);
   if (issue) return issue;
-  const proof = automaticHoldingEvidence(plan.sourceEvidence, config, now);
+  const change = plan.noticePurpose === "holding_period_change";
+  const proof = change ? automaticHoldingPeriodChangeEvidence(plan.sourceEvidence, config, originalSend, now, completedChanges)
+    : automaticHoldingEvidence(plan.sourceEvidence, config, now);
+  if (!proof || change && proof.change.id !== plan.changeFingerprint) return "holding_period_change_evidence_changed";
   const expected = automaticHoldingEvent(plan, proof.selected, config);
   const same = event && typeof event === "object" && !Array.isArray(event) &&
     Object.keys(event).length === Object.keys(expected).length && Object.entries(expected).every(([key, value]) => event[key] === value);
-  return same && plan.approval.approvedBy === config.automaticPolicyId
+  return same && plan.approval.approvedBy === (change ? config.periodChangeNotice.policyId : config.automaticPolicyId)
     ? "" : "holding_canonical_event_changed_or_missing";
 }

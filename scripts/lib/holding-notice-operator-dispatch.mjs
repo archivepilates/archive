@@ -7,9 +7,19 @@ import { calculateLiveHolding, verifyHoldingAtDispatch } from "./holding-notice-
 import { HOLDING_AUTO_EVENTS, automaticHoldingEventIssue } from "./holding-notice-automatic.mjs";
 import { readHoldingMemberProfile } from "./holding-member-identity.mjs";
 import { HOLDING_MEMO_POLICY, HOLDING_ACCEPTANCE_MEMO_POLICY, holdingMemoAcceptanceFingerprint, hasHoldingMemoAcceptance } from "./holding-delivery-memo.mjs";
+import { holdingOperatorNoticeId, holdingPeriodChangeFingerprint } from "./holding-notice-identity.mjs";
 
 const FAMILY = new Set([HOLDING_NOTICE_TEMPLATE_ID, "KA01TP261006054728079NtSGrYdtSQH"]);
 export const isHoldingLedger = row => FAMILY.has(row?.templateCode) || row?.payload?.holdingNotice === true;
+
+function sameChangeMetadata(row, source, claim = false) {
+  if (row.noticePurpose !== source.noticePurpose || row.changeFingerprint !== source.changeFingerprint) return false;
+  if (source.noticePurpose !== "holding_period_change") return true;
+  if (row.originalNoticeId !== source.originalNoticeId) return false;
+  return claim || row.periodChange && source.periodChange &&
+    Object.keys(row.periodChange).length === Object.keys(source.periodChange).length &&
+    Object.entries(source.periodChange).every(([key, value]) => row.periodChange[key] === value);
+}
 
 function safeQuietHolding(row, plan) {
   const proof = Array.isArray(row?.dispatchDeferrals) ? row.dispatchDeferrals.at(-1) : null;
@@ -18,6 +28,7 @@ function safeQuietHolding(row, plan) {
     && row.providerOutcome === "quiet_deferred_no_transport" && !row.solapiMessageId
     && row.memberId === plan.memberId && row.memberPhone === plan.memberPhone
     && row.issuanceFingerprint === plan.issuanceFingerprint && row.creationEvidenceFingerprint === plan.creationEvidenceFingerprint
+    && (row.noticePurpose || null) === (plan.noticePurpose || null) && (row.changeFingerprint || null) === (plan.changeFingerprint || null)
     && proof?.dispatchToken === row.dispatchToken && proof.providerPostCount === 0;
 }
 
@@ -27,14 +38,28 @@ function knownOtherHoldingSend(row, plan) {
       row.memberId !== plan.memberId || row.memberPhone !== plan.memberPhone || row.studioId !== plan.studioId ||
       !["operator_verified_one_off", "automatic_live_readback"].includes(row.payload?.deliveryMode) || !row.solapiMessageId ||
       !/^[a-f0-9]{64}$/.test(row.issuanceFingerprint || "") || !/^[a-f0-9]{64}$/.test(row.creationEvidenceFingerprint || "")) return false;
-  const expected = `holding_operator_notice_${holdingFingerprint([row.studioId, row.memberId, row.issuanceFingerprint, row.creationEvidenceFingerprint])}`;
-  return row.id === expected && row.candidateId === expected && row.sendId === expected &&
-    row.issuanceFingerprint === plan.issuanceFingerprint && row.creationEvidenceFingerprint !== plan.creationEvidenceFingerprint &&
-    normalizeHoldingObservation(plan.sourceEvidence).history.some(history => history.fingerprint === row.creationEvidenceFingerprint);
+  let expected;
+  try { expected = holdingOperatorNoticeId(row); } catch { return false; }
+  if (row.id !== expected || row.candidateId !== expected || row.sendId !== expected || row.isTest !== false ||
+      row.issuanceFingerprint !== plan.issuanceFingerprint ||
+      !normalizeHoldingObservation(plan.sourceEvidence).history.some(history => history.fingerprint === row.creationEvidenceFingerprint)) return false;
+  if (row.noticePurpose === "holding_period_change") {
+    let changes;
+    try { changes = calculateLiveHolding(plan.sourceEvidence, { now: new Date(plan.observedAt) }).periodChanges; } catch { return false; }
+    const source = changes.find(change => change.id === row.changeFingerprint);
+    if (!source || !row.periodChange || Object.keys(source).length !== Object.keys(row.periodChange).length ||
+        Object.entries(source).some(([key, value]) => row.periodChange[key] !== value) ||
+        row.originalNoticeId !== holdingOperatorNoticeId({ ...row, noticePurpose: undefined, changeFingerprint: undefined })) return false;
+    if (row.creationEvidenceFingerprint === plan.creationEvidenceFingerprint)
+      return plan.noticePurpose === "holding_period_change" && source.changedAt < plan.periodChange.changedAt;
+  } else if (row.noticePurpose != null || row.changeFingerprint != null || row.periodChange != null || row.originalNoticeId != null) return false;
+  if (row.creationEvidenceFingerprint !== plan.creationEvidenceFingerprint) return true;
+  return plan.noticePurpose === "holding_period_change" && !row.noticePurpose &&
+    Number.isFinite(Date.parse(row.observedAt)) && Date.parse(row.observedAt) < Date.parse(plan.periodChange.changedAt);
 }
 
 export function verifiedOperatorHoldingPlan(raw, member, approval, now = new Date()) {
-  const { observation: obs, summary, selected: current } = calculateLiveHolding(raw,
+  const { observation: obs, summary, selected: current, periodChanges } = calculateLiveHolding(raw,
     { creationEvidenceFingerprint: approval?.creationEvidenceFingerprint, now });
   if (!current) throw new Error("approved_current_hold_required");
   if (obs.studioId !== "5330" || member?.memberId !== obs.memberId || member.studioId !== obs.studioId ||
@@ -45,7 +70,17 @@ export function verifiedOperatorHoldingPlan(raw, member, approval, now = new Dat
       approval.observationFingerprint !== obs.observationFingerprint ||
       approval.memberId !== obs.memberId || approval.memberPhone !== member.phone)
     throw new Error("observation_bound_operator_approval_required");
-  const id = `holding_operator_notice_${holdingFingerprint([obs.studioId, obs.memberId, obs.issuanceFingerprint, current.id])}`;
+  if (approval.noticePurpose != null && approval.noticePurpose !== "holding_period_change") throw new Error("holding_notice_purpose_invalid");
+  const identity = { studioId: obs.studioId, memberId: obs.memberId, issuanceFingerprint: obs.issuanceFingerprint, creationEvidenceFingerprint: current.id };
+  const originalNoticeId = holdingOperatorNoticeId(identity);
+  let changeFields = {};
+  if (approval.noticePurpose === "holding_period_change") {
+    const change = periodChanges.filter(row => row.creationEvidenceFingerprint === current.id).at(-1);
+    if (!change || change.id !== approval.changeFingerprint || change.id !== holdingPeriodChangeFingerprint(change) ||
+        change.start !== current.start || change.end !== current.end) throw new Error("holding_period_change_current_evidence_required");
+    changeFields = { noticePurpose: "holding_period_change", changeFingerprint: change.id, periodChange: change, originalNoticeId };
+  } else if (approval.changeFingerprint != null) throw new Error("holding_notice_purpose_invalid");
+  const id = holdingOperatorNoticeId({ ...identity, ...changeFields });
   const variables = {
     "#{이름}": obs.memberName, "#{수강권명}": obs.ticketName,
     "#{홀딩시작일}": current.start, "#{홀딩종료일}": current.end,
@@ -57,7 +92,7 @@ export function verifiedOperatorHoldingPlan(raw, member, approval, now = new Dat
     summary, variables, observationFingerprint: obs.observationFingerprint, issuanceFingerprint: obs.issuanceFingerprint,
     creationEvidenceFingerprint: current.id, observedAt: obs.observedAt, sourceDate: current.start,
     message: HOLDING_NOTICE_TEMPLATE.content.replace(/#\{[^}]+\}/g, key => variables[key]),
-    approval, sourceEvidence: raw };
+    ...changeFields, approval, sourceEvidence: raw };
 }
 
 function verifiedReceipt(provider, plan, messageId) {
@@ -103,6 +138,9 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
         throw new Error("prior_holding_local_attempt_do_not_resend");
       known.set(row.solapiMessageId, row);
     }
+    if (plan.noticePurpose === "holding_period_change" && !local.docs.some(doc =>
+      doc.id === plan.originalNoticeId && knownOtherHoldingSend(doc.data(), plan)))
+      throw new Error("holding_period_change_delivered_original_required");
     const prior = completeProviderRows(await request(`/messages/v4/list?${params}`));
     for (const row of prior.filter(row => FAMILY.has(row.kakaoOptions.templateId))) {
       const ledger = known.get(row.messageId);
@@ -128,8 +166,12 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
       const config = (await tx.get(db.doc("settings/holdingNotice"))).data();
       if (automatic) {
         const event = (await tx.get(db.doc(`${HOLDING_AUTO_EVENTS}/${plan.id}`))).data();
-        const issue = automaticHoldingEventIssue(event, plan, config, now());
+        const originalSend = plan.noticePurpose === "holding_period_change"
+          ? (await tx.get(db.doc(`alimtalkSends/${plan.originalNoticeId}`))).data() : undefined;
+        const issue = automaticHoldingEventIssue(event, plan, config, now(), originalSend, local.docs.map(doc => doc.data()));
         if (issue) throw new Error(issue);
+      } else if (plan.noticePurpose === "holding_period_change") {
+        throw new Error("holding_period_change_requires_automatic_policy");
       } else if (config?.autoSendEnabled !== false || config?.canonicalSourcePromoted !== false || config?.templateId !== HOLDING_NOTICE_TEMPLATE_ID)
         throw new Error("operator_dispatch_requires_separate_inactive_automation");
       const profile = await readHoldingMemberProfile({ db, memberId: plan.memberId, reader: tx });
@@ -170,7 +212,8 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
         type: "manual_review", dedupeKey: plan.id, sourceActionKey: plan.id, isTest: false,
         dispatchToken, dispatchDeferrals, attempts: 1, maxAttempts: 1, reviewedByUid: plan.approval.approvedBy, reviewedAt: stamp(),
         payload: { holdingNotice: true, deliveryMode: automatic ? "automatic_live_readback" : "operator_verified_one_off",
-          source: "studiomate_live_ticket_readback", ...(automatic ? { holdingEventId: plan.id, policyId: config.automaticPolicyId } : {}) },
+          source: "studiomate_live_ticket_readback", ...(automatic ? { holdingEventId: plan.id,
+            policyId: plan.noticePurpose === "holding_period_change" ? config.periodChangeNotice.policyId : config.automaticPolicyId } : {}) },
         ...(resume ? {} : {createdAt: stamp()}), updatedAt: stamp(), lastError: null };
       const write = (ref, fields) => resume ? tx.update(ref, fields) : tx.create(ref, fields);
       write(candidateRef, { ...common, candidateId: plan.id, status: "processing", providerOutcome: "claimed_no_retry" });
@@ -179,6 +222,8 @@ export async function dispatchVerifiedOperatorHolding({ db, stamp, plan, templat
         holdingMemoRanges: calculateLiveHolding(plan.sourceEvidence, {now:now()}).holds.map(({start,end})=>({start,end})) });
       write(claimRef, { dispatchToken, dispatchDeferrals, candidateId: plan.id, memberId: plan.memberId, memberPhone: plan.memberPhone,
         issuanceFingerprint: plan.issuanceFingerprint, creationEvidenceFingerprint: plan.creationEvidenceFingerprint,
+        ...(plan.noticePurpose === "holding_period_change" ? { noticePurpose: plan.noticePurpose, changeFingerprint: plan.changeFingerprint,
+          originalNoticeId: plan.originalNoticeId } : {}),
         approvedBy: plan.approval.approvedBy, status: "claimed", ...(resume ? {} : {createdAt: stamp()}) });
       return true;
     });
@@ -284,6 +329,11 @@ export async function reconcileVerifiedOperatorHolding({ db, stamp, id, request 
   if (!ledger || ledger.isTest !== false || !["operator_verified_one_off", "automatic_live_readback"].includes(ledger.payload?.deliveryMode) ||
       ledger.templateCode !== HOLDING_NOTICE_TEMPLATE_ID || !ledger.solapiMessageId || ledger.id !== id)
     throw new Error("matching_operator_receipt_required");
+  if (holdingOperatorNoticeId(ledger) !== id || ledger.noticePurpose === "holding_period_change" &&
+      (ledger.periodChange?.id !== ledger.changeFingerprint ||
+       holdingPeriodChangeFingerprint(ledger.periodChange) !== ledger.changeFingerprint ||
+       ledger.originalNoticeId !== holdingOperatorNoticeId({ ...ledger, noticePurpose: undefined, changeFingerprint: undefined })))
+    throw new Error("matching_operator_receipt_required");
   const row = verifiedReceipt(await request(receiptLookup(ledger)), ledger, ledger.solapiMessageId);
   const delivered = row.status === "COMPLETE" && String(row.statusCode) === "4000";
   const recoverableAcceptance = ledger.holdingMemoPolicy===HOLDING_ACCEPTANCE_MEMO_POLICY &&
@@ -296,9 +346,11 @@ export async function reconcileVerifiedOperatorHolding({ db, stamp, id, request 
     const current = (await tx.get(sendRef)).data();
     const candidate = (await tx.get(candidateRef)).data(), claim = (await tx.get(claimRef)).data();
     const identityKeys = ["id", "candidateId", "sendId", "memberId", "memberPhone", "studioId", "templateCode", "isTest",
-      "message", "variables", "issuanceFingerprint", "creationEvidenceFingerprint", "payload", "observedAt", "solapiMessageId", "holdingMemoPolicy"];
+      "message", "variables", "issuanceFingerprint", "creationEvidenceFingerprint", "payload", "observedAt", "solapiMessageId", "holdingMemoPolicy",
+      "noticePurpose", "changeFingerprint", "periodChange", "originalNoticeId"];
     if (!current || identityKeys.some(key => holdingFingerprint(current[key] ?? null) !== holdingFingerprint(ledger[key] ?? null)) ||
         !candidate || !claim || candidate.candidateId !== id || claim.candidateId !== id ||
+        !sameChangeMetadata(candidate, current) || !sameChangeMetadata(claim, current, true) ||
         claim.solapiMessageId !== current.solapiMessageId || [candidate,claim].some(other=>
           ["memberId","memberPhone","issuanceFingerprint","creationEvidenceFingerprint"].some(key=>other[key]!==current[key])))
       throw new Error("holding_receipt_ledger_changed");
@@ -334,13 +386,23 @@ export async function reconcileExistingHoldingAttempt({ db, stamp, plan, request
   const claim = (await db.doc(`holdingNoticeClaims/${plan.id}`).get()).data();
   const candidate = (await db.doc(`alimtalkCandidates/${plan.id}`).get()).data();
   if (!send && !claim && !candidate) return null;
+  if ([candidate, send, claim].every(row => safeQuietHolding(row, plan)) &&
+      candidate.dispatchToken === send.dispatchToken && send.dispatchToken === claim.dispatchToken &&
+      sameChangeMetadata(candidate, plan) && sameChangeMetadata(send, plan) && sameChangeMetadata(claim, plan, true)) return null;
   const matches = row => row && row.memberId === plan.memberId && row.memberPhone === plan.memberPhone &&
     row.issuanceFingerprint === plan.issuanceFingerprint && row.creationEvidenceFingerprint === plan.creationEvidenceFingerprint &&
+    (row.noticePurpose || null) === (plan.noticePurpose || null) && (row.changeFingerprint || null) === (plan.changeFingerprint || null) &&
     row.candidateId === plan.id;
   if (!matches(send) || !matches(claim) || !matches(candidate) || send.id !== plan.id || send.sendId !== plan.id ||
       send.studioId !== plan.studioId || send.isTest !== false || send.templateCode !== HOLDING_NOTICE_TEMPLATE_ID ||
       !["operator_verified_one_off", "automatic_live_readback"].includes(send.payload?.deliveryMode) ||
       !send.solapiMessageId || claim.solapiMessageId !== send.solapiMessageId)
+    throw new Error("holding_prior_claim_reconciliation_required");
+  if (plan.noticePurpose === "holding_period_change" && (holdingOperatorNoticeId(send) !== plan.id ||
+      !sameChangeMetadata(candidate, plan) || !sameChangeMetadata(claim, plan, true) ||
+      send.originalNoticeId !== plan.originalNoticeId || !send.periodChange ||
+      Object.keys(send.periodChange).length !== Object.keys(plan.periodChange).length ||
+      Object.entries(plan.periodChange).some(([key, value]) => send.periodChange[key] !== value)))
     throw new Error("holding_prior_claim_reconciliation_required");
   const needsAcceptance = send.holdingMemoPolicy===HOLDING_ACCEPTANCE_MEMO_POLICY &&
     send.holdingMemoStatus==="waiting_acceptance" && !send.holdingMemoAcceptedMessageId;

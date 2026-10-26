@@ -1,5 +1,6 @@
 import { calculateHoldingAllowance } from "./holding-allowance-notice.mjs";
 import { holdingHistoryOperation, normalizeHoldingObservation, sourceDate, sourceInstant } from "./studiomate-holding-source.mjs";
+import { holdingPeriodChangeFingerprint } from "./holding-notice-identity.mjs";
 
 const requireEvidence = (ok, reason) => { if (!ok) throw new Error(reason); };
 const kstDay = at => new Date(Date.parse(at) + 9 * 3600000).toISOString().slice(0, 10);
@@ -9,7 +10,7 @@ export function calculateLiveHolding(raw, { creationEvidenceFingerprint, now = n
   const observation = normalizeHoldingObservation(raw);
   const age = now.getTime() - Date.parse(observation.observedAt);
   requireEvidence(Number.isFinite(age) && age >= 0 && age <= 120000, "fresh_live_ticket_required");
-  const events = [], lastHistoryAt = new Map();
+  const events = [], periodChanges = [], lastHistoryAt = new Map(), lastChangeId = new Map();
   const history = observation.history.filter(row => /정지|홀딩/.test(row.type) || row.changes.some(c => /정지|홀딩/.test(c.field)))
     .sort((a, b) => sourceInstant(a.at).localeCompare(sourceInstant(b.at)));
   for (const row of history) {
@@ -34,7 +35,14 @@ export function calculateLiveHolding(raw, { creationEvidenceFingerprint, now = n
       event.cancelledAt = at;
     } else {
       requireEvidence(changes.length > 0, "live_hold_edit_dates_required");
+      const change = { creationEvidenceFingerprint: event.id, previousChangeId: lastChangeId.get(event.id) || event.id,
+        changedAt: at, beforeStart: event.start, beforeEnd: event.end };
       for (const c of changes) event[c.field === "정지시작일" ? "start" : "end"] = sourceDate(c.after);
+      change.start = event.start;
+      change.end = event.end;
+      change.id = holdingPeriodChangeFingerprint(change);
+      periodChanges.push(change);
+      lastChangeId.set(event.id, change.id);
     }
     requireEvidence(event.start <= event.end, "invalid_live_hold_range");
     lastHistoryAt.set(event.id, at);
@@ -75,7 +83,7 @@ export function calculateLiveHolding(raw, { creationEvidenceFingerprint, now = n
       "overlapping_live_hold_identity");
     requireEvidence(!summary.overageDays, "holding_allowance_overage");
   }
-  return { observation, summary, holds, selected, currentHold, calculationMode: "live_studiomate_readback" };
+  return { observation, summary, holds, selected, currentHold, periodChanges, calculationMode: "live_studiomate_readback" };
 }
 
 export async function verifyHoldingAtDispatch(plan, readLatest, calculatePlan, now = () => new Date()) {
