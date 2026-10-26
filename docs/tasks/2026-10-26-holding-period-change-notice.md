@@ -4,7 +4,7 @@
 - Worktree: `/Users/archivepilates/codex-worktrees/holding-period-change-notice-20261026`.
 - Branch: `codex/mini/holding-period-change-notice-20261026`; base `6e50653f`.
 - User approved one automatic notice per period change, explicitly requested reuse of the exact existing approved holding v2 template, and approved validation, runtime/CORE adoption, deployment, scoped commit and push.
-- State: implementation and offline verification complete; independent final re-review and release pending. No policy activation, new member dispatch or memo write yet.
+- State: reviewed code promoted and deployed as38b9f1f3; runtime adopted while both workers idle. Policy activated20:44:04KST with saved configuration and original-ledger preservation readback. No manual member dispatch or memo write. Natural next-run delivery/memo verification remains pending.
 
 ## Boundaries
 
@@ -61,3 +61,15 @@
 - The worker treated finished ticket-change discoveries as missing-current-controls review. Restrict the new no-send exclusion to ticket_changed, full fresh native calculation, no current controls and no noncancelled current/future period. Missing or inconsistent evidence still fails closed.
 - Existing report dedupe relied on Gmail RFC message IDs; received headers contain provider-generated IDs and identical reviews repeated despite stable job/reason identities. Add an internal-only durable reviewAlerts claim under the existing lane, binding job/reason/native observation independently of import time. Claim before the mail child; mark sent only with explicit confirmed message ID. Ambiguous attempts stay claimed and cannot replay. These records never authorize member-facing actions.
 - The user asked to investigate continued emails. This scoped follow-up preserves the already-approved holding release, original allowance/duplicate guards and natural schedules. No manual queue/sync/send, override or allowance extension.
+
+## Release Receipt
+
+- Code commits9b1d3fbb/70ebdca, main integration38b9f1f3730c6fccd8fcc4274de831e994ec78cd. Newer unrelated origin/main sale-opening/video-notice rules preserved through clean merge; no unrelated local work included.
+- Latest Node22 holding suite1,560 passed0failed/skipped; TypeScript236 passed. Independent final dispatcher review743 focused tests, follow-up notification review139 overlapping tests, no actionable findings. Syntax/diff, rollback, hosting, price5 and local/live responsive95 checks passed.
+- Hosting dry-run and deploy succeeded forarchive-pilates/archive-pilates-core only. Live rules marker and release.json exact38b9f1f3 verified atcore.archivepilates.com; ARCHIVE IN retired entry remainsHTTP200. No Functions/rules/index deployment.
+- Runtime fast-forward performed with no StudioMate/memo worker PID and no shared browser lock. LaunchAgent intervals unchanged3600/300seconds; no manual invocation or restart.
+- SOLAPI GET20:43:33KST rechecked original receipt COMPLETE4000 and exact unchangedAPPROVEDtemplate. Fresh native20:43:34KST, configuration dry-run20:44:02KST, activation20:44:04KST. One exact approved preactivation change; all other historical changes excluded.
+- The settings update and internal activation audit are the only direct production mutations. Original event/candidate/send/claim hashes unchanged. ProviderPOST0, manualqueue0, member/ticket/holding/reservationwrites0. Existing memo queue untouched.
+- Feature branch pushed after live verification. Release/main/runtime were clean. Task-owned native collector and responsive browsers closed; shared lock absent.
+- GitHub Actions40317153233 for deployed code38b9f1f3 completed successfully. The Ubuntu runner migration notice is informational, not a failed check. This closeout changes only task/report documentation and does not require another Hosting release.
+- Actual next scheduled exclusion/report suppression and new change notice delivery/memo are not yet verified; deployment is not proof of those stages. Existing unresolved allowance overage remains blocked. Dependency audit warnings were not changed.
