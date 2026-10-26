@@ -6,5 +6,7 @@
 <h2>유지하는 기준</h2><p>등록 팀원의 결석 여부는 안내 제외 사유가 아닙니다. 기존 최초 권한 부여일부터 40일과 원래 발송 키는 유지합니다. 이미 전달한 이번 문자 20건을 알림톡으로 다시 보내지 않습니다. 업로드 완료·권한 연결·발송 승인·공급자 접수·최종 전달은 구분합니다.</p>
 <h2>알림톡 템플릿</h2><p>강사레슨_수업영상 업로드 완료 v1은 10/26 19:49 SOLAPI 원본에서 APPROVED와 원래 내용·채널·이미지형·내 강의실 및 회원가입 버튼 일치를 확인했습니다. 템플릿 승인은 개별 발송 승인이 아닙니다.</p>
 <h2>반영 범위</h2><p>Mac mini 공통 지침, 프로젝트 AGENTS, 기존 작업 기록과 CORE 운영규칙의 기존 항목 한 개를 갱신합니다. 새 자동 발송기·주기 작업·운영자 대상 알림톡은 만들지 않고 회원·상품·영상·권한·Functions는 변경하지 않습니다.</p>
-<p class="muted" id="release-state">반영·검증 결과는 규칙 페이지의 실제 배포와 로컬 회귀 검증 후 갱신합니다.</p>
+<h2>반영·검증 결과</h2><p id="release-state">공통 지침, 프로젝트 AGENTS, 기존 작업 기록과 CORE 한 항목의 반영을 완료했습니다. 소스 커밋 <code>7a34d151</code>을 main에 반영·푸시하고 운영 런타임에 동기화했습니다. 배포 보호장치가 정본 일치를 요구하므로 main 반영 후 배포했습니다.</p>
+<ul><li>무발송 합성 회귀 196개, 배포 도구 문법 검사와 diff 검사 통과. 새 작업영역의 의존성 누락은 기존 런타임 의존성 경로를 재사용해 해결했습니다.</li><li>기존 CORE 항목 한 개 외 모든 HTML 바이트 보존, 글로벌 기존 지침 보존을 확인했습니다. 계정은 기존 <code>archive-codex-operator@archive-pilates.iam.gserviceaccount.com</code>입니다.</li><li>20:22~20:23 KST 두 Hosting 경로만 배포했습니다. 메인 버전 <code>2656c72f988d2e26</code>, CORE 버전 <code>0bbcca9c9e764fff</code>. 다른 파일 222개·62개와 설정은 그대로입니다.</li><li><a href="https://archive-pilates.web.app/core/rules/">메인 규칙</a>과 <a href="https://archive-pilates-core.web.app/rules/">CORE 규칙</a> 모두 HTTP 200·정본 소스 해시 일치를 확인했습니다.</li></ul>
+<p class="muted">GitHub <a href="https://github.com/archivepilates/archive/actions/runs/40314604174">CI</a>는 확인 당시 진행 중이며 최종 결과는 미확정입니다. 인증 뒤 UI·실제 휴대폰 발송 시험은 수행하지 않았습니다. 레이아웃 변경 없이 기존 문구만 교체했고, 브라우저·실제 발송·새 자동화·회원 쓰기는 없습니다. 다음 조치는 차기 업로드 검증 후 발송 승인 질문입니다.</p>
 </main></body></html>
