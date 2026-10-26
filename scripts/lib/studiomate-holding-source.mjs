@@ -32,6 +32,32 @@ export function holdingSourceId({ studioId, memberId, ticketId }) {
   return `holding_ticket_${holdingFingerprint([studioId, memberId, ticketId])}`;
 }
 
+// StudioMate also labels saved period edits as registration; the date deltas distinguish them.
+export function holdingHistoryOperation(row) {
+  const type = clean(row?.type).replace(/\s/g, "");
+  if (type === "수강권정지취소") return "cancel";
+  required(["수강권정지", "수강권정지수정"].includes(type), "unsupported_live_hold_change");
+  required(Array.isArray(row.changes) && row.changes.every(change => change && typeof change.field === "string"), "invalid_history_row");
+  required(new Set(row.changes.map(change => change.field)).size === row.changes.length, "ambiguous_history_fields");
+  const expiry = row.changes.find(change => change.field === "이용종료일");
+  if (expiry) {
+    sourceDate(expiry.before);
+    sourceDate(expiry.after);
+  }
+  const changes = row.changes.filter(change => /정지|홀딩/.test(change.field));
+  required(changes.every(change => ["정지시작일", "정지종료일"].includes(change.field)), "unsupported_live_hold_field");
+  const start = changes.find(change => change.field === "정지시작일");
+  const end = changes.find(change => change.field === "정지종료일");
+  if (type === "수강권정지" && start?.before === "내역없음" && end?.before === "내역없음") {
+    required(sourceDate(start.after) <= sourceDate(end.after), "invalid_live_hold_range");
+    return "create";
+  }
+  required(changes.length > 0 && changes.every(change => change.before !== "내역없음"), "hold_creation_dates_required");
+  const deltas = changes.map(change => [sourceDate(change.before), sourceDate(change.after)]);
+  required(deltas.some(([before, after]) => before !== after), "live_hold_edit_dates_required");
+  return "edit";
+}
+
 export function normalizeHoldingObservation(raw) {
   required(raw?.source === HOLDING_SOURCE && [raw.studioId, raw.memberId].every(numeric), "invalid_observation_identity");
   required(raw.memberUrl === `https://arcpilates.studiomate.kr/users/detail?id=${raw.memberId}`, "member_url_mismatch");
@@ -87,7 +113,7 @@ export function reconcileHoldingObservation(raw, review, previous = null, now = 
       digest(h.creationEvidenceFingerprint) && Array.isArray(h.evidenceFingerprints), "invalid_stable_hold_mapping");
     ids.add(h.id);
     const creation = holdRows.find(r => r.fingerprint === h.creationEvidenceFingerprint);
-    required(creation && creation.type.replace(/\s/g, "") === "수강권정지", "creation_evidence_required");
+    required(creation && holdingHistoryOperation(creation) === "create", "creation_evidence_required");
     required(h.evidenceFingerprints.includes(creation.fingerprint), "creation_evidence_unmapped");
     for (const fp of h.evidenceFingerprints) {
       required(digest(fp) && !consumed.has(fp) && holdRows.some(r => r.fingerprint === fp), "ambiguous_hold_event_mapping");
@@ -100,17 +126,17 @@ export function reconcileHoldingObservation(raw, review, previous = null, now = 
     const lifecycle = h.evidenceFingerprints.map(fp => holdRows.find(r => r.fingerprint === fp))
       .sort((a, b) => sourceInstant(a.at).localeCompare(sourceInstant(b.at)));
     required(lifecycle[0]?.fingerprint === creation.fingerprint &&
-      lifecycle.filter(row => row.type.replace(/\s/g, "") === "수강권정지").length === 1,
+      lifecycle.filter(row => holdingHistoryOperation(row) === "create").length === 1,
     "single_hold_creation_per_identity_required");
     const creationStart = creation.changes.find(c => c.field === "정지시작일");
     const creationEnd = creation.changes.find(c => c.field === "정지종료일");
     required(creationStart?.before === "내역없음" && creationEnd?.before === "내역없음", "hold_creation_dates_required");
     let currentStart = sourceDate(creationStart.after), currentEnd = sourceDate(creationEnd.after), cancelled = false;
     for (let index = 1; index < lifecycle.length; index++) {
-      const row = lifecycle[index], type = row.type.replace(/\s/g, "");
+      const row = lifecycle[index], operation = holdingHistoryOperation(row);
       required(sourceInstant(row.at) > sourceInstant(lifecycle[index - 1].at) && !cancelled,
         "ambiguous_hold_lifecycle_order");
-      required(["수강권정지수정", "수강권정지취소"].includes(type), "unsupported_hold_lifecycle_requires_review");
+      required(["edit", "cancel"].includes(operation), "unsupported_hold_lifecycle_requires_review");
       for (const change of row.changes) {
         if (change.field === "정지시작일") {
           required(sourceDate(change.before) === currentStart, "hold_date_change_chain_mismatch");
@@ -120,7 +146,7 @@ export function reconcileHoldingObservation(raw, review, previous = null, now = 
           currentEnd = sourceDate(change.after);
         }
       }
-      cancelled = type === "수강권정지취소";
+      cancelled = operation === "cancel";
     }
     required(start === currentStart && end === currentEnd, "hold_dates_not_supported_by_history");
     required(cancelled === (h.status === "cancelled"), "hold_lifecycle_status_mismatch");
