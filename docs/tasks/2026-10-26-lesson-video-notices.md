@@ -9,6 +9,7 @@
 - Actual result: 2026-10-26 09:10:10-09:10:49 KST, 20 LMS accepted; separate GET-only reconciliation attempted 0 new sends and independently verified all20 status4000 delivered. Old automation remains PAUSED. No rights changes.
 - Initial provider GET429 occurred before any intent/POST and was resolved with paced reads (400ms minimum) plus at most one GET-only retry respecting provider wait headers. POST/PUT never wait/retry internally. No unresolved send failure or duplicate.
 - Current complete synthetic suite: 214 passed, including schedule/quiet window, original receipt binding, historical unknown replay fencing, read throttling and exact existing CORE-note replacement.
+- Current release receipt: `d7903edd` main/runtime aligned; exact one-note replacements on both CORE sites verified live hash and all221/63 files/config preserved (versions b2675a7c6eddbc4d / 4a84f00c0cf5a29a). Old automation PAUSED; dispatch locks0; current owned Chrome tab closed. Original initial preparation receipt below remains historical.
 
 ## Approved Scope
 
