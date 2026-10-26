@@ -17,7 +17,7 @@ const note = '          <div class="rule-note" id="lesson-video-upload-notice"><
 const proposed = original.replace(previousNote, note);
 
 test('pins full baseline and exactly the two rules sites/resources', () => {
-  assert.equal(BASE, '130bed1977835f2b1ffeca3060410d1a5f7e9ae6');
+  assert.equal(BASE, 'c2da57b9f5b030e7adacefaff89c94cfede66112');
   assert.deepEqual(TARGETS, {
     rules: { site: 'archive-pilates', resource: '/core/rules/index.html', source: 'core/rules/index.html',
       url: 'https://archive-pilates.web.app/core/rules/' },

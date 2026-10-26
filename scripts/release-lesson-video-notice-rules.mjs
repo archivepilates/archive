@@ -8,7 +8,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { makeManifest, assertManifest } from './release-e261017-classroom.mjs';
 
-export const BASE = '130bed1977835f2b1ffeca3060410d1a5f7e9ae6';
+export const BASE = 'c2da57b9f5b030e7adacefaff89c94cfede66112';
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const SOURCE = 'core/rules/index.html';
 const API = 'https://firebasehosting.googleapis.com/v1beta1/';

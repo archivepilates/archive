@@ -36,6 +36,14 @@
 - Preserve current orders, prices, option codes and live stock. Compare API and editor values immediately before saving; discard stale drafts instead of restoring earlier stock. Change only the approved sale-state or scheduling fields, and never replay an unknown write.
 - Record approval, closure proof, opening time, pending questions, execution intent and verified result in the existing private product ledger. Do not add recurring polling or member-facing messages without separate authorization.
 
+## Instructor Lesson Video Completion Notices
+
+- After a requested instructor-lesson YouTube upload, independently verify processing, intended visibility/playback and the existing website/classroom connection before proposing a completion notice. Describe pending signup/access exceptions rather than promising immediate playback.
+- Ask the operator in the current chat whether to send the completion Alimtalk to instructors. Present lesson/date, teams, eligible recipient count, signup/access exceptions, exact approved text and buttons. An upload request, Kakao template approval or silence is not recipient-send approval.
+- Send only after explicit approval of that notice's audience and content. Declined/unanswered proposals stay unsent; material audience/content changes need renewed approval. No new poller, scheduled dispatch or operator-directed Alimtalk is authorized by this default.
+- Before dispatch, revalidate canonical registered rosters including absentees, cancellations/refunds/identity exclusions, the exact APPROVED template/channel/content/image/buttons, the real KST communication window and cross-channel send history. Never replay accepted/unknown sends or resend an existing SMS as Alimtalk.
+- Reuse existing private upload/access/notice ledgers, original first-grant 40-day clocks and canonical action keys. Upload, classroom access, send approval, provider acceptance and final delivery are distinct states.
+
 ## ARCHIVE IN Work Coordination
 
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.

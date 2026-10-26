@@ -1,5 +1,14 @@
 # Instructor Lesson Video Completion Notices
 
+## Current Default: Ask After Upload, Send Only After Approval
+
+- 2026-10-26 operator instruction: once a requested instructor-lesson YouTube upload is actually verified, propose the completion Alimtalk in the current chat. Show lesson/date, team, canonical registered recipient count, signup/access exceptions, approved text and the classroom/signup buttons. Verify existing website/classroom readiness and clearly retain any access blockers.
+- Upload permission, APPROVED template status and silence do not authorize sending. Wait for the operator's explicit approval of this notice's audience and content; unanswered/declined proposals remain unsent, and material changes require renewed approval.
+- At dispatch, refresh registered rosters including absentees while excluding cancellation/refund/identity ambiguity, exact template/channel/content/image/buttons, real [09:00,23:00) KST and canonical cross-channel histories. Preserve original action keys, existing accepted/unknown sends and first-grant 960-hour clocks.
+- Existing completion template KA01TP261025172058035A7GWKDTFl7Y was independently read as APPROVED at 2026-10-26 19:49 KST; provider review comment records approval at 12:15:52 KST. Content, channel, image-style definition and both buttons matched the frozen specification. This supersedes the older INSPECTING snapshot below, not any historical send record.
+- This default is an operator/agent workflow, not a newly deployed upload-event watcher or automatic ATA dispatcher. No approval request is sent to the operator by Alimtalk, no scheduler is added, and the 20 previously delivered LMS notices are not resent.
+- Scope: common/project AGENTS instructions, this existing lane record and its existing CORE rule-note only. The existing scoped Hosting helper's pinned baseline is refreshed without changing its release protections. No Functions, membership, product, access, YouTube or member-message mutation.
+
 ## Current Override: Immediate Dispatch
 
 - 2026-10-26 direct user change: send now instead of the previously scheduled 11:00. Actual KST was after 09:00; the old automation `2` is PAUSED before dispatch.
