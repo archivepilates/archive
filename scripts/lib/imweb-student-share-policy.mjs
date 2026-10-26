@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { SITE, UNIT, STAFF_GRADE } from './imweb-staff-video-policy.mjs';
+import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from './lesson-share-registration-policy.mjs';
 
 export const STUDENT_SHARE_DAYS = 40;
 export const STUDENT_SHARE_WINDOW_MS = STUDENT_SHARE_DAYS * 86400000;
 export const E261017_SHARE = Object.freeze({
   policyId: 'e261017-grant-40d-v1', groupCode: 'g2026101715ef28611dff4',
   revocation: 'e_team_group_only', lane: 'student-share-e-261017',
+  lessonIds: Object.freeze(['97134045', '97134052']), lessonDate: '2026-10-17',
 });
 export const A261024_SHARE = Object.freeze({
   policyId: 'a261024-grant-40d-v1', groupCode: 'g20261025ad8ce226150cf',
@@ -57,12 +59,40 @@ export function firstVerifiedShareWindow(grant, groupCode, now) {
       || !grant.afterGroups.includes(groupCode)
       || !grant.beforeGroups.every(code => typeof code === 'string' && grant.afterGroups.includes(code))
       || grant.existingGroupsPreserved !== true) fail();
-  if (grant.beforeGroups.includes(groupCode)) {
+  const registeredEvidence = grant.attendanceEvidence?.status === 'both_sessions_registered';
+  if (registeredEvidence) {
+    const source = STUDENT_SHARE_SOURCES.find(item => item.groupCode === groupCode);
+    const evidence = grant.attendanceEvidence;
+    if (!source?.lessonIds || evidence.source !== 'studiomate_live_lesson_detail'
+        || evidence.eligibilityPolicy !== LESSON_VIDEO_ELIGIBILITY_POLICY_ID
+        || !/^m[0-9a-f]+$/.test(evidence.memberCode) || grant.memberCode !== evidence.memberCode
+        || evidence.date !== source.lessonDate
+        || JSON.stringify(evidence.lessonIds) !== JSON.stringify(source.lessonIds)
+        || !Array.isArray(evidence.sessionAttendance) || evidence.sessionAttendance.length !== source.lessonIds.length
+        || evidence.sessionAttendance.some((row, index) => row?.lessonId !== source.lessonIds[index]
+          || !isRegisteredLessonAttendance(row.status))) fail();
+  }
+  const operatorManual = grant.kind === 'student_share_operator_confirmed_manual';
+  if (operatorManual) {
+    const approval = grant.operatorConfirmation;
+    if (!registeredEvidence || !Object.hasOwn(grant, 'beforeGrade') || !Object.hasOwn(grant, 'afterGrade')
+        || !(grant.beforeGrade === null || typeof grant.beforeGrade === 'string' && grant.beforeGrade.trim() === grant.beforeGrade)
+        || grant.beforeGrade === STAFF_GRADE || grant.beforeGrade !== grant.afterGrade
+        || JSON.stringify(grant.beforeGroups) !== JSON.stringify(grant.afterGroups)
+        || !grant.beforeGroups.includes(groupCode) || !record(approval) || approval.approved !== true
+        || approval.source !== 'direct_operator_confirmation' || approval.memberCode !== grant.memberCode
+        || approval.groupCode !== groupCode || shareInstant(approval.grantedAt) !== shareInstant(grant.verifiedAt)
+        || shareInstant(approval.confirmedAt) < shareInstant(approval.grantedAt)
+        || shareInstant(approval.confirmedAt) > now
+        || shareInstant(grant.independentVerifiedAt) < shareInstant(approval.confirmedAt)
+        || shareInstant(grant.independentVerifiedAt) > now) fail();
+  } else if (grant.beforeGroups.includes(groupCode)) {
     const source = STUDENT_SHARE_SOURCES.find(source => source.groupCode === groupCode);
     const evidence = grant.attendanceEvidence;
     if (grant.kind !== 'student_share_existing_staff' || grant.beforeGrade !== STAFF_GRADE
-        || grant.afterGrade !== STAFF_GRADE || !source?.lessonIds || !record(evidence)
-        || evidence.source !== 'studiomate_live_lesson_detail' || evidence.status !== 'both_sessions_attended'
+        || grant.afterGrade !== STAFF_GRADE || !source?.lessonIds || source === E261017_SHARE || !record(evidence)
+        || evidence.source !== 'studiomate_live_lesson_detail'
+        || (!registeredEvidence && evidence.status !== 'both_sessions_attended')
         || !/^m[0-9a-f]+$/.test(evidence.memberCode) || !source.lessonDate || evidence.date !== source.lessonDate
         || JSON.stringify(evidence.lessonIds) !== JSON.stringify(source.lessonIds)
         || grant.beforeGroups.length !== grant.afterGroups.length) fail();
@@ -103,7 +133,8 @@ export function validatedShareEntries(state, source, now) {
   const result = new Map();
   for (const [code, grant] of Object.entries(state.manualImmediateGrants)) {
     if (!/^m[0-9a-f]+$/.test(code)) fail();
-    if (grant.kind === 'student_share_existing_staff' && grant.attendanceEvidence?.memberCode !== code) fail();
+    if ((grant.kind === 'student_share_existing_staff' || grant.attendanceEvidence?.status === 'both_sessions_registered')
+        && grant.attendanceEvidence?.memberCode !== code) fail();
     const window = firstVerifiedShareWindow(grant, source.groupCode, now);
     result.set(code, { ...window, status: 'active', adopted: false });
   }

@@ -9,6 +9,7 @@ import { matchLessonShareMember } from '../lib/lesson-share-261024.mjs';
 import { assertMemberPreserved } from '../lib/imweb-staff-video-policy.mjs';
 import { firstVerifiedShareWindow as sharedFirstVerifiedShareWindow } from '../lib/imweb-student-share-policy.mjs';
 import { resolveConfirmedLessonMember } from '../lib/lesson-share-261025-confirmed-identities.mjs';
+import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from '../lib/lesson-share-registration-policy.mjs';
 
 const sourceText = readFileSync(new URL('../grant-lesson-261025.mjs', import.meta.url), 'utf8');
 // Evaluate the runner body with memory-only IO; never import or invoke its live entrypoint.
@@ -142,6 +143,7 @@ function fixture(options = {}) {
   const bindings = { fs, os: { homedir: () => HOME }, path, createHash, structuredClone,
     isDeepStrictEqual: (left, right) => isDeepStrictEqual(copy(left), copy(right)),
     execFileSync: execute, imwebJson, SITE, UNIT, STAFF_GRADE, assertMemberPreserved,
+    LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance,
     C261025_SHARE: c, D261025_SHARE: d, STUDENT_SHARE_SOURCES: sources,
     MEMBER_GROUP_LOCK: `${HOME}/shared-member-groups.lock`, shareInstant, matchLessonShareMember,
     Date: DateMock, console: { log: text => output.push(JSON.parse(text)) },
@@ -166,8 +168,14 @@ function fixture(options = {}) {
       assert.equal(receipt.status, 'group_verified');
       assert.equal(receipt.existingGroupsPreserved, true);
       assert.equal(receipt.attendanceEvidence.date, '2026-10-25');
+      assert.equal(receipt.attendanceEvidence.source, 'studiomate_live_lesson_detail');
+      assert.equal(receipt.attendanceEvidence.memberCode, receipt.memberCode);
+      assert.equal(receipt.attendanceEvidence.status, 'both_sessions_registered');
+      assert.equal(receipt.attendanceEvidence.eligibilityPolicy, LESSON_VIDEO_ELIGIBILITY_POLICY_ID);
       const source = [c, d].find(source => source.groupCode === groupCode);
       assert.deepEqual(Array.from(receipt.attendanceEvidence.lessonIds), source.lessonIds);
+      assert.deepEqual(Array.from(receipt.attendanceEvidence.sessionAttendance, row => row.lessonId), source.lessonIds);
+      assert.ok(receipt.attendanceEvidence.sessionAttendance.every(row => isRegisteredLessonAttendance(row.status)));
       assert.ok(receipt.beforeGroups.every(code => receipt.afterGroups.includes(code)));
       if (receipt.kind === 'student_share_existing_staff') {
         assert.equal(receipt.beforeGrade, STAFF_GRADE); assert.equal(receipt.afterGrade, STAFF_GRADE);
@@ -213,47 +221,52 @@ test('fresh C/D attendance yields exactly ten distinct team-scoped targets', () 
   assert.deepEqual(Array.from(new Set(targets.map(row => row.team))), ['C', 'D']);
 });
 
-test('five registered per class with four C and five D attended yields nine actual targets', () => {
+test('five registered per class includes the absent C member among ten targets without changing source attendance', () => {
   const f = fixture({ evidence: fourC }), { evidence, targets } = f.attendance();
   assert.ok(evidence.sessions.every(session => session.rows.length === 5));
-  assert.equal(targets.length, 9);
-  assert.equal(targets.filter(row => row.team === 'C').length, 4);
+  assert.equal(targets.length, 10);
+  assert.equal(targets.filter(row => row.team === 'C').length, 5);
   assert.equal(targets.filter(row => row.team === 'D').length, 5);
-  assert.ok(targets.every(row => row.attendance === '출석'));
-  assert.ok(!targets.some(row => row.phone === roster('C')[4].phone));
+  const absent = targets.find(row => row.phone === roster('C')[4].phone);
+  assert.equal(absent.attendance, '결석');
+  assert.deepEqual(copy(absent.sessionAttendance), C.lessonIds.map(lessonId => ({ lessonId, status: '결석' })));
+  assert.deepEqual(copy(evidence), f.read(`${ROOT}/attendance.json`));
 });
 
-test('nine-attendee apply never reads, grants or starts a clock for the absent registered member', async () => {
+test('registered absentee receives a new verified forty-day share with exact original session evidence', async () => {
   const f = fixture({ evidence: fourC }), absent = copy(f.live.get('uid-5'));
   const prior = f.files.get(stateFile(f.extra));
+  const originalAttendance = f.files.get(`${ROOT}/attendance.json`);
   await f.main();
-  assert.equal(f.counters.writes, 9); assert.equal(f.counters.windows, 9);
-  assert.equal(f.output[0].results.length, 9);
+  assert.equal(f.counters.writes, 10); assert.equal(f.counters.windows, 10);
+  assert.equal(f.output[0].results.length, 10);
   assert.ok(f.output[0].results.every(row => row.status === 'group_verified'));
-  assert.deepEqual(f.live.get('uid-5'), absent);
-  assert.ok(!f.calls.some(args => args[0] === 'member'
-    && (args[1] === 'get' && args[2] === 'uid-5' || args[1] === 'update' && args[3] === 'uid-5')));
+  assertMemberPreserved(absent, f.live.get('uid-5'), [...absent.group, f.c.groupCode]);
   const c = f.read(stateFile(f.c));
-  for (const map of [c.manualImmediateGrants, c.entitlements, c.grantAttempts || {}]) assert.equal(map.m005, undefined);
-  assert.equal(Object.keys(c.entitlements).length, 4);
+  assert.equal(c.entitlements.m005.grantedAt, new Date(START).toISOString());
+  assert.equal(Date.parse(c.entitlements.m005.expiresAt) - START, 40 * 86400000);
+  assert.deepEqual(c.manualImmediateGrants.m005.attendanceEvidence.sessionAttendance,
+    C.lessonIds.map(lessonId => ({ lessonId, status: '결석' })));
+  assert.equal(Object.keys(c.entitlements).length, 5);
   assert.equal(Object.keys(f.read(stateFile(f.d)).entitlements).length, 5);
   assert.equal(f.files.get(stateFile(f.extra)), prior);
+  assert.equal(f.files.get(`${ROOT}/attendance.json`), originalAttendance);
 });
 
-test('nine actual attendees still grant only seven unique matches and retain two D identity holds', async () => {
+test('ten registered members still grant only eight unique matches and retain two D identity holds', async () => {
   const f = fixture({ evidence: fourC });
   f.live.set('duplicate-d-uid', { ...copy(f.live.get('uid-9')), uid: 'duplicate-d-uid', memberCode: 'm999' });
   f.live.get('uid-10').callnum = '';
-  const withheld = ['uid-5', 'uid-9', 'uid-10', 'duplicate-d-uid'].map(uid => [uid, copy(f.live.get(uid))]);
+  const withheld = ['uid-9', 'uid-10', 'duplicate-d-uid'].map(uid => [uid, copy(f.live.get(uid))]);
   await f.main();
   const results = f.output[0].results;
-  assert.equal(results.length, 9); assert.equal(f.counters.writes, 7); assert.equal(f.counters.windows, 7);
-  assert.equal(results.filter(row => row.status === 'group_verified').length, 7);
+  assert.equal(results.length, 10); assert.equal(f.counters.writes, 8); assert.equal(f.counters.windows, 8);
+  assert.equal(results.filter(row => row.status === 'group_verified').length, 8);
   const holds = results.filter(row => row.status === 'hold');
   assert.equal(holds.length, 2); assert.ok(holds.every(row => row.team === 'D'));
   assert.deepEqual(holds.map(row => row.reason).sort(), ['ambiguous_exact_match', 'identity_mismatch']);
   for (const [uid, member] of withheld) assert.deepEqual(f.live.get(uid), member);
-  assert.equal(Object.keys(f.read(stateFile(f.c)).entitlements).length, 4);
+  assert.equal(Object.keys(f.read(stateFile(f.c)).entitlements).length, 5);
   const d = f.read(stateFile(f.d));
   assert.equal(Object.keys(d.entitlements).length, 3);
   for (const code of ['m009', 'm010', 'm999']) {
@@ -261,27 +274,54 @@ test('nine actual attendees still grant only seven unique matches and retain two
   }
 });
 
-test('registered and attended identity sets are order independent across sessions', () => {
+test('registered identity sets are order independent across sessions', () => {
   const f = fixture({ evidence(value) { fourC(value); value.sessions[1].rows.reverse(); value.sessions[3].rows.reverse(); } });
-  assert.equal(f.attendance().targets.length, 9);
+  assert.equal(f.attendance().targets.length, 10);
 });
+
+for (const statuses of [['결석', '결석'], ['출석', '결석'], ['결석', '출석']]) {
+  test(`all registered rows remain eligible with ${statuses.join('/')} and source-ordered session evidence`, async () => {
+    const f = fixture({ evidence(value) {
+      for (const [team, source] of [['C', C], ['D', D]]) {
+        for (const session of value.sessions.filter(row => row.team === team)) {
+          for (const row of session.rows) row.attendance = statuses[source.lessonIds.indexOf(session.lessonId)];
+          session.rows.reverse();
+        }
+      }
+      value.sessions.reverse();
+    } });
+    const original = f.files.get(`${ROOT}/attendance.json`);
+    for (const target of f.attendance().targets) {
+      const source = target.team === 'C' ? C : D;
+      assert.equal(target.attendance, statuses[0]);
+      assert.deepEqual(copy(target.sessionAttendance), source.lessonIds.map((lessonId, index) => ({ lessonId, status: statuses[index] })));
+    }
+    await f.main();
+    assert.equal(f.counters.writes, 10); assert.equal(f.counters.windows, 10);
+    for (const source of [f.c, f.d]) {
+      for (const receipt of Object.values(f.read(stateFile(source)).manualImmediateGrants)) {
+        assert.deepEqual(receipt.attendanceEvidence.sessionAttendance,
+          source.lessonIds.map((lessonId, index) => ({ lessonId, status: statuses[index] })));
+      }
+    }
+    assert.equal(f.files.get(`${ROOT}/attendance.json`), original);
+  });
+}
 
 for (const [name, mutate] of [
   ['unknown status', value => { value.sessions[0].rows[4].attendance = '대기'; }],
   ['missing status', value => { delete value.sessions[0].rows[4].attendance; }],
   ['padded status', value => { value.sessions[0].rows[4].attendance = '출석 '; }],
-  ['one-session absence', value => { value.sessions[0].rows[4].attendance = '결석'; }],
-  ['different absentees with equal counts', value => { fourC(value); value.sessions[1].rows[4].attendance = '출석'; value.sessions[1].rows[3].attendance = '결석'; }],
+  ['cancelled registration', value => { value.sessions[0].rows[4].attendance = '취소'; }],
   ['absent registration name mismatch', value => { fourC(value); value.sessions[1].rows[4].name = 'Other registration'; }],
   ['absent registration phone mismatch', value => { fourC(value); value.sessions[1].rows[4].phone = '01099999999'; }],
-  ['empty attended set', value => { for (const session of value.sessions.filter(row => row.team === 'C')) for (const row of session.rows) row.attendance = '결석'; }],
   ['six registered rows', value => { value.sessions[0].rows.push({ name: 'Extra registration', phone: '01099999999', attendance: '결석' }); }],
   ['malformed absent name', value => { fourC(value); value.sessions[0].rows[4].name = ''; }],
   ['malformed absent phone', value => { fourC(value); value.sessions[0].rows[4].phone = 'unknown'; }],
   ['duplicate absent registration', value => { fourC(value); value.sessions[0].rows[4] = { ...value.sessions[0].rows[3], attendance: '결석' }; }],
   ['cross-team absent phone', value => { fourC(value); for (const session of value.sessions.filter(row => row.team === 'D')) session.rows[0].phone = value.sessions[0].rows[4].phone; }],
   ['cross-team absent identity', value => { fourC(value); for (const session of value.sessions.filter(row => row.team === 'D')) session.rows[0] = { ...value.sessions[0].rows[4], attendance: '출석' }; }],
-]) test(`registered/attended validation rejects ${name} before any scan, intent or write`, async () => {
+]) test(`registered validation rejects ${name} before any scan, intent or write`, async () => {
   const f = fixture({ evidence: mutate }); await assert.rejects(f.main());
   assert.equal(f.counters.scans, 0); assert.equal(f.counters.executions, 0); assert.equal(f.saves.length, 0);
   assert.equal(f.counters.released, 1);
@@ -361,6 +401,37 @@ test('apply persists intent before each mock write and preserves all prior permi
   assert.equal(f.counters.writes, 10); assert.equal(f.counters.windows, 10);
   assert.deepEqual([f.files.get(stateFile(f.c)), f.files.get(stateFile(f.d))], firstWindows);
   assert.ok(f.output.at(-1).results.every(row => row.status === 'already_verified'));
+});
+
+test('legacy attended receipts retain their first verified timestamps and expiry when current registrants are absent', async () => {
+  const f = fixture();
+  await f.main();
+  const firstVerifiedAt = new Date(START - 86400000).toISOString();
+  for (const source of [f.c, f.d]) {
+    const state = f.read(stateFile(source));
+    for (const [memberCode, receipt] of Object.entries(state.manualImmediateGrants)) {
+      receipt.verifiedAt = firstVerifiedAt;
+      receipt.attendanceEvidence.status = 'both_sessions_attended';
+      delete receipt.attendanceEvidence.eligibilityPolicy;
+      delete receipt.attendanceEvidence.sessionAttendance;
+      Object.assign(state.entitlements[memberCode], sharedFirstVerifiedShareWindow(receipt, source.groupCode, START));
+    }
+    f.put(stateFile(source), state);
+  }
+  const before = [f.files.get(stateFile(f.c)), f.files.get(stateFile(f.d))];
+  const evidence = f.read(`${ROOT}/attendance.json`);
+  for (const session of evidence.sessions) for (const row of session.rows) row.attendance = '결석';
+  f.put(`${ROOT}/attendance.json`, evidence);
+  await f.main();
+  assert.equal(f.counters.writes, 10); assert.equal(f.counters.windows, 10);
+  assert.deepEqual([f.files.get(stateFile(f.c)), f.files.get(stateFile(f.d))], before);
+  assert.ok(f.output.at(-1).results.every(row => row.status === 'already_verified'));
+  for (const source of [f.c, f.d]) {
+    for (const entitlement of Object.values(f.read(stateFile(source)).entitlements)) {
+      assert.equal(entitlement.grantedAt, firstVerifiedAt);
+      assert.equal(Date.parse(entitlement.expiresAt), START - 86400000 + 40 * 86400000);
+    }
+  }
 });
 
 test('plan mode creates only its plan receipt, never a grant/intent or provider apply', async () => {
@@ -536,14 +607,14 @@ test('lane cleanup errors cannot bypass releasing the shared lock', async () => 
   assert.equal(f.counters.released, 1); assert.equal(f.open.size, 0);
 });
 
-test('confirmed two stay deferred with no new clocks under quota, then grant once after recovery preserving the prior seven', async () => {
+test('confirmed two stay deferred with no new clocks under quota, then grant once after recovery preserving the prior eight', async () => {
   const f = fixture({ evidence: fourC });
   const first = f.live.get('uid-6'), second = f.live.get('uid-7');
   first.callnum = '01099999999';
   f.live.set('duplicate-d-account', { ...copy(second), uid: 'duplicate-d-account', memberCode: 'm9999' });
   await f.main();
   // The default fixture applies; initial strict identity checks hold only these two.
-  assert.equal(f.counters.writes, 7);
+  assert.equal(f.counters.writes, 8);
   const beforeC = copy(f.read(stateFile(f.c))), beforeD = copy(f.read(stateFile(f.d)));
   const targets = f.attendance().targets.filter(t => t.team === 'D').slice(0, 2);
   const selected = targets.map((target, i) => ({ team: 'D', name: target.name,
@@ -560,16 +631,16 @@ test('confirmed two stay deferred with no new clocks under quota, then grant onc
   blocked.grantAttempts = { synthetic: { status: 'blocked_before_dispatch', reason: 'write_quota_exceeded', quotaConfirmedAt: new Date(START).toISOString() } };
   f.put(stateFile(f.c), blocked);
   await f.main();
-  assert.equal(f.counters.writes, 7);
-  assert.equal(f.counters.windows, 7);
+  assert.equal(f.counters.writes, 8);
+  assert.equal(f.counters.windows, 8);
   assert.deepEqual(f.read(stateFile(f.d)), beforeD);
   assert.deepEqual(f.output.at(-1).results.filter(x => x.status === 'deferred').map(x => x.team), ['D', 'D']);
   // Simulate profile quota recovery only in memory; production counters are never modified.
   f.put(stateFile(f.c), beforeC);
   await f.main();
-  assert.equal(f.counters.writes, 9);
+  assert.equal(f.counters.writes, 10);
   for (const [code, receipt] of Object.entries(beforeD.manualImmediateGrants)) assert.deepEqual(f.read(stateFile(f.d)).manualImmediateGrants[code], receipt);
   assert.deepEqual(f.read(stateFile(f.c)), beforeC);
   for (const member of [first, second]) assert.equal(f.read(stateFile(f.d)).manualImmediateGrants[member.memberCode].identityConfirmation.route, 'existing_cli_only_no_admin_ui');
-  await f.main(); assert.equal(f.counters.writes, 9);
+  await f.main(); assert.equal(f.counters.writes, 10);
 });

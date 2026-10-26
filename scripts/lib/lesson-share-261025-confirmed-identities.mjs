@@ -43,10 +43,11 @@ export function resolveConfirmedLessonMember({ target, source, members, confirme
   const entry = confirmed.selected.find(x => x.name === normalizeName(target.name));
   if (!entry) return ordinary;
   const hold = reason => ({ status: 'hold', reason });
-  if (target.attendance !== '출석' || typeof target.phone !== 'string'
+  if (ordinary.reason === 'invalid_registration_or_not_registered') return ordinary;
+  if (typeof target.phone !== 'string'
       || !/^[+()\d\s-]+$/.test(target.phone)
       || hash([normalizeName(target.name), normalizeInstructorLessonPhone(target.phone)]) !== entry.attendeeIdentitySha256) return hold('confirmed_attendance_identity_changed');
-  if (['invalid_member_source', 'duplicate_member_identity', 'incomplete_member_source', 'invalid_attendee_or_not_attended'].includes(ordinary.reason)) return ordinary;
+  if (['invalid_member_source', 'duplicate_member_identity', 'incomplete_member_source'].includes(ordinary.reason)) return ordinary;
   const current = members.filter(m => m.memberCode === entry.memberCode && m.uid === entry.uid
     && normalizeName(m.name) === entry.name && m.siteCode === SITE && m.unitCode === UNIT);
   if (current.length !== 1 || ordinary.status === 'matched'

@@ -31,7 +31,8 @@ function instant(value) {
 export function entitlementFromGrant(memberCode, grant, now, source = E261017_SHARE) {
   const GROUP = source.groupCode, POLICY_ID = source.policyId;
   if (!/^m[0-9a-f]+$/.test(memberCode) || grant.status !== 'group_verified'
-      || (grant.kind === 'student_share_existing_staff' && grant.attendanceEvidence?.memberCode !== memberCode)
+      || ((grant.kind === 'student_share_existing_staff' || grant.attendanceEvidence?.status === 'both_sessions_registered')
+        && grant.attendanceEvidence?.memberCode !== memberCode)
       || !Array.isArray(grant.beforeGroups)
       || !grant.afterGroups?.includes(GROUP) || grant.existingGroupsPreserved !== true) {
     throw Error('First verified student-share grant evidence required');
@@ -41,7 +42,9 @@ export function entitlementFromGrant(memberCode, grant, now, source = E261017_SH
   const window = firstVerifiedShareWindow(grant, GROUP, now);
   return { policyId: POLICY_ID, memberCode, groupCode: GROUP,
     ...window,
-    status: 'active', grantEvidence: grant.kind === 'student_share_existing_staff'
+    status: 'active', grantEvidence: grant.kind === 'student_share_operator_confirmed_manual'
+      ? 'manualImmediateGrants:operator_confirmed_manual_grant'
+      : grant.kind === 'student_share_existing_staff'
       ? 'manualImmediateGrants:independent_attendance_share_on_staff'
       : 'manualImmediateGrants:first_verified_transition' };
 }

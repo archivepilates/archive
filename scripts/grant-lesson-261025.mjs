@@ -11,6 +11,7 @@ import { SITE, UNIT, STAFF_GRADE, assertMemberPreserved } from './lib/imweb-staf
 import { C261025_SHARE, D261025_SHARE, STUDENT_SHARE_SOURCES, readStudentShareLedgers, validatedShareEntries,
   firstVerifiedShareWindow, shareInstant } from './lib/imweb-student-share-policy.mjs';
 import { readConfirmedLessonIdentities, resolveConfirmedLessonMember } from './lib/lesson-share-261025-confirmed-identities.mjs';
+import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from './lib/lesson-share-registration-policy.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 
 export { attendance as readLessonAttendance, assertSources as assertLessonSources };
@@ -68,21 +69,21 @@ function attendance() {
     return JSON.stringify([row.name.normalize('NFC').trim(), row.phone.replace(/\D/g, '')]);
   };
   for (const [team, source] of Object.entries(SOURCES)) {
-    const sessions = evidence.sessions.filter(row => row.team === team);
-    if (sessions.length !== 2 || !isDeepStrictEqual(sessions.map(row => row.lessonId).sort(), [...source.lessonIds].sort())) throw Error('Wrong class scope');
+    const teamSessions = evidence.sessions.filter(row => row.team === team);
+    if (teamSessions.length !== 2 || !isDeepStrictEqual(teamSessions.map(row => row.lessonId).sort(), [...source.lessonIds].sort())) throw Error('Wrong class scope');
+    const sessions = source.lessonIds.map(lessonId => teamSessions.find(session => session.lessonId === lessonId));
     const lists = sessions.map(session => {
       if (session.date !== '2026-10-25' || !Array.isArray(session.rows) || session.rows.length !== 5
-          || session.rows.some(row => !['출석', '결석'].includes(row?.attendance))) throw Error('Registered roster with known attendance required');
+          || session.rows.some(row => !isRegisteredLessonAttendance(row?.attendance))) throw Error('Registered roster with known attendance required');
       const keys = session.rows.map(identity).sort();
       if (new Set(keys).size !== 5) throw Error('Duplicate registered identity');
-      const attended = session.rows.filter(row => row.attendance === '출석');
-      if (!attended.length) throw Error('Nonempty attended roster required');
-      return { keys, attended, attendedKeys: attended.map(identity).sort() };
+      return keys;
     });
-    if (!isDeepStrictEqual(lists[0].keys, lists[1].keys)) throw Error('Two registered rosters disagree');
-    if (!isDeepStrictEqual(lists[0].attendedKeys, lists[1].attendedKeys)) throw Error('Two attended rosters disagree');
+    if (!isDeepStrictEqual(lists[0], lists[1])) throw Error('Two registered rosters disagree');
     registered.push(...sessions[0].rows);
-    targets.push(...lists[0].attended.map(row => ({ ...row, team })));
+    targets.push(...sessions[0].rows.map(row => ({ ...row, team,
+      sessionAttendance: sessions.map(session => ({ lessonId: session.lessonId,
+        status: session.rows.find(registered => identity(registered) === identity(row)).attendance })) })));
   }
   if (new Set(registered.map(identity)).size !== registered.length
       || new Set(registered.map(row => row.phone.replace(/\D/g, ''))).size !== registered.length) throw Error('Cross-team duplicate registered identity or phone');
@@ -167,7 +168,8 @@ async function main() {
       assertFreshAttendance(evidence);
       const receipt = { status: 'intent', intentAt: new Date().toISOString(), memberCode,
         beforeGroups: [...before.group], afterGroups, beforeGrade: before.grade, memberInvariantHash: hash(Object.fromEntries(Object.entries(before).filter(([key]) => key !== 'group'))),
-        attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_attended',
+        attendanceEvidence: { source: 'studiomate_live_lesson_detail', status: 'both_sessions_registered',
+          eligibilityPolicy: LESSON_VIDEO_ELIGIBILITY_POLICY_ID, sessionAttendance: target.sessionAttendance,
           date: '2026-10-25', lessonIds: [...source.lessonIds], memberCode, verifiedAt: evidence.verifiedAt } };
       if (match.identityConfirmation) receipt.identityConfirmation = structuredClone(match.identityConfirmation);
       if (already) receipt.kind = 'student_share_existing_staff';

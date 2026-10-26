@@ -29,6 +29,21 @@ test('unique exact native match returns identifiers only and preserves every inp
   assert.deepEqual(input, before);
 });
 
+test('present and absent registrations match without changing attendance or retry keys', () => {
+  for (const attendance of ['출석', '결석']) {
+    const target = Object.freeze(attendee({ attendance }));
+    const before = structuredClone(target);
+    assert.deepEqual(match([member()], { attendee: target }), {
+      status: 'matched', member: { uid: 'synthetic-uid-1', memberCode: 'm0001' },
+    });
+    assert.deepEqual(match([], { attendee: target }), { status: 'no_member', reason: 'no_current_identity_match' });
+    for (const team of ['A', 'B']) for (const action of ['sms', 'no_member']) {
+      assert.equal(actionKey({ team, action, attendee: target }), actionKey({ team, action }));
+    }
+    assert.deepEqual(target, before);
+  }
+});
+
 test('existing phone normalizer handles domestic punctuation and +82, with exact trimmed names', () => {
   for (const value of ['01000000001', '010-0000-0001', '+82 10-0000-0001', '821000000001']) {
     assert.equal(match([member({ callnum: value })]).status, 'matched');
@@ -99,14 +114,39 @@ test('only a complete valid snapshot can yield no_member, and signup rechecks ch
   for (const members of [null, {}, { members: [], complete: true }]) assert.equal(match(members).status, 'hold');
 });
 
-test('non-attendance and malformed attendee identities never become SMS no-member candidates', () => {
-  for (const changed of [{ attendance: '예약' }, { attendance: '취소' }, { attendance: ' 출석' },
+test('cancelled, unknown and malformed registration identities never become SMS no-member candidates', () => {
+  for (const changed of [{ attendance: '예약' }, { attendance: '취소' }, { attendance: '환불' },
+    { attendance: '미상' }, { attendance: undefined }, { attendance: null }, { attendance: '' },
+    { attendance: ' 출석' }, { attendance: '결석 ' }, { attendance: ['출석', '결석'] },
     { name: '' }, { name: 123 }, { phone: '' }, { phone: 1000000001 }, { phone: '0001' },
     { phone: '010letters00000001' }]) {
-    assert.deepEqual(match([], { attendee: attendee(changed) }), { status: 'hold', reason: 'invalid_attendee_or_not_attended' });
+    for (const members of [[], [member()]]) {
+      assert.deepEqual(match(members, { attendee: attendee(changed) }), { status: 'hold', reason: 'invalid_registration_or_not_registered' });
+    }
     assert.throws(() => actionKey({ attendee: attendee(changed) }), /invalid_lesson_share_action/);
   }
   assert.equal(matchLessonShareMember().status, 'hold');
+});
+
+test('absent registrations retain exact identity, complete source and duplicate account safeguards', () => {
+  const target = Object.freeze(attendee({ attendance: '결석' }));
+  const extra = { attendee: target };
+  for (const changed of [{ name: 'Different Name' }, { callnum: '01000000002' }]) {
+    assert.deepEqual(match([member(changed)], extra), { status: 'hold', reason: 'identity_mismatch' });
+  }
+  for (const complete of [undefined, false, 1, 'true']) {
+    assert.deepEqual(match([member()], { ...extra, complete }), { status: 'hold', reason: 'incomplete_member_source' });
+  }
+  const other = member({ uid: 'synthetic-uid-2', memberCode: 'm0002' });
+  for (const [members, reason] of [
+    [[member(), other], 'ambiguous_exact_match'],
+    [[member(), { ...other, name: 'Different Name' }], 'ambiguous_phone'],
+    [[member(), member()], 'duplicate_member_identity'],
+    [[member(), member({ memberCode: 'm0002' })], 'duplicate_member_identity'],
+    [[member(), member({ uid: 'synthetic-uid-2' })], 'duplicate_member_identity'],
+    [[member(), { ...other, siteCode: 'other' }], 'invalid_member_source'],
+  ]) assert.deepEqual(match(members, extra), { status: 'hold', reason });
+  assert.equal(target.attendance, '결석');
 });
 
 test('duplicate exact accounts, shared phones and repeated native identities explicitly hold', () => {
