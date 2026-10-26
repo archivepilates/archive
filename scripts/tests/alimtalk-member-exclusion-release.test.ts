@@ -45,7 +45,13 @@ const exclusions = pure("alimtalk/recipientExclusion.ts", [
   "AUTOMATIC_MEMBER_TYPES", "STAFF_MEMBER_GRADES", "isAutomaticMemberAlimtalkType",
   "automaticMemberExclusionReason",
 ], { ...templates, ...recipients });
-const products = pure("alimtalk/recipientExclusion.ts", ["automaticMemberProductIssue", "instructorLessonSource"]);
+let outdoorPolicy: Record<string, any> = {};
+try {
+  outdoorPolicy = pure("privateSurvey/groupSurveyBookingPolicy.ts", null);
+} catch (error) {
+  if (!revision) throw error;
+}
+const products = pure("alimtalk/recipientExclusion.ts", ["automaticMemberProductIssue", "instructorLessonSource"], outdoorPolicy);
 const renewal = pure("renewal/renewalPolicy.ts", null);
 const guard = pure("alimtalk/renewalSendGuard.ts", [
   "RENEWAL_TYPES", "renewalCandidateProfileIssue", "sameTicket", "currentTicket", "daysUntil", "dateText",
@@ -63,7 +69,7 @@ const generation = pure("alimtalk/rebuildAlimtalkCandidates.ts", [
   "reservationOpenEligibleGroupTickets", "isReservationOpenEligibleGroupTicket",
   "isGroupOrMixedProfileTicket", "isPrivateProfileTicket", "isPrivateBookingTicket",
   "bookingTicketKind", "isInstructorLessonBooking", "isGroupBooking",
-], { ...renewal, ...instructorBookingPolicy });
+], { ...renewal, ...instructorBookingPolicy, ...outdoorPolicy });
 const absence = pure("alimtalk/longAbsencePolicy.ts", null, renewal);
 const welcomeTemplate = pure("memberSignup/membershipWelcomePolicy.ts", ["MEMBERSHIP_WELCOME_TEMPLATE"]);
 const canary = pure("memberSignup/membershipWelcomeQueue.ts", [

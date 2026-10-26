@@ -32,6 +32,15 @@ const clone = (value) =>
         )
       : value;
 const DATE = "2026-09-30";
+const NOW = Date.parse(`${DATE}T12:00:00+09:00`);
+class HarnessDate extends Date {
+  constructor(...args) {
+    super(...(args.length ? args : [NOW]));
+  }
+  static now() {
+    return NOW;
+  }
+}
 const ROOT_ID = `5330_${DATE}`;
 const approvalPath = (id = ROOT_ID) => `alimtalkSendApprovals/${id}`;
 const candidatePath = (id) => `alimtalkCandidates/${id}`;
@@ -198,7 +207,7 @@ function harness(options = {}) {
     },
     "../utils/date": {
       todayKst: () => DATE,
-      nowTimestamp: () => ({ value: ++stamp, toMillis: () => Date.now() }),
+      nowTimestamp: () => ({ value: ++stamp, toMillis: () => HarnessDate.now() }),
     },
     "../google/driveDocsMailer": {
       sendAlimtalkLogEmail: async (input) => {
@@ -260,7 +269,7 @@ function harness(options = {}) {
       {
         exports: module,
         process: { env: {} },
-        Date,
+        Date: HarnessDate,
         Set,
         Map,
         require: (id) => {
@@ -285,6 +294,8 @@ function harness(options = {}) {
   const gate = load("approvalGate");
   const binding = load("approvalStore");
   const queue = load("queueDailyAlimtalk");
+  const dispatch = load("../memberSignup/memberDispatchWindow");
+  assert.equal(dispatch.memberDispatchWindow().allowed, true);
   // Compile the actual exported claim body, with a closed dependency list. This
   // exercises main's integration without loading any sender/provider module.
   const processorSource = readFileSync(
@@ -315,8 +326,27 @@ function harness(options = {}) {
   );
   assert.ok(staleDeclaration, "isStaleProcessing must exist");
   assert.ok(staleThresholdDeclaration, "PROCESSING_STALE_MS must exist");
-  const claimSource = [staleThresholdDeclaration, staleDeclaration, claimDeclaration]
+  const quietHoursDeclaration = tree.statements.find(
+    (node) => ts.isFunctionDeclaration(node) && node.name?.text === "quietHoursPatch",
+  );
+  assert.ok(quietHoursDeclaration, "quietHoursPatch must exist");
+  // Extract only the real pure predicate and its constants, never the holding runtime.
+  const holdingTree = ts.createSourceFile(
+    "holding.ts",
+    readFileSync(new URL("src/alimtalk/holdingNoticeQueue.ts", root), "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const holdingDeclarations = holdingTree.statements.filter((node) =>
+    (ts.isFunctionDeclaration(node) && node.name?.text === "isHoldingNoticeCandidate") ||
+    (ts.isVariableStatement(node) && node.declarationList.declarations.some(
+      (declaration) => ["record", "HOLDING_NOTICE_TEMPLATE_CODE"].includes(declaration.name.getText(holdingTree)),
+    )),
+  );
+  assert.equal(holdingDeclarations.length, 3, "Holding predicate and both dependencies must exist");
+  const claimSource = [staleThresholdDeclaration, staleDeclaration, quietHoursDeclaration, claimDeclaration]
     .map((node) => node.getText(tree))
+    .concat(holdingDeclarations.map((node) => node.getText(holdingTree)))
     .join("\n");
   const claimCode = ts.transpileModule(claimSource, {
     compilerOptions: {
@@ -333,7 +363,10 @@ function harness(options = {}) {
       refs: stubs["../firestore/refs"].refs,
       alimtalkApprovalClaimIssue: binding.alimtalkApprovalClaimIssue,
       nowTimestamp: stubs["../utils/date"].nowTimestamp,
-      Date,
+      Date: HarnessDate,
+      memberDispatchWindow: dispatch.memberDispatchWindow,
+      MEMBER_DISPATCH_WINDOW_POLICY: dispatch.MEMBER_DISPATCH_WINDOW_POLICY,
+      randomBytes,
       isMembershipWelcomeCandidate: (item) =>
         item.type === "membership_welcome",
       MEMBERSHIP_AUTOMATION_SETTINGS: "syntheticSettings/membership",

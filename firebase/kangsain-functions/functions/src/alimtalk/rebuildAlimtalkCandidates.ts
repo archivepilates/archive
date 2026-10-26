@@ -29,6 +29,7 @@ import {
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 import { instructorLessonManagementNumberFor } from "./instructorLessonManagement";
 import { isInstructorLessonBooking } from "./instructorLessonBookingPolicy";
+import { isOutdoorGroupSurveyBooking } from "../privateSurvey/groupSurveyBookingPolicy";
 import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 import { automaticMemberExclusionReason, loadActiveStaffPhones } from "./recipientExclusion";
 import { alimtalkTemplateTargetRule } from "./templateTargetRules";
@@ -581,6 +582,7 @@ function hasAttendedGroupBookingOnOrBefore(
 }
 
 function isGroupAttendanceHistory(booking: BookingDoc): boolean {
+  if (isOutdoorGroupSurveyBooking(booking)) return false;
   if (isInstructorLessonBooking(booking)) return false;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return false;
   if (/프라이빗|개인|1:1|듀엣|duet|세미/i.test(booking.ticketName || "")) return false;
@@ -588,6 +590,7 @@ function isGroupAttendanceHistory(booking: BookingDoc): boolean {
 }
 
 function isGroupBooking(booking: BookingDoc): boolean {
+  if (isOutdoorGroupSurveyBooking(booking)) return false;
   if (isInstructorLessonBooking(booking)) return false;
   if (booking.lessonType === "group") return true;
   if (booking.lessonType === "private" || booking.lessonType === "semi_private") return false;

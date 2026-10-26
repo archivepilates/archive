@@ -2,6 +2,7 @@ import type { AlimtalkCandidateDoc, AlimtalkCandidateType, BookingDoc, MemberPro
 import { refs } from "../firestore/refs";
 import { ALIMTALK_MEMBER_EXCLUSION_REASONS } from "./templates";
 import { normalizeRecipientPhone } from "./testRecipients";
+import { isOutdoorGroupSurveyBooking, OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON } from "../privateSurvey/groupSurveyBookingPolicy";
 
 const AUTOMATIC_MEMBER_TYPES = new Set<AlimtalkCandidateType>([
   "reservation_open",
@@ -83,6 +84,14 @@ export async function currentAutomaticMemberExclusionReason(candidate: AlimtalkC
   return automaticMemberProductIssue(candidate, profile, booking);
 }
 
+export async function currentOutdoorGroupSurveyExclusionReason(candidate: AlimtalkCandidateDoc): Promise<string> {
+  if (candidate.type !== "group_survey") return "";
+  const bookingId = String(candidate.payload?.bookingId || "");
+  const booking = bookingId ? (await refs.booking(bookingId).get()).data() : undefined;
+  return booking?.memberId === candidate.memberId && isOutdoorGroupSurveyBooking(booking)
+    ? OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON : "";
+}
+
 export function automaticMemberProductIssue(
   candidate: AlimtalkCandidateDoc,
   profile: MemberProfileDoc | undefined,
@@ -90,6 +99,7 @@ export function automaticMemberProductIssue(
 ): string {
   if (candidate.type === "group_survey") {
     if (!booking || booking.memberId !== candidate.memberId) return "그룹 설문 예약 원천 확인 필요";
+    if (isOutdoorGroupSurveyBooking(booking)) return OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON;
     if (instructorLessonSource(booking.ticketName, booking.ticketClassType, booking.ticketType)) {
       return "강사레슨 예약 일반 설문 제외";
     }

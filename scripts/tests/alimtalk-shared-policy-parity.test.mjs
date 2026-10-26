@@ -40,7 +40,17 @@ for (const name of ['processAlimtalkQueue.ts', 'instructorLessonSampleApproval.t
     assert.equal(audit.approval, 'user_member_dispatch_quiet_hours_20261022');
     assert.equal(audit.policy, 'member_dispatch_kst_0900_2300_v1');
     const current = functions(ast(read(file), file));
-    assert.deepEqual(Object.fromEntries([...current].map(([key, body]) => [key, createHash('sha256').update(body).digest('hex')])), audit.functions[name]);
+    const expected = { ...audit.functions[name] };
+    if (name === 'instructorLessonSampleApproval.ts') {
+      // The already-released preflight recovery changed only these three bodies.
+      const reviewedSource = execFileSync('git', ['show', `15ccdd571d27dc96434a5334aba3ed7bd887ab34:${file}`], { cwd: root, encoding: 'utf8' });
+      const reviewed = functions(ast(reviewedSource, file));
+      for (const key of ['canRecoverBlockedInstructorLessonSample', 'prepareInstructorLessonSampleApproval', 'remindPendingInstructorLessonApprovals']) {
+        assert.ok(reviewed.has(key));
+        expected[key] = createHash('sha256').update(reviewed.get(key)).digest('hex');
+      }
+    }
+    assert.deepEqual(Object.fromEntries([...current].map(([key, body]) => [key, createHash('sha256').update(body).digest('hex')])), expected);
     for (const branch of name === 'processAlimtalkQueue.ts' ? welcomePreflightBranches : [])
       assert.equal(read(file).split(branch).length - 1, 1, 'Existing typed welcome preflight branch remains intact');
     const imports = ast(read(file), file).statements.filter(ts.isImportDeclaration);
@@ -51,10 +61,11 @@ for (const name of ['processAlimtalkQueue.ts', 'instructorLessonSampleApproval.t
     assert.equal(names.get('findCompletedDuplicateForCandidate'), 'targetDuplicateIssue');
   });
 }
-test('eligibility send evaluator has exactly the previous rule body, with only optional template-read mode added', () => {
+test('eligibility preserves previous rules apart from the reviewed outdoor guard and optional template-read mode', () => {
   const file = prefix + 'eligibility.ts';
   const old = functions(ast(before(file), file)).get('autoSendabilityIssue');
   const current = functions(ast(read(file), file)).get('evaluateAutoSendability')
+    .replace('  // A test override does not turn an outdoor booking into a regular group lesson.\n  const outdoorIssue = await currentOutdoorGroupSurveyExclusionReason(candidate);\n  if (outdoorIssue) return outdoorIssue;\n', '')
     .replace('alimtalkTemplateReadiness(candidate.templateCode, options)', 'alimtalkTemplateReadiness(candidate.templateCode)');
   assert.equal(current, old);
   const checks = read(prefix + 'targetValidationChecks.ts');
@@ -63,7 +74,7 @@ test('eligibility send evaluator has exactly the previous rule body, with only o
 });
 for (const name of ['dedupe.ts', 'templates.ts', 'templateTargetRules.ts', 'recipientExclusion.ts', 'testRecipients.ts',
   'privateSurveySendGuard.ts', 'renewalSendGuard.ts', 'longAbsenceSendGuard.ts', 'approvalStore.ts']) {
-  test(`${name}: canonical selection, history windows and exceptions are unchanged`, () => {
+  test(`${name}: existing policy is preserved outside the reviewed outdoor exclusion`, () => {
     if (name === 'templates.ts') {
       const file = prefix + name;
       const metadata = new Set(['RESERVATION_OPEN_ALIMTALK_TEMPLATE', 'PRIVATE_SURVEY_NONWELCOME_CONTRACT',
@@ -86,6 +97,20 @@ for (const name of ['dedupe.ts', 'templates.ts', 'templateTargetRules.ts', 'reci
       assert.deepEqual(policyStatements.map(node => node.getText(current)), baseline.statements.map(node => node.getText(baseline)));
       return;
     }
-    assert.equal(read(prefix + name), before(prefix + name));
+    let current = read(prefix + name);
+    if (name === 'templateTargetRules.ts') {
+      current = current.replace('      "예약에 연결된 수강권이 야외수업이 아님",\n', '')
+        .replace('      "야외수업 예약 (출석 이력에서도 제외)",\n', '');
+    }
+    if (name === 'recipientExclusion.ts') {
+      const parsed = ast(current, prefix + name);
+      const added = parsed.statements.find(node => ts.isFunctionDeclaration(node)
+        && node.name.text === 'currentOutdoorGroupSurveyExclusionReason');
+      assert.ok(added);
+      current = current.slice(0, added.getStart(parsed)) + current.slice(added.end + 2);
+      current = current.replace('import { isOutdoorGroupSurveyBooking, OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON } from "../privateSurvey/groupSurveyBookingPolicy";\n', '')
+        .replace('    if (isOutdoorGroupSurveyBooking(booking)) return OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON;\n', '');
+    }
+    assert.equal(current, before(prefix + name));
   });
 }

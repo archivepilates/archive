@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>야외 그룹 설문 제외 · ARCHIVE IN · 2026-10-26</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f6f7f7; color: #202326; font: 16px/1.7 system-ui, sans-serif; }
+    main { max-width: 70ch; margin: auto; padding: 2rem 1.1rem 3rem; }
+    header { padding-bottom: 1.25rem; border-bottom: 2px solid #353a3b; }
+    h1 { margin: .4rem 0; font-size: 1.75rem; line-height: 1.35; }
+    h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
+    p { margin: .55rem 0; }
+    section { padding: 1.3rem 0; border-bottom: 1px solid #d8dddd; }
+    ul { margin: .5rem 0; padding-left: 1.3rem; }
+    li { margin: .45rem 0; }
+    .meta { color: #525b60; font-size: .9rem; }
+    .status { color: #8e2424; font-weight: 700; }
+    code { font-size: .88em; overflow-wrap: anywhere; }
+    a { color: #214d43; text-underline-offset: .15em; }
+    a:focus-visible { outline: 2px solid #214d43; outline-offset: 3px; }
+    p, li { word-break: normal; overflow-wrap: anywhere; }
+    @media print { body { background: white; } main { max-width: none; padding: 0; } section { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="meta">ARCHIVE PILATES · ARCHIVE IN / ARCHIVE CORE · 2026-10-26</p>
+      <h1>야외 그룹 설문 제외</h1>
+      <p class="status">구현·배포 전 검증 완료(메인 확인) · 운영 배포·라이브 확인 대기</p>
+      <p>승인된 예약별 제외 범위를 기존 CORE 알림톡 제외 규칙에 기록했습니다. 이 보고서는 배포 전 상태이며 실발송·재큐잉·운영 데이터 변경의 완료 보고가 아닙니다.</p>
+    </header>
+    <section aria-labelledby="policy">
+      <h2 id="policy">목적과 운영 범위</h2>
+      <ul>
+        <li>목적: 야외수업의 불필요한 첫 그룹 설문과 후속 알림 방지. 정본은 연결된 <code>bookings.ticketName / ticketClassType / ticketType</code>이며 NFKC 정규화·공백 제거·대소문자 무시 후 야외 또는 outdoor 포함 여부를 판단합니다.</li>
+        <li>해당 예약의 후보 생성·발송 전 검증을 차단하며 명시적 테스트 예외도 우회하지 않습니다. 야외 출석은 일반 그룹 첫 수업 판정의 과거 출석에서 제외합니다.</li>
+        <li>미제출 요청 GET/POST, 미제출 확인 메일, 담당강사 전달과 새 설문 메모 출력을 차단합니다. 이미 제출된 응답·메모·발송 선점과 이력은 보존합니다.</li>
+        <li>혼합 보유 회원 전체를 제외하지 않습니다. 무료·1회성·체험의 기존 의미, 프라이빗·강사레슨과 중복 방지 규칙은 유지합니다. 삭제·초기화·실발송·재큐잉하지 않습니다.</li>
+      </ul>
+    </section>
+    <section aria-labelledby="evidence">
+      <h2 id="evidence">메인이 제공한 원천 조회 증거</h2>
+      <p class="meta">이 문서 담당이 독립 실행한 조회가 아닙니다. 조회시각: 2026-10-26T05:31:44.812Z / 14:31:44.812 KST.</p>
+      <p><code>archive-codex-operator</code>의 <code>archive-pilates</code> Firestore 읽기 전용 조회: <code>bookings</code>에서 <code>lectureDate == 2026-11-07</code>, 한도 1,000건으로 20건 반환·해당 쿼리 완료. 20건 모두 예약 수강권 필드로 야외 판정됐습니다.</p>
+      <p>그 20개 예약 ID만 한정한 <code>where in</code> 조회에서 <code>groupSurveyRequests</code> 0건, <code>alimtalkCandidates</code> 0건, <code>studiomateMemoWriteJobs</code> 0건입니다. 다른 날짜·ID·컬렉션이나 기존 회원 메모·전체 발송 이력에 일반화하지 않습니다.</p>
+      <p><strong>저장된 canonical 원천 증거입니다.</strong> StudioMate 실시간 재조회·공급자 접수·회원 전달 확인이 아니며 운영 쓰기는 없습니다.</p>
+    </section>
+    <section aria-labelledby="checks">
+      <h2 id="checks">검증 현황</h2>
+      <ul>
+        <li>최종 통합 무발송 검증 317/317 통과. 야외 동작·발송 전 검증·GET/POST·미제출·메모 출력·영향 매핑·parity·승인·야간 제한·원천 검증·카탈로그·CORE 회귀를 포함합니다. 별도 집중 5파일은 Node 22에서도 134/134 통과했습니다. 서로 겹치는 수치는 합산하지 않습니다.</li>
+        <li>별도 원천·시간창·체크포인트·영향 매핑 168/168, 중복 방지·안전장치·수강권·재등록 39/39, 카탈로그·CORE 44/44. 매핑 일부와 카탈로그 13건이 중복되므로 고유 테스트 총계로 합산하지 않습니다. 초기 80건 결과는 이 최종 결과로 대체합니다.</li>
+        <li>전체 5개 코드베이스 재빌드, Functions 경계 105건, rollback 가드, CORE Hosting 가드 통과. 로컬 반응형 5개 뷰포트·95케이스 통과. 운영 배포 후 화면 검증은 아닙니다.</li>
+        <li>초기 일반 207건의 실패 11건은 의도된 parity 갱신 3건과 나머지 8건의 테스트 harness·정확한 고정 baseline 대조로 해소됐다는 메인 보고입니다. 새 207/207 총계는 주장하지 않습니다. <code>15ccdd57</code> 고정 예외는 기존 강사 샘플 처리 함수 3개의 해시에만 적용하며 가드 우회가 아닙니다. 강사 실행·claim 처리의 운영 TypeScript는 변경하지 않았습니다.</li>
+        <li>카탈로그는 그룹 전용 문구로 재생성됐고 공통 helper도 생성기 지문 대상에 포함됐습니다. 현재 지문: <code>f70ffafe1e0b920405c3424beb6c702628729495896eeccdd52a14ff3df48085</code>.</li>
+        <li>위 실행 결과의 출처는 메인입니다. 문서 담당이 런타임 테스트·라이브 확인을 독립 실행한 것은 아니며, 배포 영수증과 운영 라이브 확인은 대기입니다.</li>
+        <li>문서 로컬 검사 통과: diff 공백 검사, 기존 공지의 단일 토큰 교체 및 나머지 CORE 내용 보존 대조, 알림톡 섹션 단일성, 보고서 태그·제목 연결과 외부 의존성 없음. 브라우저 렌더링 검증은 하지 않았습니다.</li>
+      </ul>
+    </section>
+    <section aria-labelledby="release">
+      <h2 id="release">영향과 배포 계획</h2>
+      <p>영향: 공통 <code>privateSurvey/groupSurveyBookingPolicy.ts</code>, 후보·과거 출석 판정, <code>recipientExclusion.ts / eligibility.ts</code>, <code>privateSurveyResponse.ts</code>, 대상 규칙·생성 카탈로그와 기존 CORE 제외 규칙입니다.</p>
+      <p>런타임 의존성은 <strong>functions-alimtalk · functions-private-chart · functions-sync</strong> 3개입니다. 변경된 detector 자체는 공통 릴리스 메타데이터이므로 전체 변경 감지는 보수적으로 5개를 선택합니다. 이 차이를 숨기거나 가드를 완화하지 않습니다.</p>
+      <p>메인이 전체 diff를 검토한 뒤 명시적 런타임 파일 목록으로 3개를 한정하는 배포를 계획합니다. root <code>firebase.json</code>, <code>archive-pilates</code>, 최신·깨끗한 main, rollback/predeploy 가드와 코드베이스별 개별 실행을 유지합니다. CORE 규칙·카탈로그는 양쪽 Hosting 대상이며 app/social 런타임·Firestore 구조·새 스케줄러는 계획에 없습니다.</p>
+      <p><strong>현재 미배포.</strong> Firebase dry-run도 네트워크 작업이며 이 문서 작업에서 실행하지 않았습니다. 배포 영수증·실제 함수 갱신·라이브 확인 결과는 메인이 추후 기록합니다.</p>
+    </section>
+    <section aria-labelledby="baseline">
+      <h2 id="baseline">별도 기존 가드 문제</h2>
+      <p>기존 <code>lesson-video-upload-notice</code>의 raw 템플릿 ID 한 개만 승인된 문서 보수로 <strong>강사레슨_수업영상 업로드 완료 v1</strong>으로 교체하고 나머지 공지 내용은 보존했습니다. 야외 설문 로직 변경과 별개입니다.</p>
+      <p>검토 당시 <code>src/alimtalk/templates.ts</code>에는 해당 ID·제목이 없었습니다. 정확한 이름의 근거는 기존 <code>2026-10-26-lesson-video-notices.md</code>의 Alimtalk Definition입니다. 이후 메인이 전체 CORE Hosting 가드 통과를 확인했으며 현재 공급자 승인이나 실제 배포를 뜻하지는 않습니다.</p>
+      <p>프라이빗 항목에 잘못 들어갔던 야외 문구는 그룹 항목으로 정리하고 프라이빗에서는 제거했습니다. 소스 재조회와 메인 최종 카탈로그 검증으로 그룹 전용 범위를 확인했습니다.</p>
+    </section>
+    <section aria-labelledby="next">
+      <h2 id="next">다음 조치</h2>
+      <p>배포 전 검증은 메인 확인 완료 상태입니다. 메인이 승인된 배포와 라이브 확인을 수행하고 최종 영수증을 갱신합니다. 문서 담당은 이 인계 후 추가로 쓰지 않습니다. 기존 CORE 항목을 수정했으며 중복 규칙·Notion 업데이트는 만들지 않았습니다.</p>
+      <p class="meta">문서 작업 한정: 허용된 HTML 2개·작업 노트 1개. 네트워크·인증정보·브라우저·운영 쓰기·commit·deploy·push 없음.</p>
+    </section>
+  </main>
+</body>
+</html>

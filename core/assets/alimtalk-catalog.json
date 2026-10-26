@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "9b4221eb46aebb06fe954015c181328805f4c65b223bc0ae9fd7aa42070876da",
+  "policyFingerprint": "f70ffafe1e0b920405c3424beb6c702628729495896eeccdd52a14ff3df48085",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -34,7 +34,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/eligibility.ts",
-      "sha256": "ee0c411dce278afe040b03bf514c71b0c7569e8b5ccdb397b322f87337c66255"
+      "sha256": "08497229329182e2c1916a40873ef5d789d894269b68bfb39f3414d31ca6a4f1"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/longAbsencePolicy.ts",
@@ -54,11 +54,11 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
-      "sha256": "b2f5657b89accfd302896212410bbbfa62577cffaee8c53223fdaebeff530a03"
+      "sha256": "4fb5a02c388a2236f37366f4d6276dff8a2e1dc29dd83e85942b9bd1470bced7"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/recipientExclusion.ts",
-      "sha256": "47e772b13974c7fee847aea979ebcf706912928eddda12f4761e94f9df2c1ca9"
+      "sha256": "dca411c5b6e9a6aae099bdda21d332b5902a3d5688dfa06abe49dd7ee95417e0"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard.ts",
@@ -70,7 +70,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
-      "sha256": "4fbf131018d9b59df78afd793b557ec7930be1b6df8b20b825fc3e5ad955d2c7"
+      "sha256": "42a0644f431053c019e17d23361a6b724e1732c2cdfc8aaa77637001e3ac95be"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
@@ -101,8 +101,12 @@
       "sha256": "ad99ab4484c4f9c9645c6b97f307985fee9bf33d1be7ffd1560cd23e9076b89d"
     },
     {
+      "path": "firebase/kangsain-functions/functions/src/privateSurvey/groupSurveyBookingPolicy.ts",
+      "sha256": "327c3ce10776e75b928414ff106e2a4437343a99d136c93bf56bb483ca208575"
+    },
+    {
       "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
-      "sha256": "525cd03e23c1de9ce6a622fee9aa150e86a96eb3babecff336ecc2501f18f528"
+      "sha256": "db85003dbc475219600044e5bfba4893139a374e6c18567bdc70dda2dc734469"
     },
     {
       "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
@@ -118,7 +122,7 @@
     },
     {
       "path": "scripts/generate-alimtalk-catalog.mjs",
-      "sha256": "e47f951ae4367740f5f7ec3807685d39423886229aee6239bd10dc93da1877a4"
+      "sha256": "2ca34a3e5ecfa2bb40faaf00eef1c99dd87c63475cdd7181b3bcbb439a5b3983"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
@@ -832,6 +836,7 @@
       "targetRules": [
         "오늘부터 다음 주 일요일까지 예정된 첫 그룹수업 예약이 있음",
         "예약이 강사레슨이 아님",
+        "예약에 연결된 수강권이 야외수업이 아님",
         "최근 1년 내 그룹 사전확인 제출 이력이 없음",
         "과거 그룹 출석 완료 이력이 없음"
       ],
@@ -859,6 +864,7 @@
         "targetRules": [
           "오늘부터 다음 주 일요일까지 예정된 첫 그룹수업 예약이 있음",
           "예약이 강사레슨이 아님",
+          "예약에 연결된 수강권이 야외수업이 아님",
           "최근 1년 내 그룹 사전확인 제출 이력이 없음",
           "과거 그룹 출석 완료 이력이 없음"
         ],
@@ -867,6 +873,7 @@
           "전화번호 없음",
           "그룹 예약 없음",
           "프라이빗 또는 강사레슨 예약",
+          "야외수업 예약 (출석 이력에서도 제외)",
           "최근 1년 내 그룹 사전확인 제출 이력 있음",
           "과거 그룹 출석 완료 이력 있음",
           "수업 시작 30분 미만인 당일 급예약",
@@ -1136,12 +1143,12 @@
         {
           "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
           "symbol": "staffSurveyNotificationDueAt",
-          "line": 1628
+          "line": 1648
         },
         {
           "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
           "symbol": "isStaffSurveyAlimtalkDue",
-          "line": 1607
+          "line": 1627
         },
         {
           "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",
@@ -1266,12 +1273,12 @@
         {
           "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
           "symbol": "staffSurveyNotificationDueAt",
-          "line": 1628
+          "line": 1648
         },
         {
           "path": "firebase/kangsain-functions/functions/src/privateSurvey/privateSurveyResponse.ts",
           "symbol": "isStaffSurveyAlimtalkDue",
-          "line": 1607
+          "line": 1627
         },
         {
           "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",

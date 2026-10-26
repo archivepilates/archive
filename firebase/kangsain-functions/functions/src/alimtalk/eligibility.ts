@@ -32,7 +32,7 @@ import {
   normalizeInstructorLessonManagementNumber,
 } from "./instructorLessonManagement";
 import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "./testRecipients";
-import { currentAutomaticMemberExclusionReason } from "./recipientExclusion";
+import { currentAutomaticMemberExclusionReason, currentOutdoorGroupSurveyExclusionReason } from "./recipientExclusion";
 import { db } from "../config/firebase";
 import { ticketFactTemplateIssue } from "./ticketNoticePolicy";
 import {
@@ -59,6 +59,9 @@ export async function inspectAutoSendabilityIssue(candidate: AlimtalkCandidateDo
 async function evaluateAutoSendability(candidate: AlimtalkCandidateDoc, today: string, options: { readOnly?: boolean } = {}): Promise<string> {
   if (candidate.type === "onsite_welcome") return "현장 웰컴 신규 발송 종료";
   if (isHoldingNoticeCandidate(candidate)) return holdingClaimIssue(candidate);
+  // A test override does not turn an outdoor booking into a regular group lesson.
+  const outdoorIssue = await currentOutdoorGroupSurveyExclusionReason(candidate);
+  if (outdoorIssue) return outdoorIssue;
   if (candidate.type === "membership_welcome" && (hasExplicitAlimtalkTestOverride(candidate)
     || candidate.templateCode !== ALIMTALK_TEMPLATES.membership_welcome.code || candidate.maxAttempts !== 1
     || !candidate.payload?.sourceContractId)) return "계약완료 웰컴 후보 규칙 불일치";

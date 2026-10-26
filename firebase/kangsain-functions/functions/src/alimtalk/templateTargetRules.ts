@@ -275,6 +275,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
     targetRules: [
       "오늘부터 다음 주 일요일까지 예정된 첫 그룹수업 예약이 있음",
       "예약이 강사레슨이 아님",
+      "예약에 연결된 수강권이 야외수업이 아님",
       "최근 1년 내 그룹 사전확인 제출 이력이 없음",
       "과거 그룹 출석 완료 이력이 없음",
     ],
@@ -283,6 +284,7 @@ export const ALIMTALK_TEMPLATE_TARGET_RULES: Partial<Record<AlimtalkCandidateTyp
       "전화번호 없음",
       "그룹 예약 없음",
       "프라이빗 또는 강사레슨 예약",
+      "야외수업 예약 (출석 이력에서도 제외)",
       "최근 1년 내 그룹 사전확인 제출 이력 있음",
       "과거 그룹 출석 완료 이력 있음",
       "수업 시작 30분 미만인 당일 급예약",

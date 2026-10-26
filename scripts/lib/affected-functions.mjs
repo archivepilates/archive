@@ -36,6 +36,9 @@ export function codebasesForFile(file) {
   const normalized = file.replaceAll("\\", "/");
   if (!normalized || normalized.startsWith("docs/") || normalized.startsWith("artifacts/")) return [];
   if (isSharedPath(normalized)) return allCodebases;
+  if (normalized === "firebase/kangsain-functions/functions/src/privateSurvey/groupSurveyBookingPolicy.ts") {
+    return ["functions-alimtalk", "functions-private-chart", "functions-sync"];
+  }
   if (normalized.includes("/security/")) {
     return ["functions-alimtalk", "functions-app", "functions-social", "functions-sync"];
   }

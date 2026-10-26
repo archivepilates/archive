@@ -24,6 +24,7 @@ import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 import { ensureShortLink } from "../utils/shortLinks";
 import { isNotionPrivateSurveySyncConfigured, syncPrivateSurveyResponseToNotion } from "./notionSync";
 import { canSkipUnchangedSurveySheet } from "./sheetSyncCheckpoint";
+import { isOutdoorGroupSurveyBooking, OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON } from "./groupSurveyBookingPolicy";
 
 const PUBLIC_VIEW_BASE_URL =
   process.env.PRIVATE_SURVEY_VIEW_BASE_URL || "https://in.archivepilates.com/privateSurveyResponseView";
@@ -491,6 +492,10 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
         response.status(410).json({ ok: false, error: "이미 대상에서 제외된 설문입니다." });
         return;
       }
+      if (groupRequest.status !== "submitted" && await groupSurveyOutdoorIssue(groupRequest)) {
+        response.status(410).json({ ok: false, error: OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON });
+        return;
+      }
       response.status(200).json({
         ok: true,
         requestId: groupRequest.requestId,
@@ -523,6 +528,10 @@ export async function submitGroupSurveyResponseHandler(request: any, response: a
         alimtalkStatus: existing?.delivery?.alimtalkStatus || "sent",
         alimtalkReason: "이미 제출된 사전설문입니다.",
       });
+      return;
+    }
+    if (await groupSurveyOutdoorIssue(groupRequest)) {
+      response.status(410).json({ ok: false, error: OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON });
       return;
     }
     const answers = groupSurveyAnswers(payload);
@@ -1278,11 +1287,20 @@ export async function processDueStaffSurveyAlimtalks(): Promise<{ checked: numbe
   return { checked, sent, failed };
 }
 
+async function groupSurveyOutdoorIssue(source: { bookingId: string; memberId: string }): Promise<string> {
+  const booking = source.bookingId ? (await refs.booking(source.bookingId).get()).data() : undefined;
+  return booking?.memberId === source.memberId && isOutdoorGroupSurveyBooking(booking)
+    ? OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON : "";
+}
+
 async function refreshSurveyBookingForStaffDelivery(
   doc: PrivateSurveyResponseDoc,
 ): Promise<{ doc: PrivateSurveyResponseDoc; issue: string }> {
   const bookingId = String(doc.matching?.bookingId || "");
   const booking = bookingId ? (await refs.booking(bookingId).get()).data() : undefined;
+  if (doc.surveyType === "group" && isOutdoorGroupSurveyBooking(booking)) {
+    return { doc, issue: OUTDOOR_GROUP_SURVEY_EXCLUSION_REASON };
+  }
   const active = booking && isSurveyBookingActive(doc, booking);
   if (active) return { doc, issue: "" };
   const replacementId = String(
@@ -1302,6 +1320,7 @@ async function refreshSurveyBookingForStaffDelivery(
 }
 
 function isSurveyBookingActive(doc: PrivateSurveyResponseDoc, booking: BookingDoc): boolean {
+  if (doc.surveyType === "group" && isOutdoorGroupSurveyBooking(booking)) return false;
   if (booking.appStatus !== "reserved") return false;
   if (/cancel|deleted|inactive|stale|missing/i.test(String(booking.sourceStatus || ""))) return false;
   if ((doc.surveyType || "private") === "private" && !isPrivateBookingTicket(booking)) return false;
@@ -1405,6 +1424,7 @@ async function processMissingGroupSurveySubmissionAlerts(): Promise<{
     };
     checked += 1;
     if (existingAlertIds.has(`group_${groupRequest.requestId}`)) continue;
+    if (await groupSurveyOutdoorIssue(groupRequest)) continue;
     const matching = await groupSurveyMatch(groupRequest);
     const dueAt = groupSurveyMissingSubmissionDueAt(matching);
     if (!dueAt || dueAt.toMillis() > nowMs) continue;
@@ -1796,6 +1816,7 @@ async function enqueueSurveyMemoOutputs(
   content = surveyMemoContent(doc),
 ): Promise<void> {
   if (doc.matching.status !== "matched" || !doc.matching.memberId || !content) return;
+  if (doc.surveyType === "group" && await groupSurveyOutdoorIssue(doc.matching)) return;
   const kind = surveyMemoKind(doc);
   const memoId = `${kind}_${doc.responseId}`;
   const memoRef = refs.memberMemos().doc(memoId);
