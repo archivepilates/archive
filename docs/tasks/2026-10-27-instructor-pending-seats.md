@@ -12,3 +12,13 @@
 - New roster rows carry issuedTicketVerified; the existing native pass-cancellation button requires that row-level evidence, not another attendee's ticket or a registration ticket name. Pending intake does not gain unsupported native cancellation actions.
 - Checks before rollout: 444 Node + 216 TypeScript tests passed (660 total), full 105-export Functions build/boundary, registration/CORE/catalog/rollback guards passed, and static responsive QA 95 checks at 320/390/768/1440/1920 widths passed.
 - Actual Chrome CORE read before rollout independently showed both queued registrations but only 1/10 in the November 29 schedule card; an owned verification tab is retained only until post-deploy UI readback.
+
+## Verified Deployment
+
+- Source e817e04b3450fe35cdaf99614a55a13ca73a0ad9 pushed to origin/main and deployed from clean local main. Affected scope was functions-app only (47 successful updates), plus CORE archive-pilates/archive-pilates-core Hosting. No other Functions codebase, DB/config/DNS change or member operation.
+- getInstructorLessonRegistrationDashboard independently described ACTIVE with updateTime 2026-10-26T16:14:13Z. Live CORE bundle contains the combined-source label; rules and release canary match source.
+- Exact-commit GitHub run 40356704396 completed successfully.
+- Actual authenticated Chrome UI after reload: November 29 occupied 3, capacity 10, remaining 7; selected roster heading 3 and both approved attendees present, each showing pending agreement/notice, no native cancellation button. November 21 remained 5/5 and November 28 remained 10/10.
+- Runtime fast-forwarded; read-only actual source recalculation at 2026-10-26T16:16:48.711Z confirmed the same 3/10 and both target registration IDs in roster. No member data writes or manual worker/send execution were performed in this follow-up.
+- Task-owned Chrome tab 2059975437 closed; original four user tabs retained. Deployment/QA sessions completed; no shared StudioMate profile was opened.
+- Documentation-only final results commit follows live verification. Final heads and clean statuses are checked after promotion; deployed functional source remains e817e04b.
