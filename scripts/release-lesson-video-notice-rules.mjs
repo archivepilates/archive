@@ -8,7 +8,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { makeManifest, assertManifest } from './release-e261017-classroom.mjs';
 
-export const BASE = '89020f76e77c49d0a2fe7d81352163bd56e9dfc0';
+export const BASE = '130bed1977835f2b1ffeca3060410d1a5f7e9ae6';
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const SOURCE = 'core/rules/index.html';
 const API = 'https://firebasehosting.googleapis.com/v1beta1/';
@@ -34,10 +34,15 @@ export function assertLessonVideoNoticeRulesScope(before, after, target) {
   const original = utf8(before), proposed = utf8(after);
   const id = /\bid\s*=\s*["']lesson-video-upload-notice["']/g;
   const note = /^ +<div class="rule-note" id="lesson-video-upload-notice"><strong>[^<\r\n]+<\/strong><span>[^<\r\n]+<\/span><\/div>\n/gm;
-  const matches = [...proposed.matchAll(note)];
-  check(!id.test(original) && matches.length === 1 && [...proposed.matchAll(id)].length === 1,
-    'Add exactly one new lesson-video-upload-notice rule-note');
-  check(proposed.replace(note, '') === original, 'Every other rules byte must equal the pinned baseline');
+  const originalMatches = [...original.matchAll(note)], proposedMatches = [...proposed.matchAll(note)];
+  check(originalMatches.length === 1 && proposedMatches.length === 1 &&
+    [...original.matchAll(id)].length === 1 && [...proposed.matchAll(id)].length === 1,
+    'Replace exactly one existing lesson-video-upload-notice rule-note');
+  const previous = originalMatches[0], replacement = proposedMatches[0];
+  check(previous[0] !== replacement[0], 'The existing lesson-video-upload-notice rule-note must change');
+  check(original.slice(0, previous.index) === proposed.slice(0, replacement.index) &&
+    original.slice(previous.index + previous[0].length) === proposed.slice(replacement.index + replacement[0].length),
+    'Every surrounding rules byte and the note position must equal the pinned baseline');
 }
 
 export function parseLessonVideoNoticeRulesArgs(args) {

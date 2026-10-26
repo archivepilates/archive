@@ -6,6 +6,9 @@
 - Current fixed window is 2026-10-26 [09:00,23:00); the original 2026-10-27 reservation below is historical and superseded. No next-day catchup.
 - Private `reschedule-261026.json` preserves the untouched original manifest/hash and new approval. Only schedule and approval timestamp changed; same20 recipients, sender, copy, purpose and channel-independent action keys. No prior sends/intents existed.
 - Fresh eight-class native roster rechecked immediately before this change. Original POST message/group receipts can bind metadata-free provider readback only with exact recipient/sender/type/content; adopted legacy histories never become trusted POST receipts.
+- Actual result: 2026-10-26 09:10:10-09:10:49 KST, 20 LMS accepted; separate GET-only reconciliation attempted 0 new sends and independently verified all20 status4000 delivered. Old automation remains PAUSED. No rights changes.
+- Initial provider GET429 occurred before any intent/POST and was resolved with paced reads (400ms minimum) plus at most one GET-only retry respecting provider wait headers. POST/PUT never wait/retry internally. No unresolved send failure or duplicate.
+- Current complete synthetic suite: 214 passed, including schedule/quiet window, original receipt binding, historical unknown replay fencing, read throttling and exact existing CORE-note replacement.
 
 ## Approved Scope
 

@@ -8,14 +8,16 @@ import {
 } from '../release-lesson-video-notice-rules.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
+const previousNote = '          <div class="rule-note" id="lesson-video-upload-notice"><strong>Synthetic notice</strong><span>Previous operating note.</span></div>\n';
 const original = '<!doctype html>\n<html><head><title>Existing rules</title></head><body>\n' +
   '          <div class="rule-note" id="existing"><strong>Existing</strong><span>Keep every byte.</span></div>\n' +
+  previousNote +
   '</body></html>\n';
 const note = '          <div class="rule-note" id="lesson-video-upload-notice"><strong>Synthetic notice</strong><span>Synthetic operating note.</span></div>\n';
-const proposed = original.replace('</body>', note + '</body>');
+const proposed = original.replace(previousNote, note);
 
 test('pins full baseline and exactly the two rules sites/resources', () => {
-  assert.equal(BASE, '89020f76e77c49d0a2fe7d81352163bd56e9dfc0');
+  assert.equal(BASE, '130bed1977835f2b1ffeca3060410d1a5f7e9ae6');
   assert.deepEqual(TARGETS, {
     rules: { site: 'archive-pilates', resource: '/core/rules/index.html', source: 'core/rules/index.html',
       url: 'https://archive-pilates.web.app/core/rules/' },
@@ -26,13 +28,14 @@ test('pins full baseline and exactly the two rules sites/resources', () => {
 });
 
 for (const target of ['rules', 'core-rules']) {
-  test(`${target} accepts exactly one standalone note insertion, including Buffer bytes`, () => {
+  test(`${target} accepts exactly one same-position note replacement, including Buffer bytes`, () => {
     assert.doesNotThrow(() => assertLessonVideoNoticeRulesScope(original, proposed, target));
     assert.doesNotThrow(() => assertLessonVideoNoticeRulesScope(Buffer.from(original), Buffer.from(proposed), target));
-    assert.equal(proposed.replace(note, ''), original);
+    assert.equal(proposed.replace(note, previousNote), original);
   });
   for (const [label, after] of [
     ['no-op', original], ['two notes', proposed.replace(note, note + note)],
+    ['note deletion', original.replace(previousNote, '')],
     ['duplicate on same line', proposed.replace(note, note.trimEnd() + note.trimStart())],
     ['extra suffix', proposed + '\n'], ['extra prefix', '<!-- unrelated -->\n' + proposed],
     ['title change', proposed.replace('Existing rules', 'Other rules')],
@@ -47,9 +50,21 @@ for (const target of ['rules', 'core-rules']) {
   ]) test(`${target} rejects ${label}`, () => {
     assert.throws(() => assertLessonVideoNoticeRulesScope(original, after, target));
   });
-  test(`${target} cannot replace, relocate or remove an existing notice`, () => {
-    for (const after of [proposed, original, proposed.replace('Synthetic operating note.', 'Replacement'), original + note])
-      assert.throws(() => assertLessonVideoNoticeRulesScope(proposed, after, target));
+  test(`${target} cannot insert a note when the baseline has none`, () => {
+    const withoutNote = original.replace(previousNote, '');
+    assert.throws(() => assertLessonVideoNoticeRulesScope(withoutNote, proposed, target));
+  });
+  test(`${target} cannot relocate a replacement while preserving all other bytes`, () => {
+    const withoutNote = original.replace(previousNote, '');
+    for (const after of [note + withoutNote, withoutNote + note,
+      withoutNote.replace('<body>\n', '<body>\n' + note)])
+      assert.throws(() => assertLessonVideoNoticeRulesScope(original, after, target));
+  });
+  test(`${target} rejects duplicate or malformed baseline notes`, () => {
+    for (const before of [original.replace(previousNote, previousNote + previousNote),
+      original.replace(previousNote, previousNote.trimEnd() + previousNote.trimStart()),
+      original.replace('Previous operating note.', 'Previous\noperating note.')])
+      assert.throws(() => assertLessonVideoNoticeRulesScope(before, proposed, target));
   });
 }
 
