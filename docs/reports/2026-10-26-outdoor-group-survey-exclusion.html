@@ -29,8 +29,8 @@
     <header>
       <p class="meta">ARCHIVE PILATES · ARCHIVE IN / ARCHIVE CORE · 2026-10-26</p>
       <h1>야외 그룹 설문 제외</h1>
-      <p class="status">Functions 운영 반영·메타데이터 확인 완료 · CORE Hosting 반영 대기</p>
-      <p>승인된 예약별 제외 조건을 운영 함수에 반영했습니다. 실제 회원 발송·재큐잉·답변 및 기존 메모 변경은 하지 않았습니다. CORE 공개 파일 확인은 Hosting 배포 뒤 별도로 기록합니다.</p>
+      <p class="status">운영 반영 완료 · 함수·공개 파일·라이브 반응형 검증 통과</p>
+      <p>야외수업의 첫 그룹 설문과 후속 알림 제외 조건을 운영 함수와 CORE 규칙·카탈로그에 반영했습니다. 이번 작업에서 실제 회원 발송·재큐잉·답변 및 기존 메모 변경은 하지 않았습니다.</p>
     </header>
     <section aria-labelledby="policy">
       <h2 id="policy">목적과 운영 범위</h2>
@@ -56,18 +56,21 @@
         <li>전체 5개 코드베이스 재빌드, Functions 경계 105건, rollback 가드, CORE Hosting 가드 통과. 로컬 반응형 5개 뷰포트·95케이스 통과. 운영 배포 후 화면 검증은 아닙니다.</li>
         <li>초기 일반 207건의 실패 11건은 의도된 parity 갱신 3건과 나머지 8건의 테스트 harness·정확한 고정 baseline 대조로 해소됐다는 메인 보고입니다. 새 207/207 총계는 주장하지 않습니다. <code>15ccdd57</code> 고정 예외는 기존 강사 샘플 처리 함수 3개의 해시에만 적용하며 가드 우회가 아닙니다. 강사 실행·claim 처리의 운영 TypeScript는 변경하지 않았습니다.</li>
         <li>카탈로그는 그룹 전용 문구로 재생성됐고 공통 helper도 생성기 지문 대상에 포함됐습니다. 현재 지문: <code>f70ffafe1e0b920405c3424beb6c702628729495896eeccdd52a14ff3df48085</code>.</li>
-        <li>위 실행 결과의 출처는 메인입니다. 문서 담당이 런타임 테스트·라이브 확인을 독립 실행한 것은 아니며, 배포 영수증과 운영 라이브 확인은 대기입니다.</li>
+        <li>운영 배포 후 CORE 라이브 반응형 95케이스와 릴리스 canary 검증도 통과했습니다. 정적 합성 화면 검증이며 실제 강사 대리 로그인이나 회원 설문 재제출을 뜻하지 않습니다.</li>
         <li>문서 로컬 검사 통과: diff 공백 검사, 기존 공지의 단일 토큰 교체 및 나머지 CORE 내용 보존 대조, 알림톡 섹션 단일성, 보고서 태그·제목 연결과 외부 의존성 없음. 브라우저 렌더링 검증은 하지 않았습니다.</li>
       </ul>
     </section>
     <section aria-labelledby="release">
-      <h2 id="release">영향과 배포 계획</h2>
+      <h2 id="release">운영 배포와 독립 확인</h2>
       <p>영향: 공통 <code>privateSurvey/groupSurveyBookingPolicy.ts</code>, 후보·과거 출석 판정, <code>recipientExclusion.ts / eligibility.ts</code>, <code>privateSurveyResponse.ts</code>, 대상 규칙·생성 카탈로그와 기존 CORE 제외 규칙입니다.</p>
       <p>런타임 의존성은 <strong>functions-alimtalk · functions-private-chart · functions-sync</strong> 3개입니다. 변경된 detector 자체는 공통 릴리스 메타데이터이므로 전체 변경 감지는 보수적으로 5개를 선택합니다. 이 차이를 숨기거나 가드를 완화하지 않습니다.</p>
-      <p>메인이 전체 diff를 검토한 뒤 명시적 런타임 파일 목록으로 3개를 한정하는 배포를 계획합니다. root <code>firebase.json</code>, <code>archive-pilates</code>, 최신·깨끗한 main, rollback/predeploy 가드와 코드베이스별 개별 실행을 유지합니다. CORE 규칙·카탈로그는 양쪽 Hosting 대상이며 app/social 런타임·Firestore 구조·새 스케줄러는 계획에 없습니다.</p>
+      <p>전체 diff와 실제 의존성 그래프를 검토한 뒤 명시적 런타임 파일 목록으로 관련 3개 코드베이스만 배포했습니다. root <code>firebase.json</code>, <code>archive-pilates</code>, 최신·깨끗한 main, rollback/predeploy 가드와 코드베이스별 개별 실행을 유지했습니다. CORE 규칙·카탈로그는 양쪽 Hosting에 반영했으며 app/social 런타임·Firestore 구조·새 스케줄러는 변경하지 않았습니다.</p>
       <p><strong>Functions 반영 완료.</strong> 구현 커밋 <code>fa7e765f621fc74979699ad41a2f93789ea0f72a</code>, Firebase <code>archive-pilates</code>, 운영자 서비스 계정. 깨끗한 최신 main의 predeploy·rollback 가드와 코드베이스별 dry-run 3회·실제 배포 3회가 모두 성공했습니다. 실제 의존성 그래프도 동일한 3개 소비자를 확인했습니다.</p>
       <p>2026-10-26T05:47:14.650Z 독립 관리 API 재조회: 전체 105개 ACTIVE, 이번 갱신 51개(알림톡 15·private-chart 24·sync 12). 갱신 시각은 05:42:15.080978636Z~05:46:43.096727799Z이며 앱·소셜 54개의 갱신시각·소스 해시는 사전 기준선과 동일합니다. <code>/api/groupSurveySubmit</code> OPTIONS는 204였습니다. 이는 배포·라우팅 증거이며 실제 회원 설문 제출 검증이 아닙니다.</p>
-      <p>GitHub Actions <a href="https://github.com/archivepilates/archive/actions/runs/40275291139">40275291139</a>는 해당 구현 커밋으로 전체 성공했습니다. CORE Hosting 및 최종 공개 파일 재조회는 아직 대기입니다.</p>
+      <p>GitHub Actions <a href="https://github.com/archivepilates/archive/actions/runs/40275291139">40275291139</a>는 해당 구현 커밋으로 전체 성공했습니다. CORE Hosting 배포 커밋은 <code>9c27227ede55044fa22fcfd23c7517b501e0a8ec</code>입니다. 양쪽 Hosting의 dry-run·배포·라이브 검증이 모두 성공했습니다.</p>
+      <p>CORE 배포 커밋의 <a href="https://github.com/archivepilates/archive/actions/runs/40276197168">Functions Affected Check 40276197168</a>도 모든 단계를 통과했습니다(14:51:05 KST 완료). 최종 기록 커밋은 문서만 변경하며 운영 함수·CORE 공개 파일을 다시 바꾸지 않습니다.</p>
+      <p>공개 <a href="https://core.archivepilates.com/rules/#alimtalk">CORE 운영규칙</a>과 <a href="https://archive-pilates.web.app/core/rules/#alimtalk">기본 Hosting의 동일 규칙</a>, 카탈로그가 각각 HTTP 200이며 파일 SHA-256이 배포 소스와 정확히 일치했습니다. 두 release.json은 깨끗한 main <code>9c27227e</code>, 생성시각 <code>2026-10-26T05:48:32.239Z</code>를 가리킵니다.</p>
+      <p>배포 후 <code>2026-10-26T05:50:01.655Z</code> 같은 저장 원천 범위를 재조회했습니다. 야외 예약 20건, 연결 설문 요청·알림톡 후보·메모 작업은 각각 0건입니다. 실회원 발송이나 원본 수강권·예약 수정 없이 확인한 결과입니다.</p>
     </section>
     <section aria-labelledby="baseline">
       <h2 id="baseline">별도 기존 가드 문제</h2>
@@ -77,7 +80,7 @@
     </section>
     <section aria-labelledby="next">
       <h2 id="next">다음 조치</h2>
-      <p>CORE Hosting을 승인된 두 대상으로 배포한 뒤 공개 규칙·카탈로그·릴리스 지문과 반응형 화면을 재조회합니다. 기존 정기 주기·발송 선점·회원 응답은 유지합니다. 중복 규칙·Notion 업데이트·추가 스케줄러는 만들지 않았습니다.</p>
+      <p>추가 수동 실행 없이 기존 정기 처리를 유지합니다. 회원·수강권·예약·발송 선점·기존 응답과 메모는 보존했습니다. 분류는 연결 수강권 필드의 야외 표식에 한정되므로, 향후 다른 이름으로 야외 상품을 만들면 원천 분류를 다시 확인해야 합니다. 실제 회원 발송을 동반한 테스트와 과거 메모 작업의 일괄 재처리는 의도적으로 하지 않았습니다.</p>
       <p class="meta">문서 작업 한정: 허용된 HTML 2개·작업 노트 1개. 네트워크·인증정보·브라우저·운영 쓰기·commit·deploy·push 없음.</p>
     </section>
   </main>
