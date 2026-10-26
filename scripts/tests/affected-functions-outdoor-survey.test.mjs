@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 import { codebasesForFile, detectAffectedFromCli } from "../lib/affected-functions.mjs";
 
 const sourceRoot = "firebase/kangsain-functions/functions/src/";
@@ -9,6 +12,21 @@ const expected = ["functions-alimtalk", "functions-private-chart", "functions-sy
 test("exact outdoor group policy path affects its three consumers, including Windows paths", () => {
   assert.deepEqual(codebasesForFile(helper), expected);
   assert.deepEqual(codebasesForFile(helper.replaceAll("/", "\\")), expected);
+});
+
+test("outdoor policy mapping matches the actual five-codebase exported dependency graph", async () => {
+  const root = new URL("../../", import.meta.url);
+  const manifest = JSON.parse(await readFile(new URL("firebase/codebase-boundaries.json", root), "utf8"));
+  const consumers = [];
+  for (const [codebase, config] of Object.entries(manifest.targetCodebases)) {
+    const compiled = await build({
+      absWorkingDir: fileURLToPath(root), entryPoints: [config.sourceEntrypoint],
+      bundle: true, write: false, platform: "node", packages: "external", metafile: true, logLevel: "silent",
+    });
+    if (Object.hasOwn(compiled.metafile.inputs, helper)) consumers.push(codebase);
+  }
+  assert.deepEqual(consumers, expected);
+  assert.deepEqual(codebasesForFile(helper), consumers);
 });
 
 test("outdoor policy exception does not widen neighboring or lookalike paths", () => {

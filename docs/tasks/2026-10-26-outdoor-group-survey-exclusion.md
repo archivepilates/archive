@@ -5,6 +5,9 @@
 - Worktree: `/Users/archivepilates/codex-worktrees/outdoor-group-survey-exclusion-20261026`
 - Branch: `codex/mini/outdoor-group-survey-exclusion-20261026`
 - Status: implementation and predeploy no-send/local verification confirmed by main; deployment and live verification pending.
+- Current release: Functions deployed from `fa7e765f621fc74979699ad41a2f93789ea0f72a`; CORE Hosting pending. Final combined no-send regression after adding actual esbuild consumer-graph coverage: 318/318 passed, superseding the earlier 317-case snapshot.
+- Independent management API read at `2026-10-26T05:47:14.650Z`: 105 total ACTIVE, 51 updated across Alimtalk 15/private-chart 24/sync 12, from `05:42:15.080978636Z` through `05:46:43.096727799Z`. App/social 54 update timestamps and source hashes unchanged versus predeploy snapshot. OPTIONS `https://in.archivepilates.com/api/groupSurveySubmit` returned 204; no member submission was made.
+- GitHub Actions run `40275291139` passed for implementation commit. Three dry-runs and three production codebase deploys succeeded with normal guards, Node 22 and the operator service account. This is not real member delivery proof.
 - Final main execution: combined no-send suite 317/317 passed; focused five-file suite also passed 134/134 on Node 22. Counts overlap and are not additive. All five codebases build, boundaries, rollback and CORE Hosting guards passed; local responsive QA passed 95 cases. Catalog fingerprint: `f70ffafe1e0b920405c3424beb6c702628729495896eeccdd52a14ff3df48085`.
 - This docs sidecar owns only this task note, its HTML report, and `core/rules/index.html`. Main owns TypeScript, tests, detector, catalog, release decisions and production commands. No commit, deploy or push is performed here.
 
