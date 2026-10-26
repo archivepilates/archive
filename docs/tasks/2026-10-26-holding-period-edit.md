@@ -4,7 +4,7 @@
 - Worktree: `/Users/archivepilates/codex-worktrees/holding-period-edit-20261026`.
 - Branch: `codex/mini/holding-period-edit-20261026`; base `057387e82525950db5bbb799b76730cd03936729`.
 - Request: inspect an ongoing hold's changed period and apply the Alimtalk logic.
-- Current status: parser fix and offline verification complete; runtime adoption and CORE Hosting pending.
+- Current status: parser fix verified and adopted in the Mac mini runtime; both CORE Hosting sites deployed and verified. Additional post-original period-change notices remain pending user policy clarification.
 
 ## Evidence And Cause
 
@@ -33,6 +33,17 @@
 - Independent read-only reviewer reran six files, 405/405 passed, with no remaining actionable findings. Explicit-edit first-notice behavior already existed; this fix only normalizes the native mislabeled row, not an additional-notice policy.
 - Affected Functions detection for the two runtime modules: none. No Functions, Firestore rules/index/schema deployment needed.
 - Required remaining release evidence: independent review, clean origin/main promotion, safe idle runtime fast-forward, fresh read-only native collection using adopted code, unchanged send/claim evidence, existing LaunchAgent intervals, CORE Hosting release and exact public file/manifest checks, CI and final Git state.
+
+## Released And Verified
+
+- Source `9a5180c123257684cbf25f42e94d3cadf0a78aea` promoted to origin/main. Main and runtime fast-forwarded only after both Excel/holding and memo LaunchAgents were not running, last exit 0; intervals remain 3600 and 300 seconds. No job was restarted or manually run.
+- Fresh native read using adopted runtime at `2026-10-26T06:10:14.740Z`: one current holding, October 16-November 1, original 150 days, total 30, used 17, remaining 13; original October 15 creation key/registration timestamp preserved.
+- A second fresh read-only diagnostic at `2026-10-26T06:12:28.327Z` invoked the real original-attempt reconciler using a write-disabled DB adapter and provider-call sentinel. Result: duplicateBlocked=true, storedDeliveryComplete=true, providerPostCount=0, providerCalls=0. This checks stored delivery evidence; it is not a new provider GET or an external send.
+- The five exact settings/event/candidate/send/claim documents had identical canonical SHA-256 digests before release (`06:07:14.099Z`) and after diagnostics (`06:12:37.796Z`). No original sent variables, receipt times, job state or approval were overwritten.
+- Root `deploy:archive-core-live` dry-run, both Hosting deployments, live 95-case responsive QA and canary passed. Both public rules URLs returned HTTP 200 with exact source SHA-256 and the period-edit rule. Both release manifests identify `9a5180c1`, generated `2026-10-26T06:09:37.705Z`.
+- GitHub Actions `40278092353` succeeded for the exact source at 15:10:11 KST. Affected Functions detection was empty; no Functions/rules/index/schema release occurred.
+- All task-owned native and responsive browser sessions closed in finally and released their own shared lock; existing user sessions were not closed. Runtime and feature Git status are checked after the documentation-only closeout push.
+- No new member-facing holding notice or memo was sent/written. Natural hourly execution of the next changed Excel roster remains distinct from the live read-only diagnostic; it was not manually triggered.
 
 ## Additional Change Notice Policy
 
