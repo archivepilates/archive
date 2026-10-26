@@ -22,7 +22,27 @@ const STAFF_LOCK_BASE_HASH = '42b17144216b720cff439930466b09a832979072a2e1ebe72d
 const STAFF_LOCK_LIVE_HASH = '42b17144216b720cff439930466b09a832979072a2e1ebe72d16e1e09f338a74';
 const REGISTERED_SHARE_BASE = '6e50653f20c243953c3bc03ec4bba00f02ab4ff4';
 const REGISTERED_SHARE_BASE_HASH = '4d3d3063d82b4f2c2056dd29586bb3df371c200d023703107c28953f46e1faae';
+const SALES_START_BASE = 'f8af6e9a53090ed3fb95a84cdd1eee7b13570858';
+const SALES_START_BASE_HASH = '1cdfe428b4595c6ea466858a02bd6dde099b71ccb959e4101da01e9391d7dacb';
 const sha = value => createHash('sha256').update(value).digest('hex');
+
+export function assertSalesStartPolicyNoteOnly(before, after) {
+  const utf8 = value => {
+    if (typeof value !== 'string' && !Buffer.isBuffer(value)) throw Error('Rules source must be UTF-8 bytes');
+    const bytes = Buffer.from(value), text = bytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(bytes) || (typeof value === 'string' && text !== value)) {
+      throw Error('Invalid UTF-8 rules source');
+    }
+    return text;
+  };
+  const original = utf8(before), proposed = utf8(after);
+  const note = /^ +<div class="rule-note" id="imweb-sale-opening-safety-policy"><strong>[^<>\x00-\x1f\x7f\u2028\u2029]+<\/strong><span>[^<>\x00-\x1f\x7f\u2028\u2029]+<\/span><\/div>\n/gm;
+  const attribute = /\bid\s*=\s*(?:"imweb-sale-opening-safety-policy"|'imweb-sale-opening-safety-policy'|imweb-sale-opening-safety-policy(?=[\s/>]))/gi;
+  if ([...original.matchAll(attribute)].length !== 0 || [...proposed.matchAll(attribute)].length !== 1
+    || [...proposed.matchAll(note)].length !== 1 || proposed.replace(note, '') !== original) {
+    throw Error('Release must add only one complete sale-opening safety policy note with every existing byte preserved');
+  }
+}
 
 export function assertStaffNoteOnly(before, after) {
   const note = /^ +<div class="rule-note" id="imweb-staff-video-policy">[^\n]*<\/div>\n/gm;
@@ -99,21 +119,23 @@ export function assertRegistrationPolicyNotesOnly(before, after) {
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.some(arg => !['--apply', '--staff-lock-policy', '--student-share-policy', '--registered-share-policy', '--webhook-onboarding', '--webhook-oauth', '--site=archive-pilates', '--site=archive-pilates-core'].includes(arg)
+  if (args.some(arg => !['--apply', '--staff-lock-policy', '--student-share-policy', '--registered-share-policy', '--sales-start-policy', '--webhook-onboarding', '--webhook-oauth', '--site=archive-pilates', '--site=archive-pilates-core'].includes(arg)
       && !arg.startsWith('--expected-version='))) throw Error('Unsupported release argument');
   const apply = args.includes('--apply');
   const studentShare = args.includes('--student-share-policy');
   const registeredShare = args.includes('--registered-share-policy');
+  const salesStart = args.includes('--sales-start-policy');
   const webhook = args.includes('--webhook-onboarding');
   const oauth = args.includes('--webhook-oauth');
   const staffLock = args.includes('--staff-lock-policy');
-  if ([studentShare, webhook, oauth, staffLock, registeredShare].filter(Boolean).length > 1) throw Error('Choose one policy release');
+  if ([studentShare, webhook, oauth, staffLock, registeredShare, salesStart].filter(Boolean).length > 1
+    || args.filter(arg => arg === '--sales-start-policy').length > 1) throw Error('Choose one policy release');
   const SITE = args.includes('--site=archive-pilates-core') ? 'archive-pilates-core' : 'archive-pilates';
-  if (!studentShare && !webhook && !oauth && !staffLock && !registeredShare && SITE !== 'archive-pilates') throw Error('Historical release is main-site only');
+  if (!studentShare && !webhook && !oauth && !staffLock && !registeredShare && !salesStart && SITE !== 'archive-pilates') throw Error('Historical release is main-site only');
   const ASSET = SITE === 'archive-pilates' ? '/core/rules/index.html' : '/rules/index.html';
   const LIVE = `https://${SITE}.web.app${ASSET.slice(0, -10)}`;
-  const baselineCommit = registeredShare ? REGISTERED_SHARE_BASE : staffLock ? STAFF_LOCK_BASE : oauth ? OAUTH_BASE : webhook ? WEBHOOK_BASE : studentShare ? SHARE_BASE : BASE;
-  const baselineHash = registeredShare ? REGISTERED_SHARE_BASE_HASH : staffLock ? STAFF_LOCK_BASE_HASH : oauth ? OAUTH_BASE_HASH : webhook ? WEBHOOK_BASE_HASH : studentShare ? SHARE_BASE_HASH : BASE_HASH;
+  const baselineCommit = salesStart ? SALES_START_BASE : registeredShare ? REGISTERED_SHARE_BASE : staffLock ? STAFF_LOCK_BASE : oauth ? OAUTH_BASE : webhook ? WEBHOOK_BASE : studentShare ? SHARE_BASE : BASE;
+  const baselineHash = salesStart ? SALES_START_BASE_HASH : registeredShare ? REGISTERED_SHARE_BASE_HASH : staffLock ? STAFF_LOCK_BASE_HASH : oauth ? OAUTH_BASE_HASH : webhook ? WEBHOOK_BASE_HASH : studentShare ? SHARE_BASE_HASH : BASE_HASH;
   const expected = args.find(arg => arg.startsWith('--expected-version='))?.slice(19);
   const git = values => execFileSync('git', values, { encoding: 'utf8' }).trim();
   const root = git(['rev-parse', '--show-toplevel']);
@@ -121,6 +143,7 @@ async function main() {
   const baselineSource = execFileSync('git', ['show', `${baselineCommit}:core/rules/index.html`]);
   if (sha(baselineSource) !== baselineHash) throw Error('Pinned baseline mismatch');
   if (staffLock) staffLockPolicySource(baselineSource.toString(), baselineSource.toString(), source.toString());
+  else if (salesStart) assertSalesStartPolicyNoteOnly(baselineSource, source);
   else if (registeredShare) assertRegistrationPolicyNotesOnly(baselineSource, source);
   else (oauth ? assertWebhookOAuthNoteOnly : webhook ? assertWebhookOnboardingNoteOnly : studentShare ? assertStudentShareNoteOnly : assertStaffNoteOnly)(baselineSource.toString(), source.toString());
   if (apply && (!expected || git(['branch', '--show-current']) !== 'main' || git(['status', '--porcelain']))) {
@@ -163,7 +186,7 @@ async function main() {
     changedPaths: [ASSET], unchangedFileCount: files.length-1, mode: apply ? 'apply' : 'plan', sourceHash: sha(source) };
   if (!apply) { console.log(JSON.stringify(evidence)); return; }
   const directory = path.join(os.homedir(), 'ArchiveIN/automation/imweb-staff-video');
-  const evidenceFile = path.join(directory, registeredShare ? `registered-share-hosting-${SITE}.json` : staffLock ? `lock-policy-hosting-${SITE}.json` : oauth ? `webhook-oauth-hosting-${SITE}.json` : webhook ? `webhook-onboarding-hosting-${SITE}.json` : studentShare ? `student-share-hosting-${SITE}.json` : 'hosting-release.json');
+  const evidenceFile = path.join(directory, salesStart ? `sales-start-hosting-${SITE}.json` : registeredShare ? `registered-share-hosting-${SITE}.json` : staffLock ? `lock-policy-hosting-${SITE}.json` : oauth ? `webhook-oauth-hosting-${SITE}.json` : webhook ? `webhook-onboarding-hosting-${SITE}.json` : studentShare ? `student-share-hosting-${SITE}.json` : 'hosting-release.json');
   const save = () => fs.writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2)+'\n', { mode: 0o600 });
   const lock = path.join(os.homedir(), `ArchiveIN/automation/locks/firebase-hosting-${SITE}.lock`);
   fs.mkdirSync(path.dirname(lock), { recursive: true }); fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -197,7 +220,7 @@ async function main() {
     if ((await latest()).name !== release.name) throw Error('Concurrent deployment detected after finalization');
     evidence.releaseIntentAt = new Date().toISOString(); save();
     const result = await request(`sites/${SITE}/releases?versionName=${created.name}`, 'POST', {
-      message: `${registeredShare ? 'Registered student-share' : studentShare ? 'Student-share first-grant and staff-exit' : 'Staff video'} policy only (${evidence.sourceCommit.slice(0,12)})`,
+      message: `${salesStart ? 'Sale-opening safety' : registeredShare ? 'Registered student-share' : studentShare ? 'Student-share first-grant and staff-exit' : 'Staff video'} policy only (${evidence.sourceCommit.slice(0,12)})`,
     });
     evidence.releaseName = result.name; save();
     if ((await latest()).version.name !== created.name) throw Error('Release readback mismatch');

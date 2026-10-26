@@ -26,6 +26,16 @@
 - Continue to stop before deploy/push when the user explicitly says `로컬만`, `검토만`, `배포하지마`, `push 하지마`, or when production target, auth, secrets, member privacy, payment/reservation policy, or unrelated dirty changes make the safe scope unclear.
 - Put task notes under `docs/tasks/`, durable decisions under `docs/decisions/`, and generated outputs under `artifacts/`.
 
+## Product Sale Opening Safety
+
+- For a new offering, a replacement lesson round, or a product with a future opening time, block purchasing before editing content or asking follow-up questions. Do not close unrelated products that are legitimately on sale.
+- First independently verify the intended product/site and current status, then use the approved hidden, sold-out, or native scheduled-sale state that actually blocks purchase. Read back the saved state and test the direct buyer URL. If closure cannot be verified, report that risk immediately; a draft or a question is not a closed product.
+- Keep the product closed while timing, required fields, approval, login, or other operator input is pending, and after an interrupted or failed preparation. Never keep it purchasable merely to wait for a reply.
+- Opening requires the exact approved KST time and scope, a final clock/source check, and independent status and buyer-flow verification. Scheduling an opening is not proof that the product has opened.
+- If native scheduling requires an unapproved end time, keep purchasing blocked and ask. Never invent an end time or temporarily open the product. A separately approved one-time opening must not become a recurring job.
+- Preserve current orders, prices, option codes and live stock. Compare API and editor values immediately before saving; discard stale drafts instead of restoring earlier stock. Change only the approved sale-state or scheduling fields, and never replay an unknown write.
+- Record approval, closure proof, opening time, pending questions, execution intent and verified result in the existing private product ledger. Do not add recurring polling or member-facing messages without separate authorization.
+
 ## ARCHIVE IN Work Coordination
 
 - Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
