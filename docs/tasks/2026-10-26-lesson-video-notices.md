@@ -1,5 +1,12 @@
 # Instructor Lesson Video Completion Notices
 
+## Current Override: Immediate Dispatch
+
+- 2026-10-26 direct user change: send now instead of the previously scheduled 11:00. Actual KST was after 09:00; the old automation `2` is PAUSED before dispatch.
+- Current fixed window is 2026-10-26 [09:00,23:00); the original 2026-10-27 reservation below is historical and superseded. No next-day catchup.
+- Private `reschedule-261026.json` preserves the untouched original manifest/hash and new approval. Only schedule and approval timestamp changed; same20 recipients, sender, copy, purpose and channel-independent action keys. No prior sends/intents existed.
+- Fresh eight-class native roster rechecked immediately before this change. Original POST message/group receipts can bind metadata-free provider readback only with exact recipient/sender/type/content; adopted legacy histories never become trusted POST receipts.
+
 ## Approved Scope
 
 - Direct user request: one completion SMS/LMS to all registered #9 external-feedback2 A/B/C/D members, including absentees. Live source verified 20 unique recipients, five per team; one C absentee is included only for the notice.

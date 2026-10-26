@@ -5,8 +5,8 @@ import os from 'node:os';
 import { memberDispatchWindow } from './member-dispatch-window.mjs';
 
 export const PURPOSE = 'external_feedback2_upload_complete_261024_261025';
-export const DUE_AT = '2026-10-27T11:00:00+09:00';
-export const EXPIRES_AT = '2026-10-27T23:00:00+09:00';
+export const DUE_AT = '2026-10-26T09:00:00+09:00';
+export const EXPIRES_AT = '2026-10-26T23:00:00+09:00';
 export const RECIPIENT_POLICY = 'registered_all';
 export const PRIVATE_ROOT = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES/lesson-video-notices-261026');
 export const SESSIONS = Object.freeze([
@@ -54,7 +54,7 @@ export function dispatchGuard(now = Date.now()) {
   if (ms >= Date.parse(EXPIRES_AT)) return { allowed: false, status: 'deferred', reason: 'expired' };
   const window = memberDispatchWindow(ms);
   if (!window.allowed) return { allowed: false, status: 'deferred', reason: window.reason };
-  if (new Date(ms + 9 * 3600000).toISOString().slice(0, 10) !== '2026-10-27')
+  if (new Date(ms + 9 * 3600000).toISOString().slice(0, 10) !== '2026-10-26')
     return { allowed: false, status: 'deferred', reason: 'wrong_date' };
   return { allowed: true };
 }
@@ -265,16 +265,19 @@ export function parseLmsHistory(response, recipient) {
   });
 }
 
-function matchingHistory(rows, recipient, senderNumber) {
+function matchingHistory(rows, recipient, senderNumber, acceptedReceipts = []) {
   return rows.flatMap(row => {
     const keyed = row.customFields.archiveActionKey === recipient.actionKey;
     const sameText = sha256(row.text) === recipient.textSha256;
-    if (!keyed && !sameText) return [];
+    const knownReceipt = acceptedReceipts.some(receipt => receipt.messageId === row.messageId && receipt.groupId === row.groupId);
+    if (!keyed && !sameText && !knownReceipt) return [];
     let sameSender = false;
     try { sameSender = normalizePhone(row.from) === normalizePhone(senderNumber); } catch { /* Unverifiable sender. */ }
     const approved = sameText && sameSender && row.customFields.purpose === PURPOSE;
     // A key alone is a replay fence, never evidence that the approved message was delivered.
-    return [{ ...row, archiveApprovalConflict: keyed && !approved, archiveApprovalVerified: approved }];
+    return [{ ...row, archiveApprovalConflict: keyed && !approved || knownReceipt && !(sameText && sameSender), archiveApprovalVerified: approved,
+      archivePayloadVerified: sameText && sameSender,
+      archiveMetadataAbsent: !Object.hasOwn(row.customFields, 'archiveActionKey') && !Object.hasOwn(row.customFields, 'purpose') }];
   });
 }
 
@@ -293,17 +296,20 @@ function mergeReceipts(previous = [], current = []) {
   return [...new Map([...previous, ...current].map(row => [row.messageId, row])).values()];
 }
 
-function historyOutcome(rows) {
+function historyOutcome(rows, acceptedReceipts = []) {
   if (rows.some(row => row.archiveApprovalConflict)) return 'attention_required';
-  if (rows.some(row => !row.archiveApprovalVerified)) return 'result_unknown';
+  // Only original POST acknowledgements can bind a metadata-free readback, never adopted history.
+  const bound = row => row.archivePayloadVerified && row.archiveMetadataAbsent && acceptedReceipts.some(receipt =>
+    receipt.messageId === row.messageId && receipt.groupId === row.groupId);
+  if (rows.some(row => !row.archiveApprovalVerified && !bound(row))) return 'result_unknown';
   if (rows.length !== 1) return 'result_unknown';
   return providerOutcome(rows[0]);
 }
 
-async function history(request, recipient, senderNumber, now) {
+async function history(request, recipient, senderNumber, now, acceptedReceipts = []) {
   const params = new URLSearchParams({ to: normalizePhone(recipient.phone), type: 'LMS', dateType: 'CREATED',
     startDate: '2026-10-24T00:00:00+09:00', endDate: new Date(time(now)).toISOString(), limit: '500' });
-  return matchingHistory(parseLmsHistory(await request(`/messages/v4/list?${params}`, 'GET'), recipient), recipient, senderNumber);
+  return matchingHistory(parseLmsHistory(await request(`/messages/v4/list?${params}`, 'GET'), recipient), recipient, senderNumber, acceptedReceipts);
 }
 
 export function validateActiveSender(response, senderNumber, now) {
@@ -386,7 +392,7 @@ export async function runLessonVideoNotice({ mode = 'plan', root = PRIVATE_ROOT,
     const excluded = await exclusions(request, loaded.state, clock());
     // The entire live preflight must pass before any new claim/pin is created.
     for (const recipient of loaded.state.recipients) {
-      const rows = await history(request, recipient, loaded.state.senderNumber, clock());
+      const rows = await history(request, recipient, loaded.state.senderNumber, clock(), loaded.state.sends[recipient.actionKey]?.acceptedReceipts);
       if (rows.some(row => row.archiveApprovalConflict))
         return { ...result, status: 'attention_required', reason: 'provider_action_key_conflict', outcomes: { attention_required: 1 } };
     }
@@ -400,13 +406,13 @@ export async function runLessonVideoNotice({ mode = 'plan', root = PRIVATE_ROOT,
       const key = recipient.actionKey, intentFile = path.join(root, `intent-${key}.json`);
       const previous = state.sends[key];
       const hasIntent = fs.existsSync(intentFile);
-      const matches = await history(request, recipient, state.senderNumber, clock());
+      const matches = await history(request, recipient, state.senderNumber, clock(), previous?.acceptedReceipts);
       const save = send => {
         state.sends[key] = send;
         writeAtomic(path.join(root, 'state.json'), `${JSON.stringify(state, null, 2)}\n`);
       };
       if (matches.length) {
-        save({ ...previous, status: historyOutcome(matches), receipts: mergeReceipts(previous?.receipts, receipts(matches)),
+        save({ ...previous, status: historyOutcome(matches, previous?.acceptedReceipts), receipts: mergeReceipts(previous?.receipts, receipts(matches)),
           readbackAt: new Date(time(clock())).toISOString() });
         result.reconciled++; count(state.sends[key].status);
         if (state.sends[key].status === 'attention_required') { result.status = 'attention_required'; break; }
@@ -450,10 +456,11 @@ export async function runLessonVideoNotice({ mode = 'plan', root = PRIVATE_ROOT,
       } catch {
         receipt = { status: 'result_unknown', receipts: [] };
       }
-      save({ ...intent, ...receipt, responseAt: new Date(time(clock())).toISOString() });
+      save({ ...intent, ...receipt, acceptedReceipts: receipt.status === 'accepted_pending_readback' ? structuredClone(receipt.receipts) : [],
+        responseAt: new Date(time(clock())).toISOString() });
       try {
-        const readback = await history(request, recipient, state.senderNumber, clock());
-        if (readback.length) save({ ...state.sends[key], status: historyOutcome(readback),
+        const readback = await history(request, recipient, state.senderNumber, clock(), state.sends[key].acceptedReceipts);
+        if (readback.length) save({ ...state.sends[key], status: historyOutcome(readback, state.sends[key].acceptedReceipts),
           receipts: mergeReceipts(state.sends[key].receipts, receipts(readback)), readbackAt: new Date(time(clock())).toISOString() });
       } catch {
         // Accepted/unknown remain replay-fenced; a readback error is never transport failure.

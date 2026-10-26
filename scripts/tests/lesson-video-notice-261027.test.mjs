@@ -93,16 +93,16 @@ const assertNoClaims = root => {
 const assertUnlocked = root => assert.equal(fs.readdirSync(root).some(name => name.endsWith('.lock')), false);
 
 for (const [value, allowed] of [
-  ['2026-10-26T11:00:00+09:00', false], ['2026-10-27T08:59:59+09:00', false],
-  ['2026-10-27T09:00:00+09:00', false], ['2026-10-27T10:59:59.999+09:00', false],
-  [DUE_AT, true], ['2026-10-27T22:59:59.999+09:00', true], [EXPIRES_AT, false],
-  ['2026-10-28T09:00:00+09:00', false], [NaN, false],
+  ['2026-10-25T11:00:00+09:00', false], ['2026-10-26T08:59:59+09:00', false],
+  ['2026-10-26T09:00:00+09:00', true], ['2026-10-26T10:59:59.999+09:00', true],
+  [DUE_AT, true], ['2026-10-26T22:59:59.999+09:00', true], [EXPIRES_AT, false],
+  ['2026-10-27T11:00:00+09:00', false], [NaN, false],
 ]) test(`due/date/quiet boundary ${value}`, () => assert.equal(dispatchGuard(value).allowed, allowed));
 
 test('every minute of due day respects both due time and shared quiet window', () => {
-  const midnight = Date.parse('2026-10-27T00:00:00+09:00');
+  const midnight = Date.parse('2026-10-26T00:00:00+09:00');
   for (let minute = 0; minute < 1440; minute++)
-    assert.equal(dispatchGuard(midnight + minute * 60000).allowed, minute >= 660 && minute < 1380);
+    assert.equal(dispatchGuard(midnight + minute * 60000).allowed, minute >= 540 && minute < 1380);
 });
 
 test('early/late apply does not load private state, authenticate, or claim', async () => {
@@ -426,7 +426,36 @@ test('omitted customFields with matching legacy body still fences duplicates wit
   assert.equal(result.status, 'attention_required'); assert.equal(result.attempted, 0);
   assert.equal(result.outcomes.delivered, undefined); assert.equal(p.posts().length, 0);
   assert.ok(Object.values(read().sends).every(s => s.status === 'result_unknown')); assertUnlocked(root);
+  const second = await apply(root, p);
+  assert.equal(second.outcomes.delivered, undefined); assert.equal(p.posts().length, 0);
 });
+
+test('metadata-free independent readback binds original POST receipt and exact payload without replay', async t => {
+  const data = fixture(), { root, read } = directory(t, data);
+  const p = provider(data.state, { readback: true, readbackCode: '4000', history: (url, stored) => {
+    const row = copy(stored.get(url.searchParams.get('to')));
+    if (row) delete row.customFields;
+    return { messageList: row ? { [row.messageId]: row } : {}, nextKey: null };
+  } });
+  const result = await apply(root, p);
+  assert.equal(result.attempted, 20); assert.equal(result.outcomes.delivered, 20);
+  assert.ok(Object.values(read().sends).every(s => s.acceptedReceipts.length === 1));
+  const second = await apply(root, p);
+  assert.equal(second.attempted, 0); assert.equal(second.outcomes.delivered, 20);
+  assert.equal(p.posts().length, 20);
+});
+
+for (const field of ['messageId', 'groupId', 'from', 'text'])
+  test(`metadata-free readback with changed ${field} cannot bind a POST receipt`, async t => {
+    const data = fixture(), { root } = directory(t, data);
+    const p = provider(data.state, { readback: true, readbackCode: '4000', history: (url, stored) => {
+      const row = copy(stored.get(url.searchParams.get('to')));
+      if (row) { delete row.customFields; row[field] += '9'; }
+      return { messageList: row ? { [row.messageId]: row } : {}, nextKey: null };
+    } });
+    const result = await apply(root, p);
+    assert.equal(result.outcomes.delivered, undefined); assert.equal(p.posts().length, 1);
+  });
 
 test('provider readback error leaves accepted receipt pending, never transport-failed or replayed', async t => {
   const data = fixture(), { root, read } = directory(t, data); let posted = false;
