@@ -237,7 +237,7 @@ async function loadInstructorLessonSchedule(studioId: string): Promise<Record<st
     const registration = registrationRows.find((r) => row.registrationId === r.id);
     const cancellation = registration?.cancellation;
     return { ...row, canCancel: /^[1-9]\d{0,15}$/.test(row.memberId || "")
-      && (item.countSource === "tickets" || registration?.ticketName === TICKET_NAME)
+      && row.issuedTicketVerified === true
       && !cancellation && !cancellationBlocksRegistration(registration),
       ...(cancellation ? { cancellation: { jobId: cancellation.jobId, status: cancellation.status,
         lastError: cleanText(cancellation.lastError, 300) } } : {}) };

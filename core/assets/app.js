@@ -7325,7 +7325,9 @@ function instructorLessonRegistrationMatchesFilter(item) {
   return true;
 }
 
-function instructorLessonScheduleSourceLabel(value) {
+function instructorLessonScheduleSourceLabel(value, pendingCount = 0) {
+  if (Number(pendingCount) > 0 && value === "tickets") return "수강권·결제확인 접수 합산 (중복 제외)";
+  if (Number(pendingCount) > 0 && value === "bookings") return "예약·결제확인 접수 합산 (중복 제외)";
   return {
     bookings: "예약 반영",
     tickets: "수강권 발급 기준",
@@ -7406,7 +7408,7 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
         <div class="instructor-seat-progress" role="img" aria-label="${occupied}명 접수, 정원 ${capacity}명">
           <span style="width:${percentage}%"></span>
         </div>
-        <small class="instructor-seat-source">${escapeHtml(instructorLessonScheduleSourceLabel(item.countSource))}</small>
+        <small class="instructor-seat-source">${escapeHtml(instructorLessonScheduleSourceLabel(item.countSource, item.confirmedPendingRegistrationCount))}</small>
         <button type="button" class="secondary-action" data-instructor-schedule-date="${escapeHtml(item.date)}" aria-controls="instructorLessonScheduleDetail" aria-expanded="${selectedInstructorLessonDate === item.date}">수강 명단 보기</button>
       </article>
     `;
@@ -7437,7 +7439,7 @@ function renderInstructorLessonRoster(schedule) {
     const action = canCancelInstructorLesson(schedule.date, member)
       ? `<button type="button" class="secondary-action instructor-lesson-cancel-button" data-instructor-cancel-key="${escapeHtml(member.memberKey)}" data-instructor-cancel-date="${escapeHtml(schedule.date)}" aria-label="${escapeHtml(member.memberName)} · ${escapeHtml(schedule.date)} 수강 취소" aria-describedby="${statusId}"${instructorLessonCancellationBusy ? " disabled" : ""}>수강 취소</button>`
       : "";
-    return `<div class="status-row instructor-lesson-roster-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p><p id="${statusId}" class="instructor-lesson-cancellation-status" role="status" aria-label="${escapeHtml(member.memberName)} 취소 상태">${escapeHtml(cancellationLabel)}${cancellation?.lastError ? ` · ${escapeHtml(cancellation.lastError)}` : ""}</p></div><div class="instructor-lesson-roster-actions"><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource))}</span>${action}</div></div>`;
+    return `<div class="status-row instructor-lesson-roster-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p><p id="${statusId}" class="instructor-lesson-cancellation-status" role="status" aria-label="${escapeHtml(member.memberName)} 취소 상태">${escapeHtml(cancellationLabel)}${cancellation?.lastError ? ` · ${escapeHtml(cancellation.lastError)}` : ""}</p></div><div class="instructor-lesson-roster-actions"><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource, schedule.confirmedPendingRegistrationCount))}</span>${action}</div></div>`;
   }).join("");
 }
 

@@ -357,5 +357,6 @@ function registration(index: number, status: string) {
     memberPhone: `0105678${String(index).padStart(4, "0")}`,
     lessonDate: "2026-09-20",
     status,
+    operatorChecks: { paymentConfirmed: true, seatConfirmed: true },
   };
 }

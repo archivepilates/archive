@@ -27,6 +27,7 @@ function registration(index: number, status = "completed", lessonDate = date) {
     memberPhone: member.phone,
     lessonDate,
     status,
+    operatorChecks: { paymentConfirmed: true, seatConfirmed: true },
   };
 }
 
@@ -53,7 +54,7 @@ function rosterOf(summary: InstructorLessonScheduleSummary) {
     assert.ok(row.memberName.trim());
     assert.deepEqual(
       Object.keys(row).sort(),
-      ["memberId", "memberKey", "memberName", ...(row.registrationId ? ["registrationId"] : [])].sort(),
+      ["memberId", "memberKey", "memberName", "issuedTicketVerified", ...(row.registrationId ? ["registrationId"] : [])].sort(),
     );
   }
   return summary.roster;
@@ -167,7 +168,8 @@ test("registration fallback retains existing eligible statuses and excludes canc
       { ...registration(8), newMemberSimulation: true },
       { ...registration(9), evidence: { newMemberSimulation: true } },
       registration(10, "completed", "2026-10-01"),
-      { registrationId: "registration-anonymous", lessonDate: date, status: "queued" },
+      { registrationId: "registration-anonymous", lessonDate: date, status: "queued",
+        operatorChecks: { paymentConfirmed: true, seatConfirmed: true } },
     ],
   });
   const roster = rosterOf(summary);
@@ -196,7 +198,9 @@ test("registration correlation uses normalized identity and date, not a shared n
   const roster = rosterOf(summary);
 
   assert.equal(roster[0].registrationId, "registration-0");
-  assert.ok(roster.slice(1).every((row) => row.registrationId === undefined));
+  assert.ok(roster.slice(1, 4).every((row) => row.registrationId === undefined));
+  assert.equal(roster[4].registrationId, "registration-4");
+  assert.equal(summary.occupiedCount, 5);
 });
 
 test("ambiguous registration ids do not select an arbitrary registration", () => {

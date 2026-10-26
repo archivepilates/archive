@@ -11,6 +11,7 @@ export type InstructorLessonScheduleRosterRow = {
   memberId: string | null;
   memberName: string;
   registrationId?: string;
+  issuedTicketVerified: boolean;
 };
 
 export type InstructorLessonScheduleSummary = {
@@ -28,6 +29,7 @@ export type InstructorLessonScheduleSummary = {
   ticketHolderCount: number;
   verifiedRegistrationCount: number;
   registrationCount: number;
+  confirmedPendingRegistrationCount: number;
   roster?: InstructorLessonScheduleRosterRow[];
 };
 
@@ -121,6 +123,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
 
   const registrationMembers: ScheduleMembers = new Map();
   const verifiedRegistrationMembers: ScheduleMembers = new Map();
+  const confirmedPendingMembers: ScheduleMembers = new Map();
   for (const registration of input.registrations || []) {
     if (isInstructorLessonSyntheticTest(registration)) continue;
     const date = dateKey(registration.lessonDate);
@@ -131,6 +134,10 @@ export function buildInstructorLessonScheduleSummaries(input: {
     addScheduleMember(registrationMembers, date, memberKey, registration);
     if (cleanText(registration.steps?.ticket?.status).toLowerCase() === "verified") {
       addScheduleMember(verifiedRegistrationMembers, date, memberKey, registration);
+    } else if (registration.operatorChecks?.paymentConfirmed === true && registration.operatorChecks?.seatConfirmed === true
+      && registration.source?.type !== "imweb_order_review" && !registration.externalOrderReviewRequired
+      && !registration.cancellation && !["cancellation_pending", "cancellation_review"].includes(status)) {
+      addScheduleMember(confirmedPendingMembers, date, memberKey, registration);
     }
     dates.add(date);
   }
@@ -141,6 +148,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
     const ticketHolderCount = ticketMembers.get(date)?.size || 0;
     const verifiedRegistrationCount = verifiedRegistrationMembers.get(date)?.size || 0;
     const registrationCount = registrationMembers.get(date)?.size || 0;
+    const confirmedPendingRegistrationCount = confirmedPendingMembers.get(date)?.size || 0;
     const effectiveTicketMembers = mergeScheduleMembers(
       ticketMembers.get(date),
       verifiedRegistrationMembers.get(date),
@@ -149,15 +157,18 @@ export function buildInstructorLessonScheduleSummaries(input: {
       ? "tickets"
       : bookingMemberCount
         ? "bookings"
-        : registrationCount
+        : confirmedPendingRegistrationCount
           ? "registrations"
           : "none";
-    const occupiedMembers =
+    // Confirmed intake reserves a seat immediately; ticket issuance and notice delivery are later stages.
+    const occupiedMembers = mergeScheduleMembers(
       countSource === "bookings"
         ? bookingMembers.get(date)
         : countSource === "tickets"
           ? effectiveTicketMembers
-          : registrationMembers.get(date);
+          : undefined,
+      confirmedPendingMembers.get(date),
+    );
     const occupiedCount = occupiedMembers?.size || 0;
     const roster = [...(occupiedMembers || [])].map(([memberKey, members]) => {
       const sources =
@@ -191,6 +202,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
           cleanText(registration?.memberName || registration?.name) ||
           "이름 미확인",
         ...(registrationId ? { registrationId } : {}),
+        issuedTicketVerified: effectiveTicketMembers.has(memberKey),
       } satisfies InstructorLessonScheduleRosterRow;
     });
     const lectureCapacity = concurrentLectureCapacity(dateLectures);
@@ -219,6 +231,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
       ticketHolderCount,
       verifiedRegistrationCount,
       registrationCount,
+      confirmedPendingRegistrationCount,
       roster,
     } satisfies InstructorLessonScheduleSummary;
   });
