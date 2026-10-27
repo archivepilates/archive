@@ -120,6 +120,66 @@ function fixture({ quantity = 2 } = {}) {
     db, verify, reads: () => reads, member, document, submittedPhone: '01000000003', now: NOW };
 }
 
+function followupAttention(f, target, step = 'confirmation', status = 'review_required') {
+  const id = target === 'own' ? f.job.registrationId
+    : f.registrations.find(r => r.registrationId !== f.job.registrationId).registrationId;
+  const row = f.db.rows.get(`instructorLessonRegistrations/${id}`);
+  row.status = 'action_required';
+  row.steps.member = { status: 'verified' }; row.steps.ticket = { status: 'verified' };
+  row.steps[step] = { status, detail: 'Synthetic follow-up attention only' };
+  return row;
+}
+
+for (const target of ['own', 'sibling']) {
+  for (const step of ['eformsign', 'memo', 'confirmation']) for (const status of ['failed', 'review_required']) {
+    test(`shared JS verifier permits ${target} ${step} ${status} only after member and ticket verification`, async () => {
+      const f = fixture(); followupAttention(f, target, step, status);
+      const before = structuredClone([...f.db.rows]);
+      const result = await f.verify(f.db, f.job);
+      assert.equal(result.assessment.status, 'ready'); assert.equal(result.assessment.paidAmount, 70000);
+      assert.equal(result.attendeeResolution.resolutionKey, f.attendeeResolution.resolutionKey);
+      assert.deepEqual([...f.db.rows], before); assert.equal(f.db.writes.length, 0);
+      assert.equal(f.reads(), 1);
+    });
+  }
+  for (const [name, change] of [
+    ['unexplained action_required', r => { r.steps.confirmation = { status: 'pending' }; }],
+    ['unknown follow-up status', r => { r.steps.confirmation = { status: 'unknown' }; }],
+    ['unrelated bookings failure', r => { r.steps.confirmation = { status: 'pending' }; r.steps.bookings = { status: 'failed' }; }],
+    ...['review_required', 'failed', 'rejected', 'cancelled', 'canceled'].map(status =>
+      [`registration ${status}`, r => { r.status = status; }]),
+    ...['member', 'ticket'].flatMap(step => ['failed', 'review_required', 'pending', 'missing'].map(status =>
+      [`${step} ${status}`, r => { if (status === 'missing') delete r.steps[step]; else r.steps[step] = { status }; }])),
+    ['external source hold', r => { r.externalOrderReviewRequired = true; }],
+    ['cancellation request', r => { r.cancellation = { jobId: 'synthetic-cancel' }; }],
+    ['payment approval missing', r => { delete r.operatorChecks.paymentConfirmed; }],
+    ['seat approval revoked', r => { r.operatorChecks.seatConfirmed = false; }],
+    ['member identity changed', r => { r.memberPhone = '01000000009'; }],
+    ['external identity changed', r => { r.externalOrder.registrationId = 'ilr_wrong'; }],
+    ['source identity changed', r => { r.source.sourceId = '209901010000002'; }],
+    ['price changed', r => { r.ticketPrice = 140000; }],
+  ]) test(`shared JS follow-up exception fails closed for ${target} ${name}`, async () => {
+    const f = fixture(), row = followupAttention(f, target); change(row);
+    const before = structuredClone([...f.db.rows]);
+    await assert.rejects(f.verify(f.db, f.job));
+    assert.deepEqual([...f.db.rows], before); assert.equal(f.db.writes.length, 0);
+  });
+}
+
+for (const issue of ['ledger hold', 'manifest approval revoked', 'refund', 'source purchaser changed']) {
+  test(`shared JS follow-up exception preserves canonical ${issue} guard`, async () => {
+    const f = fixture(); followupAttention(f, 'own'); followupAttention(f, 'sibling', 'memo', 'failed');
+    const ledger = f.db.rows.get(`imwebInstructorLessonOrders/${orderLedgerId(ORDER)}`);
+    if (issue === 'ledger hold') ledger.status = 'review_required';
+    if (issue === 'manifest approval revoked') ledger.attendeeResolution.status = 'blocked';
+    if (issue === 'refund') f.order.totalRefundedPrice = 70000;
+    if (issue === 'source purchaser changed') f.order.ordererName = 'Changed Buyer';
+    const before = structuredClone([...f.db.rows]);
+    await assert.rejects(f.verify(f.db, f.job));
+    assert.deepEqual([...f.db.rows], before); assert.equal(f.db.writes.length, 0);
+  });
+}
+
 test('single-order binding remains compatible; allocated binding uses actual attendee without rewriting purchaser', async () => {
   for (const quantity of [1, 2]) {
     const f = fixture({ quantity }), before = structuredClone(f.order);
@@ -271,6 +331,34 @@ test('existing native effect traces cannot be reclaimed or replayed', async () =
   assert.equal(f.db.rows.get(f.jobPath).status, 'review_required');
   assert.equal(f.db.rows.get(f.jobPath).attempts, 2);
   assert.equal(await api.claimJob(ref), null);
+});
+
+for (const status of ['done', 'review_required']) test(`follow-up attention never reclaims ${status} native jobs`, async () => {
+  const f = fixture(); followupAttention(f, 'own'); followupAttention(f, 'sibling');
+  Object.assign(f.db.rows.get(f.jobPath), { status, externalEffectStarted: true, effectStartedAt: 'existing-native-effect' });
+  const before = structuredClone([...f.db.rows]), api = queueApi(f, () => NOW.getTime());
+  assert.equal(await api.claimJob(f.db.doc(f.jobPath)), null);
+  assert.deepEqual([...f.db.rows], before); assert.equal(f.db.writes.length, 0); assert.equal(f.reads(), 0);
+});
+
+for (const [kind, values] of [
+  ['absent', {}], ['undefined', { ticketId: undefined }], ['empty', { ticketId: '' }],
+  ['null', { ticketId: null }], ['numeric zero', { ticketId: 0 }],
+]) test(`native completeStep records verified ticket without inventing an ID for ${kind} card evidence`, async () => {
+  const f = fixture(), ref = f.db.doc(f.jobPath);
+  Object.assign(f.db.rows.get(f.jobPath), { status: 'processing', claimToken: 'owned' });
+  delete f.db.rows.get(f.jobPath).ticketId;
+  const { completeStep } = evaluate(parsed(WORKER), ['completeStep', 'commitClaimedState', 'stepValue', 'stepLabel', 'nextStepLabel'], {
+    db: f.db, registration: id => f.db.doc(`instructorLessonRegistrations/${id}`), FieldValue: f.db.fieldValue,
+  });
+  await completeStep(ref, 'owned', 'ticket', { ...values, ticketPaymentAmount: 70000, nextStep: 'followup' });
+  const registration = f.db.rows.get(f.registrationPath), job = f.db.rows.get(f.jobPath);
+  assert.equal(registration.steps.ticket.status, 'verified'); assert.equal(registration.evidence.ticketPaymentAmount, 70000);
+  assert.equal(Object.hasOwn(registration.evidence, 'ticketId'), false); assert.equal(Object.hasOwn(job, 'ticketId'), false);
+  assert.equal(job.currentStep, 'followup'); assert.equal(job.externalEffectStarted, false);
+  followupAttention(f, 'own', 'confirmation', 'review_required');
+  const writes = f.db.writes.length;
+  assert.equal((await f.verify(f.db, job)).assessment.status, 'ready'); assert.equal(f.db.writes.length, writes);
 });
 
 test('native quiet crossing restores unattempted claim and preserves verified prior member, then resumes after 09:00', async t => {

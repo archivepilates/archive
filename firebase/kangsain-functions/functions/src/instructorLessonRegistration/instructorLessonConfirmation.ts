@@ -279,7 +279,7 @@ async function confirmationSource(candidate: AlimtalkCandidateDoc, allocationOnl
           || candidate.memberId !== registration.evidence?.studiomateMemberId
           || normalizePhone(candidate.memberPhone) !== normalizePhone(registration.memberPhone)
           || candidate.payload?.lessonDate !== registration.lessonDate
-          || candidate.payload?.ticketId !== registration.evidence?.ticketId) {
+          || cleanText(candidate.payload?.ticketId, 80) !== cleanText(registration.evidence?.ticketId, 80)) {
           return { registration, issue: "다인 주문 승인키·실제 수신자 불일치" };
         }
         if (allocationOnly) {
@@ -633,6 +633,13 @@ function validManifest(value: any, now: Date): boolean {
   return value.resolutionKey === hashText(JSON.stringify(binding));
 }
 
+function hasVerifiedTicketFollowupAttention(registration: Document): boolean {
+  const steps = registration.steps || {};
+  return registration.status === "action_required"
+    && steps.member?.status === "verified" && steps.ticket?.status === "verified"
+    && ["eformsign", "memo", "confirmation"].some(name => ["failed", "review_required"].includes(steps[name]?.status));
+}
+
 function matchesAttendee(registration: Document, attendee: Document, manifest: Document): boolean {
   const external = registration.externalOrder || {};
   return registration.registrationId === attendee.registrationId && registration.studioId === manifest.studioId
@@ -647,7 +654,8 @@ function matchesAttendee(registration: Document, attendee: Document, manifest: D
     && (!registration.orderAllocation || registration.orderAllocation.resolutionKey === manifest.resolutionKey)
     && registration.operatorChecks?.paymentConfirmed === true && registration.operatorChecks?.seatConfirmed === true
     && !registration.externalOrderReviewRequired && !registration.cancellation && !cancellationBlocksRegistration(registration)
-    && !["canceled", "rejected", "action_required", "review_required", "failed"].includes(registration.status);
+    && !["cancelled", "canceled", "rejected", "review_required", "failed"].includes(registration.status)
+    && (registration.status !== "action_required" || hasVerifiedTicketFollowupAttention(registration));
 }
 
 function phone(value: unknown): string {

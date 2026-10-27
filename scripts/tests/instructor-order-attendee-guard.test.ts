@@ -204,6 +204,22 @@ function harness(quantity = 2) {
     preflightThrow: () => { preflightThrow = true; }, providerThrow: (hook: () => Error) => { providerThrow = hook; } };
 }
 
+const absentTicketId = Symbol("absent ticket ID");
+const emptyTicketIds: Array<[string, unknown]> = [
+  ["absent", absentTicketId], ["undefined", undefined], ["empty", ""],
+  ["whitespace", " \t\n "], ["null", null], ["numeric zero", 0],
+];
+function setTicketId(target: Record<string, any>, value: unknown) {
+  if (value === absentTicketId) delete target.ticketId;
+  else target.ticketId = value;
+}
+function followupAttention(f: ReturnType<typeof harness>, path: string, step = "confirmation", status = "review_required") {
+  const registration = f.get(path);
+  registration.status = "action_required";
+  registration.steps[step] = { status, detail: "Synthetic follow-up attention only" };
+  f.seed(path, registration);
+}
+
 for (const quantity of [2, 3, 10]) test(`canonical policy manifest agrees with Functions for ${quantity} attendees`, async () => {
   const f = harness(quantity);
   assert.equal((await f.guard()).issue, "");
@@ -238,6 +254,32 @@ const mutations: Array<[string, (f: ReturnType<typeof harness>) => void]> = [
 for (const [name, change] of mutations) test(`family guard rejects ${name}`, async () => {
   const f = harness(); change(f); assert.ok((await f.guard()).issue); assert.equal(f.writes.length, 0);
 });
+
+for (const target of ["own", "sibling"] as const) {
+  const blockers: Array<[string, (r: any) => void]> = [
+    ["unexplained action_required", r => { r.steps.confirmation = { status: "pending" }; }],
+    ["unknown follow-up status", r => { r.steps.confirmation = { status: "unknown" }; }],
+    ["unrelated bookings failure", r => { r.steps.confirmation = { status: "pending" }; r.steps.bookings = { status: "failed" }; }],
+    ...["review_required", "failed", "rejected"].map(status =>
+      [`registration ${status}`, (r: any) => { r.status = status; }] as [string, (r: any) => void]),
+    ...["member", "ticket"].flatMap(step => ["failed", "review_required", "pending", "missing"].map(status =>
+      [`${step} ${status}`, (r: any) => { if (status === "missing") delete r.steps[step]; else r.steps[step] = { status }; }] as [string, (r: any) => void])),
+    ["payment approval missing", r => { delete r.operatorChecks.paymentConfirmed; }],
+    ["seat approval revoked", r => { r.operatorChecks.seatConfirmed = false; }],
+    ["source identity changed", r => { r.source.sourceId = "209901010000002"; }],
+    ["external identity changed", r => { r.externalOrder.registrationId = "ilr_wrong"; }],
+    ["allocation approval changed", r => { r.orderAllocation.resolutionKey = "0".repeat(64); }],
+  ];
+  for (const [name, change] of blockers) test(`${target} follow-up attention cannot bypass ${name}`, async () => {
+    const f = harness(), path = target === "own" ? f.regPath : f.siblingPath;
+    followupAttention(f, path);
+    const registration = f.get(path); change(registration); f.seed(path, registration);
+    assert.ok((await f.guard()).issue);
+    await assert.rejects(f.confirmation.queueInstructorLessonConfirmationForIssuedTicket(
+      f.registrations[0].registrationId, { source: "ticket_verified_trigger" }));
+    assert.equal(f.writes.length, 0); assert.equal(f.posts.length, 0);
+  });
+}
 
 test("missing allocation key never falls back even after local allocation markers are stripped", async () => {
   const f = harness(), r = f.get(f.regPath);
@@ -275,8 +317,82 @@ for (const key of ["memberName", "memberPhone", "studioId", "memberId", "payload
   });
 }
 
+for (const [candidateLabel, candidateId] of emptyTicketIds.slice(0, 3)) {
+  for (const [evidenceLabel, evidenceId] of emptyTicketIds.slice(0, 3)) {
+    test(`sendability normalizes absent IDs: candidate ${candidateLabel}, evidence ${evidenceLabel}`, async () => {
+      const f = harness(), registration = f.get(f.regPath), candidate = clone(f.candidate);
+      setTicketId(registration.evidence, evidenceId); setTicketId(candidate.payload, candidateId);
+      f.seed(f.regPath, registration);
+      assert.equal(await f.confirmation.instructorLessonConfirmationSendabilityIssue(candidate), "");
+      assert.equal(f.writes.length, 0); assert.equal(f.posts.length, 0);
+    });
+  }
+}
+
 for (const batch of [false, true]) {
   const label = batch ? "batch" : "single";
+  for (const [kind, ticketId] of emptyTicketIds) {
+    test(`${label}: real queue normalizes ${kind} ticket evidence and mocked provider accepts only once`, async () => {
+      const f = harness(), registration = f.get(f.regPath);
+      setTicketId(registration.evidence, ticketId); f.seed(f.regPath, registration); f.seed(f.candidatePath, undefined);
+      await f.confirmation.queueInstructorLessonConfirmationForIssuedTicket(
+        f.registrations[0].registrationId, { source: "ticket_verified_trigger" });
+      const queued = f.get(f.candidatePath);
+      assert.equal(queued.payload.ticketId, "");
+      assert.equal(queued.candidateId, f.candidate.candidateId);
+      assert.equal(await f.confirmation.instructorLessonConfirmationSendabilityIssue(queued), "");
+      await f.run(batch); await f.run(batch);
+      assert.equal(f.posts.length, 1); assert.equal(f.posts[0].messages[0].to, registration.memberPhone);
+      assert.equal(f.get(f.candidatePath).status, "sent"); assert.equal(f.get(f.candidatePath).attempts, 1);
+      assert.equal(f.get(f.regPath).steps.ticket.status, "verified");
+      assert.deepEqual(f.get(f.regPath).evidence.ticketId, ticketId === absentTicketId ? undefined : ticketId);
+    });
+  }
+  for (const [name, candidateId, evidenceId] of [
+    ["known mismatch", "wrong", "ticket-0"], ["candidate only", "ticket-0", absentTicketId],
+    ["evidence only", "", "ticket-0"], ["undefined candidate", undefined, "ticket-0"],
+    ["blank evidence", "ticket-0", " \t "], ["string zero is an ID", "0", undefined],
+  ] as Array<[string, unknown, unknown]>) {
+    test(`${label}: allocated ticket IDs fail closed for ${name}`, async () => {
+      const f = harness(), registration = f.get(f.regPath), candidate = clone(f.candidate);
+      setTicketId(registration.evidence, evidenceId); setTicketId(candidate.payload, candidateId);
+      f.seed(f.regPath, registration); f.seed(f.candidatePath, candidate);
+      assert.ok(await f.confirmation.instructorLessonConfirmationSendabilityIssue(candidate));
+      await f.run(batch);
+      assert.equal(f.posts.length, 0); assert.equal(f.get(f.candidatePath).attempts, 0);
+      assert.equal(f.get(`alimtalkSends/${candidate.candidateId}`), undefined);
+    });
+  }
+  test(`${label}: known ticket IDs compare after cleanText normalization`, async () => {
+    const f = harness(), registration = f.get(f.regPath), candidate = clone(f.candidate);
+    registration.evidence.ticketId = " ticket-0 "; candidate.payload.ticketId = "ticket-0";
+    f.seed(f.regPath, registration); f.seed(f.candidatePath, candidate);
+    assert.equal(await f.confirmation.instructorLessonConfirmationSendabilityIssue(candidate), "");
+    await f.run(batch); await f.run(batch);
+    assert.equal(f.posts.length, 1); assert.equal(f.get(f.candidatePath).attempts, 1);
+  });
+  for (const target of ["own", "sibling"] as const) {
+    for (const step of ["eformsign", "memo", "confirmation"]) for (const status of ["failed", "review_required"]) {
+      test(`${label}: ${target} ${step} ${status} does not poison verified confirmation or replay it`, async () => {
+        const f = harness(), path = target === "own" ? f.regPath : f.siblingPath;
+        const registration = f.get(f.regPath); delete registration.evidence.ticketId; f.seed(f.regPath, registration);
+        followupAttention(f, path, step, status);
+        const before = f.get(path);
+        assert.equal((await f.guard()).issue, "");
+        assert.equal(f.writes.length, 0);
+        f.seed(f.candidatePath, undefined);
+        await f.confirmation.queueInstructorLessonConfirmationForIssuedTicket(
+          f.registrations[0].registrationId, { source: "ticket_verified_trigger" });
+        await f.run(batch); await f.run(batch);
+        assert.equal(f.posts.length, 1); assert.equal(f.posts[0].messages[0].to, registration.memberPhone);
+        assert.equal(f.get(f.candidatePath).status, "sent"); assert.equal(f.get(f.candidatePath).attempts, 1);
+        const after = f.get(path);
+        assert.deepEqual(after.steps.member, before.steps.member); assert.deepEqual(after.steps.ticket, before.steps.ticket);
+        if (step !== "confirmation" || target === "sibling") assert.deepEqual(after.steps[step], before.steps[step]);
+        assert.deepEqual(after.externalOrder, before.externalOrder); assert.deepEqual(after.operatorChecks, before.operatorChecks);
+      });
+    }
+  }
   test(`${label}: actual provider function sends valid allocation once`, async () => {
     const f = harness(); await f.run(batch);
     assert.equal(f.posts.length, 1); assert.equal(f.posts[0].messages[0].to, f.candidate.memberPhone);
@@ -288,6 +404,23 @@ for (const batch of [false, true]) {
     assert.equal(f.get(f.candidatePath).status, "skipped");
     assert.equal(f.get(f.candidatePath).reasonCode, "instructor_lesson_confirmation_source_blocked");
     assert.equal(f.get(`alimtalkSends/${f.candidate.candidateId}`), undefined);
+  });
+  for (const [name, change] of mutations) test(`${label}: follow-up exception still blocks late ${name}`, async () => {
+    const f = harness(); followupAttention(f, f.regPath, "memo", "failed"); followupAttention(f, f.siblingPath);
+    assert.equal((await f.guard()).issue, "");
+    f.beforeProvider(() => change(f)); await f.run(batch);
+    assert.equal(f.posts.length, 0); assert.equal(f.get(f.candidatePath).attempts, 0);
+    assert.equal(f.get(f.candidatePath).status, "skipped");
+    assert.equal(f.get(f.candidatePath).reasonCode, "instructor_lesson_confirmation_source_blocked");
+    assert.equal(f.get(`alimtalkSends/${f.candidate.candidateId}`), undefined);
+  });
+  for (const status of ["sent", "unknown"]) test(`${label}: follow-up exception cannot replay ${status} provider history`, async () => {
+    const f = harness(); followupAttention(f, f.regPath); followupAttention(f, f.siblingPath, "memo", "failed");
+    const prior = { status, messageId: "synthetic-existing-message" };
+    f.beforeProvider(() => f.seed(`alimtalkSends/${f.candidate.candidateId}`, prior));
+    await f.run(batch); await f.run(batch);
+    assert.equal(f.posts.length, 0); assert.equal(f.get(f.candidatePath).attempts, 0);
+    assert.deepEqual(f.get(`alimtalkSends/${f.candidate.candidateId}`), prior);
   });
   for (const throwsOutsideWrapper of [false, true]) test(`${label}: final canonical read failure is pretransport (${throwsOutsideWrapper})`, async () => {
     const f = harness(); f.beforeProvider(() => throwsOutsideWrapper ? f.preflightThrow() : f.readFailure(LEDGER));

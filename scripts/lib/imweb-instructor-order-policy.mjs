@@ -134,6 +134,13 @@ export function validateInstructorOrderAttendeeResolution(order, resolution, { n
   return assessOrderQuantity(order, { now, policy: IMWEB_LESSON_POLICY, quantity: resolution.attendees.length });
 }
 
+function hasVerifiedTicketFollowupAttention(registration) {
+  const steps = registration.steps || {};
+  return registration.status === 'action_required'
+    && steps.member?.status === 'verified' && steps.ticket?.status === 'verified'
+    && ['eformsign', 'memo', 'confirmation'].some(name => ['failed', 'review_required'].includes(steps[name]?.status));
+}
+
 export function assertInstructorOrderAttendeeFamily(resolution, registrations) {
   if (!resolution || resolution.status !== 'approved' || !Array.isArray(resolution.attendees)
     || resolution.attendees.length !== registrations.length) throw new Error('다인 주문 공동 원장 확인필요');
@@ -149,7 +156,9 @@ export function assertInstructorOrderAttendeeFamily(resolution, registrations) {
       || r.externalOrder?.totalPaidAmount !== resolution.totalPaidAmount
       || r.externalOrder?.paidAmount !== attendee.paidAmount || r.ticketPrice !== attendee.paidAmount
       || r.operatorChecks?.paymentConfirmed !== true || r.operatorChecks?.seatConfirmed !== true
-      || r.externalOrderReviewRequired || r.cancellation || ['cancelled', 'canceled', 'rejected', 'action_required', 'review_required', 'failed'].includes(r.status)) {
+      || r.externalOrderReviewRequired || r.cancellation
+      || ['cancelled', 'canceled', 'rejected', 'review_required', 'failed'].includes(r.status)
+      || (r.status === 'action_required' && !hasVerifiedTicketFollowupAttention(r))) {
       throw new Error('다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단');
     }
   }
