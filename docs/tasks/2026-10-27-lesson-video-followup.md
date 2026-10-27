@@ -9,3 +9,13 @@
 - Existing B notice delivered/transportAttempts1; E channel hold unapproved. No new/duplicate member messages, C/D/E notice, operator email, test group, video/product/order change, scheduler or quota manipulation.
 - Only existing CORE lesson-share-261025 note changes. Pinned ignored one-note release helper and99synthetic checks preserve all surrounding HTML bytes, existing live Hosting manifests/config, source/release concurrency guards and task-owned locks. Main agent owns deployment/push.
 - Pending: B identity1 and all five individual expiry/removal lifecycles. Continue existing e-2 schedule; never terminate after one team completes.
+
+## Verified release
+
+- Source commit `e6207d70d1af45176344671eca0adb68c1758251`; source tracked in dedicated clean lane.
+- Main Hosting version `b7f645751af0f586` retained223files/config; dedicated CORE version `f49147743f93ecd7` retained63files/config. Only each existing rules file changed.
+- Both actual routes returned HTTP200/300891bytes and full SHA256 `c5903ae2efea4476231c068dc372a67bc2b1a1a44135ef419540395331ce87e5`, equal lane source.
+- Release guard99synthetic tests passed in main and independent reviewer runs. Reviewer found no blocker. Report320/390/768/1440px: no overflow,16px text,no external requests/page errors;390px visually reviewed. Task-owned report browser closed.
+- Post-grant canonical read-only expiry check:24not_due; every ledger byte-identical. Today's CLI audit2records/10units; no quota bypass/change. New D2 receipts each have actual attendance, fixed identity approval, preserved member fields and exactly960hours.
+- Main/browser/member-group/five-team locks absent; shared-profile browser processes0. Existing non-owned video task locks and runtime untracked Python cache preserved.
+- Full app build, Functions, playback matrix and real test-account group changes skipped because no app/permission code changed. Only approved normal CLI grants and one CORE note were applied.
