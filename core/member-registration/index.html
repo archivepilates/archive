@@ -56,7 +56,7 @@
         </header>
 
         <section class="grid kpis member-registration-kpis" aria-label="최근 회원등록 현황">
-          <article class="panel metric"><div class="metric-label">최근 등록</div><div class="metric-value" id="memberRegistrationRecentCount">0명</div></article>
+          <article class="panel metric"><div class="metric-label" id="memberRegistrationRecentLabel">최근 기록</div><div class="metric-value" id="memberRegistrationRecentCount">0명</div></article>
           <article class="panel metric"><div class="metric-label">진행중</div><div class="metric-value" id="memberRegistrationActiveCount">0명</div></article>
           <article class="panel metric"><div class="metric-label">확인필요</div><div class="metric-value" id="memberRegistrationReviewCount">0명</div></article>
           <article class="panel metric"><div class="metric-label">완료</div><div class="metric-value" id="memberRegistrationCompletedCount">0명</div></article>
@@ -65,13 +65,14 @@
         <section class="panel member-registration-history">
           <div class="panel-header">
             <div>
-              <h2>최근 회원등록</h2>
-              <p>최근 14일 · 회원·수강권·계약서·서명·웰컴</p>
+              <h2 id="memberRegistrationHistoryTitle">최근 기록</h2>
+              <p>최근 14일 · 회원·수강권·계약서·서명·웰컴 · <span id="memberRegistrationObservationCount" style="white-space: nowrap">감지보류 0명</span></p>
             </div>
             <div class="segmented-control" id="memberRegistrationFilters" role="group" aria-label="회원등록 상태 필터">
               <button type="button" class="active" data-member-registration-filter="active">진행중</button>
               <button type="button" data-member-registration-filter="review">확인필요</button>
               <button type="button" data-member-registration-filter="completed">완료</button>
+              <button type="button" data-member-registration-filter="observation">감지보류</button>
               <button type="button" data-member-registration-filter="all">전체</button>
             </div>
           </div>

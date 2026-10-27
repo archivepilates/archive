@@ -1,4 +1,4 @@
-import { normalizeMembershipPhone } from "./studiomate-membership-contract-policy.mjs";
+import { normalizeMembershipPhone, isExcludedMembershipContractProductTitle } from "./studiomate-membership-contract-policy.mjs";
 
 export const STUDIOMATE_ORIGIN = "https://arcpilates.studiomate.kr";
 const API_PREFIX = "/v2/staff";
@@ -303,6 +303,8 @@ export function buildNativeContractCompletionReadback({
   if (matches.length !== 1)
     return { status: "review", reason: "bound_native_ticket_not_unique" };
   const ticket = matches[0];
+  if (isExcludedMembershipContractProductTitle(ticket.title))
+    return { status: "review", reason: "one_off_product_excluded" };
   if (!ticket.payment?.verified || !ticket.payment?.complete)
     return { status: "review", reason: ticket.payment?.reason || "native_payment_not_verified" };
   const identity = {
@@ -329,6 +331,7 @@ export function buildNativeContractCompletionReadback({
         source: "studiomate_native_ticket",
         userTicketId: ticket.userTicketId,
         productId: ticket.productId,
+        title: ticket.title,
         classification: "regular",
         status: ticket.status,
         refunded: ticket.refunded,

@@ -2,6 +2,7 @@ import {
   evaluateMembershipContractEligibility,
   membershipContractJobKey,
   evaluateApprovedOctoberRenewalRecovery,
+  isExcludedMembershipContractProductTitle,
 } from "./studiomate-membership-contract-policy.mjs";
 
 const nativeId = (value) => /^[1-9]\d{0,63}$/.test(String(value ?? ""));
@@ -112,10 +113,11 @@ export function selectNativeMembershipContractCandidate({
     return review("invalid_native_selection_policy");
 
   const allRegular = ticketRead.tickets.filter((ticket) =>
-    regularProductIds.includes(ticket.productId),
+    regularProductIds.includes(ticket.productId) && !isExcludedMembershipContractProductTitle(ticket.title),
   );
   const purchaseHistory = ticketRead.tickets.filter((ticket) =>
-    regularProductIds.includes(ticket.productId) || HISTORICAL_REGULAR_PRODUCT_IDS.has(ticket.productId),
+    (regularProductIds.includes(ticket.productId) || HISTORICAL_REGULAR_PRODUCT_IDS.has(ticket.productId))
+      && !isExcludedMembershipContractProductTitle(ticket.title),
   );
   const currentIds = purchaseHistory.map((ticket) => ticket.userTicketId);
   const previousIds = purchaseHistory
@@ -171,6 +173,7 @@ export function selectNativeMembershipContractCandidate({
       memberId: ticket.memberId,
       userTicketId: ticket.userTicketId,
       productId: ticket.productId,
+      title: ticket.title,
       identityVerified: true,
       classification: "regular",
       status: ticket.status,

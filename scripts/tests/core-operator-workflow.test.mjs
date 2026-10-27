@@ -119,6 +119,63 @@ test("registration separates reminder acceptance from delivery and exposes uncer
     }else{assert.equal(item.status,"review");assert.match(list.innerHTML,/서명 요청 문자 확인필요/);}
   }
 });
+
+test("registration observation filter and compact count do not claim active contract work", () => {
+  const a = app();
+  const list = a.element("memberRegistrationList");
+  const observationCount = a.element("memberRegistrationObservationCount");
+  const recentLabel = a.element("memberRegistrationRecentLabel");
+  const historyTitle = a.element("memberRegistrationHistoryTitle");
+  const activeCount = a.element("memberRegistrationActiveCount");
+  const buttons = ["active", "review", "completed", "observation", "all"].map(filter => ({
+    dataset: { memberRegistrationFilter: filter },
+    classList: { toggle(_name, selected) { this.selected = selected; } },
+    setAttribute(name, value) { this[name] = value; },
+  }));
+  a.document.querySelectorAll = () => buttons;
+  const item = (status, memberName) => ({ status, memberName, latestAt: Date.now(), memberGrade: "일반회원",
+    ticketName: "수강권 원천 미확인", steps: [], reason: "Excel 감지 · 원천 미확인" });
+  const dashboard = { counts: { recent: 4, active: 1, review: 1, completed: 1, observation: 1 },
+    items: [item("active", "Canonical Active"), item("review", "Canonical Review"),
+      item("completed", "Canonical Complete"), item("observation", "Historical Hint")] };
+  a.renderMemberRegistrationDashboard(dashboard);
+  assert.match(list.innerHTML, /Canonical Active/);
+  assert.doesNotMatch(list.innerHTML, /Historical Hint/);
+  assert.equal(activeCount.textContent, "1명");
+  assert.equal(observationCount.textContent, "감지보류 1명");
+  assert.equal(recentLabel.textContent, "최근 기록");
+  assert.equal(historyTitle.textContent, "최근 기록");
+  a.setMemberRegistrationFilter("observation");
+  a.renderMemberRegistrationDashboard(dashboard);
+  assert.match(list.innerHTML, /Historical Hint/);
+  assert.match(list.innerHTML, /감지보류|감지 상태/);
+  assert.doesNotMatch(list.innerHTML, /Canonical|진행중|다음 단계/);
+  for (const button of buttons) assert.equal(button["aria-pressed"], String(button.dataset.memberRegistrationFilter === "observation"));
+  a.setMemberRegistrationFilter("all");
+  a.renderMemberRegistrationDashboard(dashboard);
+  for (const row of dashboard.items) assert.ok(list.innerHTML.includes(row.memberName));
+  a.renderMemberRegistrationDashboard({ items: dashboard.items.slice(0, 3), counts: { ...dashboard.counts, observation: 0 } });
+  assert.equal(recentLabel.textContent, "최근 등록");
+  assert.equal(historyTitle.textContent, "최근 회원등록");
+  assert.equal(observationCount.textContent, "감지보류 0명");
+  a.setReadState("memberRegistrationDashboard", "unavailable");
+  a.renderMemberRegistrationDashboard(dashboard);
+  assert.equal(observationCount.textContent, "확인 필요");
+  assert.match(list.innerHTML, /원장을 읽지 못했습니다/);
+});
+
+test("registration HTML retains four KPI cards and puts observation count in the history header", () => {
+  const html = fs.readFileSync(new URL("../../core/member-registration/index.html", import.meta.url), "utf8");
+  const kpis = html.slice(html.indexOf('<section class="grid kpis'), html.indexOf('<section class="panel member-registration-history'));
+  const history = html.slice(html.indexOf('<section class="panel member-registration-history'));
+  assert.equal((kpis.match(/class="panel metric"/g) || []).length, 4);
+  assert.doesNotMatch(kpis, /memberRegistrationObservationCount/);
+  assert.match(history, /<p>[^]*id="memberRegistrationObservationCount"[^]*<\/p>/);
+  assert.match(history, /data-member-registration-filter="observation">감지보류<\/button>/);
+  for (const id of ["memberRegistrationRecentLabel", "memberRegistrationHistoryTitle", "memberRegistrationObservationCount"]) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1);
+  }
+});
 const renewal = (id, extra = {}) => ({ id, memberId: "m1", memberName: "테스트", ticketIdentity: "user:old", ticketName: "그룹 30회", kind: "group", priority: "urgent", active: true, ...extra });
 
 test("fresh canonical tickets override an already-loaded member directory", () => {

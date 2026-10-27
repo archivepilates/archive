@@ -20,6 +20,11 @@ const nativeIds = (value: any) => Array.isArray(value) && [...value].every(nativ
 const text = (value: any) => typeof value === "string" && value.trim().length > 0;
 const money = (value: any) => Number.isSafeInteger(value) && value >= 0;
 
+export function isExcludedMembershipContractProductTitle(value: unknown): boolean {
+  const title = typeof value === "string" ? value.normalize("NFKC").replace(/\s+/g, "").toLowerCase() : "";
+  return /야외|outdoor|체험|(?:^|[^\d주])1회권/.test(title);
+}
+
 /** Korean mobile strings only; invalid input returns "". Never an identity key. */
 export function normalizeMembershipPhone(value: any) {
   if (typeof value !== "string" || !/^[+\d\s().-]+$/.test(value)) return "";
@@ -185,6 +190,8 @@ function evaluate(input: any, approvedRecovery: boolean) {
     return review("unverified_native_identity");
   if (EXCLUDED.has(ticket.classification) || EXCLUDED.has(member.classification))
     return result("excluded", "excluded_classification");
+  if (isExcludedMembershipContractProductTitle(ticket.title))
+    return result("excluded", "one_off_product_excluded");
   if (member.classification !== "member" || ticket.classification !== "regular")
     return review("unknown_classification");
   if (

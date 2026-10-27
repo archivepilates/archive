@@ -39,6 +39,12 @@ export function codebasesForFile(file) {
   if (normalized === "firebase/kangsain-functions/functions/src/privateSurvey/groupSurveyBookingPolicy.ts") {
     return ["functions-alimtalk", "functions-private-chart", "functions-sync"];
   }
+  if (normalized === "firebase/kangsain-functions/functions/src/memberSignup/membershipContractPolicy.ts") {
+    return ["functions-alimtalk", "functions-app", "functions-private-chart", "functions-sync"];
+  }
+  if (normalized === "firebase/kangsain-functions/functions/src/memberSignup/membershipWelcomeReadback.ts") {
+    return ["functions-alimtalk"];
+  }
   if (normalized.includes("/security/")) {
     return ["functions-alimtalk", "functions-app", "functions-social", "functions-sync"];
   }

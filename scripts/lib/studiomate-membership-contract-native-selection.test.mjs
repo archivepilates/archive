@@ -84,6 +84,32 @@ function fixture() {
   };
 }
 
+for (const title of ["야외수업 1회권", "야 외 수 업", "OUTDOOR class", "그룹 체험권", "그룹 1회권"]) {
+  test(`single-use native product remains ignored even if allowlisted: ${title}`, () => {
+    const input = fixture(); input.ticketRead.tickets[0].title = title;
+    const before = structuredClone(input);
+    const result = selectNativeMembershipContractCandidate(input);
+    assert.equal(result.status, "ignored"); assert.equal(result.selection, null);
+    assert.deepEqual(input, before);
+  });
+  test(`mixed native holdings select only the fresh regular issuance: ${title}`, () => {
+    const input = fixture();
+    input.ticketRead.tickets.push({...structuredClone(input.ticketRead.tickets[0]), userTicketId: "201", title});
+    const result = selectNativeMembershipContractCandidate(input);
+    assert.equal(result.status, "eligible"); assert.equal(result.selection.userTicketId, "200");
+    assert.equal(result.selection.ticket.title, "10주(주2회)");
+    assert.deepEqual(result.selection.history.currentIssuanceIds, ["200"]);
+  });
+  test(`prior one-off holding cannot turn first regular purchase into renewal: ${title}`, () => {
+    const input = fixture();
+    input.ticketRead.tickets.unshift({...structuredClone(input.ticketRead.tickets[0]), userTicketId: "199", title,
+      issuedAt: "2026-09-13T23:30:00.000Z"});
+    const result = selectNativeMembershipContractCandidate(input);
+    assert.equal(result.status, "eligible"); assert.equal(result.selection.action, "first_purchase_contract");
+    assert.deepEqual(result.selection.history.purchases.priorRegularIssuanceIds, []);
+  });
+}
+
 function addPriorRegularIssuance(input) {
   input.ticketRead.tickets.unshift({
     ...input.ticketRead.tickets[0],

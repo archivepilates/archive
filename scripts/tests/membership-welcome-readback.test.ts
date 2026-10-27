@@ -98,6 +98,20 @@ test("complete current native reads pass without mutating inputs", () => {
   assert.deepEqual(f, before);
 });
 
+for (const title of ["야외수업 1회권", "야 외 수 업", "OUTDOOR class", "그룹 체험권", "그룹 1회권"]) {
+  test(`current bound single-use ticket blocks welcome: ${title}`, () => {
+    const f = fixture(); f.source.nativeReadback.ticket.title = title;
+    const before = structuredClone(f);
+    assert.equal(membershipWelcomeReadbackIssue(f.source, f.now, f.candidate), "one_off_product_excluded");
+    assert.deepEqual(f, before);
+  });
+}
+test("regular bound ticket remains eligible despite unrelated outdoor holdings", () => {
+  const f = fixture(); f.source.nativeReadback.ticket.title = "10주(주1회)";
+  const source = {...f.source, activeTickets: [{title: "야외수업 1회권"}]};
+  assert.equal(membershipWelcomeReadbackIssue(source, f.now, f.candidate), "");
+});
+
 for (const field of ["completion", "nativeReadback"] as const) {
   for (const value of [undefined, null, [], "synthetic"]) {
     test(`${field} must be a present native object: ${JSON.stringify(value)}`, () => {

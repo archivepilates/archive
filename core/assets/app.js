@@ -7607,6 +7607,7 @@ const MEMBER_REGISTRATION_REASONS = Object.freeze({
   reconciliation_failed: "웰컴 안내 준비 중 오류가 발생했습니다.",
   current_canonical_member_mismatch: "회원 원천정보 연결을 확인해야 합니다.",
   staff_or_instructor_excluded: "강사·스텝은 일반회원 자동화에서 제외됩니다.",
+  one_off_product_excluded: "야외·체험·1회권은 일반회원 계약·웰컴 대상에서 제외됩니다.",
   welcome_already_sent_pending_or_ambiguous: "기존 웰컴 발송 이력을 확인해야 합니다.",
   membership_activation_scope_blocked: "회원가입 자동화 적용 범위를 확인해야 합니다.",
   contract_outside_cutover_or_stale: "계약서 최신 상태를 다시 확인해야 합니다.",
@@ -7654,13 +7655,18 @@ function memberRegistrationLatest(items = []) {
   return [...items].sort((a, b) => memberRegistrationItemTime(b) - memberRegistrationItemTime(a))[0] || null;
 }
 
+function memberRegistrationExcludedProductTitle(value) {
+  const title = typeof value === "string" ? value.normalize("NFKC").replace(/\s+/g, "").toLowerCase() : "";
+  return /야외|outdoor|체험|(?:^|[^\d주])1회권/.test(title);
+}
+
 function memberRegistrationTicketHint(hint) {
   const rows = Array.isArray(hint?.hints) ? hint.hints : [];
   return [...rows]
     .filter((item) => {
-      const name = String(item.productName || "");
-      const amount = Number(String(item.paymentAmountText || "").replace(/[^0-9.-]/g, "")) || 0;
-      return amount > 0 && !/(체험|1회|상품권|쿠폰)/.test(name);
+      const name = String(item?.productName || "");
+      const amount = Number(String(item?.paymentAmountText || "").replace(/[^0-9.-]/g, "")) || 0;
+      return amount > 0 && !memberRegistrationExcludedProductTitle(item?.productName) && !/(체험|1회|상품권|쿠폰)/.test(name);
     })
     .sort((a, b) => {
       const bTime = timestampMs(b.issuedAtText || b.paymentAtText);
@@ -7879,6 +7885,18 @@ async function loadMemberRegistrationDashboard(runtime) {
       ["ignored", "excluded"].includes(hintStatus) ||
       (hintStatus === "review" && hint?.reason === "fresh_native_issuance_not_found");
     if (noActionHint && !contract && !candidate && !send) return null;
+    const hasCanonicalRecords = Boolean(entry.contracts.length || entry.candidates.length || entry.sends.length);
+    const reviewHint = hintStatus === "review" ? hint : memberRegistrationLatest(entry.hints.filter((item) =>
+      String(item.status || "").toLowerCase() === "review" && item.reason !== "fresh_native_issuance_not_found"));
+    const hintReview = Boolean(reviewHint);
+    const memberGrade = String(profile?.memberGrade || profile?.grade || "일반회원");
+    const excludedGrade = /^(강사회원|강사|스텝|직원|체험회원|상담회원)$/.test(memberGrade.replace(/\s/g, ""));
+    const hintProducts = entry.hints.flatMap((item) => Array.isArray(item.hints) && item.hints.length ? item.hints : [{}]);
+    const excludedProducts = hintProducts.length > 0 && hintProducts.every((item) =>
+      memberRegistrationExcludedProductTitle(item?.productName));
+    // Hint exclusions never suppress canonical work or an existing review.
+    if (!hasCanonicalRecords && !hintReview && (excludedGrade || excludedProducts)) return null;
+    const observation = !hasCanonicalRecords && !hintReview;
     const matchedHint = contract ? memberRegistrationLatest(entry.hints.filter((item) =>
       item.contractId ? (contract.contractId || contract.id) === item.contractId :
         (contract.binding?.selectionJobKey && contract.binding.selectionJobKey === item.jobKey))) : hint;
@@ -7902,12 +7920,11 @@ async function loadMemberRegistrationDashboard(runtime) {
     const contractStatus = String(contract?.status || contract?.observationStatus || "").toLowerCase();
     const signed = contractStatus === "signed" || Boolean(contract?.completion);
     const contractCreated = Boolean(contract?.contractId || contract?.id);
-    const ticketConfirmed = Boolean(ticketHint || contract?.binding?.userTicketId || contract?.selection?.userTicketId);
+    const ticketConfirmed = Boolean(contract && (ticketHint || contract.binding?.userTicketId || contract.selection?.userTicketId));
     const identityConfirmed = Boolean(profile || contract?.binding?.memberId || contract?.completion?.memberId || candidate?.memberId);
     const welcome = reference?.sendReadError
       ? { status: "error", label: "확인필요", reason: "웰컴 발송 원장을 읽지 못했습니다. 실제 발송 여부를 확인하세요." }
       : memberRegistrationWelcomeState(contract, candidate, send);
-    const hintReview = hintStatus === "review";
     const contractReview = [contract?.status, contract?.observationStatus]
       .some(value => ["review", "failed", "error"].includes(String(value || "").toLowerCase())) &&
       !memberRegistrationHistoricalContractReview(contract);
@@ -7916,8 +7933,10 @@ async function loadMemberRegistrationDashboard(runtime) {
     const reminderReview = ["review", "attempting"].includes(reminder?.status);
     const review = !identityConfirmed || (hintReview && !contractCreated) || contractReview || welcomeReview || reminderReview;
     const completed = signed && ["done", "not_required"].includes(welcome.status);
-    const status = review ? "review" : completed ? "completed" : "active";
-    const reason = review
+    const status = observation ? "observation" : review ? "review" : completed ? "completed" : "active";
+    const reason = observation
+      ? "Excel 감지 기록입니다. 새 정규 수강권 발급·계약 대상 여부는 원천 미확인입니다."
+      : review
       ? memberRegistrationReason(
           !identityConfirmed
             ? "회원 원천정보를 연결하지 못했습니다."
@@ -7927,7 +7946,7 @@ async function loadMemberRegistrationDashboard(runtime) {
               ? welcome.reason || send?.lastError || candidate?.lastError || contract?.welcomeReason
               : contractReview
                 ? contract?.observationReason
-                : hint?.reason,
+                : reviewHint?.reason || hint?.reason,
         )
       : !contractCreated
         ? "수강권 원천 확인 후 계약서를 생성합니다."
@@ -7947,9 +7966,10 @@ async function loadMemberRegistrationDashboard(runtime) {
       phoneLast4: phone.slice(-4),
       memberId,
       memberDetailHref: studioMateMemberHref,
-      memberGrade: String(profile?.memberGrade || profile?.grade || "일반회원"),
+      memberGrade,
       ticketName: String(contract?.binding?.ticketName || contract?.selection?.ticket?.title ||
-        contract?.selection?.productName || ticketHint?.productName || "수강권 확인"),
+        contract?.selection?.productName || (hasCanonicalRecords ? ticketHint?.productName : "") ||
+        (hasCanonicalRecords ? "수강권 확인" : "수강권 원천 미확인")),
       latestAt,
       status,
       reason,
@@ -7958,14 +7978,14 @@ async function loadMemberRegistrationDashboard(runtime) {
         : reminderReview ? "서명 요청 문자 확인필요" : "",
       steps: [
         { name: "회원", status: identityConfirmed ? "done" : "error", statusLabel: identityConfirmed ? "확인" : "확인필요" },
-        { name: "수강권", status: ticketConfirmed ? "done" : review ? "error" : "active", statusLabel: ticketConfirmed ? "확인" : review ? "확인필요" : "확인중" },
-        { name: "계약서", status: contractCreated ? "done" : review ? "error" : "pending", statusLabel: contractCreated ? "발송" : review ? "확인필요" : "대기" },
-        { name: "서명", status: signed ? "done" : contractCreated ? "active" : "pending", statusLabel: signed ? "완료" : contractCreated ? "대기" : "대기" },
-        { name: "웰컴", status: welcome.status, statusLabel: welcome.label },
+        { name: "수강권", status: observation ? "pending" : ticketConfirmed ? "done" : review ? "error" : "active", statusLabel: observation ? "미확인" : ticketConfirmed ? "확인" : review ? "확인필요" : "확인중" },
+        { name: "계약서", status: contractCreated ? "done" : observation ? "pending" : review ? "error" : "pending", statusLabel: contractCreated ? "발송" : observation ? "미생성" : review ? "확인필요" : "대기" },
+        { name: "서명", status: signed ? "done" : contractCreated ? "active" : "pending", statusLabel: observation ? "미확인" : signed ? "완료" : "대기" },
+        { name: "웰컴", status: observation ? "pending" : welcome.status, statusLabel: observation ? "미확인" : welcome.label },
       ],
     };
   }).filter(Boolean).sort((a, b) => {
-    const priority = { review: 0, active: 1, completed: 2 };
+    const priority = { review: 0, active: 1, completed: 2, observation: 3 };
     return priority[a.status] - priority[b.status] || b.latestAt - a.latestAt;
   });
   return {
@@ -7975,6 +7995,7 @@ async function loadMemberRegistrationDashboard(runtime) {
       active: items.filter((item) => item.status === "active").length,
       review: items.filter((item) => item.status === "review").length,
       completed: items.filter((item) => item.status === "completed").length,
+      observation: items.filter((item) => item.status === "observation").length,
     },
   };
 }
@@ -7988,17 +8009,21 @@ function renderMemberRegistrationDashboard(data = state.memberRegistrationDashbo
   const container = qs("memberRegistrationList");
   if (!container) return;
   if (readUnavailable("memberRegistrationDashboard")) {
-    ["memberRegistrationRecentCount", "memberRegistrationActiveCount", "memberRegistrationReviewCount", "memberRegistrationCompletedCount"]
+    ["memberRegistrationRecentCount", "memberRegistrationActiveCount", "memberRegistrationReviewCount", "memberRegistrationCompletedCount", "memberRegistrationObservationCount"]
       .forEach((id) => setText(id, "확인 필요"));
     container.innerHTML = '<div class="empty-state danger">회원등록 원장을 읽지 못했습니다. 연결 상태를 확인하세요.</div>';
     return;
   }
   const items = Array.isArray(data?.items) ? data.items : [];
   const counts = data?.counts || {};
+  const hasObservations = items.some((item) => item.status === "observation");
+  setText("memberRegistrationRecentLabel", hasObservations ? "최근 기록" : "최근 등록");
+  setText("memberRegistrationHistoryTitle", hasObservations ? "최근 기록" : "최근 회원등록");
   setText("memberRegistrationRecentCount", `${Number(counts.recent || 0).toLocaleString("ko-KR")}명`);
   setText("memberRegistrationActiveCount", `${Number(counts.active || 0).toLocaleString("ko-KR")}명`);
   setText("memberRegistrationReviewCount", `${Number(counts.review || 0).toLocaleString("ko-KR")}명`);
   setText("memberRegistrationCompletedCount", `${Number(counts.completed || 0).toLocaleString("ko-KR")}명`);
+  setText("memberRegistrationObservationCount", `감지보류 ${Number(counts.observation || 0).toLocaleString("ko-KR")}명`);
   document.querySelectorAll("[data-member-registration-filter]").forEach((button) => {
     const selected = button.dataset.memberRegistrationFilter === memberRegistrationFilter;
     button.classList.toggle("active", selected);
@@ -8010,8 +8035,8 @@ function renderMemberRegistrationDashboard(data = state.memberRegistrationDashbo
     return;
   }
   container.innerHTML = visibleItems.map((item) => {
-    const statusLabel = item.status === "review" ? "확인필요" : item.status === "completed" ? "완료" : "진행중";
-    const tone = item.status === "review" ? "danger" : item.status === "completed" ? "good" : "warn";
+    const statusLabel = item.status === "observation" ? "감지보류" : item.status === "review" ? "확인필요" : item.status === "completed" ? "완료" : "진행중";
+    const tone = item.status === "observation" ? "" : item.status === "review" ? "danger" : item.status === "completed" ? "good" : "warn";
     const name = item.memberDetailHref
       ? `<a href="${escapeHtml(item.memberDetailHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.memberName)}</a>`
       : escapeHtml(item.memberName);
@@ -8026,7 +8051,7 @@ function renderMemberRegistrationDashboard(data = state.memberRegistrationDashbo
           ${item.steps.map((step, index) => `<li class="is-${escapeHtml(step.status)}"><span>${index + 1}</span><small>${escapeHtml(step.name)}</small><em>${escapeHtml(step.statusLabel)}</em></li>`).join("")}
         </ol>
         ${item.signatureReminderLabel ? `<p>${escapeHtml(item.signatureReminderLabel)}</p>` : ""}
-        <div class="instructor-registration-next ${item.status === "review" ? "is-error" : ""}"><strong>${item.status === "review" ? "확인할 내용" : "다음 단계"}</strong><span>${escapeHtml(item.reason)}</span></div>
+        <div class="instructor-registration-next ${item.status === "review" ? "is-error" : ""}"><strong>${item.status === "observation" ? "감지 상태" : item.status === "review" ? "확인할 내용" : "다음 단계"}</strong><span>${escapeHtml(item.reason)}</span></div>
       </article>`;
   }).join("");
 }

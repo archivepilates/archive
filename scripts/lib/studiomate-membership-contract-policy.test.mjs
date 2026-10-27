@@ -5,6 +5,7 @@ import {
   evaluateMembershipContractEligibility as evaluate,
   membershipContractJobKey,
   normalizeMembershipPhone,
+  isExcludedMembershipContractProductTitle,
 } from "./studiomate-membership-contract-policy.mjs";
 
 function fixture() {
@@ -78,6 +79,23 @@ function fixture() {
       },
     },
   };
+}
+
+for (const title of ["야외수업 1회권", "야 외 수 업", "OUTDOOR class", "ＯＵＴＤＯＯＲ", "그룹 체험권", "그룹 1회권", "1회권"]) {
+  test(`explicit single-use title cannot become regular membership: ${title}`, () => {
+    const input = fixture(); input.ticket.title = title;
+    assert.equal(isExcludedMembershipContractProductTitle(title), true);
+    const result = evaluate(input);
+    assert.equal(result.status, "excluded"); assert.equal(result.reasons[0], "one_off_product_excluded");
+    assert.equal(result.eligibleForDetection, false); assert.equal(result.jobKey, null); assert.equal(result.sendAllowed, false);
+  });
+}
+for (const title of ["10회권", "11회권", "21회권", "주1회권", "10주(주1회)", "*그룹 40회 4개월권", "", undefined]) {
+  test(`regular title is not excluded by substring count: ${title}`, () => {
+    const input = fixture(); input.ticket.title = title;
+    assert.equal(isExcludedMembershipContractProductTitle(title), false);
+    assert.equal(evaluate(input).eligibleForDetection, true);
+  });
 }
 
 function renewal() {

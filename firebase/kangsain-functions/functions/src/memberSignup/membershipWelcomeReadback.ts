@@ -1,4 +1,4 @@
-import { normalizeMembershipPhone } from "./membershipContractPolicy";
+import { normalizeMembershipPhone, isExcludedMembershipContractProductTitle } from "./membershipContractPolicy";
 
 type Data = Record<string, any>;
 // The native StudioMate refresh request is handled by the Mac mini and the
@@ -18,6 +18,7 @@ export function membershipWelcomeReadbackIssue(source: Data, now: Date, candidat
   const completion = source.completion;
   const readback = source.nativeReadback;
   if (!record(completion) || !record(readback)) return "current_native_readback_required";
+  if (isExcludedMembershipContractProductTitle(readback.ticket?.title)) return "one_off_product_excluded";
   const completionAt = utcMillis(completion.checkedAt);
   const created = candidate?.createdAt;
   let candidateAt = completionAt;

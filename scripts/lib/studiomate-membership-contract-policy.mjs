@@ -18,6 +18,7 @@ const policy = tsRequire(
 );
 export const {
   normalizeMembershipPhone,
+  isExcludedMembershipContractProductTitle,
   membershipContractJobKey,
   baselineDiff,
   evaluateMembershipContractEligibility,

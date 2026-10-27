@@ -11,7 +11,7 @@ const functions = new Map([...source.matchAll(/^(?:async )?function (\w+)\([^]*?
 const names = [
   "normalizePhone", "timestampMs", "formatDate", "isFailureStatus", "isPermissionDenied", "getCollectionBy", "getRecentStudioCollectionBy",
   "memberRegistrationReason", "membershipPhoneFingerprint", "memberRegistrationItemTime", "memberRegistrationLatest",
-  "memberRegistrationTicketHint", "memberRegistrationWelcomeState", "memberRegistrationProfilePreference",
+  "memberRegistrationExcludedProductTitle", "memberRegistrationTicketHint", "memberRegistrationWelcomeState", "memberRegistrationProfilePreference",
   "verifiedLegacyMembershipWelcomeDisposition", "memberRegistrationHistoricalContractReview",
   "preferredMemberRegistrationProfile", "memberRegistrationWelcomeReference", "memberRegistrationWelcomeRecordMatches",
   "loadMemberRegistrationWelcomeReferences", "loadMemberRegistrationDashboard",
@@ -117,7 +117,7 @@ test("old failed welcome survives more than 250 unrelated recent candidates and 
   const h = harness({ candidates: [...unrelated(), candidate()], sends: [...unrelated(), send()] });
   const data = await h.load();
   assert.equal(data.items.length, 1);
-  assert.deepEqual(plain(data.counts), { recent: 1, active: 0, review: 1, completed: 0 });
+  assert.deepEqual(plain(data.counts), { recent: 1, active: 0, review: 1, completed: 0, observation: 0 });
   assert.equal(data.items[0].status, "review");
   assert.equal(data.items[0].reason, welcomeReasons.history_time_limit);
   assert.deepEqual(welcome(data.items[0]), { name: "웰컴", status: "error", statusLabel: "확인필요" });
@@ -190,7 +190,7 @@ for (const agedOut of [false, true]) {
       assert.match(row.reason, /웰컴 발송 원장을 읽지 못/);
       assert.doesNotMatch(row.reason, /발송을 준비|발송완료|발송대기/);
       assert.equal(dashboard.items.find(item => item.memberId === "10002").status, "completed");
-      assert.deepEqual(plain(dashboard.counts), { recent: 2, active: 0, review: 1, completed: 1 });
+      assert.deepEqual(plain(dashboard.counts), { recent: 2, active: 0, review: 1, completed: 1, observation: 0 });
       assert.ok(h.reads.includes(`alimtalkSends/${ID}`));
     });
   }
@@ -353,7 +353,7 @@ test("verified legacy source completes without claiming a welcome was sent or ch
   const h = harness({ contracts: [original] });
   const dashboard = await h.load(), row = dashboard.items[0];
   assert.equal(h.api.verifiedLegacyMembershipWelcomeDisposition(original), true);
-  assert.deepEqual(plain(dashboard.counts), { recent: 1, active: 0, review: 0, completed: 1 });
+  assert.deepEqual(plain(dashboard.counts), { recent: 1, active: 0, review: 0, completed: 1, observation: 0 });
   assert.equal(row.reason, "기존 회원 · 대상 제외");
   assert.deepEqual(welcome(row), { name: "웰컴", status: "not_required", statusLabel: "기존 회원 · 대상 제외" });
   assert.equal(row.steps.find(step => step.name === "서명").statusLabel, "완료");
@@ -498,4 +498,178 @@ test("ticket fallback uses only the exact original contract/job hint, never a la
   const conflicting = (await harness({ contracts: [legacyContract()], hints: [purchaseHint(), purchaseHint({ id: "conflicting", discoveredAt: NEW,
     contractId: "b".repeat(64), hints: [{ productName: "ToeSox", paymentAmountText: "20000", issuedAtText: NEW }] })] }).load()).items[0];
   assert.equal(conflicting.ticketName, "Original regular pass");
+});
+
+const hintProfile = (extra = {}) => ({
+  id: "10001", memberId: "10001", name: "Synthetic Member", phone: PHONE, memberGrade: "일반회원", updatedAt: OLD, ...extra,
+});
+const unverifiedHint = (extra = {}) => purchaseHint({
+  contractId: undefined, jobKey: undefined, status: "native_verification_required", ...extra,
+});
+const outdoorProduct = { productName: "야외수업 1회권", paymentAmountText: "10000", issuedAtText: NEW };
+
+test("outdoor-only, trial-only and single-use hints without canonical work are excluded", async () => {
+  for (const productName of ["야외수업 1회권", "야외수업 참가권", "체험 수강권", "그룹 1회권",
+    "OUTDOOR CLASS", " O U T D O O R 참가권 ", "ＯＵＴＤＯＯＲ 참가권", "그룹 １회권", "야 외 수 업", "체 험 수 강 권"]) {
+    const hint = unverifiedHint({ hints: [{ ...outdoorProduct, productName }] });
+    const before = structuredClone(hint);
+    const h = harness({ contracts: [], hints: [hint], profiles: [hintProfile()] });
+    const data = await h.load();
+    assert.deepEqual(plain(data.counts), { recent: 0, active: 0, review: 0, completed: 0, observation: 0 }, productName);
+    assert.equal(data.items.length, 0);
+    assert.deepEqual(h.reads, []);
+    assert.deepEqual(hint, before);
+    assert.equal(h.api.memberRegistrationTicketHint(hint), null);
+  }
+  const excludedOnly = await harness({ contracts: [], profiles: [hintProfile()], hints: [unverifiedHint({ hints: [
+    outdoorProduct, { productName: "ＯＵＴＤＯＯＲ 참가권" }, { productName: "체 험 수강권" }, { productName: "그룹 １회권" },
+  ] })] }).load();
+  assert.equal(excludedOnly.items.length, 0);
+});
+
+test("mixed historical holdings remain an observation, never evidence of a new regular issuance", async () => {
+  const hint = unverifiedHint({ hints: [outdoorProduct, ...purchaseHint().hints] });
+  const before = structuredClone(hint);
+  const h = harness({ contracts: [], hints: [hint], profiles: [hintProfile()] });
+  const data = await h.load(), row = data.items[0];
+  assert.deepEqual(plain(data.counts), { recent: 1, active: 0, review: 0, completed: 0, observation: 1 });
+  assert.equal(row.status, "observation");
+  assert.equal(row.key, hint.phoneFingerprint);
+  assert.equal(row.memberId, "10001");
+  assert.equal(row.ticketName, "수강권 원천 미확인");
+  assert.equal(row.steps.find(step => step.name === "수강권").status, "pending");
+  assert.equal(row.steps.find(step => step.name === "계약서").statusLabel, "미생성");
+  assert.equal(welcome(row).statusLabel, "미확인");
+  assert.match(row.reason, /새 정규 수강권 발급.*원천 미확인/);
+  assert.doesNotMatch(row.reason, /생성합니다|준비합니다/);
+  assert.deepEqual(h.reads, []);
+  assert.deepEqual(hint, before);
+});
+
+test("unknown and processed hint states cannot become active, even with no profile or a dangling contract ID", async () => {
+  for (const status of ["native_verification_required", "processed", "unknown", "", undefined]) {
+    for (const profiles of [[], [hintProfile()]]) {
+      const row = (await harness({ contracts: [], profiles, hints: [purchaseHint({ status })] }).load()).items[0];
+      assert.equal(row.status, "observation", String(status));
+      assert.equal(row.steps.find(step => step.name === "수강권").statusLabel, "미확인");
+    }
+  }
+});
+
+test("exclusion requires every product to be known excluded across all member hints", async () => {
+  for (const other of ["그룹 30회권", "그룹 11회권", "", "Unknown product"]) {
+    const data = await harness({ contracts: [], profiles: [hintProfile()], hints: [
+      unverifiedHint({ hints: [outdoorProduct] }),
+      unverifiedHint({ id: "historical", discoveredAt: NEW, hints: [{ productName: other }] }),
+    ] }).load();
+    assert.equal(data.items[0].status, "observation", other);
+  }
+  for (const hints of [[], undefined, [null]]) {
+    const row = (await harness({ contracts: [], profiles: [hintProfile()], hints: [unverifiedHint({ hints })] }).load()).items[0];
+    assert.equal(row.status, "observation");
+  }
+});
+
+test("explicit title exclusion never broadens regular counts, weekly cadence or unapproved labels", async () => {
+  const h = harness({ contracts: [] });
+  for (const productName of ["그룹 10회권", "그룹 11회권", "그룹 21회권", "그룹 １１회권", "그룹 ２１회권",
+    "10주(주1회)", "10주(주1회권)", "10주 (주 1 회권)", "10주(주１회권)",
+    "원데이 클래스", "단회 이용권", "oneoff pass", "trial pass"]) {
+    assert.equal(h.api.memberRegistrationExcludedProductTitle(productName), false, productName);
+    for (const products of [[{ productName }], [outdoorProduct, { productName }]]) {
+      const data = await harness({ contracts: [], profiles: [hintProfile()],
+        hints: [unverifiedHint({ hints: products })],
+      }).load();
+      assert.equal(data.items.length, 1, productName);
+      assert.equal(data.items[0].status, "observation", productName);
+      assert.equal(data.counts.active, 0, productName);
+    }
+  }
+  for (const value of [undefined, null, 1, {}, ["OUTDOOR"]]) {
+    assert.equal(h.api.memberRegistrationExcludedProductTitle(value), false);
+  }
+  for (const productName of ["그룹 상품권", "그룹 쿠폰"]) {
+    assert.equal(h.api.memberRegistrationTicketHint({ hints: [{ productName, paymentAmountText: "100000" }] }), null);
+  }
+});
+
+for (const memberGrade of ["강사회원", "강사", "스텝", "직원", "체험회원", "상담회원"]) {
+  test(`${memberGrade} excludes only non-review hints, never canonical work or welcome history`, async () => {
+    const profiles = [hintProfile({ memberGrade })], hints = [unverifiedHint()];
+    assert.equal((await harness({ contracts: [], profiles, hints }).load()).items.length, 0);
+    const baseline = plain(await harness({ profiles }).load());
+    assert.deepEqual(plain(await harness({ profiles, hints }).load()), baseline);
+    const review = await harness({ contracts: [], profiles, hints: [unverifiedHint({ status: "review", reason: "identity_ambiguous" })] }).load();
+    assert.equal(review.items[0].status, "review");
+    for (const status of ["queued", "sent", "failed", "review"]) {
+      const data = await harness({ contracts: [], profiles, hints,
+        candidates: [candidate({ status, lastError: null })],
+        sends: status === "sent" ? [send({ status: "accepted", lastError: null })] : [],
+      }).load();
+      assert.equal(data.items.length, 1, status);
+      assert.notEqual(data.items[0].status, "observation", status);
+      assert.equal(welcome(data.items[0]).status, status === "sent" ? "done" : status === "failed" ? "error" : status === "queued" ? "active" : "pending");
+    }
+  });
+}
+
+test("mixed outdoor/history hints leave canonical regular contract, review and signed welcome flows unchanged", async () => {
+  for (const extra of [
+    { status: "waiting", completion: null },
+    { status: "failed", observationStatus: "review", observationReason: "native_contract_read_failed" },
+    { status: "signed", welcomeStatus: "accepted" },
+    { status: "signed", welcomeStatus: "review", welcomeReason: "late_signature_welcome_review_required" },
+  ]) {
+    const source = contract(extra);
+    source.binding.ticketName = "Canonical regular pass";
+    const options = { contracts: [source], profiles: [hintProfile()] };
+    const baseline = plain(await harness(options).load());
+    for (const products of [[outdoorProduct, ...purchaseHint().hints],
+      [{ productName: "ＯＵＴＤＯＯＲ 참가권" }, ...purchaseHint().hints], [{ productName: "OUTDOOR CLASS" }]]) {
+      const withHints = await harness({ ...options,
+        hints: [unverifiedHint({ hints: products })],
+      }).load();
+      assert.deepEqual(plain(withHints), baseline);
+    }
+  }
+});
+
+test("outdoor hints do not suppress unsubmitted hint reviews, canonical failures, or sent welcome history", async () => {
+  const hints = [unverifiedHint({ hints: [outdoorProduct] })], profiles = [hintProfile()];
+  const review = await harness({ contracts: [], profiles, hints: [{ ...hints[0], status: "review", reason: "unsubmitted_review" }] }).load();
+  assert.equal(review.items[0].status, "review");
+  assert.equal(review.items[0].reason, "unsubmitted review");
+  for (const status of ["failed", "error", "review"]) {
+    const row = (await harness({ contracts: [contract({ status })], profiles, hints }).load()).items[0];
+    assert.equal(row.status, "review");
+  }
+  const sent = await harness({ contracts: [], profiles, hints,
+    candidates: [candidate({ status: "sent", lastError: null })], sends: [send({ status: "accepted", lastError: null })],
+  }).load();
+  assert.equal(sent.items.length, 1);
+  assert.equal(welcome(sent.items[0]).status, "done");
+});
+
+test("a newer unverified outdoor hint cannot hide an older genuine hint review", async () => {
+  const data = await harness({ contracts: [], profiles: [hintProfile({ memberGrade: "체험회원" })], hints: [
+    unverifiedHint({ status: "review", reason: "unsubmitted_review", hints: [outdoorProduct] }),
+    unverifiedHint({ id: "newer-outdoor", discoveredAt: NEW, hints: [outdoorProduct] }),
+  ] }).load();
+  assert.equal(data.items.length, 1);
+  assert.equal(data.items[0].status, "review");
+  assert.equal(data.items[0].reason, "unsubmitted review");
+  assert.deepEqual(plain(data.counts), { recent: 1, active: 0, review: 1, completed: 0, observation: 0 });
+});
+
+test("member registration dashboard remains read-only and never dispatches hint-based actions", () => {
+  const dashboard = functions.get("loadMemberRegistrationDashboard");
+  assert.doesNotMatch(dashboard, /setDoc|updateDoc|deleteDoc|addDoc|httpsCallable|fetch\(|writeBatch|\.doc\([^]*?\.(?:set|update|delete)\(/);
+});
+
+test("existing no-action hints stay absent without losing canonical records", async () => {
+  for (const extra of [{ status: "ignored" }, { status: "excluded" }, { status: "review", reason: "fresh_native_issuance_not_found" }]) {
+    const hints = [unverifiedHint(extra)], profiles = [hintProfile()];
+    assert.equal((await harness({ contracts: [], profiles, hints }).load()).items.length, 0);
+    assert.equal((await harness({ profiles, hints }).load()).items.length, 1);
+  }
 });
