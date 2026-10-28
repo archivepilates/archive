@@ -78,7 +78,9 @@
     {"code":"ACA6","path":"/archive-method-watch-aca6","title":"캐딜락 지지와 움직임 (ACA6)"},
     {"code":"ACH9","path":"/archive-method-watch-ach9","title":"체어 지지와 움직임 (ACH9)"},
     {"code":"AR6","path":"/archive-method-watch-ar6","title":"리포머 외부 피드백 (AR6)"},
-    {"code":"AB10","path":"/archive-method-watch-ab10","title":"바렐 외부 피드백 (AB10)"}
+    {"code":"AB10","path":"/archive-method-watch-ab10","title":"바렐 외부 피드백 (AB10)"},
+    {"code":"AB11","path":"/archive-method-watch-ab11","title":"바렐 외부 피드백2 (AB11)"},
+    {"code":"AR7","path":"/archive-method-watch-ar7","title":"리포머 외부 피드백2 (AR7)"}
   ];
   // <archive-paid-video-classroom-catalog:end>
   var L=PAID_VIDEO_CATALOG.concat([
