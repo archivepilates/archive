@@ -33,3 +33,9 @@
 - Read-only inspection of the native Send handler established that the required-field completion notice deliberately suppresses Send until its completion-toast flag clears. Required 2/2 and network idle do not establish this readiness. No provider callback or validation state was altered.
 - Added a read-only native-ready predicate (notice inactive, viewer loaded, button Send), then exactly one click. Removed unproven network-idle experiments. Exact source-extracted draft preparation reached the native recipient dialog without any recipient or final-send click, twice including the initial experimental predicate proof.
 - Approved recovery classification now also recognizes only the structured send-dialog timeout at the loaded expected page and Send label. All fresh identity/ticket/order/document-absence/confirmation/no-effect proofs remain mandatory; attempts are retained. Actual recovery and independent result readback remain pending until executed.
+
+## PDF Widget Commit
+
+- Source 078af2d was deployed to both CORE sites, runtime aligned, live canary and responsive checks passed; CI run 40645597744 succeeded. The sixth bounded preparation stopped before Next because the PDF amount widget cleared a fill/Tab value. No recipient or send marker was created.
+- Instructor input now uses the existing refund worker's native keyboard/Enter commit pattern instead of programmatic fill/Tab with swallowed commit errors. Both operator values and native Required 2/2 remain mandatory. Exact source preparation with this pattern reached the recipient dialog without any final send. Native completion-notice waiting remains in force.
+- Only the structured operator-values mismatch at loaded expected page/Next can enter the already approved recovery planner, subject to all fresh proof and no-effect guards. It is not a provider-send failure and does not cause automatic attempt resets or general retries.

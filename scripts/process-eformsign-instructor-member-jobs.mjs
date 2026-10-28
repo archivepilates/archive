@@ -529,14 +529,10 @@ async function openSendDialog(page, sendButton) {
 async function fillFrameField(page, frame, fieldId, value) {
   const field = frame.locator(`#${fieldId}`);
   await field.waitFor({ state: "visible", timeout: 30_000 });
-  try {
-    await field.fill(String(value));
-  } catch {
-    await field.click({ force: true });
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
-    await page.keyboard.type(String(value));
-  }
-  await field.press("Tab").catch(() => {});
+  await field.click();
+  await field.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await field.pressSequentially(String(value), { delay: 3 });
+  await field.press("Enter");
 }
 
 async function configureSmsRecipient(page, sendModal, job) {

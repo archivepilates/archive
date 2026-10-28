@@ -7,6 +7,7 @@ export function isKnownUnsentInstructorEformFailure(message) {
   const prefixes = [
     ['[eformsign:send_transition] TimeoutError timeoutMs=30000 ', ['Next', '다음']],
     ['[eformsign:send_dialog] TimeoutError timeoutMs=30000 ', ['Send', '전송']],
+    ['[eformsign:operator_values_ready] Error ', ['Next', '다음']],
   ];
   const entry = prefixes.find(([prefix]) => typeof message === 'string' && message.startsWith(prefix));
   if (!entry) return false;

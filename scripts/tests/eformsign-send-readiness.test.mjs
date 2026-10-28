@@ -3,6 +3,79 @@ import assert from 'node:assert/strict';
 import { runEformStage, waitForEformOperatorFields, waitForEformSendReady, resolvedEformErrorPatch, eformNumericPaymentValue } from '../lib/eformsign-send-readiness.mjs';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createRequire} from 'node:module';
+
+const require = createRequire(new URL('../../firebase/kangsain-functions/functions/package.json', import.meta.url));
+const ts = require('typescript');
+const workerTree = ts.createSourceFile('instructor-worker.mjs',
+  readFileSync(new URL('../process-eformsign-instructor-member-jobs.mjs', import.meta.url), 'utf8'),
+  ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+const fillDeclaration = workerTree.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'fillFrameField');
+assert.ok(fillDeclaration, 'Missing instructor field writer');
+
+function keyboardFixture(platform, failAt = '') {
+  // Extract only the field writer; never import the executable worker or open a browser.
+  const write = vm.runInNewContext(`${fillDeclaration.getText(workerTree)}\nfillFrameField`, {
+    process: Object.freeze({platform}),
+  }, {timeout: 1000});
+  const calls = [];
+  const failure = new Error(`synthetic ${failAt || 'unused'} failure`);
+  const forbidden = () => assert.fail('No fill fallback, page keyboard, browser or send is allowed');
+  const field = {
+    async waitFor(options) { calls.push(['waitFor', options.state, options.timeout]); },
+    async click(options) { assert.equal(options, undefined); calls.push(['click']); },
+    async press(key) {
+      calls.push(['press', key]);
+      if (failAt === 'commit' && key === 'Enter') throw failure;
+    },
+    async pressSequentially(value, options) {
+      calls.push(['pressSequentially', value, options.delay]);
+      if (failAt === 'typing') throw failure;
+    },
+    fill: forbidden,
+  };
+  const frame = {locator(selector) { calls.push(['locator', selector]); return field; }};
+  const page = Object.freeze({keyboard: Object.freeze({press: forbidden, type: forbidden})});
+  return {write, calls, failure, frame, page};
+}
+
+for (const platform of ['darwin', 'linux']) {
+  const selectAll = platform === 'darwin' ? 'Meta+A' : 'Control+A';
+  for (const value of [70000, 'Synthetic ticket']) {
+    test(`${platform} field writer uses focused keyboard input and one Enter commit for ${typeof value}`, async () => {
+      const f = keyboardFixture(platform);
+      await f.write(f.page, f.frame, 'synthetic-field', value);
+      assert.deepEqual(f.calls, [
+        ['locator', '#synthetic-field'], ['waitFor', 'visible', 30000], ['click'],
+        ['press', selectAll], ['pressSequentially', String(value), 3], ['press', 'Enter'],
+      ]);
+    });
+  }
+  test(`${platform} Enter commit failure propagates without Tab, fallback or retry`, async () => {
+    const f = keyboardFixture(platform, 'commit');
+    await assert.rejects(f.write(f.page, f.frame, 'synthetic-field', 70000), error => error === f.failure);
+    assert.deepEqual(f.calls, [
+      ['locator', '#synthetic-field'], ['waitFor', 'visible', 30000], ['click'],
+      ['press', selectAll], ['pressSequentially', '70000', 3], ['press', 'Enter'],
+    ]);
+  });
+  test(`${platform} typing failure stops before Enter and retains the stage cause`, async () => {
+    const f = keyboardFixture(platform, 'typing');
+    const diagnosticPage = {evaluate: async () => ({
+      path: '/eform/document/view_service.html', framePresent: true, viewerStatus: '1', processText: 'Next',
+    })};
+    await assert.rejects(runEformStage(diagnosticPage, 'payment_input', () =>
+      f.write(f.page, f.frame, 'synthetic-field', 70000)), error => {
+      assert.equal(error.cause, f.failure);
+      assert.match(error.message, /^\[eformsign:payment_input\] Error /);
+      return true;
+    });
+    assert.deepEqual(f.calls, [
+      ['locator', '#synthetic-field'], ['waitFor', 'visible', 30000], ['click'],
+      ['press', selectAll], ['pressSequentially', '70000', 3],
+    ]);
+  });
+}
 
 test('native Send waits for completion notice without changing validation state or clicking twice', async () => {
   const checker={completeToast:true};
@@ -34,6 +107,11 @@ test('worker validates actual values before Next and retains native required-fie
   assert.ok(s.indexOf('"operator_values_ready"') < s.indexOf('await processButton.click()'));
   assert.ok(s.includes('eformNumericPaymentValue(ticketPrice)'));
   assert.equal(s.includes('__checkRequired'),false);
+  const fill=s.slice(s.indexOf('async function fillFrameField'),s.indexOf('async function configureSmsRecipient'));
+  assert.ok(fill.includes('field.pressSequentially(String(value), { delay: 3 })'));
+  assert.ok(fill.includes('await field.press("Enter")'));
+  assert.equal(fill.includes('.fill('),false);
+  assert.equal(fill.includes('.catch('),false);
 });
 
 test('operator readiness uses visible fields, not vendor load_status', async () => {
