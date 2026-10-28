@@ -52,6 +52,8 @@ export function codebasesForFile(file) {
   if (normalized.endsWith("/memberSignup/membershipWelcomeHistory.ts")) return ["functions-alimtalk"];
   if (normalized.endsWith("/privateLessonChart/privateLessonChartOwnership.ts")) return ["functions-app", "functions-private-chart"];
   if (normalized.endsWith("/alimtalk/templates.ts")) return ["functions-alimtalk", "functions-private-chart"];
+  // Meal HTTP/generation lives in app; invitation/publication lives in Alimtalk.
+  if (normalized.startsWith("firebase/kangsain-functions/functions/src/mealPlan/")) return ["functions-alimtalk", "functions-app"];
   // Lecture sync also rebuilds instructor-material candidates.
   if ([
     "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonManagement.ts",

@@ -561,5 +561,9 @@ test("shared last-mile policy and approved-ID boundary remain wired without a sc
   assert.doesNotMatch(source, /onSchedule|CloudTasks|setInterval|buildAlimtalkCandidates/);
   const transport = readFileSync(new URL("src/alimtalk/processAlimtalkQueue.ts", root), "utf8");
   const fn = transport.slice(transport.indexOf("export async function sendSolapiAlimtalk"));
-  assert.match(fn, /assertMemberDispatchAllowed\(\)/);
+  assert.match(fn, /await assertCandidateDispatchAllowed\(candidate\)/);
+  assert.match(fn, /await assertCandidateDispatchAllowed\(candidate, true\)/);
+  const guard = readFileSync(new URL("src/alimtalk/recommendedMealTestWindow.ts", root), "utf8");
+  assert.match(guard, /if \(!isMealWindowTest\(candidate\)\)/);
+  assert.match(guard, /if \(!memberDispatchWindow\(\)\.allowed\) throw new MemberDispatchDeferredError/);
 });

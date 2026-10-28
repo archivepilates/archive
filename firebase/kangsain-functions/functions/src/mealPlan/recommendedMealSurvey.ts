@@ -5,6 +5,7 @@ import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { db } from "../config/firebase";
 import { nowTimestamp } from "../utils/date";
 import { AppError } from "../utils/errors";
+import { MEAL_CHOICE_SCHEMA, MEAL_CHOICE_CONSENT, parseMealChoices, mealChoiceReviewReasons } from "./recommendedMealChoicePolicy";
 
 export const RECOMMENDED_MEAL_REQUEST_COLLECTION = "recommendedMealProgramRequests";
 export const RECOMMENDED_MEAL_RESPONSE_COLLECTION = "recommendedMealProgramResponses";
@@ -189,6 +190,8 @@ async function handleGet(request: Request, response: Response): Promise<void> {
   response.status(200).json({
     ok: true,
     requestId,
+    surveySchemaVersion: MEAL_CHOICE_SCHEMA,
+    consentVersion: MEAL_CHOICE_CONSENT,
     memberName: String(surveyRequest.memberName || "회원"),
     status: String(surveyRequest.status || "pending"),
     recommendationStatus: String(surveyRequest.recommendationStatus || ""),
@@ -210,7 +213,7 @@ async function handlePost(request: Request, response: Response): Promise<void> {
     return;
   }
 
-  const answers = parseAnswers(body as Record<string, unknown>);
+  const answers = parseMealChoices(body as Record<string, unknown>);
   const member: RecommendedMealMemberMatch = {
     memberId: String(surveyRequest.memberId || ""),
     memberName: String(surveyRequest.memberName || ""),
@@ -218,12 +221,14 @@ async function handlePost(request: Request, response: Response): Promise<void> {
     studioId: String(surveyRequest.studioId || DEFAULT_STUDIO_ID),
   };
   const inbody = await latestRecommendedMealInbodyReference(member);
-  const reviewReasons = recommendedMealReviewReasons(answers, inbody);
+  const reviewReasons = mealChoiceReviewReasons(answers);
   const submittedAt = nowTimestamp();
   await db.runTransaction(async (transaction) => {
     const fresh = await transaction.get(requestRef);
     const current = fresh.data();
     if (!current) throw new Error("설문 요청을 찾지 못했습니다.");
+    if (current.status === "cancelled" || current.expiresAt instanceof Timestamp && current.expiresAt.toMillis() < Date.now())
+      throw new Error("설문 링크가 만료되었거나 종료되었습니다.");
     if (current.status === "submitted") return;
     transaction.set(
       db.collection(RECOMMENDED_MEAL_RESPONSE_COLLECTION).doc(requestId),
@@ -277,7 +282,7 @@ async function verifiedRequest(requestId: string, accessToken: string): Promise<
   return data;
 }
 
-function parseAnswers(body: Record<string, unknown>): RecommendedMealSurveyAnswers {
+function parseAnswers(body: Record<string, unknown>): RecommendedMealSurveyAnswers & Record<string, unknown> {
   const answers: RecommendedMealSurveyAnswers = {
     primaryGoal: requiredText(body.primaryGoal, "식단 목표", 80),
     goalDetail: optionalText(body.goalDetail, 500),
@@ -314,7 +319,7 @@ function parseAnswers(body: Record<string, unknown>): RecommendedMealSurveyAnswe
   };
   if (!answers.allergies.length) throw new Error("알레르기 여부를 선택해 주세요.");
   if (!answers.consent) throw new Error("개인정보 및 건강정보 활용 동의가 필요합니다.");
-  return answers;
+  return { ...answers };
 }
 
 function recommendedMealReviewReasons(

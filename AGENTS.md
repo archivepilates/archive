@@ -15,6 +15,7 @@
 
 - All member-facing Alimtalk, SMS/LMS, email and electronic-contract signature requests are forbidden daily from 23:00 KST through 08:59:59 KST. Dispatch is allowed only in [09:00, 23:00), including manual, MCP/Codex, recovery and real-phone test sends.
 - Approval or test mode is not a quiet-hour override. Internal operator/system reports and read-only/preparation work remain separate.
+- Explicit operator amendment 2026-10-29: only the single `meal-choice-test-20261029` recommended-meal survey invitation to the canonical operator test recipient Kim Ki-hyo may use the documented once-only time-window exception. It requires a current private approval bound to the exact candidate, native identity, normalized phone hash, approved template and at-most-24-hour interval, with a durable pretransport claim. It does not waive duplicates, identity, consent, template or privacy checks. Other tests, reports, contracts, members and scheduled sends retain the normal window. A consumed or ambiguous claim is never replayed.
 - Defer before claims and attempts where possible, retain stable canonical keys/approvals, and re-check the real clock immediately before the irreversible send. Resume after 09:00 only after all current source, exclusion, cancellation, signature and duplicate guards pass. Never replay accepted/ambiguous requests or create a duplicate scheduler.
 
 - Read the current files before changing behavior.

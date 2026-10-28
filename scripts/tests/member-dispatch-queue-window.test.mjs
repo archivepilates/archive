@@ -156,9 +156,15 @@ function harness(at = DAY) {
   const requests = load("alimtalk/memberDispatchRequests.ts", {
     "../utils/hash": hashes, "./testRecipients": recipients,
   });
+  const mealTestWindow = load("alimtalk/recommendedMealTestWindow.ts", {
+    "../config/firebase": { db: h.db }, "firebase-admin/firestore": { Timestamp: { now: stamp } },
+    "../memberSignup/memberDispatchWindow": window, "./testRecipients": recipients,
+    "./templates": { ALIMTALK_TEMPLATES: { recommended_meal_survey: { code: "synthetic-meal" } } },
+  });
   const queue = load("alimtalk/processAlimtalkQueue.ts", {
     "../utils/hash": hashes,
     "./memberDispatchRequests": requests,
+    "./recommendedMealTestWindow": mealTestWindow,
     "../memberSignup/memberDispatchWindow": window,
     "./holdingNoticeRuntime": { ...runtime, reconcileHoldingNoticeQueue: async () => { h.reconciles++; } },
     "./holdingNoticeScheduling": scheduling,
@@ -209,8 +215,40 @@ function harness(at = DAY) {
   };
   h.row = id => h.db.rows.get(`alimtalkCandidates/${id}`);
   h.claims = family => [...h.db.rows].filter(([path]) => path.startsWith(`${family === "holding" ? "holdingNoticeClaims" : "membershipWelcomeClaims"}/`));
-  return Object.assign(h, { queue, runtime, window, holding, welcome, deps });
+  return Object.assign(h, { queue, runtime, window, holding, welcome, deps, mealTestWindow, recipients });
 }
+
+test("one approved meal test passes real queue transport guards once at night without opening ordinary sends", async () => {
+  const h = harness("2026-10-28T16:00:00Z"), p = h.mealTestWindow;
+  const target = h.recipients.primaryAlimtalkTestRecipient(), id = p.MEAL_TEST_REQUEST, cid = p.MEAL_TEST_CANDIDATE;
+  const token = "a".repeat(48), surveyUrl = `https://in.archivepilates.com/recommendedMealSurvey/?id=${id}&token=${token}`;
+  const reportUrl = `https://in.archivepilates.com/recommendedMealPlan/?id=${id}&token=${token}`;
+  const candidate = { candidateId: cid, type: "recommended_meal_survey", sourceActionKey: id, studioId: "5330",
+    memberId: target.memberId, memberName: target.name, memberPhone: target.phone, templateCode: "synthetic-meal",
+    status: "queued", queuedBy: "operator", reviewedByUid: "synthetic-operator", attempts: 0, maxAttempts: 1,
+    createdAt: new Stamp(h.clock), updatedAt: new Stamp(h.clock), payload: { quietHoursTestCampaign: p.MEAL_TEST_CAMPAIGN,
+      surveyId: id, accessToken: token, surveyUrl, reportUrl, shortLinkId: "s-test", shortUrl: "https://in.archivepilates.com/s/s-test/",
+      reportLinkId: "r-test", reportShortUrl: "https://in.archivepilates.com/s/r-test/" } };
+  h.db.seed(`alimtalkCandidates/${cid}`, candidate);
+  h.db.seed(`recommendedMealProgramRequests/${id}`, { ...candidate, requestId: id,
+    accessTokenHash: createHash("sha256").update(token).digest("hex"), expiresAt: new Stamp(h.clock + 86400000),
+    surveyUrl, reportUrl, shortLinkId: "s-test", shortUrl: candidate.payload.shortUrl,
+    reportShortLinkId: "r-test", reportShortUrl: candidate.payload.reportShortUrl });
+  h.db.seed("shortLinks/s-test", { linkId: "s-test", active: true, type: "recommended_meal_survey", targetUrl: surveyUrl, sourceId: id });
+  h.db.seed("shortLinks/r-test", { linkId: "r-test", active: true, type: "recommended_meal_report", targetUrl: reportUrl, sourceId: `${id}-report` });
+  h.db.seed(p.MEAL_TEST_APPROVAL, { status: "approved", approved: true, campaign: p.MEAL_TEST_CAMPAIGN,
+    candidateId: cid, memberId: target.memberId, templateCode: "synthetic-meal",
+    phoneSha256: createHash("sha256").update(target.phone).digest("hex"),
+    notBefore: new Date(h.clock - 1000).toISOString(), expiresAt: new Date(h.clock + 3600000).toISOString() });
+  const result = await h.queue.processAlimtalkCandidate(cid);
+  assert.equal(result.status, "sent", result.lastError);
+  assert.equal(h.fetches.length, 1);
+  assert.equal(h.db.rows.get(p.MEAL_TEST_APPROVAL).status, "attempted_do_not_replay");
+  assert.equal((await h.queue.processAlimtalkCandidate(cid)).status, "deferred");
+  const normal = h.seed();
+  assert.equal((await h.queue.processAlimtalkCandidate(normal)).status, "deferred");
+  assert.equal(h.fetches.length, 1);
+});
 
 for (const [at, allowed, next] of [
   ["2026-10-22T13:59:59.999Z", true, null], [CLOSE, false, OPEN],

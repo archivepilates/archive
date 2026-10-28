@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "514e0b0b3b43dd760fa03d4f39ef6de6170f688d673be7695551790e8be2e041",
+  "policyFingerprint": "2281057dd930dfd13cdf2af988e457748b7f9d4c51a2b94465a6c9906f398d4d",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -14,7 +14,7 @@
   "sourceFingerprints": [
     {
       "path": "core/assets/app.js",
-      "sha256": "6e11ffc6b95c1db1b6e4e61459d436a58838089f6eb32f95f95f425050290f05"
+      "sha256": "c5d4f971ff966cdbf1cf9d24aa5c332cdfea7ae7083b3c6dfedd4abf17f61573"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/approvalGate.ts",
@@ -46,7 +46,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/processAlimtalkQueue.ts",
-      "sha256": "27c28cd94d682e2c0f6c80d0595cc1df9fea4a569fffe479fa30e39694d8b094"
+      "sha256": "cc45b2a8398089d135b50a59a508c222387168e78748c3459e50ecdbd3990ea7"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/queueDailyAlimtalk.ts",

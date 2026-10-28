@@ -47,6 +47,7 @@ import {
   RECOMMENDED_MEAL_REPORT_COLLECTION,
 } from "../mealPlan/recommendedMealProgram";
 import { RECOMMENDED_MEAL_REQUEST_COLLECTION } from "../mealPlan/recommendedMealSurvey";
+import { candidateDispatchWindow, assertCandidateDispatchAllowed } from "./recommendedMealTestWindow";
 import {
   syncInstructorLessonConfirmationOutcome,
   instructorLessonConfirmationAllocationSendabilityIssue,
@@ -438,14 +439,14 @@ export async function processAlimtalkCandidate(candidateId: string): Promise<Ali
 
 async function processAlimtalkCandidateOutcome(candidate: AlimtalkCandidateDoc | undefined): Promise<AlimtalkCandidateProcessResult> {
   if (!candidate) return { processed: false, status: "not_found", lastError: "알림톡 후보가 없습니다" };
-  const window = memberDispatchWindow();
+  const window = await candidateDispatchWindow(candidate);
   if (!window.allowed) {
     await deferMemberDispatchCandidate(candidate, window);
     return { processed: false, status: "deferred", lastError: window.reason, nextEligibleAt: window.nextAllowedAt };
   }
   const claimed = await claimCandidate(candidate);
-  if (!claimed && !memberDispatchWindow().allowed) {
-    const deferred = memberDispatchWindow();
+  if (!claimed && !(await candidateDispatchWindow(candidate)).allowed) {
+    const deferred = await candidateDispatchWindow(candidate);
     return { processed: false, status: "deferred", lastError: deferred.reason, nextEligibleAt: deferred.nextAllowedAt };
   }
   if (!claimed) return { processed: false, status: "not_claimed", lastError: "알림톡 후보를 처리할 수 없습니다" };
@@ -1138,7 +1139,7 @@ export async function claimCandidate(candidate: AlimtalkCandidateDoc): Promise<A
     const snap = await tx.get(ref);
     const current = snap.data();
     if (!current) return null;
-    const window = memberDispatchWindow();
+    const window = await candidateDispatchWindow(current, ref => tx.get(ref));
     if (!window.allowed) {
       if (current.status === "queued") tx.update(db.doc(ref.path), quietHoursPatch(window));
       return null;
@@ -1235,7 +1236,7 @@ function isStaleProcessing(candidate: AlimtalkCandidateDoc): boolean {
 export async function sendSolapiAlimtalk(
   candidate: AlimtalkCandidateDoc,
 ): Promise<{ messageId: string; variables: Record<string, string> }> {
-  assertMemberDispatchAllowed();
+  await assertCandidateDispatchAllowed(candidate);
   if (isHoldingNoticeCandidate(candidate)) return sendHoldingNotice(candidate);
   if (candidate.type === "membership_welcome" || candidate.templateCode === MEMBERSHIP_WELCOME_TEMPLATE.templateId) {
     return sendMembershipWelcome(candidate, () => sendSolapiMessage(candidate));
@@ -1288,7 +1289,7 @@ async function sendSolapiMessage(candidate: AlimtalkCandidateDoc): Promise<{ mes
       throw new InstructorOrderAttendeePreflightError("instructor_order_attendee_source_read_failed");
     }
   }
-  assertMemberDispatchAllowed();
+  await assertCandidateDispatchAllowed(candidate, true);
   try {
     const response = await fetch(SOLAPI_SEND_URL, options);
     const result = (await response.json().catch(() => ({}))) as SolapiSendResponse;

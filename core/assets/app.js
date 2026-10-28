@@ -135,6 +135,12 @@ let memberPage = 1;
 let selectedStaffKey = "";
 let selectedMealRequestId = "";
 let mealQueueFilter = "active";
+let mealReviewSequence = 0;
+let mealReviewLoading = false;
+let mealActionPending = "";
+let mealDraftDirty = false;
+let mealReviewStale = true;
+let mealPublishNeedsReview = false;
 let videoWatchRangeDays = 30;
 let videoWatchContentType = "paid";
 let videoWatchMembers = [];
@@ -2975,7 +2981,8 @@ function toggleRecommendedMealHistory() {
 
 function mealFlowStatus(item) {
   const status = String(item.recommendationStatus || item.status || "");
-  if (["published", "sent"].includes(status)) return { label: "리포트 공개", tone: "success", stage: "sent" };
+  if (status === "published" || item.recommendationStatus === "sent") return { label: "리포트 공개", tone: "success", stage: "sent" };
+  if (status === "draft_failed") return { label: "초안 생성 확인", tone: "danger", stage: "review" };
   if (status === "send_failed") return { label: "공개 실패", tone: "danger", stage: "review" };
   if (status === "approved") return { label: "공개 준비", tone: "active", stage: "review" };
   if (["awaiting_operator_review", "draft_ready", "operator_edited"].includes(status)) {
@@ -3021,7 +3028,7 @@ function renderRecommendedMealQueue() {
   list.innerHTML = items
     .map((item) => {
       const flow = mealFlowStatus(item);
-      const selected = item.requestId === selectedMealRequestId ? " is-active" : "";
+      const selected = (item.requestId || item.id) === selectedMealRequestId ? " is-active" : "";
       const meta = [
         formatPhoneNumber(item.memberPhone || ""),
         item.inbody?.status === "available" ? "InBody 있음" : "InBody 없음",
@@ -3029,7 +3036,7 @@ function renderRecommendedMealQueue() {
       ]
         .filter(Boolean)
         .join(" · ");
-      return `<button class="status-row meal-queue-button${selected}" type="button" data-meal-request-id="${escapeHtml(item.requestId || item.id || "")}">
+      return `<button class="status-row meal-queue-button${selected}" type="button" aria-pressed="${Boolean(selected)}" data-meal-request-id="${escapeHtml(item.requestId || item.id || "")}">
         <span><strong>${escapeHtml(item.memberName || "회원")}</strong><small>${escapeHtml(meta)}</small></span>
         ${pill(flow.label, flow.tone)}
       </button>`;
@@ -3042,6 +3049,87 @@ function mealReviewSetMessage(message, tone = "") {
   if (!element) return;
   element.textContent = message;
   element.className = `form-status ${tone}`.trim();
+  element.setAttribute("role", tone === "danger" ? "alert" : "status");
+}
+
+function mealReviewIsPublished() {
+  return ["published", "sent"].includes(state.recommendedMealReview?.report?.publicationStatus);
+}
+
+function syncMealReviewControls() {
+  const form = qs("mealDraftForm");
+  if (!form) return;
+  const review = state.recommendedMealReview;
+  const busy = mealReviewLoading || Boolean(mealActionPending);
+  const current = !mealReviewStale && (review?.request?.requestId || review?.request?.id) === selectedMealRequestId;
+  const published = mealReviewIsPublished();
+  const locked = busy || !current || published;
+  form.querySelectorAll("input, textarea, button").forEach((element) => { element.disabled = locked; });
+  const generate = qs("mealGenerateButton");
+  generate.disabled = locked || !review?.response;
+  generate.textContent = mealActionPending === "generate" ? "초안 생성 중" : review?.draft ? "식단 초안 다시 생성" : "식단 초안 생성";
+  qs("mealSaveButton").textContent = mealActionPending === "save" ? "저장 중" : "수정 저장";
+  qs("mealSendButton").textContent = mealActionPending === "publish" ? "저장·공개 중" : "검토 완료 후 리포트 공개";
+  qs("mealSendButton").disabled = locked || mealPublishNeedsReview;
+  const panel = qs("recommendedMealReviewPanel");
+  panel.setAttribute("aria-busy", String(busy));
+  panel.classList.toggle("meal-review-loading", mealReviewStale || mealReviewLoading || mealActionPending === "refresh");
+  const refreshButton = qs("refreshButton");
+  if (refreshButton && mealActionPending !== "refresh") refreshButton.disabled = Boolean(mealActionPending);
+  document.querySelectorAll("[data-meal-request-id], [data-meal-filter]").forEach((button) => {
+    button.disabled = Boolean(mealActionPending);
+    button.setAttribute("aria-pressed", String(button.dataset.mealRequestId
+      ? button.dataset.mealRequestId === selectedMealRequestId
+      : button.classList.contains("is-active")));
+  });
+  setText("mealUiStatus", busy ? "작업 중 · 현재 요청 확인 후 완료됩니다." : mealDraftDirty ? "미저장 수정 내용 있음" : "");
+}
+
+function mealReviewCanAct(action) {
+  const review = state.recommendedMealReview;
+  if (mealActionPending || mealReviewLoading) return false;
+  if (mealReviewStale || !review || (review.request?.requestId || review.request?.id) !== selectedMealRequestId) {
+    mealReviewSetMessage("목록에서 요청을 다시 선택해 현재 상태를 확인하세요.", "warn");
+    return false;
+  }
+  if (mealReviewIsPublished()) return false;
+  if (action !== "generate" && !review.draft?.publicContent) return false;
+  if (action === "generate" && (!review.response || mealDraftDirty)) {
+    mealReviewSetMessage(mealDraftDirty ? "미저장 수정 내용을 먼저 저장하세요. 초안을 다시 생성하면 저장된 식단이 교체됩니다." : "회원 설문 제출 후 초안을 만들 수 있습니다.", "warn");
+    return false;
+  }
+  if (action === "publish" && mealPublishNeedsReview) {
+    mealReviewSetMessage("직전 공개 요청 결과를 새로고침으로 확인한 뒤 진행하세요. 확인 전에는 다시 공개하지 않습니다.", "warn");
+    return false;
+  }
+  return true;
+}
+
+function requireCurrentMealRequest(requestId) {
+  const review = state.recommendedMealReview;
+  if (mealReviewStale || mealReviewLoading || requestId !== selectedMealRequestId
+    || (review?.request?.requestId || review?.request?.id) !== requestId || mealReviewIsPublished()) {
+    throw new Error("현재 검토 요청을 확인하지 못했습니다. 자료를 다시 조회한 뒤 진행하세요.");
+  }
+}
+
+function mealGenerationSummary(draft) {
+  if (!draft) return "저장된 초안 없음 · 생성 완료 상태가 아닙니다.";
+  const provider = String(draft.provider || "");
+  const fallback = provider.startsWith("safe_");
+  const label = provider === "gemini" ? "Gemini 생성 초안 · 운영자 검토 필요"
+    : provider === "safe_health_review" ? "건강 주의 응답 · AI 생성 없이 운영자·전문가 검토 대기"
+    : fallback ? "기본 초안 · AI 생성 아님 · 추가 AI 비용 없음"
+    : "기존 초안 · 생성 출처 확인 필요";
+  const error = String(draft.generationError || "");
+  let action = "";
+  if (["gemini_free_tier_identity_unverified", "gemini_free_tier_billing_unverified"].includes(error)) action = "무료 등급 미확인 · 운영자가 키 프로젝트·Cloud Billing 조회 권한을 확인하세요.";
+  else if (error === "gemini_paid_or_unknown_billing_blocked") action = "무료 사용 조건 미충족 · 운영자가 프로젝트 결제 연결을 확인하세요.";
+  else if (/quota|429|daily.*(?:limit|claimed)/i.test(error)) action = "무료 한도·일일 시도 제한 · 현재 초안을 검토하고 한도를 확인하세요.";
+  else if (error && /^(gemini_|meal_ai_)/.test(error)) action = "AI 생성 보류 · 운영자가 생성 조건과 오류코드를 확인하세요.";
+  else if (error) action = error;
+  const code = /^(gemini_|meal_ai_)[a-z0-9_]+$/.test(error) ? error : "";
+  return [label, provider === "safe_health_review" ? "추가 AI 비용 없음" : "", action, code].filter(Boolean).join(" · ");
 }
 
 function mealAnswerLabel(key) {
@@ -3059,8 +3147,9 @@ function mealAnswerLabel(key) {
     exerciseSchedule: "운동 일정",
     mealsPerDay: "하루 식사 횟수",
     breakfastPattern: "아침 식사",
+    mainMealSource: "주된 식사 마련 방식",
     regularMealPattern: "평소 식사",
-    snackPattern: "간식",
+    snackPattern: "간식·야식·음주",
     lateNightFrequency: "야식",
     eatingOutFrequency: "외식",
     cookingAccess: "식사 준비 환경",
@@ -3072,6 +3161,10 @@ function mealAnswerLabel(key) {
     alcoholAmount: "음주량",
     smokingStatus: "흡연",
     medicalConditions: "질환·주의사항",
+    healthFlags: "건강상 주의사항",
+    schemaVersion: "설문 버전",
+    aiProcessingConsent: "AI 처리 동의",
+    consentVersion: "동의 문안 버전",
     medications: "복용 약물",
     pregnancyStatus: "임신·수유",
     eatingDisorderHistory: "섭식 관련 치료 경험",
@@ -3101,6 +3194,10 @@ function renderMealSource(review) {
     }
   }
   const answers = review?.response?.answers || {};
+  setText("mealConsentState", !review?.response ? "설문 미제출"
+    : answers.aiProcessingConsent === true && answers.consentVersion
+      ? "AI 처리 동의 기록 있음 · 현재 동의 유효성은 생성 시 재확인"
+      : "기존 응답 · 현재 AI 처리 동의 기록 없음 · 응답은 보존되며 기본 초안으로 검토합니다.");
   const surveyElement = qs("mealSurveySummary");
   if (surveyElement) {
     const rows = Object.entries(answers)
@@ -3136,6 +3233,8 @@ function mealDayEditorHtml(day, index) {
 function fillMealDraftForm(draft) {
   const form = qs("mealDraftForm");
   const content = draft?.publicContent;
+  setText("mealGenerationStatus", mealGenerationSummary(draft));
+  setText("mealDraftMeta", draft ? "저장된 초안" : "초안 없음");
   if (!form || !content) {
     if (form) form.hidden = true;
     return;
@@ -3154,13 +3253,10 @@ function fillMealDraftForm(draft) {
   const reasons = draft.reviewReasons || [];
   qs("mealReviewCheckWrap").hidden = !reasons.length;
   qs("mealReviewAcknowledged").checked = Boolean(draft.reviewAcknowledged);
-  const published = ["published", "sent"].includes(state.recommendedMealReview?.report?.publicationStatus);
-  form.querySelectorAll("input, textarea, button").forEach((element) => {
-    element.disabled = published;
-  });
+  const published = mealReviewIsPublished();
   qs("mealDraftMeta").textContent = published
     ? `리포트 공개 · ${formatDate(state.recommendedMealReview.report.publishedAt || state.recommendedMealReview.report.sentAt)}`
-    : `${draft.provider || "draft"} · ${draft.model || ""} · ${draft.revision?.slice(0, 10) || ""}`;
+    : ["저장된 초안", draft.model || "", draft.revision?.slice(0, 10) || ""].filter(Boolean).join(" · ");
 }
 
 function renderRecommendedMealReview(review) {
@@ -3168,17 +3264,32 @@ function renderRecommendedMealReview(review) {
   const body = qs("mealReviewBody");
   const empty = qs("mealReviewEmpty");
   if (!review) {
+    mealReviewSequence += 1;
+    mealReviewLoading = false;
+    mealReviewStale = true;
     if (body) body.hidden = true;
     if (empty) empty.hidden = false;
+    setText("mealReviewTitle", "요청 선택");
+    setText("mealReviewMeta", "");
+    setText("mealReviewStatus", "대기");
+    syncMealReviewControls();
     return;
   }
   if (body) body.hidden = false;
   if (empty) empty.hidden = true;
-  const flow = mealFlowStatus(review.request || {});
+  const published = mealReviewIsPublished();
+  const flow = published ? { label: "리포트 공개", tone: "success" }
+    : review.draft?.reviewReasons?.length && !review.draft.reviewAcknowledged ? { label: "주의 응답 확인", tone: "danger" }
+    : review.draft ? { label: "초안 검토", tone: "warning" }
+    : review.response ? { label: "설문 제출 · 초안 대기", tone: "active" }
+    : { label: "설문 미제출", tone: "neutral" };
   setText("mealReviewTitle", `${review.request?.memberName || "회원"} 추천식단`);
   setText(
     "mealReviewMeta",
-    [formatPhoneNumber(review.request?.memberPhone || ""), review.response?.submittedAt ? `설문 ${formatDate(review.response.submittedAt)}` : "설문 대기"]
+    [formatPhoneNumber(review.request?.memberPhone || ""), review.response ? `설문 제출 ${formatDate(review.response.submittedAt)}` : ({
+      sent: "설문 요청 발송 기록 · 도달 별도 확인", queued: "설문 요청 발송 대기", template_pending: "설문 요청 템플릿 대기",
+      failed: "설문 요청 발송 확인 필요", skipped: "설문 요청 제외", pending: "설문 요청 대기",
+    }[review.request?.status] || "설문 미제출")]
       .filter(Boolean)
       .join(" · "),
   );
@@ -3189,50 +3300,89 @@ function renderRecommendedMealReview(review) {
   }
   renderMealSource(review);
   fillMealDraftForm(review.draft);
-  const published = ["published", "sent"].includes(review.report?.publicationStatus);
-  qs("mealGenerateButton").disabled = !review.response || published;
-  if (!review.response) mealReviewSetMessage("회원 설문 제출을 기다리고 있습니다.", "warn");
-  else if (!review.draft) mealReviewSetMessage("설문 제출 후 식단을 자동 생성하고 있습니다. 잠시 뒤 새로고침하세요.", "warn");
-  else if (published) mealReviewSetMessage("리포트가 공개되어 수정이 잠겼습니다. 회원은 최초 설문 링크에서 확인할 수 있습니다.", "good");
+  setText("mealPublicationState", published
+    ? "회원 링크 공개됨 · 알림톡 발송·도달 여부는 별도 발송 기록에서 확인"
+    : "회원 링크 미공개 · 초안 저장은 공개·알림톡 발송이 아닙니다.");
+  if (published) mealReviewSetMessage("리포트가 공개되어 수정이 잠겼습니다. 회원은 최초 설문 링크에서 확인할 수 있습니다.", "good");
+  else if (!review.response) mealReviewSetMessage("회원 설문 제출을 기다리고 있습니다.", "warn");
+  else if (!review.draft) mealReviewSetMessage("설문 제출 완료 · 저장된 초안이 없습니다. 생성 상태를 확인하거나 초안을 생성하세요.", "warn");
   else if ((review.draft.reviewReasons || []).length && !review.draft.reviewAcknowledged) {
     mealReviewSetMessage("주의 응답을 확인하고 체크한 뒤 저장해야 공개할 수 있습니다.", "warn");
   } else mealReviewSetMessage("내용을 수정·저장한 뒤 회원 확인 링크에 공개할 수 있습니다.");
+  syncMealReviewControls();
 }
 
-async function loadRecommendedMealReview(requestId) {
+async function loadRecommendedMealReview(requestId, { fromAction = false } = {}) {
+  if (!requestId || mealActionPending && !fromAction) return false;
+  if (mealDraftDirty && !fromAction) {
+    mealReviewSetMessage("미저장 수정 내용이 있습니다. 먼저 수정 저장을 완료하세요.", "warn");
+    return false;
+  }
+  const sequence = ++mealReviewSequence;
   selectedMealRequestId = requestId;
+  mealReviewLoading = true;
+  mealReviewStale = true;
+  setText("mealReviewTitle", "검토 자료 조회 중");
+  setText("mealReviewMeta", "");
+  setText("mealReviewStatus", "조회 중");
+  qs("mealReviewStatus").className = "pill";
   renderRecommendedMealQueue();
+  syncMealReviewControls();
   mealReviewSetMessage("설문, InBody, 식단 초안을 불러오고 있습니다.", "warn");
   try {
     const runtime = await initFirebase();
     const getReview = runtime.httpsCallable(runtime.functionsClient, "getRecommendedMealProgramReview");
     const result = await getReview({ requestId });
-    renderRecommendedMealReview(result?.data || null);
+    if (sequence !== mealReviewSequence) return false;
+    const review = result?.data;
+    if (!review?.request || (review.request.requestId || review.request.id) !== requestId) {
+      throw new Error("선택한 요청과 검토 자료가 일치하지 않습니다. 새로고침 후 확인하세요.");
+    }
+    mealReviewStale = false;
+    mealDraftDirty = false;
+    mealPublishNeedsReview = false;
+    renderRecommendedMealReview(review);
+    const queued = state.recommendedMealProgramRequests.find((item) => (item.requestId || item.id) === requestId);
+    if (queued) {
+      Object.assign(queued, review.request);
+      if (mealReviewIsPublished()) queued.recommendationStatus = "published";
+      renderRecommendedMealQueue();
+    }
+    qs("recommendedMealReviewPanel")?.querySelectorAll(".meal-source-card").forEach((element) => { element.open = false; });
+    return true;
   } catch (error) {
-    mealReviewSetMessage(error?.message || "추천식단 검토 자료를 불러오지 못했습니다.", "danger");
+    if (sequence === mealReviewSequence) {
+      setText("mealReviewTitle", "검토 자료 확인 필요");
+      setText("mealReviewStatus", "조회 실패");
+      mealReviewSetMessage(error?.message || "추천식단 검토 자료를 불러오지 못했습니다. 요청을 다시 선택하세요.", "danger");
+    }
+    return false;
+  } finally {
+    if (sequence === mealReviewSequence) {
+      mealReviewLoading = false;
+      syncMealReviewControls();
+    }
   }
 }
 
 async function handleMealGenerate() {
-  if (!selectedMealRequestId) return;
-  const button = qs("mealGenerateButton");
-  if (button) {
-    button.disabled = true;
-    button.textContent = "초안 생성 중";
-  }
-  mealReviewSetMessage("설문과 최신 InBody를 반영해 7일 식단 초안을 만들고 있습니다.", "warn");
+  if (!mealReviewCanAct("generate")) return;
+  if (state.recommendedMealReview?.draft && !window.confirm("저장된 식단 초안을 다시 생성할까요? 기존 수정 내용이 새 초안으로 교체될 수 있습니다.")) return;
+  const requestId = selectedMealRequestId;
+  mealActionPending = "generate";
+  syncMealReviewControls();
+  mealReviewSetMessage("설문 선택값으로 초안을 준비하고 있습니다. 생성 출처와 보류 사유는 완료 후 확인하세요.", "warn");
   try {
     const runtime = await initFirebase();
+    requireCurrentMealRequest(requestId);
     const generate = runtime.httpsCallable(runtime.functionsClient, "generateRecommendedMealProgramDraft");
-    await generate({ requestId: selectedMealRequestId });
-    await loadRecommendedMealReview(selectedMealRequestId);
+    await generate({ requestId });
+    await loadRecommendedMealReview(requestId, { fromAction: true });
   } catch (error) {
     mealReviewSetMessage(error?.message || "추천식단 초안 생성에 실패했습니다.", "danger");
   } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "AI 식단 다시 생성";
-    }
+    mealActionPending = "";
+    syncMealReviewControls();
   }
 }
 
@@ -3263,66 +3413,122 @@ function collectMealPublicContent() {
   };
 }
 
-async function saveMealDraft({ quiet = false } = {}) {
-  if (!selectedMealRequestId) throw new Error("검토할 추천식단 요청을 선택하세요.");
+async function saveMealDraft({ quiet = false, requestId = selectedMealRequestId } = {}) {
+  if (!requestId || requestId !== selectedMealRequestId || mealReviewStale) throw new Error("검토할 추천식단 요청을 다시 선택하세요.");
+  const publicContent = collectMealPublicContent();
+  const reviewAcknowledged = Boolean(qs("mealReviewAcknowledged")?.checked);
   const runtime = await initFirebase();
+  requireCurrentMealRequest(requestId);
   const saveDraft = runtime.httpsCallable(runtime.functionsClient, "saveRecommendedMealProgramDraft");
   const result = await saveDraft({
-    requestId: selectedMealRequestId,
-    publicContent: collectMealPublicContent(),
-    reviewAcknowledged: Boolean(qs("mealReviewAcknowledged")?.checked),
+    requestId,
+    publicContent,
+    reviewAcknowledged,
   });
+  if (result?.data?.ok !== true || result.data.requestId !== requestId) {
+    throw new Error("수정 저장 완료를 확인하지 못했습니다. 입력 내용은 유지됩니다. 저장 원본을 확인하세요.");
+  }
+  mealDraftDirty = false;
   if (!quiet) mealReviewSetMessage("추천식단 수정 내용을 저장했습니다.", "good");
   return result?.data || {};
 }
 
 async function handleMealDraftSubmit(event) {
   event.preventDefault();
-  const button = qs("mealSaveButton");
-  if (button) {
-    button.disabled = true;
-    button.textContent = "저장 중";
-  }
+  if (!mealReviewCanAct("save") || !qs("mealDraftForm").reportValidity()) return;
+  const requestId = selectedMealRequestId;
+  mealActionPending = "save";
+  syncMealReviewControls();
   try {
-    await saveMealDraft();
-    await loadRecommendedMealReview(selectedMealRequestId);
+    await saveMealDraft({ requestId });
+    await loadRecommendedMealReview(requestId, { fromAction: true });
   } catch (error) {
     mealReviewSetMessage(error?.message || "추천식단 저장에 실패했습니다.", "danger");
   } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "수정 저장";
-    }
+    mealActionPending = "";
+    syncMealReviewControls();
   }
 }
 
 async function handleMealApproveAndSend() {
-  if (!selectedMealRequestId) return;
+  if (!mealReviewCanAct("publish") || !qs("mealDraftForm").reportValidity()) return;
   if (!window.confirm("현재 식단을 최종 승인하고 최초 설문 링크에 공개할까요? 공개 후에는 수정할 수 없습니다.")) return;
-  const button = qs("mealSendButton");
-  if (button) {
-    button.disabled = true;
-    button.textContent = "저장·공개 중";
-  }
+  const requestId = selectedMealRequestId;
+  let publicationAttempted = false;
+  mealActionPending = "publish";
+  syncMealReviewControls();
   mealReviewSetMessage("최종 수정 내용을 저장하고 승인 revision을 확인하고 있습니다.", "warn");
   try {
-    await saveMealDraft({ quiet: true });
+    await saveMealDraft({ quiet: true, requestId });
     const runtime = await initFirebase();
+    requireCurrentMealRequest(requestId);
     const publish = runtime.httpsCallable(runtime.functionsClient, "operatorPublishRecommendedMealPlan");
-    const result = await publish({ requestId: selectedMealRequestId, confirmPublish: true });
+    publicationAttempted = true;
+    const result = await publish({ requestId, confirmPublish: true });
     const data = result?.data || {};
-    if (data.status === "published") mealReviewSetMessage("추천식단을 공개했습니다. 회원은 최초 설문 알림톡 링크에서 확인할 수 있습니다.", "good");
-    else mealReviewSetMessage(data.message || "추천식단 공개를 완료하지 못했습니다.", "danger");
-    await refresh();
-    await loadRecommendedMealReview(selectedMealRequestId);
+    const loaded = await loadRecommendedMealReview(requestId, { fromAction: true });
+    if (!loaded) mealPublishNeedsReview = true;
+    else if (data.status !== "published" || !mealReviewIsPublished()) {
+      mealPublishNeedsReview = true;
+      mealReviewSetMessage(data.message || "공개 요청 결과와 저장 상태를 함께 확인하지 못했습니다. 새로고침 후 확인하세요.", "danger");
+    }
   } catch (error) {
+    if (publicationAttempted) mealPublishNeedsReview = true;
     mealReviewSetMessage(error?.message || "추천식단 승인·공개에 실패했습니다.", "danger");
   } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "검토 완료 후 리포트 공개";
-    }
+    mealActionPending = "";
+    syncMealReviewControls();
   }
+}
+
+async function handleMealRefresh(event) {
+  event?.preventDefault();
+  event?.stopImmediatePropagation();
+  if (mealActionPending) return;
+  if (mealDraftDirty) {
+    mealReviewSetMessage("미저장 수정 내용이 있습니다. 먼저 수정 저장을 완료하세요.", "warn");
+    return;
+  }
+  const requestId = selectedMealRequestId;
+  mealReviewSequence += 1;
+  mealReviewLoading = false;
+  mealReviewStale = true;
+  mealActionPending = "refresh";
+  syncMealReviewControls();
+  try {
+    await refresh();
+    if (requestId && state.recommendedMealProgramRequests.some((item) => (item.requestId || item.id) === requestId)) {
+      await loadRecommendedMealReview(requestId, { fromAction: true });
+    } else if (requestId) {
+      mealReviewSetMessage("현재 목록에서 요청을 확인하지 못했습니다. 목록과 연결 상태를 확인한 뒤 다시 선택하세요.", "warn");
+    }
+  } catch (error) {
+    mealReviewSetMessage(error?.message || "추천식단 목록을 새로고침하지 못했습니다. 연결 상태를 확인하세요.", "danger");
+  } finally {
+    mealActionPending = "";
+    syncMealReviewControls();
+  }
+}
+
+function initMealReviewGuards() {
+  const form = qs("mealDraftForm");
+  if (!form) return;
+  const markDirty = () => { mealDraftDirty = true; syncMealReviewControls(); };
+  form.addEventListener("input", markDirty);
+  form.addEventListener("change", markDirty);
+  qs("refreshButton")?.addEventListener("click", handleMealRefresh, true);
+  window.addEventListener("beforeunload", (event) => {
+    if (!mealDraftDirty && !mealActionPending) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+  document.addEventListener("click", (event) => {
+    if (!(mealDraftDirty || mealActionPending) || !event.target.closest("a[href]")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    mealReviewSetMessage(mealActionPending ? "진행 중인 작업을 마친 뒤 이동하세요." : "미저장 수정 내용을 먼저 저장하세요.", "warn");
+  }, true);
+  syncMealReviewControls();
 }
 
 function handleMealQueueClick(event) {
@@ -3331,11 +3537,13 @@ function handleMealQueueClick(event) {
 }
 
 function handleMealFilterClick(event) {
+  if (mealActionPending) return;
   const button = event.target.closest("[data-meal-filter]");
   if (!button) return;
   mealQueueFilter = button.dataset.mealFilter || "active";
   document.querySelectorAll("[data-meal-filter]").forEach((item) => item.classList.toggle("is-active", item === button));
   renderRecommendedMealQueue();
+  syncMealReviewControls();
 }
 
 function setParkingStatus(message, tone = "") {
@@ -8740,6 +8948,7 @@ qs("mealFilterBar")?.addEventListener("click", handleMealFilterClick);
 qs("mealGenerateButton")?.addEventListener("click", handleMealGenerate);
 qs("mealDraftForm")?.addEventListener("submit", handleMealDraftSubmit);
 qs("mealSendButton")?.addEventListener("click", handleMealApproveAndSend);
+initMealReviewGuards();
 qs("parkingRegistrationForm")?.addEventListener("submit", handleParkingVehicleSubmit);
 qs("parkingOwnerType")?.addEventListener("change", syncParkingVisitorFields);
 qs("parkingAutoApplyButton")?.addEventListener("click", handleParkingAutoApplyClick);

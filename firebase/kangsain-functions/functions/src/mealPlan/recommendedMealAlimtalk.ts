@@ -23,6 +23,7 @@ import {
   RECOMMENDED_MEAL_SURVEY_EXPIRES_DAYS,
 } from "./recommendedMealSurvey";
 import { recommendedMealReportUrl } from "./recommendedMealProgram";
+import { MEAL_TEST_CAMPAIGN, MEAL_TEST_REQUEST, MEAL_TEST_APPROVAL, mealTestWindowApprovalValid } from "../alimtalk/recommendedMealTestWindow";
 
 const SURVEY_BASE_URL = "https://in.archivepilates.com/recommendedMealSurvey/";
 
@@ -42,11 +43,27 @@ export async function operatorSendRecommendedMealProgramAlimtalkHandler(
   if (!templateCode) throw new AppError("INVALID_ARGUMENT", "추천식단 프로그램 알림톡 템플릿 코드가 없습니다.");
 
   const accessToken = createRecommendedMealAccessToken();
-  const requestId = `meal-${todayKst()}-${stableHash({
+  const testCampaign = data.testCampaign === MEAL_TEST_CAMPAIGN;
+  const requestId = testCampaign ? MEAL_TEST_REQUEST : `meal-${todayKst()}-${stableHash({
     phone,
     memberId: member.memberId,
     token: accessToken,
   }).slice(0, 16)}`;
+  if (testCampaign) {
+    const approval = (await db.doc(MEAL_TEST_APPROVAL).get()).data();
+    const target = { candidateId: `${requestId}-invite`, ...member, type: "recommended_meal_survey" as const,
+      templateCode, sourceActionKey: requestId, queuedBy: "operator" as const, reviewedByUid: staff.uid || "operator",
+      payload: { quietHoursTestCampaign: MEAL_TEST_CAMPAIGN, surveyId: requestId } };
+    if (!mealTestWindowApprovalValid(target, approval)) throw new AppError("INVALID_ARGUMENT", "이번 테스트의 대상·승인·시간을 확인하세요.");
+    const fresh = await db.runTransaction(async tx => {
+      const ref = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
+      const existing = await tx.get(ref);
+      if (existing.exists) return false;
+      tx.create(ref, { requestId, status: "preparing_test", createdAt: nowTimestamp(), memberId: member.memberId });
+      return true;
+    });
+    if (!fresh) return { ok: true, status: "skipped", requestId, message: "동일 테스트 요청이 이미 존재합니다. 기존 결과부터 확인하세요." };
+  }
   const surveyUrl = recommendedMealSurveyUrl(requestId, accessToken);
   const shortLink = await ensureShortLink({
     type: "recommended_meal_survey",
@@ -115,6 +132,7 @@ export async function operatorSendRecommendedMealProgramAlimtalkHandler(
     member,
     staff,
   });
+  if (testCampaign) candidate.payload = { ...candidate.payload, quietHoursTestCampaign: MEAL_TEST_CAMPAIGN };
   const issue = await autoSendabilityIssue(candidate, todayKst());
   if (issue) {
     await requestRef.set({ ...baseRequest, status: "failed", lastError: issue }, { merge: true });

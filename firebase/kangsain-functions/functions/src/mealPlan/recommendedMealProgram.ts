@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
+import { applicationDefault, getApp } from "firebase-admin/app";
 import type { Request, Response } from "express";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
@@ -13,13 +14,14 @@ import {
   RECOMMENDED_MEAL_REQUEST_COLLECTION,
   RECOMMENDED_MEAL_RESPONSE_COLLECTION,
 } from "./recommendedMealSurvey";
+import { MEAL_FREE_MODEL, assertFreeGeminiProject, mealAiConsentCurrent,
+  mealGenerationPreferences, mealChoiceReviewReasons } from "./recommendedMealChoicePolicy";
 
 export const RECOMMENDED_MEAL_DRAFT_COLLECTION = "recommendedMealProgramDrafts";
 export const RECOMMENDED_MEAL_REPORT_COLLECTION = "recommendedMealProgramReports";
 export const RECOMMENDED_MEAL_REPORT_EXPIRES_DAYS = 90;
 
 const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
-const GEMINI_MODELS = ["gemini-2.5-flash-lite", "gemini-2.5-flash"];
 const REPORT_BASE_URL = "https://in.archivepilates.com/recommendedMealPlan/";
 
 export interface RecommendedMealDay {
@@ -119,7 +121,7 @@ async function generateRecommendedMealProgramDraftForRequest(
   const answers = objectValue(bundle.response.answers);
   const reviewReasons = stringArray(bundle.response.reviewReasons, 20, 80);
   const sourceHash = stableHash({ answers, inbody: bundle.inbody, reviewReasons });
-  if (!options.force && bundle.draft?.sourceResponseHash === sourceHash && bundle.draft?.publicContent) {
+  if (bundle.draft?.sourceResponseHash === sourceHash && bundle.draft?.publicContent) {
     return { ok: true, requestId, reused: true, draft: safeDraftForOperator(bundle.draft) };
   }
   const fallback = deterministicMealPlan(bundle.request, answers, bundle.inbody, reviewReasons);
@@ -129,20 +131,42 @@ async function generateRecommendedMealProgramDraftForRequest(
   let generationError = "";
   const allergies = reportedAllergies(answers);
   const excludedFoods = reportedFoodExclusions(answers);
-  if (excludedFoods.length) {
+  if (!mealAiConsentCurrent(answers)) {
+    generationError = "현재 AI 처리 동의가 없어 기본 초안만 생성했습니다. 기존 응답은 보존합니다.";
+  } else if (mealChoiceReviewReasons(answers).length || reviewReasons.length && reviewReasons.some(v => v !== "latest_inbody_missing")) {
+    provider = "safe_health_review";
+    generationError = "건강·알레르기 확인 항목이 있어 AI 전송 없이 전문가 검토를 기다립니다.";
+  } else if (excludedFoods.length) {
     provider = allergies.length ? "safe_allergy_review" : "safe_food_exclusion_review";
     generationError = allergies.length
       ? "알레르기 응답으로 특정 식품 자동 추천을 제한했습니다."
       : "섭취 제외 식품 응답으로 특정 식품 자동 추천을 제한했습니다.";
   } else {
     try {
-      const generated = await generateGeminiMealPlan(answers, bundle.inbody, reviewReasons);
+      // Durable per-response/day limit also serializes manual and event-triggered generation.
+      const claimRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
+      await db.runTransaction(async tx => {
+        const current = (await tx.get(claimRef)).data();
+        const prior = current?.mealAiGenerationAttempt as { day?: string } | undefined;
+        const day = new Date().toISOString().slice(0, 10);
+        if (prior?.day === day) throw new Error("meal_ai_daily_attempt_already_claimed");
+        if (current?.status !== "submitted") throw new Error("meal_ai_response_not_submitted");
+        tx.update(claimRef, { mealAiGenerationAttempt: { day, sourceHash, claimedAt: nowTimestamp(), model: MEAL_FREE_MODEL } });
+      });
+      const generated = await generateGeminiMealPlan(answers);
       publicContent = normalizePublicContent(generated, fallback);
       publicContent.title = fallback.title;
+      publicContent.metricsSummary = fallback.metricsSummary;
+      publicContent.caution = fallback.caution;
       provider = "gemini";
       model = generated.model;
     } catch (err) {
-      generationError = errorMessage(err).slice(0, 400);
+      if (err instanceof Error && err.message === "meal_ai_daily_attempt_already_claimed") {
+        return { ok: true, requestId, status: "generation_in_progress_or_daily_limit", reused: true,
+          draft: safeDraftForOperator(bundle.draft) };
+      }
+      generationError = err instanceof Error && /^(gemini_|meal_ai_)/.test(err.message)
+        ? err.message.slice(0, 100) : "gemini_generation_unavailable_no_paid_fallback";
     }
   }
 
@@ -170,8 +194,15 @@ async function generateRecommendedMealProgramDraftForRequest(
     updatedAt: now,
     createdAt: bundle.draft?.createdAt || now,
   };
-  await db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(requestId).set(draft, { merge: false });
-  await db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(requestId).set(
+  await db.runTransaction(async tx => {
+    const reportRef = db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(requestId);
+    const requestRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
+    const currentReport = (await tx.get(reportRef)).data();
+    const currentRequest = (await tx.get(requestRef)).data();
+    if (["published", "sent"].includes(String(currentReport?.publicationStatus || "")) || currentRequest?.status !== "submitted")
+      throw new AppError("INVALID_ARGUMENT", "현재 공개·제출 상태가 변경되어 초안을 덮어쓰지 않았습니다.");
+    tx.set(db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(requestId), draft, { merge: false });
+    tx.set(reportRef,
     {
       reportId: requestId,
       requestId,
@@ -187,15 +218,16 @@ async function generateRecommendedMealProgramDraftForRequest(
       createdAt: bundle.report?.createdAt || now,
     },
     { merge: true },
-  );
-  await db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId).set(
+    );
+    tx.set(requestRef,
     {
       recommendationStatus: reviewReasons.length ? "review_required" : "awaiting_operator_review",
       draftRevision: revision,
       updatedAt: now,
     },
     { merge: true },
-  );
+    );
+  });
   return { ok: true, requestId, draft: safeDraftForOperator(draft) };
 }
 
@@ -412,32 +444,30 @@ async function loadInbodySummary(reference: FirebaseFirestore.DocumentData): Pro
 
 async function generateGeminiMealPlan(
   answers: Record<string, unknown>,
-  inbody: Record<string, unknown> | null,
-  reviewReasons: string[],
 ): Promise<RecommendedMealPublicContent & { model: string }> {
   const apiKey = geminiApiKey.value();
   if (!apiKey) throw new Error("GEMINI_API_KEY secret이 설정되어 있지 않습니다.");
+  const credential = getApp().options.credential || applicationDefault();
+  const access = await credential.getAccessToken();
+  await assertFreeGeminiProject(apiKey, access.access_token);
   const prompt = [
     "ARCHIVE PILATES 회원용 추천식단을 한국어 JSON으로 작성합니다.",
     "목표는 생활 습관 개선이며 의료적 영양 처방, 질환 진단, 치료 표현을 금지합니다.",
     "극단적인 칼로리 제한, 단식 강요, 보충제 처방을 하지 않습니다.",
-    "설문에 알레르기·섭취불가 음식이 있으면 반드시 모든 식단에서 제외합니다.",
-    "InBody 수치는 맥락 설명에만 쓰고 몸을 평가하거나 수치 개선을 단정하지 않습니다.",
+    "건강·질환·약물·알레르기·신원·체성분 정보는 제공되지 않습니다. 추정하거나 만들어내지 않습니다.",
     "정확히 7일 식단을 작성하고 각 끼니는 한국에서 쉽게 구할 수 있는 식품으로 제안합니다.",
     "각 끼니는 음식과 대략적인 손바닥/주먹/컵 단위 분량을 짧게 포함합니다.",
     "출력 키: title, summary, goal, metricsSummary, principles(3~5개), days(7개), hydration, exerciseNutrition, weekendStrategy, caution.",
     "days 항목 키: day(1~7), label, breakfast, lunch, dinner, snack, timingTip.",
-    `설문: ${JSON.stringify(privacySafeGenerationInput(answers))}`,
-    `InBody: ${JSON.stringify(privacySafeGenerationInput(inbody || {}, ["measurementId"]))}`,
-    `운영자 확인 사유 코드: ${JSON.stringify(reviewReasons)}`,
+    "예산, 조리 가능한 시간과 도구, 집밥·구내식당·배달·편의점 식사 환경에 맞게 현실적인 대체 메뉴를 제안합니다.",
+    `고정 선택지: ${JSON.stringify(mealGenerationPreferences(answers))}`,
     "JSON 외 텍스트는 출력하지 않습니다.",
   ].join("\n");
-  let lastError = "";
-  for (const model of GEMINI_MODELS) {
-    try {
+  const model = MEAL_FREE_MODEL;
       const response = await fetch(`${GEMINI_GENERATE_URL}/${encodeURIComponent(model)}:generateContent`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+        signal: AbortSignal.timeout(45000),
         body: JSON.stringify({
           systemInstruction: {
             parts: [{ text: "당신은 ARCHIVE PILATES의 생활습관 식단 에디터입니다. 안전하고 실천 가능한 JSON만 반환합니다." }],
@@ -453,15 +483,10 @@ async function generateGeminiMealPlan(
       });
       const text = await response.text();
       const json = text ? JSON.parse(text) : {};
-      if (!response.ok) throw new Error(`Gemini API ${response.status}: ${json.error?.message || text}`);
+      if (!response.ok) throw new Error(`gemini_generation_http_${response.status}`);
       const output = String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "");
       const parsed = JSON.parse(output.replace(/^```json\s*|\s*```$/g, ""));
       return { ...normalizePublicContent(parsed, parsed), model };
-    } catch (err) {
-      lastError = errorMessage(err);
-    }
-  }
-  throw new Error(lastError || "추천식단 AI 초안 생성에 실패했습니다.");
 }
 
 function deterministicMealPlan(
@@ -474,7 +499,9 @@ function deterministicMealPlan(
   const goal = cleanText(answers.primaryGoal, 120) || "규칙적인 식사 습관 만들기";
   const avoid = reportedFoodExclusions(answers);
   const exercise = cleanText(answers.exerciseSchedule, 200);
-  const mealSet = avoid.length ? safeAllergyReviewMealSet() : [
+  const needsHealthReview = mealChoiceReviewReasons(answers).length > 0
+    || reviewReasons.some(v => v !== "latest_inbody_missing");
+  const mealSet = avoid.length || needsHealthReview ? safeAllergyReviewMealSet() : [
     ["그릭요거트 1컵 + 제철 과일 1주먹 + 견과 1숟갈", "현미밥 1주먹 + 닭가슴살/두부 1손바닥 + 채소 2주먹", "잡곡밥 반~1주먹 + 생선 1손바닥 + 나물 2가지", "삶은 달걀 1개 또는 무가당 두유"],
     ["달걀 2개 + 통밀빵 1장 + 토마토", "보리밥 1주먹 + 소고기/콩 1손바닥 + 쌈채소", "두부 버섯전골 + 밥 반주먹", "과일 1주먹 + 플레인 요거트"],
     ["오트밀 반컵 + 우유/두유 + 바나나 반개", "비빔밥 1그릇(밥 1주먹, 채소 충분히, 단백질 추가)", "닭고기 채소구이 + 고구마 1주먹", "견과 1줌 또는 치즈 1장"],
@@ -483,13 +510,35 @@ function deterministicMealPlan(
     ["달걀 2개 + 고구마 1주먹 + 과일 소량", "외식: 밥 반~1공기 + 구이/회/수육 + 채소", "채소 듬뿍 샤브샤브 + 면/죽은 소량", "배고플 때 요거트 또는 견과"],
     ["평소 아침 식사와 같은 시간에 단백질 포함 식사", "한식 백반: 밥 1주먹, 단백질 반찬, 채소 반찬 우선", "가벼운 집밥: 국/찌개는 건더기 위주 + 밥 반주먹", "과일 1주먹 또는 무가당 음료"],
   ];
+  const preferences = mealGenerationPreferences(answers);
+  if (!avoid.length && !needsHealthReview) {
+    for (const meals of mealSet) {
+      if (preferences.mainMealSource === "편의점·간편식") {
+        meals[1] = "편의점: 작은 즉석밥 + 구운 달걀 또는 두부 + 샐러드, 소스는 별도";
+        meals[2] = "간편식: 즉석밥 + 전자레인지 채소 + 두부 또는 닭고기, 영양표시와 나트륨 확인";
+      } else if (preferences.mainMealSource === "식당·배달") {
+        meals[1] = "식당·배달: 한식 백반 또는 비빔밥 + 단백질 반찬, 소스와 국물은 별도";
+        meals[2] = "식당·배달: 구이·두부·채소를 포함한 한 끼, 밥은 배고픔에 맞게 조절";
+      } else if (preferences.mainMealSource === "구내식당·급식") {
+        meals[1] = "구내식당: 제공된 밥·단백질 반찬·채소를 골고루, 국은 건더기 위주";
+      } else if (["전자레인지·조립만 가능", "조리 어려움"].includes(String(preferences.cookingAccess))) {
+        meals[1] = "즉석밥 + 두부 또는 구운 달걀 + 씻은 채소, 조리 없이 한 접시로 구성";
+        meals[2] = "전자레인지 채소 + 즉석밥 + 두부 또는 닭고기, 별도 소스 소량";
+      } else if (preferences.mealBudget === "하루 1만원 이하") {
+        meals[1] = "집밥·도시락: 밥 + 달걀 또는 두부 + 제철 채소, 같은 재료를 나누어 준비";
+        meals[2] = "밥 + 콩·두부 반찬 + 냉동 또는 제철 채소, 남은 재료 활용";
+      }
+      if (preferences.breakfastPattern === "거의 거름") meals[0] = "아침이 부담스러우면 무가당 두유·달걀·과일 등 평소 먹던 간단한 구성부터 선택";
+      if (preferences.cookingAccess === "10분 이내 간단 조리") meals[0] = "구운 달걀 또는 두부 + 통밀빵 또는 즉석밥 + 씻은 과일";
+      if (Array.isArray(preferences.snackPattern) && preferences.snackPattern.includes("거의 없음"))
+        meals[3] = "배고프지 않으면 간식은 생략하고 물 또는 무가당 음료 선택";
+    }
+  }
   return {
     title: `${name}님의 7일 추천식단`,
-    summary: `${goal}을 목표로, 현재 생활 패턴에서 반복하기 쉬운 식사 구성을 우선했습니다.`,
+    summary: `${goal}을 목표로, ${[preferences.mainMealSource, preferences.cookingAccess, preferences.mealBudget].filter(Boolean).join(" · ") || "현재 생활 패턴"}에서 반복하기 쉬운 식사 구성을 우선했습니다.`,
     goal,
-    metricsSummary: inbody
-      ? "최근 InBody 기록은 식사 구성의 참고 자료로만 반영했으며, 수치보다 꾸준히 실천 가능한 흐름을 우선했습니다."
-      : "InBody 측정값 없이 설문 응답을 중심으로 구성했습니다. 다음 측정 후 식단을 다시 조정할 수 있습니다.",
+    metricsSummary: "생활·식사 선택지를 참고한 일반 식단입니다. 건강 응답과 InBody 수치는 AI에 전송하지 않았습니다.",
     principles: [
       "매 끼니에 손바닥 크기의 단백질을 포함합니다.",
       "채소는 하루 두 끼 이상, 한 끼에 두 주먹을 목표로 합니다.",
@@ -505,7 +554,11 @@ function deterministicMealPlan(
       lunch: meals[1],
       dinner: meals[2],
       snack: meals[3],
-      timingTip: index % 2 === 0 ? "식사 간격은 4~5시간을 기준으로 조정하세요." : "늦은 저녁이라면 밥 양을 줄이고 단백질과 채소를 유지하세요.",
+      timingTip: preferences.mealBreakWindow === "교대·야간근무" || preferences.mealBreakWindow === "매일 다름"
+        ? "정해진 시각보다 근무 중 확보 가능한 식사 시간을 기준으로 한 끼와 휴대 간식을 준비하세요."
+        : preferences.mealBreakWindow === "저녁 21시 이후"
+          ? "늦은 식사는 소화에 부담이 적은 평소 음식으로 준비하고, 무리한 공복이나 과식을 피하세요."
+          : "평소 식사 시간을 기준으로 배고픔과 포만감을 확인하며 조절하세요.",
     })),
     hydration: "물을 한 번에 많이 마시기보다 기상 후, 식사 사이, 운동 전후로 나누어 마십니다.",
     exerciseNutrition: exercise
@@ -541,24 +594,6 @@ function safeAllergyReviewMealSet(): string[][] {
       ? "기존에 안전하게 섭취한 간식 1회분"
       : "배고플 때 평소 문제없이 먹던 과일 또는 안전한 단백질 간식",
   ]);
-}
-
-function privacySafeGenerationInput(
-  value: unknown,
-  excludedKeys: string[] = [],
-): unknown {
-  if (Array.isArray(value)) return value.map((item) => privacySafeGenerationInput(item, excludedKeys));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([key]) => !excludedKeys.includes(key))
-        .map(([key, item]) => [key, privacySafeGenerationInput(item, excludedKeys)]),
-    );
-  }
-  if (typeof value !== "string") return value;
-  return value
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email removed]")
-    .replace(/(?:\+?82[-\s]?)?0?1[016789][-\s]?\d{3,4}[-\s]?\d{4}/g, "[phone removed]");
 }
 
 function normalizePublicContent(value: unknown, fallbackValue: unknown): RecommendedMealPublicContent {

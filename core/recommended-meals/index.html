@@ -13,6 +13,35 @@
     <title>추천식단 · ARCHIVE CORE</title>
     <link rel="stylesheet" href="../assets/styles.css" />
     <link rel="stylesheet" href="../assets/interface.css" />
+    <style>
+      [data-recommended-meals-dashboard] .meal-workspace { grid-template-columns: minmax(0, 1fr); }
+      [data-recommended-meals-dashboard] :is(.top-actions, .title-block, .meal-draft-actions, .meal-form-actions) { min-width: 0; }
+      [data-recommended-meals-dashboard] :is(.panel-header, .top-actions) { flex-wrap: wrap; }
+      [data-recommended-meals-dashboard] :is(h2, .meta-line, .pill, .filter-button, .primary-action, .secondary-action) { overflow-wrap: anywhere; white-space: normal; }
+      [data-recommended-meals-dashboard] :is(.filter-button, .primary-action, .secondary-action, .refresh-button) { min-height: 44px; height: auto; }
+      [data-recommended-meals-dashboard] .meal-queue-button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+      [data-recommended-meals-dashboard] .meal-queue-button .pill { max-width: 8rem; }
+      [data-recommended-meals-dashboard] .meal-source-card { display: block; }
+      [data-recommended-meals-dashboard] .meal-source-card:not([open]) > .meal-source-content { display: none; }
+      [data-recommended-meals-dashboard] .meal-review-check { min-height: 44px; align-items: center; }
+      [data-recommended-meals-dashboard] .meal-review-check input { flex-shrink: 0; }
+      [data-recommended-meals-dashboard] :is(.meal-source-content, .meal-editor-grid, .meal-days) { min-width: 0; }
+      [data-recommended-meals-dashboard] .meal-day-editor { min-inline-size: 0; }
+      [data-recommended-meals-dashboard] [hidden] { display: none !important; }
+      [data-recommended-meals-dashboard] #mealUiStatus:not(:empty) { padding: 12px 0; color: var(--muted); }
+      [data-recommended-meals-dashboard] .meal-review-loading #mealReviewBody { visibility: hidden; }
+      [data-recommended-meals-dashboard] :is(button, summary):focus-visible { outline: 2px solid var(--blue, #2563eb); outline-offset: 3px; }
+      @media (min-width: 1280px) {
+        [data-recommended-meals-dashboard] .meal-workspace { grid-template-columns: minmax(16rem, .8fr) minmax(0, 2.2fr); }
+      }
+      @media (max-width: 640px) {
+        [data-recommended-meals-dashboard] .meal-queue-panel .filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+        [data-recommended-meals-dashboard] .meal-queue-panel .filter-button { padding: 8px 4px; }
+        [data-recommended-meals-dashboard] .meal-queue-panel .filter-button:last-child { grid-column: auto; }
+        [data-recommended-meals-dashboard] .meal-form-actions { align-items: stretch; }
+        [data-recommended-meals-dashboard] :is(.meal-source-card, .meal-day-editor) { padding: 12px; }
+      }
+    </style>
     <script src="../firebase-config.js"></script>
     <script type="module" src="../assets/app.js"></script>
   </head>
@@ -38,32 +67,32 @@
         <header class="topbar">
           <div class="title-block">
             <h1>추천식단 검토</h1>
-            <p>설문·InBody 기반 7일 식단 · 운영자 검토·승인</p>
+            <p>설문 응답 · 식단 초안 · 운영자 검토·공개</p>
           </div>
           <div class="top-actions" aria-label="상태 확인">
-            <a class="text-link" href="../#recommendedMealProgram">추천식단 설문 발송</a>
+            <a class="text-link" href="../#recommendedMealProgram">설문 요청 관리</a>
             <div class="connection-card" aria-live="polite"><span id="connectionLabel">로딩</span><strong id="connectionDetail">데이터 연결 준비 중</strong></div>
             <button class="refresh-button" id="refreshButton" type="button">새로고침</button>
           </div>
         </header>
 
         <section class="grid kpis meal-kpis" aria-label="추천식단 진행 현황">
-          <article class="panel metric"><div class="metric-label">설문 대기</div><div class="metric-value" id="mealAwaitingCount">0</div></article>
-          <article class="panel metric"><div class="metric-label">초안 가능</div><div class="metric-value" id="mealReadyCount">0</div></article>
-          <article class="panel metric"><div class="metric-label">검토 필요</div><div class="metric-value" id="mealReviewCount">0</div></article>
-          <article class="panel metric"><div class="metric-label">리포트 공개</div><div class="metric-value" id="mealSentCount">0</div></article>
+          <article class="panel metric"><div class="metric-label">설문 미제출</div><div class="metric-value" id="mealAwaitingCount">-</div></article>
+          <article class="panel metric"><div class="metric-label">설문 제출 · 초안 대기</div><div class="metric-value" id="mealReadyCount">-</div></article>
+          <article class="panel metric"><div class="metric-label">검토 필요</div><div class="metric-value" id="mealReviewCount">-</div></article>
+          <article class="panel metric"><div class="metric-label">리포트 공개</div><div class="metric-value" id="mealSentCount">-</div></article>
         </section>
 
         <section class="meal-workspace">
           <article class="panel meal-queue-panel">
             <div class="panel-header">
-              <div><h2>진행 목록</h2><p>회원명·상태만 표시</p></div>
-              <span class="pill" id="mealQueueCount">0건</span>
+              <div><h2>진행 목록</h2></div>
+              <span class="pill" id="mealQueueCount">조회 중</span>
             </div>
             <div class="filter-bar" id="mealFilterBar" aria-label="추천식단 상태 필터">
-              <button class="filter-button is-active" type="button" data-meal-filter="active">진행 중</button>
-              <button class="filter-button" type="button" data-meal-filter="review">검토 필요</button>
-              <button class="filter-button" type="button" data-meal-filter="sent">리포트 공개</button>
+              <button class="filter-button is-active" type="button" data-meal-filter="active" aria-pressed="true">진행 중</button>
+              <button class="filter-button" type="button" data-meal-filter="review" aria-pressed="false">검토 필요</button>
+              <button class="filter-button" type="button" data-meal-filter="sent" aria-pressed="false">리포트 공개</button>
             </div>
             <div class="status-list meal-queue" id="recommendedMealQueue"><div class="empty-state">요청 불러오는 중</div></div>
           </article>
@@ -73,31 +102,35 @@
               <div><h2 id="mealReviewTitle">요청 선택</h2><p id="mealReviewMeta"></p></div>
               <span class="pill" id="mealReviewStatus">대기</span>
             </div>
-            <div class="form-status" id="mealReviewMessage" aria-live="polite"></div>
-            <div id="mealReviewEmpty" class="empty-state">설문 제출 후 식단 초안을 만들고 운영자가 최종 내용을 확인합니다.</div>
+            <div class="form-status" id="mealReviewMessage" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
+            <div id="mealUiStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+            <div id="mealReviewEmpty" class="empty-state">검토할 요청을 선택하세요.</div>
             <div id="mealReviewBody" hidden>
               <div class="meal-source-grid">
-                <section class="meal-source-card" aria-labelledby="mealInbodyHeading">
-                  <h3 id="mealInbodyHeading">InBody 참고</h3>
+                <details class="meal-source-card" aria-labelledby="mealInbodyHeading">
+                  <summary id="mealInbodyHeading">InBody 참고 · 운영자 전용</summary>
                   <div id="mealInbodySummary" class="meal-source-content"></div>
-                </section>
+                </details>
                 <details class="meal-source-card meal-sensitive-card">
-                  <summary>민감 설문 응답 확인</summary>
+                  <summary>설문 원본 · 운영자 전용</summary>
                   <div id="mealSurveySummary" class="meal-source-content"></div>
                 </details>
               </div>
 
               <div class="meal-draft-actions">
-                <button class="secondary-action" id="mealGenerateButton" type="button">AI 식단 다시 생성</button>
+                <button class="secondary-action" id="mealGenerateButton" type="button">식단 초안 생성</button>
                 <span class="meta-line" id="mealDraftMeta">초안 없음</span>
               </div>
+              <p id="mealGenerationStatus" class="meta-line" role="status"></p>
+              <p id="mealConsentState" class="meta-line"></p>
+              <p id="mealPublicationState" class="meta-line"></p>
 
               <form id="mealDraftForm" class="meal-draft-form" hidden>
                 <div class="meal-editor-grid">
                   <label><span>제목</span><input id="mealTitle" maxlength="120" required /></label>
                   <label><span>목표</span><input id="mealGoal" maxlength="300" required /></label>
                   <label class="meal-editor-wide"><span>요약</span><textarea id="mealSummary" rows="3" maxlength="800" required></textarea></label>
-                  <label class="meal-editor-wide"><span>InBody 해석</span><textarea id="mealMetricsSummary" rows="3" maxlength="800"></textarea></label>
+                  <label class="meal-editor-wide"><span>회원 공개용 요약 · 민감정보 제외</span><textarea id="mealMetricsSummary" rows="3" maxlength="800"></textarea></label>
                   <label class="meal-editor-wide"><span>실천 원칙 · 한 줄에 하나</span><textarea id="mealPrinciples" rows="5" maxlength="1800"></textarea></label>
                 </div>
                 <div class="meal-days" id="mealDaysEditor" aria-label="7일 추천식단"></div>
