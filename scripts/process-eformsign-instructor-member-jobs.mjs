@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { acquireEformsignBrowserLock } from "./lib/eformsign-browser-lock.mjs";
-import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch } from "./lib/eformsign-send-readiness.mjs";
+import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch, eformNumericPaymentValue } from "./lib/eformsign-send-readiness.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION, canonicalSignupPhone, parseSignupProfile } from "./lib/instructor-signup-profile.mjs";
@@ -472,8 +472,10 @@ async function sendInstructorMemberForm(page, job, beforeFinalSend) {
     page,
     frame,
     INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS.paymentAmount,
-    `${ticketPrice.toLocaleString("ko-KR")}원`,
+    eformNumericPaymentValue(ticketPrice),
   ));
+  await runEformStage(page, "operator_values_ready", () =>
+    assertOperatorFieldsReady(page, frame, { ticketName, ticketPrice }, { requireCounter: false }));
 
   const processButton = page.locator("#btn_unstructured_process_request");
   await processButton.click();
@@ -501,10 +503,10 @@ async function sendInstructorMemberForm(page, job, beforeFinalSend) {
   return { documentName, documentId: evidence.documentId, documentUrl: evidence.url };
 }
 
-async function assertOperatorFieldsReady(page, frame, expected) {
+async function assertOperatorFieldsReady(page, frame, expected, { requireCounter = true } = {}) {
   const body = await page.locator("body").innerText();
   const progress = body.match(/(?:필수 입력 항목|Required fields)\s*\((\d+)\s*\/\s*(\d+)\)/i);
-  if (!progress || Number(progress[1]) !== 2 || Number(progress[2]) !== 2) {
+  if (requireCounter && (!progress || Number(progress[1]) !== 2 || Number(progress[2]) !== 2)) {
     throw new Error(`강사회원가입서의 운영자 선입력 필드가 ${progress?.[1] || "?"}/${progress?.[2] || "?"}입니다. 템플릿 필드 매핑 확인이 필요합니다.`);
   }
   const [ticketName, paymentAmount] = await Promise.all([
@@ -519,30 +521,7 @@ async function assertOperatorFieldsReady(page, frame, expected) {
 async function openSendDialog(page, sendButton) {
   const heading = page.getByRole("heading", { name: /^(문서 전송|Send document)$/ }).filter({ visible: true }).first();
   await sendButton.click();
-  if (await heading.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false)) return heading;
-
-  const body = await page.locator("body").innerText();
-  if (!/(?:필수 입력 항목|Required fields)\s*\(2\s*\/\s*2\)/i.test(body)) {
-    throw new Error("이폼싸인 필수 입력 2/2 확인 전에 전송창을 열 수 없습니다.");
-  }
-  const fallbackInstalled = await page.evaluate(() => {
-    if (typeof window.__checkRequired !== "function") return false;
-    window.__archiveCheckRequiredOriginal = window.__checkRequired;
-    window.__checkRequired = (callback) => callback(true);
-    return true;
-  });
-  if (!fallbackInstalled) throw new Error("이폼싸인 필수항목 검증 콜백을 확인하지 못했습니다.");
-  try {
-    await sendButton.click();
-    await heading.waitFor({ state: "visible", timeout: 30_000 });
-  } finally {
-    await page.evaluate(() => {
-      if (typeof window.__archiveCheckRequiredOriginal === "function") {
-        window.__checkRequired = window.__archiveCheckRequiredOriginal;
-        delete window.__archiveCheckRequiredOriginal;
-      }
-    }).catch(() => {});
-  }
+  await heading.waitFor({ state: "visible", timeout: 30_000 });
   return heading;
 }
 

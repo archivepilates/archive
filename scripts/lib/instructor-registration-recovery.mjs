@@ -2,6 +2,17 @@ import { deriveInstructorLessonRegistrationState, normalizeInstructorLessonPhone
 const millis = v => v?.toMillis ? v.toMillis() : v?._seconds ? v._seconds * 1000 : Date.parse(v || '');
 const legacyFamilyError = '다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단';
 
+export function isKnownUnsentInstructorEformFailure(message) {
+  if (message === legacyFamilyError) return true;
+  const prefix = '[eformsign:send_transition] TimeoutError timeoutMs=30000 ';
+  if (typeof message !== 'string' || !message.startsWith(prefix)) return false;
+  try {
+    const state = JSON.parse(message.slice(prefix.length));
+    return state.path === '/eform/document/view_service.html' && state.framePresent === true
+      && ['Next', '다음'].includes(state.processText);
+  } catch { return false; }
+}
+
 export function planInstructorRegistrationRecovery({ action, registration: r, job, native, approval, now = new Date() }) {
   if (!approval?.operationKey || approval.action !== action || approval.registrationId !== r?.registrationId
     || !approval.actor || !Number.isFinite(millis(approval.approvedAt))
@@ -58,7 +69,7 @@ export function planInstructorRegistrationRecovery({ action, registration: r, jo
         'evidence.ticketPaymentAmount': ticket.payment.paidAmount } };
   }
   if (action !== 'retry_unsent_eform' || r.mode !== 'new_member' || r.steps.ticket?.status !== 'verified'
-    || r.steps.eformsign?.status !== 'failed' || job.status !== 'failed' || job.lastError !== legacyFamilyError
+    || r.steps.eformsign?.status !== 'failed' || job.status !== 'failed' || !isKnownUnsentInstructorEformFailure(job.lastError)
     || ['externalEffectStarted', 'effectStartedAt', 'sendStartedAt', 'sendClickedAt', 'sentAt', 'documentId', 'documentUrl',
       'completedAt', 'providerMessageId'].some(k => Boolean(job[k])) || r.evidence.eformsignDocumentId
     || !native.eformAbsence?.complete || native.eformAbsence.account !== 'archivepilates@gmail.com'

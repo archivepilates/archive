@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch } from '../lib/eformsign-send-readiness.mjs';
+import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch, eformNumericPaymentValue } from '../lib/eformsign-send-readiness.mjs';
+import {readFileSync} from 'node:fs';
+
+test('numeric payment input never contains currency formatting rejected by the field', () => {
+  assert.equal(eformNumericPaymentValue(70000), '70000');
+  for (const value of [0, -1, NaN, Infinity, 1.5, '70000', null]) assert.throws(() => eformNumericPaymentValue(value));
+});
+test('worker validates actual values before Next and retains native required-field validation', () => {
+  const s=readFileSync(new URL('../process-eformsign-instructor-member-jobs.mjs',import.meta.url),'utf8');
+  assert.ok(s.indexOf('"operator_values_ready"') < s.indexOf('await processButton.click()'));
+  assert.ok(s.includes('eformNumericPaymentValue(ticketPrice)'));
+  assert.equal(s.includes('__checkRequired'),false);
+});
 
 test('operator readiness uses visible fields, not vendor load_status', async () => {
   const calls = [];

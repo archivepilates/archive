@@ -141,8 +141,9 @@ const checks = [
     "INSTRUCTOR_MEMBER_EFORMSIGN_OPERATOR_FIELD_IDS",
     "Required fields",
     "Send document",
-    "__archiveCheckRequiredOriginal",
-  ], []],
+    "eformNumericPaymentValue(ticketPrice)",
+    "operator_values_ready",
+  ], ["__checkRequired", "__archiveCheckRequiredOriginal"]],
   ["scripts/process-studiomate-memo-write-jobs.mjs", [
     "updateInstructorLessonRegistrationMemoStatus",
     "deriveInstructorLessonRegistrationState",

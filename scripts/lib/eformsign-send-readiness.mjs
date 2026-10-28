@@ -23,6 +23,11 @@ export async function waitForEformOperatorFields(page, fieldIds) {
   return frame;
 }
 
+export function eformNumericPaymentValue(amount) {
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Invalid eform payment amount');
+  return String(amount);
+}
+
 export function resolvedEformErrorPatch(current, expectedError) {
   if (!expectedError || current.lastError !== String(expectedError).slice(0, 500)) return {};
   const otherFailure = Object.entries(current.steps || {}).some(([key, step]) =>
