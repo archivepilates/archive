@@ -16,7 +16,15 @@
     "providerPhysicalCleanupDoneFlag": "not confirmed; no delete replay",
     "sourceAndSharedServices": "preserved",
     "task": "docs/tasks/2026-10-28-reservation-mirror-retirement.md",
-    "coreRuleRelease": "pending scoped rules-file release"
+    "coreRuleRelease": {
+      "status": "deployed_verified",
+      "sourceCommit": "43cb3d1f08a43744e4e02aef6d8e267af6e8755d",
+      "releaseName": "sites/archive-pilates-core/releases/1793184261560000",
+      "releaseTime": "2026-10-28T10:44:21.560Z",
+      "changedPaths": ["/rules/index.html"],
+      "liveSourceHashMatched": true,
+      "otherHostingFilesAndConfigurationPreserved": true
+    }
   },
   "branch": "codex/mini/rea-studiomate-feasibility-20261023",
   "application": "apps/reservation-mirror",

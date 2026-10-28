@@ -74,3 +74,15 @@ source. CORE rules retirement text and final release evidence are scoped to
 that surface only. No operational Functions deployment is required.
 
 No member notification or source-data mutation is part of this task.
+
+## Final CORE Rules Release
+
+Published at 2026-10-28 19:44:21 KST from clean exact-main source
+`43cb3d1f08a43744e4e02aef6d8e267af6e8755d`. Release:
+`sites/archive-pilates-core/releases/1793184261560000`.
+Only `/rules/index.html` changed; all other 62 Hosting files and the complete
+live Hosting configuration were preserved. Public `https://core.archivepilates.com/rules/`
+returned 200 and exactly matched source SHA-256
+`ff32a327fb6d3968b33446afd9e42baa37b400018a52f72a9049a4b51b339dde`.
+The following receipt-only documentation update does not require another
+Hosting or Functions deployment.
