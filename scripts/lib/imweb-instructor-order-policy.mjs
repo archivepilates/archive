@@ -144,6 +144,7 @@ function hasVerifiedTicketFollowupAttention(registration) {
 export function assertInstructorOrderAttendeeFamily(resolution, registrations) {
   if (!resolution || resolution.status !== 'approved' || !Array.isArray(resolution.attendees)
     || resolution.attendees.length !== registrations.length) throw new Error('다인 주문 공동 원장 확인필요');
+  let progressBlocked = false;
   for (const attendee of resolution.attendees) {
     const r = registrations.find(r => r.registrationId === attendee.registrationId);
     if (!r || r.studioId !== resolution.studioId || r.memberName !== attendee.memberName
@@ -157,10 +158,18 @@ export function assertInstructorOrderAttendeeFamily(resolution, registrations) {
       || r.externalOrder?.paidAmount !== attendee.paidAmount || r.ticketPrice !== attendee.paidAmount
       || r.operatorChecks?.paymentConfirmed !== true || r.operatorChecks?.seatConfirmed !== true
       || r.externalOrderReviewRequired || r.cancellation
-      || ['cancelled', 'canceled', 'rejected', 'review_required', 'failed'].includes(r.status)
-      || (r.status === 'action_required' && !hasVerifiedTicketFollowupAttention(r))) {
+      || ['cancelled', 'canceled', 'rejected'].includes(r.status)
+      || !['queued', 'pending', 'processing', 'action_required', 'review_required', 'failed',
+        'confirmation_pending', 'waiting_signature', 'memo_pending', 'completed'].includes(r.status)) {
       throw new Error('다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단');
     }
+    if (['review_required', 'failed'].includes(r.status)
+      || (r.status === 'action_required' && !hasVerifiedTicketFollowupAttention(r))) {
+      progressBlocked = true;
+    }
   }
+  if (progressBlocked) throw Object.assign(new Error('다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단'), {
+    code: 'INSTRUCTOR_ORDER_FAMILY_PROGRESS_BLOCKED',
+  });
   return true;
 }

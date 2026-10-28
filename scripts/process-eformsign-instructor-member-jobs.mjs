@@ -193,6 +193,9 @@ async function processCandidate(page, candidate) {
     summary.processed += 1;
     let finalSendClicked = false;
     try {
+      const preflight = (await db.collection("instructorLessonRegistrations").doc(candidate.ref.id).get()).data();
+      if (!preflight) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
+      await verifyInstructorPaidOrder(db, preflight);
       const sendResult = await sendInstructorMemberForm(page, { ...claimed, jobId: candidate.ref.id }, async () => {
         const registration = (await db.collection("instructorLessonRegistrations").doc(candidate.ref.id).get()).data();
         if (!registration) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
@@ -217,6 +220,13 @@ async function processCandidate(page, candidate) {
       summary.sent += 1;
       summary.waiting += 1;
     } catch (error) {
+      if (error.code === "INSTRUCTOR_ORDER_FAMILY_PROGRESS_BLOCKED" && !finalSendClicked) {
+        await deferFamilyProgress(candidate.ref, claimed);
+        item.status = "source_waiting";
+        summary.waiting += 1;
+        summary.jobs.push(item);
+        return;
+      }
       if (isMemberDispatchDeferred(error) && !finalSendClicked) {
         await deferClaim(candidate.ref, claimed);
         summary.processed -= 1;
@@ -251,7 +261,8 @@ async function loadCandidates(limit) {
       return snapshot.exists && isCompletionCandidate(snapshot.data())
         ? [{ ref: snapshot.ref, data: snapshot.data(), type: "job" }] : [];
     }
-    if (snapshot.exists && ["pending", "retry", "sent", "waiting_completion"].includes(String(snapshot.data()?.status || ""))) {
+    if (snapshot.exists && (!snapshot.data().nextSourceCheckAt || timestampMillis(snapshot.data().nextSourceCheckAt) <= Date.now())
+      && ["pending", "retry", "sent", "waiting_completion"].includes(String(snapshot.data()?.status || ""))) {
       return [{ ref: snapshot.ref, data: snapshot.data(), type: "job" }];
     }
     if (registrationSnapshot.exists && isInstructorMemberEformOrphan(registrationSnapshot.data(), snapshot.exists)) {
@@ -268,7 +279,8 @@ async function loadCandidates(limit) {
   const sortOldest = (docs) => docs
     .map((doc) => ({ ref: doc.ref, data: doc.data() }))
     .sort((a, b) => timestampMillis(a.data.createdAt) - timestampMillis(b.data.createdAt));
-  const sends = sortOldest([...pendingSnapshot.docs, ...retrySnapshot.docs]).slice(0, limit);
+  const sends = sortOldest([...pendingSnapshot.docs, ...retrySnapshot.docs])
+    .filter(({ data }) => !data.nextSourceCheckAt || timestampMillis(data.nextSourceCheckAt) <= Date.now()).slice(0, limit);
   const checks = [...sentSnapshot.docs, ...waitingSnapshot.docs]
     .map((doc) => ({ ref: doc.ref, data: doc.data() }))
     .sort((a, b) => timestampMillis(a.data.lastCheckedAt || a.data.sentAt || a.data.createdAt)
@@ -300,7 +312,10 @@ async function loadOrphanRegistrationCandidates(limit) {
 }
 
 async function recoverStaleJobs() {
-  const snapshots = await Promise.all(
+  const snapshots = config.jobId
+    ? [{ docs: [await db.collection("eformsignInstructorMemberJobs").doc(config.jobId).get()]
+      .filter(doc => doc.exists && ["processing", "sending", "checking_completion"].includes(doc.data().status)) }]
+    : await Promise.all(
     ["processing", "sending", "checking_completion"].map((status) =>
       db.collection("eformsignInstructorMemberJobs").where("status", "==", status).limit(20).get()),
   );
@@ -310,17 +325,19 @@ async function recoverStaleJobs() {
       const data = doc.data();
       if (now - timestampMillis(data.updatedAt || data.claimedAt) < config.staleLeaseMs) continue;
       if (data.status === "checking_completion") {
-        await doc.ref.set({
-          status: "waiting_completion",
-          claimToken: null,
-          claimedAt: null,
-          claimedBy: null,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        await db.runTransaction(async tx => {
+          const current = (await tx.get(doc.ref)).data();
+          if (!current || current.status !== "checking_completion"
+            || (current.claimToken || null) !== (data.claimToken || null)
+            || now - timestampMillis(current.updatedAt || current.claimedAt) < config.staleLeaseMs) return;
+          tx.set(doc.ref, { status: "waiting_completion", claimToken: null,
+            claimedAt: null, claimedBy: null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        });
         continue;
       }
       const status = staleExternalActionStatus(data, "send_review_required");
-      await updateFailureState(doc.ref, data, "작업자 중단 후 이폼싸인 상태를 확정하지 못했습니다.", status);
+      await updateFailureState(doc.ref, data, "작업자 중단 후 이폼싸인 상태를 확정하지 못했습니다.", status,
+        { staleBefore: now - config.staleLeaseMs, expectedStatus: data.status, expectedClaimToken: data.claimToken || null });
     }
   }
 }
@@ -335,6 +352,7 @@ async function claimJob(ref) {
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     if (registrationSnapshot.data()?.cancellation?.jobId) return null;
     const data = snapshot.data();
+    if (data.nextSourceCheckAt && timestampMillis(data.nextSourceCheckAt) > Date.now()) return null;
     if (!memberDispatchWindow().allowed) return null;
     if (data.externalEffectStarted || data.effectStartedAt || data.sendClickedAt) {
       const message = "이폼싸인 전송 실행 흔적이 있어 자동 재발송을 차단했습니다.";
@@ -927,14 +945,47 @@ function restoreFields(data, fields) {
 
 async function deferClaim(ref, job) {
   await db.runTransaction(async tx => {
-    const current = (await tx.get(ref)).data();
+    const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
+    const [currentSnapshot, registrationSnapshot] = await Promise.all([tx.get(ref), tx.get(registrationRef)]);
+    const current = currentSnapshot.data(), registration = registrationSnapshot.data();
     if (current?.claimToken !== job.claimToken || !["processing", "sending"].includes(current.status))
       throw new Error("instructor_eform_quiet_claim_changed");
+    if (!registrationSnapshot.exists || registration.cancellation || registration.externalOrderReviewRequired
+      || ['cancelled', 'canceled', 'rejected', 'cancellation_pending', 'cancellation_review', 'completed'].includes(registration.status))
+      throw new Error("instructor_eform_quiet_source_changed");
     const nextAllowedAt = memberDispatchWindow().nextAllowedAt;
     tx.update(ref, { ...job.dispatchUndo.job, nextAllowedAt,
       dispatchDeferrals: [...(current.dispatchDeferrals || []), { claimToken: job.claimToken, claimedAt: current.claimedAt,
         sendPreparedAt: current.sendClickedAt || null, deferredAt: new Date().toISOString(), providerPostCount: 0, nextAllowedAt }] });
-    tx.update(db.collection("instructorLessonRegistrations").doc(ref.id), job.dispatchUndo.registration);
+    tx.update(registrationRef, job.dispatchUndo.registration);
+  });
+}
+
+async function deferFamilyProgress(ref, job) {
+  await db.runTransaction(async tx => {
+    const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
+    const [snapshot, registrationSnapshot] = await Promise.all([tx.get(ref), tx.get(registrationRef)]);
+    const current = snapshot.data(), registration = registrationSnapshot.data();
+    if (!snapshot.exists || current.claimToken !== job.claimToken || current.status !== "processing"
+      || ['externalEffectStarted', 'effectStartedAt', 'sendStartedAt', 'sendClickedAt', 'sentAt',
+        'documentId', 'documentUrl', 'providerMessageId', 'completedAt'].some(key => Boolean(current[key])))
+      throw new Error("가입서 원본 대기 중 작업 또는 전송 상태가 변경됐습니다.");
+    if (!registrationSnapshot.exists || registration.cancellation || registration.externalOrderReviewRequired
+      || !['waiting_signature', 'processing', 'action_required', 'confirmation_pending', 'memo_pending'].includes(registration.status)
+      || registration.evidence?.eformsignDocumentId
+      || ['sent', 'verified', 'waiting_completion'].includes(registration.steps?.eformsign?.status))
+      throw new Error("가입서 원본 대기 중 취소·주문 보류가 발생했습니다.");
+    const now = FieldValue.serverTimestamp();
+    tx.update(ref, {
+      status: "pending", attempts: Number(job.attempts || 1) - 1,
+      claimToken: null, claimedAt: null, claimedBy: null,
+      nextSourceCheckAt: new Date(Date.now() + 5 * 60 * 1000),
+      sourceWaitCode: "INSTRUCTOR_ORDER_FAMILY_PROGRESS_BLOCKED", updatedAt: now,
+    });
+    tx.update(registrationRef, deriveRegistrationPatch(registration, {
+      "steps.eformsign": stepValue("queued", "강사회원 가입서", "같은 주문의 회원·수강권 검증 대기 · 미발송"),
+      updatedAt: now,
+    }));
   });
 }
 
@@ -973,8 +1024,17 @@ async function writeSendClaimedState(ref, claimToken, allowedStatuses, jobPatch,
       throw new Error("이폼싸인 발송 작업 임대가 변경되어 상태 반영을 중단했습니다.");
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
-    transaction.set(ref, jobPatch, { merge: true });
     const registration = registrationSnapshot.data() || {};
+    if (jobPatch.status === "sending" && (registration.cancellation || registration.externalOrderReviewRequired
+      || !['waiting_signature', 'processing', 'action_required', 'confirmation_pending', 'memo_pending'].includes(registration.status)
+      || registration.steps?.member?.status !== "verified" || registration.steps?.ticket?.status !== "verified"
+      || registration.evidence?.eformsignDocumentId
+      || ['sent', 'verified', 'waiting_completion'].includes(registration.steps?.eformsign?.status)
+      || ['externalEffectStarted', 'effectStartedAt', 'sendStartedAt', 'sendClickedAt', 'sentAt',
+        'documentId', 'documentUrl', 'providerMessageId', 'completedAt'].some(key => Boolean(current[key])))) {
+      throw new Error("가입서 최종 전송 전 취소·주문 보류·기존 접수 흔적을 확인해 중단했습니다.");
+    }
+    transaction.set(ref, jobPatch, { merge: true });
     transaction.update(registrationRef, deriveRegistrationPatch(registration, {
       ...resolvedEformErrorPatch(registration, resolvedError),
       ...registrationPatch,
@@ -1121,7 +1181,7 @@ async function markFailure(ref, job, message, finalSendClicked) {
   return { status };
 }
 
-async function updateFailureState(ref, job, message, status) {
+async function updateFailureState(ref, job, message, status, expectedStale = null) {
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
@@ -1131,6 +1191,9 @@ async function updateFailureState(ref, job, message, status) {
     ]);
     const current = snapshot.data() || {};
     if (!snapshot.exists) return;
+    if (expectedStale && (current.status !== expectedStale.expectedStatus
+      || (current.claimToken || null) !== expectedStale.expectedClaimToken
+      || timestampMillis(current.updatedAt || current.claimedAt) > expectedStale.staleBefore)) return;
     if (job.claimToken && current.claimToken && current.claimToken !== job.claimToken) return;
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     transaction.set(ref, {

@@ -5,11 +5,12 @@ import vm from 'node:vm';
 import { beforeEach, test } from 'node:test';
 import { assessInstructorOrder, createInstructorOrderAttendeeResolution, orderLedgerId, orderFingerprint } from '../lib/imweb-instructor-order-policy.mjs';
 import { verifyInstructorPaidOrder } from '../lib/imweb-instructor-order-source.mjs';
+import { assertExistingInstructorTicketBinding } from '../lib/instructor-ticket-issue-evidence.mjs';
 import { assertOrderContactBinding, buildOrderContactBinding } from '../lib/instructor-signup-order-identity.mjs';
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred, MemberDispatchDeferredError } from '../lib/member-dispatch-window.mjs';
 import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID, INSTRUCTOR_LESSON_TICKET_NAME,
   INSTRUCTOR_LESSON_TICKET_PRICE, normalizeInstructorLessonName, normalizeInstructorLessonPhone,
-  staleExternalActionStatus } from '../lib/instructor-lesson-registration-contract.mjs';
+  staleExternalActionStatus, deriveInstructorLessonRegistrationState } from '../lib/instructor-lesson-registration-contract.mjs';
 
 const require = createRequire(new URL('../../firebase/kangsain-functions/functions/package.json', import.meta.url));
 const ts = require('typescript');
@@ -415,7 +416,8 @@ test('an attempted native action is never rolled back as an unsent quiet deferra
 for (const amount of [70000, 140000]) test(`existing-ticket adoption checks allocated ${amount} amount and never issues another ticket`, async () => {
   const f = fixture(), steps = [], calls = [];
   const { processStudioMateRegistration } = evaluate(parsed(WORKER), ['processStudioMateRegistration'], {
-    db: f.db, verifyInstructorPaidOrder: async (...args) => { calls.push('verify'); return f.verify(...args); },
+    db: f.db, assertExistingInstructorTicketBinding,
+    verifyInstructorPaidOrder: async (...args) => { calls.push('verify'); return f.verify(...args); },
     openMemberDetail: async () => {}, findActiveInstructorTicket: async () => ({ ticketId: '456', text: `결제 금액 ${amount}원` }),
     completeStep: async (_ref, _claim, step, values) => steps.push([step, values]),
     preparePostTicketSteps: async () => calls.push('prepare'), completeStudioMateRegistration: async () => ({ status: 'completed' }),
@@ -431,6 +433,7 @@ for (const amount of [70000, 140000]) test(`existing-ticket adoption checks allo
 
 test('ticket completion rechecks the paid family after issuing and before completing or preparing candidates', async () => {
   const f = fixture();
+  delete f.job.ticketId;
   const { processStudioMateRegistration } = evaluate(parsed(WORKER), ['processStudioMateRegistration'], {
     db: f.db, verifyInstructorPaidOrder: f.verify,
     openMemberDetail: async () => {}, findActiveInstructorTicket: async () => null,
@@ -440,6 +443,50 @@ test('ticket completion rechecks the paid family after issuing and before comple
   await assert.rejects(processStudioMateRegistration({}, {}, { ...f.job, nativeDispatch: { attempted: false } }));
   assert.equal(f.reads(), 2);
 });
+
+test('a retained ticket receipt prevents another issuance when the card is absent', async () => {
+  const f = fixture();
+  const { processStudioMateRegistration } = evaluate(parsed(WORKER), ['processStudioMateRegistration'], {
+    db: f.db, verifyInstructorPaidOrder: f.verify, openMemberDetail: async () => {},
+    findActiveInstructorTicket: async () => null, issueInstructorLessonTicket: unexpected,
+    completeStep: unexpected, preparePostTicketSteps: unexpected,
+  });
+  await assert.rejects(processStudioMateRegistration({}, {}, { ...f.job, nativeDispatch: { attempted: false } }), /기존 발급 증거/);
+});
+
+for (const issue of ['none', 'claim', 'cancellation', 'source hold', 'send marker']) {
+  test(`eform family deferral preserves attempts and concurrent state: ${issue}`, async () => {
+    const f = fixture(), path = `eformsignInstructorMemberJobs/${f.job.registrationId}`;
+    const claimed = { ...f.job, status: 'processing', claimToken: 'owned', attempts: 4 };
+    delete claimed.documentId;
+    delete claimed.sentAt;
+    f.db.rows.set(path, structuredClone(claimed));
+    const r = f.db.rows.get(f.registrationPath);
+    delete r.evidence.eformsignDocumentId;
+    r.steps.member = { status: 'verified' }; r.steps.ticket = { status: 'verified' };
+    r.steps.confirmation = { status: 'verified', detail: 'Existing accepted notice' };
+    r.steps.eformsign = { status: 'processing' };
+    if (issue === 'claim') f.db.rows.get(path).claimToken = 'other';
+    if (issue === 'cancellation') r.cancellation = { jobId: 'synthetic-cancel' };
+    if (issue === 'source hold') r.externalOrderReviewRequired = true;
+    if (issue === 'send marker') f.db.rows.get(path).sendClickedAt = NOW;
+    const before = structuredClone([...f.db.rows]);
+    const api = evaluate(parsed(EFORM), ['deferFamilyProgress', 'deriveRegistrationPatch', 'stepValue'], {
+      db: f.db, FieldValue: f.db.fieldValue, deriveInstructorLessonRegistrationState,
+    });
+    if (issue !== 'none') {
+      await assert.rejects(api.deferFamilyProgress(f.db.doc(path), claimed));
+      assert.deepEqual([...f.db.rows], before); assert.equal(f.db.writes.length, 0);
+    } else {
+      await api.deferFamilyProgress(f.db.doc(path), claimed);
+      const next = f.db.rows.get(path);
+      assert.equal(next.status, 'pending'); assert.equal(next.attempts, 3);
+      assert.equal(next.claimToken, null); assert.ok(next.nextSourceCheckAt > NOW);
+      assert.deepEqual(f.db.rows.get(f.registrationPath).steps.confirmation, r.steps.confirmation);
+      assert.equal(f.db.rows.get(f.registrationPath).status, 'waiting_signature');
+    }
+  });
+}
 
 test('post-ticket preparation verifies the whole family first and queues the actual per-attendee price', async () => {
   for (const blocked of [false, true]) {

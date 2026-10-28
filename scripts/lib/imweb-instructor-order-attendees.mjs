@@ -113,7 +113,12 @@ export async function reconcileInstructorOrderAttendees(db, order, { apply = fal
       if (data.status !== 'queued' || data.fingerprint !== resolution.sourceFingerprint) throw new Error('기존 공동 보류 상태');
       validateInstructorOrderAttendeeResolution(order, resolution, { now });
       assertInstructorOrderAttendeeFamily(resolution, rows.map(r => r.reg.data()));
-    } catch { reason = '다인 주문 변경·환불·취소 또는 수강자 연결 불일치: 공동 처리 보류'; }
+    } catch (error) {
+      if (error.code === 'INSTRUCTOR_ORDER_FAMILY_PROGRESS_BLOCKED') {
+        return { status: 'unchanged', orderNo: resolution.orderNo, attendeeResolutionVerified: true, operationalWait: true };
+      }
+      reason = '다인 주문 변경·환불·취소 또는 수강자 연결 불일치: 공동 처리 보류';
+    }
     if (!reason) return { status: 'unchanged', orderNo: resolution.orderNo, attendeeResolutionVerified: true };
     if (apply) {
       for (const row of rows) {

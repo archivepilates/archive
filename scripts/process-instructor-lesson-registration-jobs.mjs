@@ -14,6 +14,7 @@ import { sanitizeImwebFailureDetails } from "./lib/imweb-read-failure.mjs";
 import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import { processInstructorLessonCancellations } from "./lib/instructor-lesson-cancellation-worker.mjs";
+import { issuedInstructorTicketId, instructorTicketReceipt, assertExistingInstructorTicketBinding } from "./lib/instructor-ticket-issue-evidence.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
   INSTRUCTOR_LESSON_TICKET_PRICE,
@@ -265,8 +266,8 @@ async function processStudioMateRegistration(page, ref, job) {
   const paidOrder = await verifyInstructorPaidOrder(db, job);
   if (activeTicket && job.externalOrder) {
     const payment = activeTicket.text.match(/결제\s*금액\s*([\d,]+)\s*원/);
-    if (!job.ticketId || String(activeTicket.ticketId) !== String(job.ticketId)
-      || !payment || Number(payment[1].replaceAll(",", "")) !== paidOrder.assessment.paidAmount) {
+    assertExistingInstructorTicketBinding(job, activeTicket);
+    if (!payment || Number(payment[1].replaceAll(",", "")) !== paidOrder.assessment.paidAmount) {
       throw new Error("동일 수강일 수강권의 ID·결제액 연결 확인필요: 자동 재발급 금지");
     }
   }
@@ -274,6 +275,7 @@ async function processStudioMateRegistration(page, ref, job) {
   if (activeTicket) {
     ticketId = activeTicket.ticketId || ticketId;
   } else {
+    if (job.ticketId || job.ticketIssueReceipt) throw new Error("기존 발급 증거가 있어 새 수강권 발급을 차단했습니다. 원본 연결 확인이 필요합니다.");
     const issued = await issueInstructorLessonTicket(page, ref, { ...job, mode, studiomateMemberId: memberId });
     ticketId = issued.ticketId;
   }
@@ -398,7 +400,7 @@ async function openMemberDetail(page, memberId) {
   await page.locator(".member-detail__header").waitFor({ state: "visible", timeout: 30_000 });
 }
 
-async function findActiveInstructorTicket(page, lessonDate) {
+async function findActiveInstructorTicket(page, lessonDate, refreshed = false) {
   const cards = page
     .locator(".member-basic__user-tickets")
     .first()
@@ -407,6 +409,8 @@ async function findActiveInstructorTicket(page, lessonDate) {
   const count = await cards.count();
   for (let index = 0; index < count; index += 1) {
     const locator = cards.nth(index);
+    if (!await locator.isVisible()) continue;
+    if (await locator.evaluate(element => Boolean(element.parentElement?.closest(".userticket-card, .ticket-card")))) continue;
     const text = await locator.innerText().catch(() => "");
     const title = normalizeInstructorLessonName(await locator.locator("h3").innerText().catch(() => ""));
     if (title !== INSTRUCTOR_LESSON_TICKET_NAME) continue;
@@ -415,7 +419,12 @@ async function findActiveInstructorTicket(page, lessonDate) {
     if (dates[0] !== lessonDate || dates.at(-1) !== lessonDate) continue;
     matches.push({ locator, text, ticketId: await locator.getAttribute("data-id").catch(() => "") || "" });
   }
-  if (matches.length > 1) throw new Error("동일 수강일의 강사레슨 (2T) 수강권이 2개 이상입니다.");
+  if (matches.length > 1) {
+    if (refreshed) throw new Error("동일 수강일의 강사레슨 (2T) 수강권이 2개 이상입니다.");
+    await page.reload({ waitUntil: "networkidle", timeout: 60000 });
+    await page.locator(".member-detail__header").waitFor({ state: "visible", timeout: 30000 });
+    return findActiveInstructorTicket(page, lessonDate, true);
+  }
   return matches[0] || null;
 }
 
@@ -489,6 +498,11 @@ async function issueInstructorLessonTicket(page, ref, job) {
   if (response && !response.ok()) {
     throw new Error(`StudioMate 수강권 발급 실패: ${response.status()} ${JSON.stringify(payload).slice(0, 500)}`);
   }
+  const responseTicketId = issuedInstructorTicketId(payload);
+  await commitClaimedState(ref, job.claimToken, {
+    ticketIssueReceipt: { ...instructorTicketReceipt(job, responseTicketId), receivedAt: FieldValue.serverTimestamp() },
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { updatedAt: FieldValue.serverTimestamp() });
   await openMemberDetail(page, job.studiomateMemberId);
   const verified = await findActiveInstructorTicket(page, job.lessonDate);
   if (!verified) throw new Error("발급 후 StudioMate 상세에서 강사레슨 (2T) 수강권을 확인하지 못했습니다.");
@@ -499,8 +513,8 @@ async function issueInstructorLessonTicket(page, ref, job) {
       throw new Error("발급 후 홈페이지 결제금액과 수강권 결제금액 불일치: 자동 재발급 금지");
     }
   }
-  const ticketId = String(payload?.data?.[0]?.id || payload?.[0]?.id || verified.ticketId || "");
-  return { ticketId };
+  if (verified.ticketId && verified.ticketId !== responseTicketId) throw new Error("발급 응답과 원본 수강권 고유번호 불일치: 자동 재발급 금지");
+  return { ticketId: responseTicketId };
 }
 
 async function preparePostTicketSteps(ref, claimToken, job) {
@@ -831,15 +845,15 @@ async function commitClaimedState(ref, claimToken, jobPatch, registrationPatch) 
   });
 }
 
-async function markFailure(ref, job, message, status) {
+async function markFailure(ref, job, message, status, staleBefore = null) {
   const currentStep = registrationStepName(job.currentStep);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const source = await transaction.get(registration(ref.id));
     if (source.data()?.cancellation?.jobId) return;
     const current = snapshot.data() || {};
-    if (!snapshot.exists) return;
-    if (job.claimToken && current.claimToken && current.claimToken !== job.claimToken) return;
+    if (!snapshot.exists || current.status !== "processing" || (current.claimToken || null) !== (job.claimToken || null)) return;
+    if (staleBefore !== null && timestampMillis(current.leaseExpiresAt) > staleBefore) return;
     transaction.set(ref, {
       status,
       claimToken: null,
@@ -861,13 +875,16 @@ async function markFailure(ref, job, message, status) {
 }
 
 async function recoverStaleJobs() {
-  const snapshot = await db.collection("studiomateInstructorLessonJobs").where("status", "==", "processing").limit(20).get();
+  const snapshot = config.jobId
+    ? { docs: [await db.collection("studiomateInstructorLessonJobs").doc(config.jobId).get()]
+      .filter(doc => doc.exists && doc.data().status === "processing") }
+    : await db.collection("studiomateInstructorLessonJobs").where("status", "==", "processing").limit(20).get();
   const now = Date.now();
   for (const doc of snapshot.docs) {
     const data = doc.data();
     if (timestampMillis(data.leaseExpiresAt) > now) continue;
     const status = staleExternalActionStatus(data);
-    await markFailure(doc.ref, data, "작업자 중단 후 임대시간이 만료되었습니다.", status);
+    await markFailure(doc.ref, data, "작업자 중단 후 임대시간이 만료되었습니다.", status, now);
   }
 }
 
