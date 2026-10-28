@@ -84,7 +84,8 @@ for (const target of ['rules', 'core-rules']) {
       assert.ok(actual[0].includes(marker), marker);
     }
     assert.match(actual[0], /일반 구매자.*미완료/);
-    assert.match(actual[0], /배포·판매 오픈을 실행하거나 확인하지 않았습니다/);
+    assert.match(actual[0], /판매 오픈·쿠폰 배포는 아직 실행하지 않았습니다/);
+    assert.match(actual[0], /write_quota_exceeded/);
     assert.equal(current.replace(actual[0], ''), rules);
   });
   test(`${target}: permits only one anchored note addition`, () => {
