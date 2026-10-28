@@ -1,5 +1,65 @@
 const NETWORK_CODES = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH']);
 export const TRANSIENT_READ_CODE = 'IMWEB_TRANSIENT_READ_FAILED';
+export const LOCAL_WRITE_QUOTA_CODE = 'IMWEB_LOCAL_WRITE_QUOTA_EXCEEDED';
+const LOCAL_QUOTA = 'write_quota_exceeded';
+
+// Only structured, uncontradicted CLI safety evidence proves non-dispatch.
+export function isLocalImwebWriteQuotaFailure(error) {
+  if (!error || typeof error !== 'object') return false;
+  const payloads = [error];
+  for (const stream of [error.stdout, error.stderr]) {
+    if (stream === undefined || stream === null || String(stream).trim() === '') continue;
+    try {
+      const parsed = JSON.parse(String(stream));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+      payloads.push(parsed);
+    } catch { return false; }
+  }
+  let found = false;
+  for (const payload of payloads) {
+    const normalized = payload.code === LOCAL_WRITE_QUOTA_CODE
+      && payload.failureDetails?.classification === LOCAL_QUOTA
+      && payload.failureDetails?.quotaScope === 'local_cli'
+      && payload.failureDetails?.dispatchState === 'blocked_before_dispatch';
+    const body = payload.error;
+    if (body !== undefined && (!body || typeof body !== 'object' || Array.isArray(body))) return false;
+    if (body && body.code !== LOCAL_QUOTA && body.classification !== LOCAL_QUOTA) return false;
+    found ||= normalized || body?.code === LOCAL_QUOTA || body?.classification === LOCAL_QUOTA;
+    const pending = [{ value: payload, depth: 0 }];
+    const seen = new Set();
+    while (pending.length) {
+      const { value, depth } = pending.pop();
+      if (seen.has(value) || depth > 8) return false;
+      seen.add(value);
+      if (value.ok === true || value.success === true) return false;
+      if (/network|transport|timeout|abort/i.test(String(value.name || ''))) return false;
+      for (const key of Object.getOwnPropertyNames(value)) {
+        const item = value[key];
+        if (['stdout', 'stderr', 'message', 'stack'].includes(key)) continue;
+        if (['statusCode', 'status_code', 'httpStatus', 'http_status', 'error_code', 'transportCode', 'transport_code', 'signal', 'errno',
+          'providerRequestId', 'provider_request_id', 'requestId', 'request_id', 'dispatchedAt', 'acceptedAt', 'appliedAt', 'sentAt'].includes(key)
+            && item !== undefined && item !== null) return false;
+        if (key === 'status' && item !== undefined && item !== null
+            && !(value === error && [0, 1, 2].includes(item))
+            && !['blocked_before_dispatch', 'not_dispatched'].includes(item)) return false;
+        if (key === 'classification' && item !== LOCAL_QUOTA) return false;
+        if (key === 'quotaScope' && item !== 'local_cli') return false;
+        if (['dispatchState', 'dispatchStatus', 'dispatch_status'].includes(key)
+            && !['blocked_before_dispatch', 'not_dispatched'].includes(item)) return false;
+        if (key === 'code' && item !== undefined && item !== LOCAL_QUOTA
+            && !(value === error && (normalized || [0, 1, 2].includes(item)))) return false;
+        if (['kind', 'type', 'name'].includes(key) && /api|auth|permission|network|http|transport|captcha|security|timeout|abort/i.test(String(item))) return false;
+        if (['dispatched', 'requestDispatched', 'request_dispatched', 'providerAttempted', 'provider_attempted',
+          'accepted', 'applied', 'requestSent', 'request_sent', 'sent', 'attempted', 'externalEffectStarted', 'external_effect_started',
+          'killed', 'timedOut', 'networkError', 'transportError', 'captchaRequired', 'securityWarning', 'authRequired', 'permissionDenied'].includes(key)
+            && item !== undefined && item !== false) return false;
+        if (['attemptCount', 'attempt_count'].includes(key) && item !== 0) return false;
+        if (item && typeof item === 'object') pending.push({ value: item, depth: depth + 1 });
+      }
+    }
+  }
+  return found;
+}
 
 export function sanitizeImwebFailureDetails(value = {}) {
   value ||= {};
@@ -12,11 +72,22 @@ export function sanitizeImwebFailureDetails(value = {}) {
   if (Number.isInteger(value.statusCode) && value.statusCode >= 100 && value.statusCode <= 599) details.statusCode = value.statusCode;
   if (typeof value.providerCode === 'string' && /^\d{1,10}$/.test(value.providerCode)) details.providerCode = value.providerCode;
   if (NETWORK_CODES.has(value.transportCode)) details.transportCode = value.transportCode;
+  if (value.classification === LOCAL_QUOTA && value.quotaScope === 'local_cli'
+      && value.dispatchState === 'blocked_before_dispatch') {
+    Object.assign(details, { classification: LOCAL_QUOTA, quotaScope: 'local_cli', dispatchState: 'blocked_before_dispatch' });
+  }
   return details;
 }
 
 // Inspect structured metadata only; never retain CLI output containing customer data.
 export function imwebRequestFailure(error, { readOnly = false, operation } = {}) {
+  if (!readOnly && isLocalImwebWriteQuotaFailure(error)) {
+    return Object.assign(new Error('Imweb local write quota blocked before dispatch; native follow-up requires the original approval'), {
+      code: LOCAL_WRITE_QUOTA_CODE,
+      failureDetails: sanitizeImwebFailureDetails({ operation, classification: LOCAL_QUOTA,
+        quotaScope: 'local_cli', dispatchState: 'blocked_before_dispatch' }),
+    });
+  }
   const payloads = [error];
   for (const stream of [error?.stdout, error?.stderr]) {
     try {

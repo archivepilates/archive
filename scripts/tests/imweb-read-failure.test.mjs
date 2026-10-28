@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { imwebRequestFailure, sanitizeImwebFailureDetails, TRANSIENT_READ_CODE } from '../lib/imweb-read-failure.mjs';
+import { imwebRequestFailure, sanitizeImwebFailureDetails, TRANSIENT_READ_CODE,
+  LOCAL_WRITE_QUOTA_CODE, isLocalImwebWriteQuotaFailure } from '../lib/imweb-read-failure.mjs';
 import { imwebJson } from '../lib/imweb-referral-source.mjs';
 
 const envelope = status => ({ ok: false, error: { kind: 'imweb_api', status_code: status,
@@ -113,4 +114,85 @@ test('referral adapter rejects malformed and snake-case zero-exit envelopes with
     });
     assert.equal(calls, 1);
   }
+});
+
+const quotaEnvelope = () => ({ ok: false, error: { classification: 'write_quota_exceeded',
+  message: 'private person@example.test token=secret', context: { credential: 'secret' } } });
+
+test('actual classification envelope and legacy structured code prove local quota on either CLI stream', () => {
+  for (const body of [quotaEnvelope(), { error: { code: 'write_quota_exceeded' } }]) {
+    for (const stream of ['stdout', 'stderr']) {
+      const raw = { [stream]: Buffer.from(JSON.stringify(body)), status: 1, signal: null };
+      assert.equal(isLocalImwebWriteQuotaFailure(raw), true);
+      const failure = imwebRequestFailure(raw, { operation: 'other_request' });
+      assert.equal(failure.code, LOCAL_WRITE_QUOTA_CODE);
+      assert.deepEqual(failure.failureDetails, { operation: 'other_request', classification: 'write_quota_exceeded',
+        quotaScope: 'local_cli', dispatchState: 'blocked_before_dispatch' });
+      assert.equal(isLocalImwebWriteQuotaFailure(failure), true);
+      assert.doesNotMatch(JSON.stringify(failure), /private|secret|credential|@/);
+    }
+    assert.equal(isLocalImwebWriteQuotaFailure(body), true);
+  }
+});
+
+test('local quota never becomes transient or retried through the shared CLI wrapper', () => {
+  let calls = 0;
+  assert.throws(() => imwebJson(['member', 'update', 'groups', 'synthetic', '--yes'], {
+    execute() { calls++; throw { stdout: JSON.stringify(quotaEnvelope()) }; },
+    wait() { assert.fail('No automatic write retry'); },
+  }), { code: LOCAL_WRITE_QUOTA_CODE });
+  assert.equal(calls, 1);
+  assert.equal(imwebRequestFailure(quotaEnvelope(), { readOnly: true }).code, 'IMWEB_REQUEST_FAILED');
+});
+
+test('text, malformed JSON, bare codes and untrusted normalized flags do not prove non-dispatch', () => {
+  for (const error of [
+    Error('write_quota_exceeded'), { stderr: 'write_quota_exceeded' }, { stdout: '{broken' },
+    { classification: 'write_quota_exceeded' }, { code: 'write_quota_exceeded' },
+    { code: LOCAL_WRITE_QUOTA_CODE }, { error: { message: 'write_quota_exceeded' } },
+    { stdout: JSON.stringify(quotaEnvelope()), stderr: 'unstructured diagnostic' },
+  ]) assert.equal(isLocalImwebWriteQuotaFailure(error), false);
+});
+
+test('auth, API quota, transport, dispatch and conflicting structured metadata override quota hints', () => {
+  const cases = [];
+  for (const status of [200, 400, 401, 403, 429, 500, 'unknown']) {
+    for (const field of ['statusCode', 'status_code', 'httpStatus', 'http_status']) {
+      cases.push({ ...quotaEnvelope(), [field]: status });
+      const nested = quotaEnvelope(); nested.error[field] = status; cases.push(nested);
+    }
+  }
+  for (const field of ['dispatched', 'requestDispatched', 'request_dispatched', 'providerAttempted',
+    'provider_attempted', 'accepted', 'applied', 'requestSent', 'request_sent', 'sent', 'externalEffectStarted',
+    'attempted', 'killed', 'timedOut', 'captchaRequired', 'securityWarning', 'authRequired', 'permissionDenied']) {
+    const raw = quotaEnvelope(); raw.error.context[field] = true; cases.push(raw);
+  }
+  for (const patch of [
+    { code: 'ECONNRESET' }, { transportCode: 'ETIMEDOUT' }, { signal: 'SIGTERM' },
+    { code: 429 }, { name: 'AbortError' },
+    { status: 429 }, { success: true }, { ok: true },
+    { errno: -110 }, { dispatchStatus: 'accepted' }, { requestId: 'synthetic-provider-receipt' },
+    { attemptCount: 1 },
+    { error: { classification: 'auth_required', code: 'write_quota_exceeded' } },
+    { error: { classification: 'write_quota_exceeded', code: 'provider_timeout' } },
+    { error: { classification: 'write_quota_exceeded', error_code: '30001' } },
+    { error: { classification: 'write_quota_exceeded', kind: 'imweb_api' } },
+    { error: { classification: 'write_quota_exceeded', kind: 'security' } },
+    { error: { classification: 'write_quota_exceeded', type: 'captcha' } },
+  ]) cases.push({ ...quotaEnvelope(), ...patch });
+  cases.push({ stdout: JSON.stringify(quotaEnvelope()), stderr: JSON.stringify(envelope(401)) });
+  cases.push({ stdout: JSON.stringify(quotaEnvelope()), stderr: JSON.stringify({ error: { code: 'unknown' } }) });
+  cases.push(Object.defineProperty(quotaEnvelope(), 'statusCode', { value: 429 }));
+  cases.push(Object.assign(new DOMException('synthetic abort', 'AbortError'), { error: quotaEnvelope().error }));
+  for (const raw of cases) {
+    assert.equal(isLocalImwebWriteQuotaFailure(raw), false);
+    assert.equal(imwebRequestFailure(raw).code, 'IMWEB_REQUEST_FAILED');
+  }
+});
+
+test('explicit false dispatch evidence is compatible; circular structured evidence fails closed', () => {
+  const raw = quotaEnvelope(); raw.error.dispatched = false;
+  assert.equal(isLocalImwebWriteQuotaFailure(raw), true);
+  raw.error.context.loop = raw;
+  assert.equal(isLocalImwebWriteQuotaFailure(raw), false);
 });

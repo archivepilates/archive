@@ -4,6 +4,7 @@ import path from 'node:path';
 import { referralKey, awardReason } from './imweb-referral-policy.mjs';
 import { readCanonicalPointLogs } from './imweb-referral-point-logs.mjs';
 import { imwebRequestFailure, isTransientReadFailure, sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
+import { runApprovedImwebWrite } from './imweb-native-followup.mjs';
 
 export const IMWEB_REFERRAL_SCOPE = Object.freeze({
   siteCode: 'S20260516852c71a014d08',
@@ -38,6 +39,36 @@ export function imwebJson(args, { execute = execFileSync,
       throw failure;
     }
   }
+}
+
+// Opt-in approved writes share a durable action key across CLI and native admin.
+// The caller retains its domain lock and verifies the target identity/readback.
+export async function imwebApprovedJson(args, { payload, operation, targetRef, store,
+  execute = execFileSync } = {}) {
+  if (!Array.isArray(args) || args.length < 3 || args.some(value => typeof value !== 'string' || value.startsWith('--'))
+      || args.slice(0, -1).join('.') !== operation?.approvedScope?.action
+      || !operation.approvedScope.targetIds.includes(targetRef)
+      || args[0] === 'product' && args.at(-1) !== targetRef
+      || !['product.update.status', 'product.update.classification', 'member.update.groups'].includes(operation.approvedScope.action)
+      || !payload || Object.getPrototypeOf(payload) !== Object.prototype
+      || JSON.stringify(Object.keys(payload).sort()) !== JSON.stringify([...operation.approvedScope.fields].sort())) {
+    throw new Error('Approved Imweb command/scope mismatch');
+  }
+  const context = imwebJson(['config', 'context'], { execute });
+  if (context.resolved_profile?.site_code !== operation.siteCode
+      || context.resolved_profile?.unit_code !== operation.unitCode) throw new Error('Approved Imweb site/unit mismatch');
+  if (args[0] === 'member') {
+    const member = imwebJson(['member', 'get', args.at(-1)], { execute }).data;
+    if (member?.memberCode !== targetRef || member.uid !== args.at(-1)
+        || member.siteCode !== operation.siteCode || member.unitCode !== operation.unitCode
+        || payload.unitCode !== operation.unitCode) throw new Error('Approved Imweb member identity mismatch');
+  }
+  return runApprovedImwebWrite({ operation, payload, store, execute: body => {
+    const command = [...args, '--data', JSON.stringify(body)];
+    const dry = imwebJson([...command, '--dry-run'], { execute });
+    if (typeof dry.confirmation_token !== 'string' || !dry.confirmation_token) throw new Error('Missing Imweb confirmation');
+    return imwebJson([...command, '--yes', '--confirm-token', dry.confirmation_token], { execute });
+  } });
 }
 
 export function readReferralMembers({ run = imwebJson, maxPages = 10, pageSize = 50 } = {}) {

@@ -26,6 +26,14 @@
 - Continue to stop before deploy/push when the user explicitly says `로컬만`, `검토만`, `배포하지마`, `push 하지마`, or when production target, auth, secrets, member privacy, payment/reservation policy, or unrelated dirty changes make the safe scope unclear.
 - Put task notes under `docs/tasks/`, durable decisions under `docs/decisions/`, and generated outputs under `artifacts/`.
 
+## Imweb Local Quota Native Continuation
+
+- When the official CLI positively reports a local `write_quota_exceeded` before dispatch, continue the same approved operation through a separate Codex in-app administrator tab without asking again solely because the route changed. Do not reset the quota/audit log or repeat the blocked CLI write.
+- Preserve the original approval, canonical action key, exact account/site/unit/targets and intended fields. A route change never authorizes new recipients, products, payment/refund actions, broader access, or member messages.
+- Authentication/permission errors, remote HTTP 429/API limits, CAPTCHA/security warnings, contradictory metadata, transport failures and accepted/unknown writes are not local-quota fallback triggers. Reconcile uncertain outcomes read-only before any further action; follow existing approval/handoff requirements.
+- Acquire the same product/member lock, save native-write intent in the existing private ledger, refresh the canonical source and administrator form immediately before saving, and independently re-read afterward. Preserve unrelated groups/purchases, original 40-day clocks, stock/options/prices and sale-closure guards. Restore test-only changes and close task-owned tabs in finally cleanup.
+- Active Codex work continues immediately when the administrator session is usable. Unattended Node workers may create one durable deduplicated native follow-up only; a queue record is not execution or completion. Do not add polling, a second scheduler, or an unaudited browser worker. Missing login or a genuinely new approval still requires operator action.
+
 ## Product Sale Opening Safety
 
 - For a new offering, a replacement lesson round, or a product with a future opening time, block purchasing before editing content or asking follow-up questions. Do not close unrelated products that are legitimately on sale.

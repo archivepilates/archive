@@ -1,0 +1,136 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+import { isDeepStrictEqual } from 'node:util';
+import { pathToFileURL } from 'node:url';
+import { makeManifest, assertManifest } from './release-e261017-classroom.mjs';
+
+const BASE = 'd6f864fd';
+const BASELINE_SHA256 = '05e91569ef34b4501607ed13b2a1851a86b7be275bba22af62a180d2d85c25bc';
+const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
+const targets = {
+  rules: { site: 'archive-pilates', resource: '/core/rules/index.html',
+    source: 'core/rules/index.html', url: 'https://archive-pilates.web.app/core/rules/' },
+  'core-rules': { site: 'archive-pilates-core', resource: '/rules/index.html',
+    source: 'core/rules/index.html', url: 'https://archive-pilates-core.web.app/rules/' },
+};
+const sha = value => createHash('sha256').update(value).digest('hex');
+
+export function assertNativeFallbackRulesScope(before, after, target) {
+  if (!Object.hasOwn(targets, target)) throw Error('Unexpected release target');
+  const oldId = 'method9-c-sale-20261028', newId = 'imweb-local-quota-native-continuation';
+  const pattern = id => new RegExp(`^          <div class="rule-note" id="${id}"><strong>[^<>\\r\\n\\u2028\\u2029]+<\\/strong><span>[^<>\\r\\n\\u2028\\u2029]+<\\/span><\\/div>\\n`, 'gm');
+  const previous = before.match(pattern(oldId)) || [];
+  const replaced = after.match(pattern(oldId)) || [];
+  const added = after.match(pattern(newId)) || [];
+  if (previous.length !== 1 || replaced.length !== 1 || added.length !== 1
+      || before.includes(newId) || before.split(`id="${oldId}"`).length !== 2
+      || after.split(`id="${oldId}"`).length !== 2 || after.split(`id="${newId}"`).length !== 2
+      || previous[0] === replaced[0]
+      || after !== before.replace(previous[0], () => added[0] + replaced[0])) {
+    throw Error('Only the existing METHOD #9 note replacement and one preceding native-continuation note are allowed');
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const target = args.find(x => x.startsWith('--target='))?.slice(9);
+  const apply = args.includes('--apply');
+  const expected = args.find(x => x.startsWith('--expected-version='))?.slice(19);
+  if (!Object.hasOwn(targets, target) || new Set(args).size !== args.length
+      || args.filter(x => x.startsWith('--target=')).length !== 1
+      || args.filter(x => x.startsWith('--expected-version=')).length > 1
+      || args.some(x => !['--apply', `--target=${target}`, `--expected-version=${expected}`].includes(x))) {
+    throw Error('Unsupported release argument');
+  }
+  const selected = targets[target];
+  const git = args => execFileSync('git', args, { encoding: 'utf8' }).trim();
+  const root = git(['rev-parse', '--show-toplevel']);
+  const source = fs.readFileSync(path.join(root, selected.source));
+  const baselineSource = execFileSync('git', ['show', `${BASE}:${selected.source}`]);
+  if (sha(baselineSource) !== BASELINE_SHA256) throw Error('Pinned source baseline hash changed');
+  assertNativeFallbackRulesScope(baselineSource.toString(), source.toString(), target);
+  if (apply) {
+    git(['fetch', 'origin', 'main']);
+    if (!expected || git(['branch', '--show-current']) !== 'main' || git(['status', '--porcelain'])
+        || git(['rev-parse', 'HEAD']) !== git(['rev-parse', 'origin/main'])) {
+      throw Error('Apply requires reviewed version and clean synchronized main');
+    }
+  }
+  const token = execFileSync('gcloud', ['auth', 'print-access-token', `--account=${ACCOUNT}`], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000,
+  }).trim();
+  const request = async (name, method = 'GET', body) => {
+    const response = await fetch(`https://firebasehosting.googleapis.com/v1beta1/${name}`, {
+      method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok) throw Error(`Hosting ${method} failed: ${response.status}`);
+    return response.json();
+  };
+  const latest = async () => (await request(`sites/${selected.site}/releases?pageSize=1`)).releases?.[0];
+  const files = async version => {
+    const all = []; let cursor;
+    do {
+      const result = await request(`${version}/files?pageSize=1000${cursor ? `&pageToken=${encodeURIComponent(cursor)}` : ''}`);
+      all.push(...(result.files || [])); cursor = result.nextPageToken;
+    } while (cursor);
+    return all;
+  };
+  const release = await latest();
+  if (!release?.version?.name?.startsWith(`sites/${selected.site}/versions/`)
+      || !release.name?.startsWith(`sites/${selected.site}/releases/`)
+      || apply && release.version.name !== expected) throw Error('Unexpected live version');
+  const live = await fetch(selected.url, { cache: 'no-store' });
+  if (!live.ok || sha(Buffer.from(await live.arrayBuffer())) !== BASELINE_SHA256) throw Error('Live source drift; review before release');
+  const baseline = await request(release.version.name);
+  if (baseline.name !== release.version.name || !baseline.config) throw Error('Unexpected baseline configuration');
+  const baselineFiles = await files(baseline.name);
+  const compressed = gzipSync(source, { level: 9 }), hash = sha(compressed);
+  const manifest = makeManifest(baselineFiles, hash, selected.resource);
+  const evidence = { target, site: selected.site, baselineVersion: baseline.name, sourceBaseline: BASE,
+    sourceCommit: git(['rev-parse', 'HEAD']), changedPaths: [selected.resource], fileCount: baselineFiles.length,
+    baselineSourceSha256: BASELINE_SHA256, sourceSha256: sha(source), mode: apply ? 'apply' : 'plan' };
+  const output = path.join(root, 'artifacts/imweb-native-fallback-20261028'); fs.mkdirSync(output, { recursive: true });
+  const save = () => fs.writeFileSync(path.join(output, `${target}-${apply ? 'release' : 'plan'}.json`), JSON.stringify(evidence, null, 2));
+  save();
+  if (!apply) { console.log(JSON.stringify(evidence)); return; }
+  const lock = path.join(process.env.HOME, 'ArchiveIN/automation/locks', `firebase-hosting-${selected.site}.lock`);
+  const fd = fs.openSync(lock, 'wx', 0o600);
+  try {
+    fs.writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+    if ((await latest()).name !== release.name) throw Error('Concurrent release');
+    const version = await request(`sites/${selected.site}/versions`, 'POST', { config: baseline.config });
+    if (!version.name?.startsWith(`sites/${selected.site}/versions/`)) throw Error('Unexpected version scope');
+    evidence.createdVersion = version.name; save();
+    const chunks = Object.entries(manifest);
+    for (let start = 0; start < chunks.length; start += 1000) {
+      const result = await request(`${version.name}:populateFiles`, 'POST', { files: Object.fromEntries(chunks.slice(start, start + 1000)) });
+      if ((result.uploadRequiredHashes || []).some(value => value !== hash)) throw Error('Unrelated files require upload');
+      if (result.uploadRequiredHashes?.length) {
+        const url = new URL(result.uploadUrl);
+        if (url.origin !== 'https://upload-firebasehosting.googleapis.com') throw Error('Unexpected upload destination');
+        const response = await fetch(`${url.href}/${hash}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' }, body: compressed, signal: AbortSignal.timeout(60000) });
+        if (!response.ok) throw Error(`Asset upload failed: ${response.status}`);
+      }
+    }
+    assertManifest(await files(version.name), manifest);
+    if (!isDeepStrictEqual((await request(version.name)).config, baseline.config) || (await latest()).name !== release.name) throw Error('Configuration or release changed');
+    await request(`${version.name}?updateMask=status`, 'PATCH', { status: 'FINALIZED' });
+    if ((await latest()).name !== release.name) throw Error('Concurrent release after finalization');
+    evidence.releaseIntentAt = new Date().toISOString(); save();
+    const published = await request(`sites/${selected.site}/releases?versionName=${version.name}`, 'POST', {
+      message: `Imweb native continuation ${target} notes only (${evidence.sourceCommit.slice(0, 12)})`,
+    });
+    evidence.releaseName = published.name; save();
+    const verified = await fetch(selected.url, { cache: 'no-store' });
+    if ((await latest()).version.name !== version.name || !verified.ok || sha(Buffer.from(await verified.arrayBuffer())) !== sha(source)) throw Error('Live readback failed; do not repeat release');
+    evidence.verified = true; save(); console.log(JSON.stringify(evidence));
+  } finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(() => {
+  console.error('Scoped Imweb native-continuation rules release failed; inspect saved evidence before retry'); process.exitCode = 1;
+});

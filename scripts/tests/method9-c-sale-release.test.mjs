@@ -75,8 +75,9 @@ test('classroom scope rejects no-op, private-array insertion and already-present
 });
 
 for (const target of ['rules', 'core-rules']) {
-  test(`${target}: actual note is the only change, explicitly local and pending`, () => {
-    const current = readFileSync(path.join(root, 'core/rules/index.html'), 'utf8');
+  test(`${target}: original released note is the only change, explicitly local and pending`, () => {
+    // Later verified progress is released separately; preserve this release's proof.
+    const current = execFileSync('git', ['show', 'd6f864fd:core/rules/index.html'], { cwd: root, encoding: 'utf8' });
     assert.doesNotThrow(() => assertMethod9ReleaseScope(rules, current, target));
     const actual = current.match(/^          <div class="rule-note" id="method9-c-sale-20261028">[^\n]+\n/gm);
     assert.equal(actual.length, 1);
