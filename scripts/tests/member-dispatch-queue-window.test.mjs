@@ -106,6 +106,7 @@ function harness(at = DAY) {
     }, { filename: relative, timeout: 2000 });
     return exports;
   }
+  const hashes = load("utils/hash.ts");
   const window = load("memberSignup/memberDispatchWindow.ts");
   const recipients = load("alimtalk/testRecipients.ts");
   const history = load("memberSignup/membershipWelcomeHistory.ts", { "node:crypto": require("node:crypto") });
@@ -153,9 +154,10 @@ function harness(at = DAY) {
     "longAbsenceCandidateSendabilityIssue", "instructorLessonConfirmationSendabilityIssue"].map(name => [name, async () => h.sourceIssue]));
   sourceChecks.targetDuplicateIssue = async () => h.duplicate;
   const requests = load("alimtalk/memberDispatchRequests.ts", {
-    "../utils/hash": { stableHash: hash }, "./testRecipients": recipients,
+    "../utils/hash": hashes, "./testRecipients": recipients,
   });
   const queue = load("alimtalk/processAlimtalkQueue.ts", {
+    "../utils/hash": hashes,
     "./memberDispatchRequests": requests,
     "../memberSignup/memberDispatchWindow": window,
     "./holdingNoticeRuntime": { ...runtime, reconcileHoldingNoticeQueue: async () => { h.reconciles++; } },

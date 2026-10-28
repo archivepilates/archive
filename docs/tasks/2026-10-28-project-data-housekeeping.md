@@ -104,3 +104,73 @@ Functions deployment.
   all steps in 2m7s. The runner-image migration annotation was informational.
 - Home-profile task tabs were closed; fresh browser inventory showed no
   remaining home-profile task tab. Existing user Chrome/IAB tabs were preserved.
+
+## Follow-Up Usage Regression
+
+Operator explicitly requested live usage checks and a rough deletion summary.
+No real test dispatch, purchase, refund, signup, contract, reservation or
+climate command was introduced. Existing operator account and Imweb default
+profile were used read-only. Private aggregate evidence:
+`post-cleanup-regression.json` (20:51) and
+`post-cleanup-final-checks.json` (20:57), same private evidence directory.
+
+- Reconfirmed all names, unchanged SDK and IDs, exact 22 deleted paths absent,
+  one active default DB and retired server/Job 404.
+- Read counts from 13 canonical/action/video collections. Counts do not prove
+  all individual records unchanged and are not unique-member counts.
+- Actual Chrome authenticated CORE navigation: home, registration, instructor
+  lessons, Alimtalk, climate and home. Each reached read-complete; climate
+  displayed eight devices without a control command. Final home read 20:55.
+  No captured console errors. No all-size/mobile regression claim.
+- Official homepage to actual Imweb ACH9 product: logged-out login/signup
+  links, product title/price/buy control visible, no captured console errors.
+  No cart, checkout, payment or buyer-only playback test.
+- Imweb site/product/order official CLI reads: 200, correct site, sample size
+  three, total product count65/order count213 at observation time.
+- Timestamp and ISO-string send-created timestamps queried separately to avoid
+  cross-type Firestore ordering mistakes. Today's covered rows: eight done,
+  zero created after cleanup. Five latest send records matched provider GET
+  message ID, recipient, template, ATA and COMPLETE/4000. They are pre-cleanup
+  sends; provider observation 20:51 is not provider completion time.
+- Natural source imports after cleanup: three applied at20:17:59~20:18:24.
+  Video event count increased by six and session count by one during checks.
+- Public reads: ten active surfaces200, two retired test surfaces404.
+  Cloud Run/Functions ERROR+ since20:09 through20:51: zero, no pagination gap.
+- Remaining existing issue: staff video group sync last succeeded16:44,
+  failures started16:49 (before cleanup), 47 failures by20:53. Exact runner
+  reason is `Unresolved group update; no automatic write retry`. Read original
+  failure mail `1a18180acd703fc5`; no re-notification or state mutation.
+  This is not resolved by successful site/product/order reads. Next step is
+  exact existing-intent/current-group reconciliation, not automatic replay.
+- Member webhook remains shadow. Latest provider sample10/22, no real shadow
+  event observed. Existing config retained, not full signup-to-grant proof.
+- All task-created tabs2059976031/2059976037 closed; user tabs retained. No
+  temporary viewport override or shared StudioMate browser session was used.
+- No new operating rule was introduced; deployed CORE naming/retirement rules
+  remain current. This follow-up report and test-harness-only changes do not
+  require a Hosting/Functions deployment.
+
+Initial offline sidecar:114 tests passed. Main additional attendees/health
+tests:118 passed after supplying existing runtime NODE_PATH. Window/canonical
+request tests:55 passed. Queue VM tests initially failed because their strict
+mock imports had not tracked the current production source. Harness-only
+verification result follows; production dispatch logic is not changed.
+
+Final harness review: only `member-dispatch-queue-window.test.mjs`, three
+lines added/one replaced. Load real `utils/hash.ts` through the isolated VM
+and use it in both queue and request validation. No assertion, dispatch logic,
+network mock or unexpected-import fail-closed rule weakened. Sidecar passed
+38 queue tests; main reviewed the exact diff and reran the whole bounded set:
+345 passed, zero failed/cancelled/skipped, duration2449ms.
+
+Reproduction: with existing runtime Functions `NODE_PATH`, run node --test
+--test-timeout=30000 over these scripts/tests MJS files:
+`imweb-webhook-ingress-policy`, `imweb-instructor-order-policy`,
+`system-health-alimtalk`, `project-housekeeping-policy`,
+`member-dispatch-health-window`, `imweb-instructor-order-attendees`,
+`member-dispatch-window`, `member-dispatch-requests-window`,
+`member-dispatch-queue-window`, plus the existing mirror release-hosting tests.
+
+Source edits are two result documents and one isolated test file only.
+No production deploy is required. Existing CORE operating rules need no new
+policy change; pending operational faults remain explicit, not force-resolved.
