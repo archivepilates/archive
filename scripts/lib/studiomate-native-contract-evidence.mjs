@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   membershipContractJobKey,
   normalizeMembershipPhone,
@@ -111,6 +112,27 @@ function validBinding(binding) {
     (binding.expectedTotalAmount ?? binding.expectedPaidAmount) > 0 &&
     Number.isFinite(utcMillis(binding.selectedAt))
   );
+}
+
+function verifiedRerequestWindow(binding, nowMs) {
+  const receipt = binding.latestSignatureRequestReceipt;
+  if (!record(receipt) || receipt.schemaVersion !== 1 || receipt.source !== "studiomate_contract_dom_rerequest"
+    || receipt.policy !== "operator_expired_signature_rerequest_v1" || receipt.verified !== true
+    || receipt.complete !== true || receipt.status !== "accepted" || !text(receipt.approvalReference)
+    || !sameIdentity(receipt, binding, [...historyBindingKeys, "contractId", "memberPhone"])
+    || receipt.nativeStatus !== "요청대기" || receipt.independentReloadVerified !== true
+    || receipt.recipientCount !== 1 || receipt.providerSuccess !== 1
+    || receipt.centerSignaturePresent !== true || receipt.memberSignaturePresent !== false) return false;
+  const observed = utcMillis(receipt.observedAt), attempted = utcMillis(receipt.attemptedAt);
+  const previous = utcMillis(receipt.previousExpiredAt), expires = utcMillis(receipt.expiresAt);
+  if (!fresh(observed, nowMs, 7 * DAY) || !Number.isFinite(attempted) || !Number.isFinite(previous)
+    || !Number.isFinite(expires) || attempted > observed || previous >= attempted
+    || utcMillis(binding.selectedAt) > attempted || expires <= nowMs || expires <= observed
+    || expires - observed > 7 * DAY) return false;
+  const key = `contract_rerequest_${createHash("sha256").update(JSON.stringify([
+    receipt.policy, binding.contractId, receipt.previousExpiredAt,
+  ])).digest("hex")}`;
+  return receipt.key === key;
 }
 
 function domObservation(dom, binding, historical = false) {
@@ -360,7 +382,7 @@ export function normalizeNativeContractObservation(raw, binding, now) {
     return result("review", "invalid_observation_clock");
   if (
     !validBinding(binding) ||
-    !fresh(utcMillis(binding.selectedAt), nowMs, 7 * DAY)
+    (!fresh(utcMillis(binding.selectedAt), nowMs, 7 * DAY) && !verifiedRerequestWindow(binding, nowMs))
   )
     return result("review", "invalid_native_binding");
   const selectedMs = utcMillis(binding.selectedAt);

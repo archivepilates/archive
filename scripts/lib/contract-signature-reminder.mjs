@@ -58,6 +58,7 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
     || !source.memberName?.trim() || !b.title?.trim() || !Number.isFinite(instant(b.selectedAt))) return skip("invalid_source");
   if (source.status !== "waiting" || source.observationStatus !== "waiting" || source.observationHold === true
     || source.completion || source.signatureReceipt || source.invalidatedCompletion) return skip("not_unsigned");
+  if (source.operatorSignatureReRequest != null) return skip("operator_signature_rerequest_recorded");
   if (source.signatureReminder != null && !safeReminderDeferral(source.signatureReminder,id)) return skip("reminder_already_recorded");
   let history;
   try { history = membershipContractObservationHistory(source); } catch { return skip("invalid_history"); }

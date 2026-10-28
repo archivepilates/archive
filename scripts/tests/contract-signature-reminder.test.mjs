@@ -47,6 +47,18 @@ function sourceFixture(id = ID) {
   return source;
 }
 
+test("an operator's expired-contract rerequest never causes a second automatic reminder", async () => {
+  for (const status of ["attempting", "accepted", "unknown"]) {
+    const source = sourceFixture();
+    source.operatorSignatureReRequest = { status };
+    assert.equal(planContractSignatureReminder(source, ID, new Date(NOW)).reason, "operator_signature_rerequest_recorded");
+    const result = await processContractSignatureReminder({ source, id: ID, apply: true, scheduled: true,
+      now: () => new Date(NOW), db: { doc: () => assert.fail("no database read") },
+      readLive: () => assert.fail("no live source read"), sendSms: () => assert.fail("no SMS") });
+    assert.equal(result.reason, "operator_signature_rerequest_recorded");
+  }
+});
+
 function sentObservation(source, observedAt = SENT) {
   const bindingIdentity = Object.fromEntries(
     ["studioId", "memberId", "userTicketId", "productId", "selectionJobKey", "selectedAt"]

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { membershipContractJobKey } from "./studiomate-membership-contract-policy.mjs";
 import {
@@ -859,3 +860,199 @@ function deepFreeze(value) {
   }
   return value;
 }
+
+function rerequestKey(binding, receipt) {
+  return `contract_rerequest_${createHash("sha256")
+    .update(JSON.stringify([
+      "operator_expired_signature_rerequest_v1",
+      binding.contractId,
+      receipt.previousExpiredAt,
+    ]))
+    .digest("hex")}`;
+}
+
+function rerequestFixture() {
+  const input = fixture();
+  input.binding.selectedAt = "2026-09-01T03:00:00.000Z";
+  input.binding.currentMemberTicket.providerSignature = null;
+  input.raw = { ...draft(input, CHECKED), statusText: REQUEST_WAITING };
+  input.binding.previousObservations = [draft(input, "2026-09-01T03:10:00.000Z")];
+  const receipt = {
+    schemaVersion: 1,
+    source: "studiomate_contract_dom_rerequest",
+    policy: "operator_expired_signature_rerequest_v1",
+    verified: true,
+    complete: true,
+    status: "accepted",
+    ...historyIdentity(input.binding),
+    contractId: input.binding.contractId,
+    memberPhone: input.binding.memberPhone,
+    approvalReference: "user_synthetic_approval",
+    attemptedAt: "2026-09-14T03:45:00.000Z",
+    observedAt: "2026-09-14T03:46:00.000Z",
+    previousExpiredAt: "2026-09-08T03:00:00.000Z",
+    expiresAt: "2026-09-21T03:46:00.000Z",
+    nativeStatus: REQUEST_WAITING,
+    independentReloadVerified: true,
+    recipientCount: 1,
+    providerSuccess: 1,
+    centerSignaturePresent: true,
+    memberSignaturePresent: false,
+  };
+  receipt.key = rerequestKey(input.binding, receipt);
+  input.binding.latestSignatureRequestReceipt = receipt;
+  return input;
+}
+
+test("old selection without a verified rerequest receipt remains invalid", () => {
+  for (const receipt of [undefined, null, {}, [], "accepted"]) {
+    const input = rerequestFixture();
+    input.binding.latestSignatureRequestReceipt = receipt;
+    review(input, "invalid_native_binding");
+  }
+});
+
+test("accepted rerequest permits waiting observation only, including the seven-day expiry bound", () => {
+  for (const expiresAt of ["2026-09-14T04:00:00.001Z", "2026-09-21T03:46:00.000Z"]) {
+    const input = rerequestFixture();
+    input.binding.latestSignatureRequestReceipt.expiresAt = expiresAt;
+    const result = run(input);
+    assert.equal(result.status, "waiting");
+    assert.equal(result.reason, "native_member_signature_required");
+    assert.equal(result.observation.status, "sent");
+    assert.equal(result.observation.memberSignaturePresent, false);
+    assert.equal(result.observation.bindingIdentity.selectedAt, input.binding.selectedAt);
+    assert.equal(result.completion, null);
+    assert.equal(result.firstObservedSignedAt, null);
+    assert.equal(result.transition, null);
+    assert.equal(result.sendAllowed, false);
+  }
+});
+
+test("rerequest policy, approval, acceptance and independent native evidence fail closed", () => {
+  for (const patch of [
+    { schemaVersion: 2 },
+    { source: "studiomate_native_contract" },
+    { policy: "other_policy" },
+    { verified: false },
+    { complete: false },
+    { status: "unknown" },
+    { status: "pending" },
+    { approvalReference: undefined },
+    { approvalReference: "" },
+    { approvalReference: " " },
+    { approvalReference: false },
+    { key: "contract_rerequest_wrong" },
+    { nativeStatus: DRAFT },
+    { independentReloadVerified: false },
+    { recipientCount: 2 },
+    { recipientCount: "1" },
+    { providerSuccess: 0 },
+    { providerSuccess: "1" },
+    { centerSignaturePresent: false },
+    { memberSignaturePresent: true },
+  ]) {
+    const input = rerequestFixture();
+    Object.assign(input.binding.latestSignatureRequestReceipt, patch);
+    review(input, "invalid_native_binding");
+  }
+});
+
+test("rerequest receipt must match every immutable binding identity field", () => {
+  for (const key of [
+    "studioId", "memberId", "userTicketId", "productId",
+    "selectionJobKey", "selectedAt", "contractId", "memberPhone",
+  ]) {
+    const input = rerequestFixture();
+    input.binding.latestSignatureRequestReceipt[key] = key === "selectedAt"
+      ? "2026-09-02T03:00:00.000Z" : "different";
+    review(input, "invalid_native_binding");
+  }
+  const changedExpiry = rerequestFixture();
+  changedExpiry.binding.latestSignatureRequestReceipt.previousExpiredAt = "2026-09-09T03:00:00.000Z";
+  review(changedExpiry, "invalid_native_binding");
+});
+
+test("rerequest clocks require strict UTC instants, not dates, offsets or rollover", () => {
+  for (const key of ["attemptedAt", "observedAt", "previousExpiredAt", "expiresAt"]) {
+    for (const value of [
+      "2026-09-14",
+      "2026-09-14T03:45:00+00:00",
+      "2026-09-14T03:45:00",
+      "2026-02-30T03:45:00.000Z",
+      undefined,
+    ]) {
+      const input = rerequestFixture();
+      const receipt = input.binding.latestSignatureRequestReceipt;
+      receipt[key] = value;
+      receipt.key = rerequestKey(input.binding, receipt);
+      review(input, "invalid_native_binding");
+    }
+  }
+});
+
+test("expired, future, reversed or over-seven-day rerequest windows never extend selection", () => {
+  for (const patch of [
+    { expiresAt: NOW },
+    { expiresAt: "2026-09-14T03:59:59.999Z" },
+    { expiresAt: "2026-09-14T03:46:00.000Z" },
+    { expiresAt: "2026-09-21T03:46:00.001Z" },
+    { observedAt: "2026-09-14T04:00:00.001Z" },
+    { attemptedAt: "2026-09-14T04:00:00.001Z" },
+    { attemptedAt: "2026-09-14T03:46:00.001Z" },
+    { previousExpiredAt: "2026-09-14T03:45:00.000Z" },
+    { previousExpiredAt: "2026-09-14T03:45:00.001Z" },
+    { attemptedAt: "2026-09-01T02:59:59.999Z", previousExpiredAt: "2026-09-01T02:00:00.000Z" },
+    { observedAt: "2026-09-07T03:59:59.999Z", attemptedAt: "2026-09-07T03:45:00.000Z", previousExpiredAt: "2026-09-06T03:00:00.000Z" },
+  ]) {
+    const input = rerequestFixture();
+    const receipt = input.binding.latestSignatureRequestReceipt;
+    Object.assign(receipt, patch);
+    receipt.key = rerequestKey(input.binding, receipt);
+    review(input, "invalid_native_binding");
+  }
+});
+
+test("valid rerequest never bypasses current source freshness, identity or refund guards", () => {
+  for (const source of ["member", "ticket", "payment"]) {
+    for (const checkedAt of ["2026-09-14T03:29:59.999Z", "2026-09-14T04:00:00.001Z"]) {
+      const input = rerequestFixture();
+      input.binding.currentMemberTicket[source].checkedAt = checkedAt;
+      review(input, `stale_${source}_source`);
+    }
+    const changed = rerequestFixture();
+    changed.binding.currentMemberTicket[source].memberId = "999";
+    review(changed, `unverified_${source}_source`);
+  }
+  for (const patch of [{ refunded: true }, { cancelled: true }, { status: "expired" }]) {
+    const input = rerequestFixture();
+    Object.assign(input.binding.currentMemberTicket.ticket, patch);
+    review(input, "current_member_or_ticket_ineligible");
+  }
+  const changedPhone = rerequestFixture();
+  changedPhone.binding.currentMemberTicket.member.phone = "01099999999";
+  review(changedPhone, "current_phone_mismatch");
+  const staleDom = rerequestFixture();
+  staleDom.raw.observedAt = "2026-09-14T03:29:59.999Z";
+  review(staleDom, "stale_contract_source");
+});
+
+test("rerequest observation leaves original selectedAt, receipt and append-only history immutable", () => {
+  const input = rerequestFixture();
+  const before = structuredClone(input);
+  deepFreeze(input);
+  assert.equal(run(input).status, "waiting");
+  assert.equal(run(input).status, "waiting");
+  assert.deepEqual(input, before);
+
+  const regression = rerequestFixture();
+  regression.binding.previousObservations.push({
+    ...fixture().raw,
+    observedAt: "2026-09-14T03:50:00.000Z",
+    bindingIdentity: historyIdentity(regression.binding),
+  });
+  const historyBefore = structuredClone(regression);
+  deepFreeze(regression);
+  review(regression, "signature_history_regression");
+  assert.deepEqual(regression, historyBefore);
+});
