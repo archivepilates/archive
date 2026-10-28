@@ -70,6 +70,9 @@ test("current policy passes markers and mandates offline semantic suites without
     "scripts/tests/renewal-core-visibility.test.mjs",
     "scripts/tests/alimtalk-release-policy-guard.test.mjs",
     "scripts/tests/instructor-lesson-bounded-send.test.mjs",
+    "scripts/tests/recommended-meal-api.test.ts",
+    "scripts/tests/recommended-meal-choice-policy.test.ts",
+    "scripts/tests/recommended-meal-test-window.test.ts",
   ]);
   assert.equal(call.options.env.FIRESTORE_EMULATOR_HOST, "127.0.0.1:1");
   assert.equal(call.options.env.GCLOUD_PROJECT, "demo-alimtalk-policy");
@@ -77,6 +80,19 @@ test("current policy passes markers and mandates offline semantic suites without
   assert.equal(call.options.env.GOOGLE_APPLICATION_CREDENTIALS, undefined);
   assert.equal(call.options.env.NODE_OPTIONS, undefined);
   assert.equal(call.options.timeout, 60_000);
+});
+
+test("meal privacy, free-billing and one-time test safety contracts cannot disappear", () => {
+  for (const [file, marker] of [
+    [`${backend}mealPlan/recommendedMealChoicePolicy.ts`, 'key === "allergies" || key === "healthFlags"'],
+    [`${backend}mealPlan/recommendedMealChoicePolicy.ts`, "info.billingEnabled !== false || info.billingAccountName"],
+    [`${backend}alimtalk/recommendedMealTestWindow.ts`, "attempted_do_not_replay"],
+    ["archivein/recommendedMealSurvey/index.html", 'schemaVersion: "meal-choice-v2"'],
+  ]) {
+    const result = validate(mutate(file, marker, "removed_safety_contract"));
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.errors.includes(marker) || result.errors.includes(JSON.stringify(marker).slice(1, -1)));
+  }
 });
 
 test("restoring blanket alternate-ticket exclusion in the send guard fails", () => {

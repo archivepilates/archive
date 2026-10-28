@@ -230,23 +230,33 @@ const guardGroups = [
       {
         file: "archivein/recommendedMealSurvey/index.html",
         markers: [
-          "ARCHIVE PILATES 추천식단 프로그램",
+          "추천식단 설문",
           'id="mealSurveyForm"',
           "api/recommendedMealSurvey",
           "설문 제출이 완료되었습니다.",
           ".option:has(input:checked)",
-          ".section > :is(.field, fieldset, .grid-2)",
-          "min-height: 46px",
+          'schemaVersion: "meal-choice-v2"',
+          'consentVersion: "meal-preferences-gemini-v1-20261029"',
+          "min-height: 48px",
         ],
       },
       {
         file: "scripts/verify-recommended-meal-survey.mjs",
         markers: [
           "minimumOptionHeight",
-          "minimumFieldLabelFontSize",
+          "contractMismatchCases",
           "option target below 44px",
           "-viewport.png",
         ],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/mealPlan/recommendedMealChoicePolicy.ts",
+        markers: ["parseMealChoices", "mealGenerationPreferences", 'key === "allergies" || key === "healthFlags"',
+          "assertFreeGeminiProject", "info.billingEnabled !== false || info.billingAccountName"],
+      },
+      {
+        file: "firebase/kangsain-functions/functions/src/alimtalk/recommendedMealTestWindow.ts",
+        markers: ["mealTestWindowApprovalValid", "attempted_do_not_replay", "send.exists", "until - from <= 86400000"],
       },
       {
         file: "firebase.json",
@@ -327,7 +337,7 @@ const guardGroups = [
         file: "core/recommended-meals/index.html",
         markers: [
           "추천식단 검토",
-          "AI 식단 다시 생성",
+          'id="mealGenerateButton"',
           "검토 완료 후 리포트 공개",
         ],
       },
@@ -1775,6 +1785,9 @@ const semanticTests = [
   "scripts/tests/renewal-core-visibility.test.mjs",
   "scripts/tests/alimtalk-release-policy-guard.test.mjs",
   "scripts/tests/instructor-lesson-bounded-send.test.mjs",
+  "scripts/tests/recommended-meal-api.test.ts",
+  "scripts/tests/recommended-meal-choice-policy.test.ts",
+  "scripts/tests/recommended-meal-test-window.test.ts",
 ];
 const semanticResult = spawnSync(process.execPath, [
   "--import", "./firebase/kangsain-functions/functions/node_modules/tsx/dist/loader.mjs",
