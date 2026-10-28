@@ -37,3 +37,13 @@
 
 - The old Documents-backed draft worktree suffered Git mmap timeout during a fast-forward attempt. Existing survey work was preserved and copied to this healthy dedicated lane. It is not a deployment source.
 - Existing Gemini metadata permission is a blocker for verified free AI generation. The deployed safe fallback remains usable, but must not be described as Gemini-generated.
+
+## Live Result
+
+- Source 804bc17d promoted to origin/main; CI 40726882539 passed. App and Alimtalk codebases updated successfully. Other codebases were not deployed.
+- CORE/member/compatibility Hosting versions: 6b025e739786dd1b / 0a7ed5f4c6968a83 / fffacfddefe49cf0. Original manifests/configuration preserved, exact approved assets independently matched on actual domains. Invalid API links rejected with400.
+- Exact test message M4V20261029013826QBO7T3W4D74J4OB accepted once at01:38 KST; provider COMPLETE/4000 confirmed by bounded recipient/date GET at01:40:04, with identity/template/ledger binding and consumed once-only approval. No resend.
+- Actual recipient submission at01:41:27; response contains13 fixed choices and current consent/schema. Server event created7-day safe_fallback/rule-based-v1 draft at01:41:30; generationError=gemini_free_tier_identity_unverified. AI was blocked before generation. Draft/report revision binding matches; publication remains draft. No fabricated answer, manual regeneration, publication or second Alimtalk.
+- Live intake browser checks passed320/390/768; during1440 verification the actual recipient submitted, so the intake correctly became a completed read-only view. This state transition is not an intake UI defect. Completed-state live checks are recorded separately. All browser contexts are closed and non-read network requests were blocked.
+- Existing 정유리 request/response/draft/report hashes all matched before-write baseline after deployment.
+- Quality review: basic draft is not yet a fully personalized final result. Meal-count/breakfast precedence, shift-work structure, specific snack substitutions and short-preparation menu consistency need improvement. This review did not edit submitted answers or the generated draft and did not publish it.
