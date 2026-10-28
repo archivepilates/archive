@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { makeManifest, assertManifest } from './release-e261017-classroom.mjs';
 
-const BASE = '612d27e8';
+const BASE = '18b75b9a';
 const ASSET = '/assets/imweb-my-classroom-20260723a.js';
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const targets = {

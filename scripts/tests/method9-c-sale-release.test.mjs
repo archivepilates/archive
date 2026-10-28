@@ -13,7 +13,7 @@ import { makeManifest, assertManifest } from '../release-e261017-classroom.mjs';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const releaseSource = readFileSync(new URL('../release-method9-c-sale.mjs', import.meta.url), 'utf8');
-const baseline = file => execFileSync('git', ['show', `612d27e8:${file}`], { cwd: root, encoding: 'utf8' });
+const baseline = file => execFileSync('git', ['show', `18b75b9a:${file}`], { cwd: root, encoding: 'utf8' });
 const classroomPath = 'official-home/assets/imweb-my-classroom-20260723a.js';
 const classroom = baseline(classroomPath), rules = baseline('core/rules/index.html');
 const ASSET = '/assets/imweb-my-classroom-20260723a.js';
@@ -105,8 +105,8 @@ for (const target of ['rules', 'core-rules']) {
   });
 }
 
-test('release source pins BASE612d27e8, the exact three resources and import-safe entrypoint', () => {
-  assert.match(releaseSource, /const BASE = '612d27e8';/);
+test('release source pins BASE18b75b9a, the exact three resources and import-safe entrypoint', () => {
+  assert.match(releaseSource, /const BASE = '18b75b9a';/);
   const start = releaseSource.indexOf('const targets = {'), end = releaseSource.indexOf('\n};', start);
   const targets = structuredClone(runInNewContext(`${releaseSource.slice(start, end + 3)}\ntargets;`, { ASSET }));
   assert.deepEqual(targets, {
@@ -143,7 +143,7 @@ function fixture(options = {}) {
     }
     assert.equal(binary, 'git');
     if (args[0] === 'show') {
-      assert.equal(args[1], `612d27e8:${target === 'classroom' ? classroomPath : 'core/rules/index.html'}`);
+      assert.equal(args[1], `18b75b9a:${target === 'classroom' ? classroomPath : 'core/rules/index.html'}`);
       return Buffer.from(before);
     }
     const key = args.join(' ');
@@ -245,7 +245,7 @@ for (const target of ['classroom', 'rules', 'core-rules']) {
     assert.equal(f.counters.closes, 1); assert.equal(f.counters.unlinks, 1);
     assert.equal(f.saved.at(-1).evidence.verified, true);
     assert.ok(f.saved.every(row => row.file.includes('/artifacts/method9-c-sale-20261028/')));
-    assert.equal(f.saved[0].evidence.sourceBaseline, '612d27e8');
+    assert.equal(f.saved[0].evidence.sourceBaseline, '18b75b9a');
     assert.deepEqual(f.saved[0].evidence.changedPaths, [f.resource]);
     assert.ok(f.commands.findIndex(row => row.join(' ') === 'git fetch origin main') < f.commands.findIndex(row => row[0] === 'gcloud'));
     for (const file of f.baselineFiles.filter(file => file.path !== f.resource)) assert.equal(f.manifest[file.path], file.hash);
