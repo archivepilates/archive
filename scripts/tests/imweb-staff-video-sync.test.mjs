@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
-import { reconcileStaffVideos as reconcileRuntimeStaffVideos, STAFF_VIDEO_POLICY } from '../lib/imweb-staff-video-sync.mjs';
+import { reconcileStaffVideos as reconcileRuntimeStaffVideos, STAFF_VIDEO_POLICY, staffPendingDigest } from '../lib/imweb-staff-video-sync.mjs';
 import { E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE, STUDENT_SHARE_SOURCES } from '../lib/imweb-student-share-policy.mjs';
 import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT } from '../lib/imweb-staff-video-policy.mjs';
 
@@ -237,6 +237,45 @@ test('idempotent apply rerun performs no more dry-runs or writes and never adopt
   assert.deepEqual(f.live.get('synthetic-m001'), current);
   assert.deepEqual(f.state.members.m001.ownedAddedGroups, owned);
   assert.ok(!owned.includes('baseline') && !owned.includes(VIDEO_CODES[0]));
+});
+
+test('explicit pending recovery archives uncertainty and prepares one fresh additive intent', () => {
+  const f=fixture();f.failWrite='before';
+  assert.throws(()=>f.reconcile(),/unresolved/);
+  const old=copy(f.state.members.m001.pending), baseline=copy(f.state.members.m001.baselineGroups);
+  f.failWrite=null;
+  assert.throws(()=>f.reconcile(),/Unresolved/);
+  const approval={memberCode:'m001',pendingDigest:staffPendingDigest(old),approvalRef:'operator-recovery-test'};
+  const result=f.reconcile({onlyMemberCode:'m001',reconcilePending:approval});
+  assert.equal(result.ok,true);assert.equal(f.writes.length,2);
+  assert.deepEqual(f.state.members.m001.baselineGroups,baseline);
+  assert.deepEqual(f.state.members.m001.reconciledWrites[0].pending,old);
+  assert.equal(f.state.members.m001.reconciledWrites[0].dispatchOutcome,'unknown');
+  assert.equal(f.state.members.m001.pending,undefined);
+  assert.throws(()=>f.reconcile({onlyMemberCode:'m001',reconcilePending:approval}),/existing pending/);
+});
+
+test('known local quota is a durable native handoff and same-day retry never dispatches', () => {
+  const f=fixture();
+  f.beforeCall=args=>{if(isWrite(args))throw Object.assign(Error('quota'),{code:'IMWEB_LOCAL_WRITE_QUOTA_EXCEEDED',
+    failureDetails:{classification:'write_quota_exceeded',quotaScope:'local_cli',dispatchState:'blocked_before_dispatch'}});};
+  assert.throws(()=>f.reconcile(),{code:'IMWEB_NATIVE_ADMIN_REQUIRED'});
+  assert.equal(f.state.members.m001.pending.status,'blocked_before_dispatch');
+  const calls=f.writes.length;
+  f.beforeCall=null;
+  assert.throws(()=>f.reconcile(),{code:'IMWEB_NATIVE_ADMIN_REQUIRED'});
+  assert.equal(f.writes.length,calls);
+  const result=f.reconcile({now:NOW+86400000});
+  assert.equal(result.ok,true);assert.equal(f.writes.length,calls+1);
+  assert.equal(f.state.members.m001.reconciledWrites[0].outcome,'not_dispatched');
+});
+
+test('contradictory quota transport evidence stays unknown and blocks automatic replay', () => {
+  const f=fixture();
+  f.beforeCall=args=>{if(isWrite(args))throw Object.assign(Error('unknown'),{code:'IMWEB_LOCAL_WRITE_QUOTA_EXCEEDED',
+    failureDetails:{classification:'write_quota_exceeded',quotaScope:'local_cli',dispatchState:'blocked_before_dispatch'},statusCode:429});};
+  assert.throws(()=>f.reconcile(),{code:'STAFF_GROUP_RESULT_UNKNOWN'});
+  assert.equal(f.state.members.m001.pending.status,'result_unknown');
 });
 
 test('a newly cataloged video is added on a later run without acquiring baseline ownership', () => {

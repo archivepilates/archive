@@ -1,31 +1,46 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import assert from 'node:assert/strict';
-import { staffImweb, staffMembers, staffPages, STAFF_VIDEO_DIR } from './lib/imweb-staff-video-sync.mjs';
-import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT, videoGroups } from './lib/imweb-staff-video-policy.mjs';
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { staffImweb, STAFF_VIDEO_DIR, MEMBER_GROUP_LOCK } from './lib/imweb-staff-video-sync.mjs';
+import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
+import { verifyStaffVideoAccess } from './lib/imweb-staff-video-verification.mjs';
 
-// Independent read-only member detail and every target group's membership list.
-const state = JSON.parse(fs.readFileSync(path.join(STAFF_VIDEO_DIR, 'state.json'), 'utf8'));
-const context = staffImweb(['config', 'context']);
-assert.equal(context.resolved_profile.site_code, SITE); assert.equal(context.resolved_profile.unit_code, UNIT);
-const members = staffMembers(staffImweb).filter(member => member.grade === STAFF_GRADE);
-assert.ok(members.length > 0);
-const catalog = videoGroups(staffPages(staffImweb, ['member', 'groups', 'list']));
-const desired = [...catalog, STAFF_GROUP];
-const outcomes = [];
-for (const member of members) {
-  const detail = staffImweb(['member', 'get', member.uid, '--unit-code', UNIT]).data;
-  assert.equal(detail.memberCode, member.memberCode); assert.equal(detail.grade, STAFF_GRADE);
-  const entry = state.members[member.memberCode]; assert.ok(entry && !entry.pending);
-  assert.ok(desired.every(code => detail.group.includes(code)));
-  assert.ok(entry.baselineGroups.every(code => detail.group.includes(code)));
-  outcomes.push({ memberCode: detail.memberCode, videoGroups: catalog.length, baselinePreserved: true });
+export { verifyStaffVideoAccess };
+
+export async function runStaffVideoVerification({ run = staffImweb, directory = STAFF_VIDEO_DIR,
+  onlyMemberCode = '', expectedGroupCodes = [], acquireLock = acquireStudioMateBrowserLock, io = fs } = {}) {
+  const release = await acquireLock({ lockPath: MEMBER_GROUP_LOCK, owner: 'imweb-staff-video-verification',
+    waitMs: 0, staleMs: 600000 });
+  let temporary;
+  try {
+    const state = JSON.parse(io.readFileSync(path.join(directory, 'state.json'), 'utf8'));
+    const result = verifyStaffVideoAccess({ run, state, onlyMemberCode, expectedGroupCodes });
+    temporary = path.join(directory, `.verification-${randomUUID()}.tmp`);
+    io.writeFileSync(temporary, JSON.stringify(result, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+    io.renameSync(temporary, path.join(directory, 'verification.json'));
+    temporary = undefined;
+    return result;
+  } finally {
+    try {
+      if (temporary) try { io.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    } finally { await release(); }
+  }
 }
-for (const code of desired) {
-  const rows = staffPages(staffImweb, ['member', 'groups', 'members', code, '--unit-code', UNIT]);
-  for (const member of members) assert.equal(rows.filter(row => row.memberCode === member.memberCode).length, 1);
+
+export async function main(args = process.argv.slice(2), options = {}) {
+  let onlyMemberCode = '';
+  const expectedGroupCodes = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--member-code' && !onlyMemberCode && /^m[0-9a-f]+$/.test(args[i + 1] || '')) onlyMemberCode = args[++i];
+    else if (args[i] === '--expected-group' && args[i + 1] && !args[i + 1].startsWith('--')) expectedGroupCodes.push(args[++i]);
+    else throw Error('Unsupported staff verification argument');
+  }
+  const result = await runStaffVideoVerification({ ...options, onlyMemberCode, expectedGroupCodes });
+  console.log(JSON.stringify(result));
+  return result;
 }
-const result = { ok: true, verifiedAt: new Date().toISOString(), memberDetails: outcomes,
-  independentlyVerifiedGroupLists: desired.length, ordinaryMemberPlayback: 'not_verified' };
-fs.writeFileSync(path.join(STAFF_VIDEO_DIR, 'verification.json'), JSON.stringify(result, null, 2)+'\n', { mode: 0o600 });
-console.log(JSON.stringify(result));
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(() => {
+  console.error('Staff video independent verification failed; completion not confirmed'); process.exitCode = 1;
+});

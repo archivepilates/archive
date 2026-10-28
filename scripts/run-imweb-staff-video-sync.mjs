@@ -14,6 +14,7 @@ export async function runStaffVideoJob({args=[],directory=STAFF_VIDEO_DIR,run=ru
   try {
     const result=await run({apply,onlyMemberCode,directory});
     if(result.ok!==true||result.skipped||result.mode!==(apply?'apply':'dry_run')
+      ||apply&&(result.accessVerified!==true||result.verification?.ok!==true)
       ||!Number.isFinite(Date.parse(result.finishedAt))) {
       throw Object.assign(Error('Staff video run did not complete'),{code:'STAFF_VIDEO_RUN_INCOMPLETE'});
     }

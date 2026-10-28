@@ -82,7 +82,7 @@ test('30-minute lock starvation alerts once and only full completion recovers', 
   assert.equal(f.events[0].errorCode, LOCK_WAIT_DELAYED_CODE);
   await f.invoke(35);
   assert.equal(f.events.length, 1);
-  const complete = { ok: true, mode: 'apply', finishedAt: at(36) };
+  const complete = { ok: true, mode: 'apply', accessVerified: true, verification: { ok: true }, finishedAt: at(36) };
   await f.invoke(36, { args: ['--apply', '--member-code', 'm001'], run: async () => complete });
   assert.equal(f.events.length, 1, 'Targeted success must not recover the full job');
   await f.invoke(37, { run: async () => ({ ...complete, finishedAt: at(37) }) });
@@ -154,7 +154,7 @@ test('auth, unknown writes, ledger, raw lock errors and late lookalikes remain i
     assert.notEqual(result.status, 'deferred');
   }
   assert.equal(f.events.length, 5);
-  const result = await f.invoke(1, { run: async () => ({ ok: true, mode: 'apply', finishedAt: at(1) }),
+  const result = await f.invoke(1, { run: async () => ({ ok: true, mode: 'apply', accessVerified: true, verification: { ok: true }, finishedAt: at(1) }),
     observe: async () => { throw Object.assign(Error('synthetic health lock'), { code: 'STUDIOMATE_BROWSER_BUSY' }); } });
   assert.equal(result.exitCode, 1);
   assert.notEqual(result.status, 'deferred');
@@ -190,7 +190,7 @@ test('starvation preserves an ambiguous real incident and reconciles its origina
   assert.equal(delayed.consecutiveFailures, 1);
   assert.deepEqual(delayed.pendingNotice, original);
   const notices = [];
-  await f.invoke(31, { run: async () => ({ ok: true, mode: 'apply', finishedAt: at(31) }),
+  await f.invoke(31, { run: async () => ({ ok: true, mode: 'apply', accessVerified: true, verification: { ok: true }, finishedAt: at(31) }),
     notify: async event => { notices.push(event); return { messageId: 'synthetic-original-receipt' }; } });
   assert.equal(notices[0].reconcileOnly, true);
   assert.equal(notices[0].observedAt, original.observedAt);

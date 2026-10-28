@@ -49,6 +49,11 @@
 
 ## Instructor Lesson Video Completion Notices
 
+- Video delivery completion requires fresh media processing/playback, protected-page and classroom/catalog connection proof, followed by `scripts/complete-imweb-video-access.mjs --ready-file=<private-proof>` (schema in `validateVideoReadiness`). Keep the private proof with the canonical upload ledger; do not commit member data. Upload alone is not delivery completion. Failure leaves access pending and notices unsent.
+- The upload gate and existing worker use the same `runStaffVideoSync` handler and member-group lock. Success requires independent member details and native group-membership readbacks, with original purchase/student-share clocks and ownership preserved. Do not add another scheduler.
+- Signup/grade events must enter this same current-source handler only after approved OAuth/site integration and canonical queue promotion. Shadow webhook receipts are not permission authority; do not activate them or select mutations from `workLanes` merely because an app is approved.
+- A legacy unknown staff-group intent stays blocked in unattended runs. An operator-approved recovery must bind the exact pending digest/member, verify unchanged metadata and before-groups, preserve the original uncertain intent in history and permit only a fresh additive catalog plan. Never infer historical non-dispatch from current absence. Positively identified local quota is retained as `blocked_before_dispatch`/native continuation, not transport uncertainty.
+
 - After a requested instructor-lesson YouTube upload, independently verify processing, intended visibility/playback and the existing website/classroom connection before proposing a completion notice. Describe pending signup/access exceptions rather than promising immediate playback.
 - Ask the operator in the current chat whether to send the completion Alimtalk to instructors. Present lesson/date, teams, eligible recipient count, signup/access exceptions, exact approved text and buttons. An upload request, Kakao template approval or silence is not recipient-send approval.
 - Send only after explicit approval of that notice's audience and content. Declined/unanswered proposals stay unsent; material audience/content changes need renewed approval. No new poller, scheduled dispatch or operator-directed Alimtalk is authorized by this default.

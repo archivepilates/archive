@@ -2,13 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash,randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT, videoGroups, planStaffGroups,
   protectedPurchaseGroups, assertMemberPreserved } from './imweb-staff-video-policy.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
-import { imwebRequestFailure } from './imweb-read-failure.mjs';
+import { imwebRequestFailure, isLocalImwebWriteQuotaFailure } from './imweb-read-failure.mjs';
 import { readStudentShareLedgers, protectedStudentShareGroups, STUDENT_SHARE_SOURCES } from './imweb-student-share-policy.mjs';
+import { verifyStaffVideoAccess } from './imweb-staff-video-verification.mjs';
 
 export const STAFF_VIDEO_POLICY = 'imweb-staff-video-v1';
 export const STAFF_VIDEO_DIR = path.join(os.homedir(), 'ArchiveIN/automation/imweb-staff-video');
@@ -18,13 +19,44 @@ const stamp = () => new Date().toISOString();
 const sameGroups = (a,b) => isDeepStrictEqual([...a].sort(),[...b].sort());
 const memberHash = member => createHash('sha256').update(JSON.stringify(Object.fromEntries(
   Object.entries(member).filter(([key])=>key!=='group').sort(([a],[b])=>a.localeCompare(b))))).digest('hex');
+export const staffPendingDigest = pending => createHash('sha256').update(JSON.stringify(pending)).digest('hex');
+const kstDay = value => new Date(Date.parse(value) + 9 * 3600000).toISOString().slice(0,10);
 
-export function staffImweb(args, { execute = execFileSync } = {}) {
+// Operator reconciliation is deliberately unavailable to unattended workers.
+export function reconcilePendingStaffWrite(entry, member, catalog, approval, now) {
+  const pending=entry.pending;
+  planStaffGroups(member,entry,catalog);
+  if(entry.reconciledWrites!==undefined && (!Array.isArray(entry.reconciledWrites)
+    || entry.reconciledWrites.some(row=>staffPendingDigest(row.pending)===approval?.pendingDigest))) throw Error('Pending recovery already reconciled or invalid history');
+  if(!approval || approval.memberCode!==member.memberCode || approval.pendingDigest!==staffPendingDigest(pending)
+    || !/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,160}$/.test(approval.approvalRef||'')
+    || member.siteCode!==SITE || member.unitCode!==UNIT || member.memberCode!==entry.memberCode || member.uid!==entry.uid
+    || member.grade!==STAFF_GRADE || pending?.status!=='result_unknown'
+    || memberHash(member)!==pending.memberHash || !sameGroups(member.group,pending.beforeGroups)
+    || !Array.isArray(pending.afterGroups) || new Set(pending.afterGroups).size!==pending.afterGroups.length
+    || !pending.beforeGroups.every(code=>pending.afterGroups.includes(code))) throw Error('Pending operator reconciliation mismatch');
+  const additions=pending.afterGroups.filter(code=>!pending.beforeGroups.includes(code));
+  if(!additions.length || additions.some(code=>code!==STAFF_GROUP&&!catalog.includes(code))
+    || !sameGroups(pending.nextManagedGroups,[...new Set([...entry.ownedAddedGroups,...additions])])) {
+    throw Error('Only additive catalog recovery is allowed');
+  }
+  entry.reconciledWrites??=[];
+  entry.reconciledWrites.push({pending:structuredClone(pending),outcome:'not_present_on_independent_readback',
+    dispatchOutcome:'unknown',approvalRef:approval.approvalRef,reconciledAt:new Date(now).toISOString()});
+  delete entry.pending;
+}
+
+export function staffImweb(args, { execute = execFileSync,
+  pause=milliseconds=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,milliseconds) } = {}) {
+  const membershipRead=args.slice(0,3).join(' ')==='member groups members';
+  // Independent catalog verification uses many GETs; respect the provider rate window.
+  if(membershipRead)pause(1500);
   try {
     const result=JSON.parse(execute(path.join(os.homedir(),'.local/bin/imweb'),
-      ['--profile','default','--output','json',...args], {encoding:'utf8',timeout:45000,
+      ['--profile','default','--output','json',...(membershipRead?['--retry','1','--retry-wait-ms','60000']:[]),...args], {encoding:'utf8',timeout:membershipRead?120000:45000,
         maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']}));
-    if (!result || typeof result!=='object' || Array.isArray(result) || result.error
+    if(result?.error)throw result;
+    if (!result || typeof result!=='object' || Array.isArray(result)
       || result.statusCode!==undefined && result.statusCode!==200) throw Error('Invalid Imweb envelope');
     return result;
   } catch(error) {
@@ -83,7 +115,7 @@ function verifyContext(run) {
 }
 
 export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>{},now=Date.now(),onlyMemberCode='',
-  readStudentShares=readStudentShareLedgers}={}) {
+  readStudentShares=readStudentShareLedgers,reconcilePending,expectedGroupCodes=[]}={}) {
   if(!apply)state=structuredClone(state);
   if(state.policyVersion!==STAFF_VIDEO_POLICY||state.approved!==true)throw Error('Approved staff policy required');
   if(!state.members||Array.isArray(state.members)||typeof state.members!=='object')throw Error('Ownership members map missing or invalid');
@@ -94,7 +126,11 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
   if(grades.filter(g=>g.memberGradeCode===STAFF_GRADE&&g.title==='스텝'&&g.useAutoGrade==='N').length!==1)throw Error('Staff grade mismatch');
   const catalog=videoGroups(groups);
   if(catalog.length<30)throw Error('Unexpectedly incomplete video catalog');
+  if(!Array.isArray(expectedGroupCodes) || expectedGroupCodes.some(code=>!catalog.includes(code))) throw Error('Expected video group missing from native catalog');
   const members=staffMembers(run);const index=new Map(members.map(m=>[m.memberCode,m]));
+  if(reconcilePending && (onlyMemberCode!==reconcilePending.memberCode || !state.members[onlyMemberCode]?.pending)) {
+    throw Error('Operator recovery requires one existing pending member');
+  }
   const targets=[...new Set([...members.filter(m=>m.grade===STAFF_GRADE).map(m=>m.memberCode),...Object.keys(state.members)])]
     .filter(code=>!onlyMemberCode||code===onlyMemberCode).sort();
   if(onlyMemberCode&&!targets.includes(onlyMemberCode))throw Error('Requested member not eligible/tracked');
@@ -111,6 +147,22 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
     const before=readMember(code);const entry=state.members[code]||{memberCode:code,uid:before.uid,
       baselineGroups:[...before.group],ownedAddedGroups:[],firstObservedAt:new Date(now).toISOString()};
     if(entry.memberCode!==code||entry.uid!==before.uid)throw Error('Ownership ledger identity mismatch');
+    if(entry.pending && reconcilePending?.memberCode===code) {
+      reconcilePendingStaffWrite(entry,before,catalog,reconcilePending,now);
+      if(apply){state.members[code]=entry;save(state);}
+    }
+    if(entry.pending?.status==='blocked_before_dispatch') {
+      if(memberHash(before)!==entry.pending.memberHash || !sameGroups(before.group,entry.pending.beforeGroups)) {
+        throw Error('Quota-blocked member changed; operator review required');
+      }
+      if(kstDay(entry.pending.at)===kstDay(new Date(now).toISOString())) {
+        throw Object.assign(Error('Local quota blocked; native administrator continuation pending'),{code:'IMWEB_NATIVE_ADMIN_REQUIRED'});
+      }
+      entry.reconciledWrites??=[];
+      entry.reconciledWrites.push({pending:structuredClone(entry.pending),outcome:'not_dispatched',reconciledAt:new Date(now).toISOString()});
+      delete entry.pending;
+      if(apply){state.members[code]=entry;save(state);}
+    }
     if(entry.pending) {
       if(memberHash(before)!==entry.pending.memberHash||!sameGroups(before.group,entry.pending.afterGroups))throw Error('Unresolved group update; no automatic write retry');
       entry.ownedAddedGroups=entry.pending.nextManagedGroups;delete entry.pending;
@@ -161,6 +213,10 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
         run(args);
         const after=readMember(code);assertMemberPreserved(before,after,plan.afterGroups);
       } catch(error) {
+        if(isLocalImwebWriteQuotaFailure(error)) {
+          entry.pending.status='blocked_before_dispatch';entry.pending.failureDetails=error.failureDetails;save(state);
+          throw Object.assign(Error('Local quota blocked; native administrator continuation pending'),{code:'IMWEB_NATIVE_ADMIN_REQUIRED'});
+        }
         entry.pending.status='result_unknown';save(state);
         // Only read back after an uncertain request; never send that write again.
         let after;
@@ -176,12 +232,11 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
   }
   const result={ok:true,mode:apply?'apply':'dry_run',catalogGroups:catalog.length,scannedMembers:members.length,
     staffMembers:members.filter(m=>m.grade===STAFF_GRADE).length,outcomes,finishedAt:stamp()};
-  if(apply){state.lastRun=result;save(state);}
   return result;
 }
 
 export async function runStaffVideoSync({apply=false,onlyMemberCode='',directory=STAFF_VIDEO_DIR,run=staffImweb,
-  acquireLock=acquireStudioMateBrowserLock}={}) {
+  acquireLock=acquireStudioMateBrowserLock,reconcilePending,expectedGroupCodes=[],verify=verifyStaffVideoAccess}={}) {
   fs.mkdirSync(directory,{recursive:true,mode:0o700});
   let release;
   try {
@@ -197,7 +252,20 @@ export async function runStaffVideoSync({apply=false,onlyMemberCode='',directory
     const file=path.join(directory,'state.json');
     if(!fs.existsSync(file))throw Error('Ownership ledger missing; operator review required');
     const state=JSON.parse(fs.readFileSync(file,'utf8'));
-    const save=value=>{const temp=`${file}.${process.pid}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2)+'\n',{mode:0o600});fs.renameSync(temp,file);};
-    return reconcileStaffVideos(state,{run,apply,save,onlyMemberCode});
+    const save=value=>{
+      const temp=`${file}.${randomUUID()}.tmp`,fd=fs.openSync(temp,'wx',0o600);
+      try{fs.writeFileSync(fd,JSON.stringify(value,null,2)+'\n');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+      fs.renameSync(temp,file);
+      const parent=fs.openSync(directory,'r');try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}
+    };
+    const result=reconcileStaffVideos(state,{run,apply,save,onlyMemberCode,reconcilePending,expectedGroupCodes});
+    if(!apply)return result;
+    const verification=await verify({run,state,onlyMemberCode,expectedGroupCodes});
+    if(verification?.ok!==true || verification.catalogGroups!==result.catalogGroups)throw Error('Independent staff video verification failed or catalog changed');
+    const complete={...result,finishedAt:stamp(),accessVerified:true,verification};
+    if(!onlyMemberCode)state.lastRun=complete;
+    else state.members[onlyMemberCode].accessVerification=verification;
+    save(state);
+    return complete;
   } finally {await release();}
 }
