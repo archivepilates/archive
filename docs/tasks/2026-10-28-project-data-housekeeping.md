@@ -174,3 +174,8 @@ Reproduction: with existing runtime Functions `NODE_PATH`, run node --test
 Source edits are two result documents and one isolated test file only.
 No production deploy is required. Existing CORE operating rules need no new
 policy change; pending operational faults remain explicit, not force-resolved.
+
+Follow-up source commit `03d7689012a0c523468d6a4040f1c2e80ee0dfc5` pushed to
+main and fast-forwarded into the runtime. GitHub Actions `40684482943`
+succeeded; every affected-functions step passed in2m3s. No new release was
+performed. The receipt-only update does not alter the verified source/runtime.
