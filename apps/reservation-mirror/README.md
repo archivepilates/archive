@@ -1,5 +1,15 @@
 # ARCHIVE PILATES Reservation Mirror
 
+## Retirement - 2026-10-28
+
+This lane is being retired at the operator's request after live usage review.
+Do not run the importer, redeploy the mirror site/server, recreate its database,
+or connect this historical source to operational writers without a new explicit
+approval. The source and earlier test reports remain for reference only.
+See `docs/tasks/2026-10-28-reservation-mirror-retirement.md` for the actual
+resource-deletion receipts and verification status. The operating `(default)`
+database, shared Auth, official sales website and CORE remain in service.
+
 Authenticated operator-only read-only server and UI. This is not the operating
 booking system. StudioMate remains authoritative; no message, ticket mutation,
 reservation, refund, contract, or production automation adapter exists here.

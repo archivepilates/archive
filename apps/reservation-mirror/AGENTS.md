@@ -1,5 +1,11 @@
 # Reservation Mirror
 
+- Retired lane as of 2026-10-28. Keep historical sources; do not execute imports,
+  recreate the named database, or redeploy the mirror server/site without a new
+  explicit operator approval. Refer to the retirement task for verified status.
+- The release helper's separate CORE rules-only capability is still active;
+  mirror retirement does not authorize deleting shared CORE/Auth resources.
+
 - This is an authenticated operator-only read-only mirror, never an operational writer.
 - The only cloud database accepted by app/import writes is `archive-pilates/reservation-mirror`.
 - `(default)` is source read-only for the offline import tool; the serving runtime must be IAM-denied access to it.
