@@ -34,6 +34,43 @@ Private intent/receipt evidence:
 `/Users/archivepilates/ArchiveIN/operations/reservation-mirror-retirement-20261028/`.
 Contains aggregate audit, metadata plan and exact operation receipts, not member
 payloads or credentials. Uses the existing operator account; no role increase.
-Final result and independent verification will be recorded below.
+The dedicated Hosting release is `SITE_DISABLE`; both test hostnames return
+404. The dedicated Cloud Run service returns 404 after its delete operation
+completed. The mirror database returns 404 and is absent from active database
+listing. A separate `showDeleted=true` metadata query matched the original
+database UID and creation time and verified native `deleteTime` of
+2026-10-28T10:31:06.381603Z (19:31:06 KST). Only `(default)` remains active.
+
+The bounded database long-running-operation wait did not receive its terminal
+done flag. This does not replace the independent deleted-state evidence above;
+physical provider cleanup completion remains unconfirmed. The delete request
+was not replayed. Preserve both the wait result and native deleteTime evidence.
+
+Operating database identity/configuration matched the pre-write baseline.
+Official sales homepage, CORE and ARCHIVE IN each return HTTP 200. CORE and
+ARCHIVE IN Hosting releases changed concurrently under another work stream;
+this task did not publish those releases. The latest `origin/main` was fetched
+and adopted, and its CORE rules bytes matched the live rules before editing.
+Do not claim globally unchanged Hosting versions across concurrent work.
+
+No DNS, shared Auth, IAM, operational Functions, member records or scheduler
+was changed. Dedicated service account, old deployment images, Hosting site
+ownership and source history remain. No new copy of member data was made.
+
+## Checks And Operating Rules
+
+`node --test apps/reservation-mirror/test/release-hosting.test.mjs`: 20 passed.
+`npm run detect:affected-functions -- --base origin/main --head HEAD`: no
+Functions codebases affected. `npm run validate:archive-core-hosting` passed
+with `NODE_PATH` pointing to the runtime Functions dependencies; the fresh
+worktree initially lacked TypeScript. No dependency/source files were changed.
+`git diff --check` passed. Standalone report layout was checked at 320, 390,
+768 and 1440 pixels with no horizontal document overflow. Task-owned headless
+browser contexts were closed. No live login, message, reservation or full
+Functions build was needed for this documentation-only release.
+The existing release helper allows only the CORE rules file while preserving
+the full current Hosting manifest/config; it must run from clean exact-main
+source. CORE rules retirement text and final release evidence are scoped to
+that surface only. No operational Functions deployment is required.
 
 No member notification or source-data mutation is part of this task.

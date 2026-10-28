@@ -2,7 +2,7 @@
 
 ## Retirement - 2026-10-28
 
-This lane is being retired at the operator's request after live usage review.
+This lane was retired at the operator's request after live usage review.
 Do not run the importer, redeploy the mirror site/server, recreate its database,
 or connect this historical source to operational writers without a new explicit
 approval. The source and earlier test reports remain for reference only.

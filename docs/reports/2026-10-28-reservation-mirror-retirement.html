@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES 예약앱 미러 종료 검증</title>
+<style>*{box-sizing:border-box}body{margin:0;color:#222;background:#fafafa;font:16px/1.8 system-ui,sans-serif;letter-spacing:0}main{max-width:880px;margin:auto;padding:32px 20px 64px}h1{font-size:28px;line-height:1.4}h2{font-size:20px;margin-top:32px}p,li{overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:14px}th,td{text-align:left;vertical-align:top;padding:12px 8px;border-bottom:1px solid #ddd;overflow-wrap:anywhere}.muted{color:#666}.result{border-left:3px solid #ba262d;padding-left:16px}a{color:inherit;text-underline-offset:3px}@media(max-width:600px){main{padding:24px 16px}h1{font-size:24px}table{font-size:13px}th,td{padding:10px 4px}}</style>
+<main><p class="muted">ARCHIVE PILATES · 2026-10-28 KST</p>
+<h1>사용 중단된 예약앱 미러를 종료했습니다</h1>
+<p class="result">전용 테스트 Hosting 비활성화, Cloud Run 서버 삭제, 미러 DB 삭제 상태를 독립 조회로 확인했습니다. 운영용 (default) DB와 공통 로그인·기존 운영 원장은 유지했습니다.</p>
+<h2>최근 사용 확인</h2>
+<p>최근 7일의 Cloud Monitoring과 Cloud Run 요청 로그를 대조했습니다. 마지막 로그인 후 데이터 조회는 <strong>10/24 11:59:25 KST</strong>였습니다. 최종 72시간 재확인에서도 성공 조회가 없었으며, 이후 기록은 공개 설정 조회 또는 거부된 요청입니다. 확인한 Cloud Scheduler와 읽을 수 있는 로컬 실행 작업에는 미러 연결이 없었습니다.</p>
+<h2>실행 결과</h2>
+<table><thead><tr><th>대상</th><th>처리</th><th>확인 증거</th></tr></thead><tbody>
+<tr><td>reservation-mirror DB</td><td>삭제 상태 확인</td><td>직접 조회 404, 활성 목록에서 제외. 삭제 기록의 원래 고유 ID·생성 시각 일치. deleteTime 10/28 19:31:06 KST.</td></tr>
+<tr><td>archive-reservation-mirror 서버</td><td>삭제 완료</td><td>Cloud Run 삭제 작업 완료와 직접 조회 404.</td></tr>
+<tr><td>전용 테스트 Hosting</td><td>SITE_DISABLE</td><td>기본 테스트 주소와 booking-test 서브도메인 모두 404.</td></tr>
+<tr><td>운영 DB·공식 홈페이지·CORE·ARCHIVE IN</td><td>유지</td><td>운영 DB 식별·설정 동일, 공식 홈페이지·CORE·ARCHIVE IN HTTP 200.</td></tr>
+</tbody></table>
+<h2>범위와 한계</h2>
+<p>Google 내부 삭제 작업의 완료 플래그는 제한 시간 안에 확인되지 않았습니다. 삭제를 재시도하지 않고, 별도 원본 메타데이터에서 동일 DB의 deleteTime과 활성 목록 제거를 확인했습니다. 이는 삭제된 DB 상태의 증거이며 내부 물리 정리 완료를 뜻하지는 않습니다.</p>
+<p>검증 중 다른 작업에서 CORE·ARCHIVE IN Hosting이 갱신됐습니다. 해당 변경을 이번 삭제 결과로 간주하거나 되돌리지 않았습니다. 최신 origin/main과 실제 CORE 운영규칙의 내용 일치를 확인한 뒤 이 종료 항목만 수정했습니다.</p>
+<p>DNS·공통 인증·IAM·회원 데이터·발송·운영 자동화 주기는 변경하지 않았습니다. 테스트 Hosting 소유권, 전용 서비스 계정, 과거 배포 이미지와 개발 소스는 보존했습니다. 회원 데이터의 새 백업·내보내기는 만들지 않았습니다.</p>
+<h2>재사용 규칙</h2>
+<p>별도 승인 없이 미러 DB 재생성·재수집·전용 서버 및 테스트 사이트 재배포를 하지 않습니다. 보존된 코드는 과거 개발 자료이며 현재 운영 기능이 아닙니다. 재개 시에는 새로운 범위·신원·중복·권한 검증이 필요합니다.</p>
+<h2>검증과 기록</h2>
+<p>전용 배포 도구의 범위·원장 보존·오배포 방지 테스트 20건이 통과했습니다. 자세한 원본 요청 시각·영수증·독립 검증 결과는 비공개 운영 기록에 보존했습니다. CORE 운영규칙의 최종 게시 결과는 작업 기록에 이어서 남깁니다.</p>
+<p class="muted">회원 원문·전화번호·시크릿은 이 보고서에 포함하지 않았습니다. 이 보고서는 전체 시스템의 장애·부하·복구 성능 시험을 뜻하지 않습니다.</p>
+</main></html>
