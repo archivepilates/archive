@@ -3,7 +3,9 @@
 ## Project
 
 - Name: archive-in
-- Canonical live app: `https://archive-pilates.web.app/archivein/`
+- System display name: `ARCHIVE PILATES OPS`
+- Canonical operator app: `https://core.archivepilates.com/`
+- Existing member-link compatibility surface: `https://archive-pilates.web.app/archivein/`
 - Firebase/GCP project: `archive-pilates`
 - Primary rule: preserve existing user work and avoid production-impacting commands unless explicitly requested.
 
@@ -52,10 +54,10 @@
 - Before dispatch, revalidate canonical registered rosters including absentees, cancellations/refunds/identity exclusions, the exact APPROVED template/channel/content/image/buttons, the real KST communication window and cross-channel send history. Never replay accepted/unknown sends or resend an existing SMS as Alimtalk.
 - Reuse existing private upload/access/notice ledgers, original first-grant 40-day clocks and canonical action keys. Upload, classroom access, send approval, provider acceptance and final delivery are distinct states.
 
-## ARCHIVE IN Work Coordination
+## OPS Work Coordination
 
-- Use the main ARCHIVE IN project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
-- If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main ARCHIVE IN chat before treating it as project direction.
+- Use the main ARCHIVE PILATES OPS project chat as the control surface for cross-cutting decisions about the web app, Firebase model, StudioMate sync, Google Contacts, Kakao Alimtalk, and deployment readiness.
+- If a separate chat or agent is used for a narrow subtask, bring the decision/result back into the main OPS chat before treating it as project direction.
 - ARCHIVE CORE transition work uses `workLanes/archive-core-transition` as the shared work lane. New subthreads should read that lane first, update handoffs there, and use lane-specific worktrees for code changes.
 - Active integration/runtime repository: `~/dev/archive-in-runtime`; GitHub `origin/main` is the source of truth.
 - Keep the active runtime checkout fast-forward aligned with `origin/main` (the Mac mini runtime branch is `archive-runtime-main`). For new non-trivial changes, use a dedicated `codex/mini/<task-name>` branch/worktree under `~/codex-worktrees`, then promote reviewed changes to `origin/main` and deploy from a clean local `main` worktree. Do not deploy from old transition or live-setup worktrees.
@@ -69,7 +71,7 @@
 - Keep existing Alimtalk, StudioMate sync, and member-facing writes on their current canonical sources until a shadow-compare migration explicitly approves a source change.
 - When speed helps and the task can be split safely, use parallel agents, including the Spark model for quick read-only exploration or bounded implementation checks.
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
-- Start live checks with read-only verification of the deployed ARCHIVE IN app, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
+- Start live checks with read-only verification of the deployed OPS/member surfaces, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
 
 ## Browser Cleanup Rules
 
@@ -81,15 +83,17 @@
 
 ## StudioMate Sync Mode
 
-- Until ARCHIVE PILATES operates its own site, treat StudioMate Excel download/import as the default ARCHIVE IN sync mode.
-- Do not use StudioMate API mode for normal ARCHIVE IN operations, manual sync, contact sync, Alimtalk candidate generation, or dashboard-facing app sync.
+- Until ARCHIVE PILATES operates its own site, treat StudioMate Excel download/import as the default OPS sync mode.
+- Do not use StudioMate API mode for normal OPS processing, manual sync, contact sync, Alimtalk candidate generation, or dashboard-facing app sync.
 - Legacy internal names such as `emergency_excel`, `run-studiomate-excel-emergency-mode.mjs`, and `com.archive.studiomate-excel-emergency-mode` may remain for compatibility, but staff-facing copy and operating decisions should call it Excel sync/default sync, not temporary emergency mode.
 - API-mode work should only be a read-only investigation or a future migration plan unless the user explicitly approves a switch after ARCHIVE PILATES own-site operations are ready.
 
 ## Brand Writing Rules
 
-- Always write the app/product name as `ARCHIVE IN` in new chat responses, UI text, reports, documents, commit summaries, and operator-facing materials.
-- Do not use `ArchiveIN`, `Archive In`, `archive in`, or other mixed/lowercase variants unless quoting an exact file path, URL, command, package name, branch name, or historical source text.
+- Use `ARCHIVE PILATES OPS` as the current system/project display name. Do not mix it with a Korean suffix for the same name. ARCHIVE CORE remains the existing operator web surface.
+- `ARCHIVE IN` is a historical label, not a current product name. Retain it only in literal paths, URLs, package/code identifiers, approved historical content, or exact quotations. Do not bulk-rename project/app/database/collection IDs or existing member links.
+- New member-facing brand copy uses `ARCHIVE PILATES`; existing approved message templates and member links are not changed by this naming rule.
+- For Google administration, use the Chrome profile signed into `home@archivepilates.com` (currently shown as the official-account profile). Switching Google accounts inside another Chrome profile is not the same as selecting that profile. Verify profile and account before writes.
 
 ## Local Setup
 

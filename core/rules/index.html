@@ -53,6 +53,15 @@
           </div>
         </section>
 
+        <section class="panel rule-section" id="ops-resource-naming">
+          <div class="panel-header"><div><h2>OPS 프로젝트·데이터 명칭 · 2026.10.28</h2></div></div>
+          <div class="rule-note"><strong>목적·현재 표시</strong><span>프로젝트·등록 웹앱의 표시 이름은 ARCHIVE PILATES OPS로 통일합니다. 같은 이름에 한글 접미사를 섞지 않습니다. ARCHIVE IN은 과거 명칭이며, 기존 경로·식별자·승인된 역사 기록을 제외한 새 표시 이름으로 사용하지 않습니다. 관리 화면은 기존 ARCHIVE CORE 주소를 유지합니다.</span></div>
+          <div class="rule-note"><strong>이름과 연결의 구분</strong><span>프로젝트 ID archive-pilates와 기본 DB (default)는 그대로입니다. 기본 DB는 ‘OPS 기본 데이터 원장’으로 설명합니다. 회원 기본정보 memberProfiles, 예약 bookings, 수업 lectures, 메모 memberMemos, 알림톡 후보 alimtalkCandidates와 발송 alimtalkSends의 기술 이름을 바꾸거나 복제하지 않습니다. 전체 119개 컬렉션의 읽기 쉬운 설명은 OPS 리소스 명칭표에 기록하며, 설명을 실제 사용 여부나 새 업무 원천으로 간주하지 않습니다.</span></div>
+          <div class="rule-note"><strong>사이트·보존 범위</strong><span>Hosting 7개에는 용도·상태 라벨만 추가했습니다. 기본 사이트는 공용 웹 경로, core는 관리 화면, in은 기존 회원 링크·설문, method는 강의실, privacy는 개인정보 처리방침입니다. home 사이트는 용도 추가 확인으로 보존하고, booking-test는 비활성 상태를 유지합니다. 기존 회원 링크·앱 ID·SDK 설정·로그인 권한·사이트 주소는 변경하지 않습니다.</span></div>
+          <div class="rule-note"><strong>삭제·검증</strong><span>만료된 영상 집계 제한 기록 중 시간별 ID·2일 만료 규칙·1시간 추가 여유·값과 버전이 모두 검증된 22건만 원자적으로 삭제했습니다. 현재 시간의 제한과 시청 이력은 유지했습니다. 종료한 예약앱의 미사용 격리 검증 Job 1개도 실행 중 작업과 예약 연결이 없음을 확인 후 삭제했습니다. 컬렉션 전체·회원 원장·발송 및 중복방지 기록·계약·감사 이력은 삭제하지 않았습니다. 결과와 확인 범위는 2026-10-28-project-data-housekeeping 보고서에 구분합니다.</span></div>
+          <div class="rule-note"><strong>재정리 원칙</strong><span>문서 수 0, 옛 이름, 완료 상태, 오래된 시각만으로 삭제하지 않습니다. 하위 컬렉션·외부 링크·선점·재처리 방지·복구 보관을 대조하고, 확실하지 않으면 보존합니다. 새 주기 작업이나 일괄 삭제는 추가하지 않았습니다. Google 관리 작업은 home@archivepilates.com의 Chrome 공식계정 프로필을 사용하며, 다른 프로필에서 Google 계정만 바꾸는 것으로 대체하지 않습니다.</span></div>
+        </section>
+
         <section class="panel rule-section" id="reservation-mirror">
           <div class="panel-header"><div><h2>예약앱 조회 미러 종료 · 2026.10.28</h2></div></div>
           <div class="rule-note"><strong>목적·현재 상태</strong><span>미사용 예약앱의 시험용 복사 DB와 서버를 정리했습니다. 운영자 승인 후 reservation-mirror DB의 고유 ID·생성 시각·삭제 시각(10/28 19:31 KST)을 대조했고, 전용 Cloud Run 서버 삭제와 테스트 Hosting 비활성화를 확인했습니다. 개발 소스와 과거 검증 기록은 참조용으로 보존합니다.</span></div>

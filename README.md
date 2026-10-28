@@ -1,6 +1,12 @@
 # ARCHIVE PILATES Runtime
 
-Runtime source for ARCHIVE IN member flows, ARCHIVE CORE operator tools, and Firebase Functions. The active Mac mini checkout is `~/dev/archive-in-runtime`; GitHub `origin/main` is the source of truth. Use dedicated branches/worktrees for changes and follow `AGENTS.md` for approval and release requirements.
+Runtime source for ARCHIVE PILATES OPS: member flows, ARCHIVE CORE operator tools, and Firebase Functions. The active Mac mini checkout is `~/dev/archive-in-runtime`; GitHub `origin/main` is the source of truth. Use dedicated branches/worktrees for changes and follow `AGENTS.md` for approval and release requirements.
+
+The display name is `ARCHIVE PILATES OPS`. `ARCHIVE IN` is a historical name,
+not a reason to delete active data or rename existing URLs and technical IDs.
+See [resource names](docs/decisions/2026-10-28-ops-resource-names.json) for
+readable collection/site labels. Project `archive-pilates`, database `(default)`
+and existing member links remain unchanged.
 
 ## Deployment Safety
 
