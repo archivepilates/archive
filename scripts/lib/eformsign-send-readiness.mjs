@@ -23,6 +23,15 @@ export async function waitForEformOperatorFields(page, fieldIds) {
   return frame;
 }
 
+export async function waitForEformSendReady(page) {
+  // Native validation ignores Send while its required-field completion notice is active.
+  await page.waitForFunction(() => Boolean(window.requiredChecker)
+    && !window.requiredChecker.completeToast
+    && document.querySelector('#viewer_layer')?.getAttribute('load_status') === '1'
+    && /^(전송|Send)$/.test(document.querySelector('#btn_unstructured_process_request')?.textContent?.trim() || ''),
+  undefined, { timeout: 30_000 });
+}
+
 export function eformNumericPaymentValue(amount) {
   if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('Invalid eform payment amount');
   return String(amount);

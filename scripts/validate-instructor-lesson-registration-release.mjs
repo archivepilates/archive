@@ -142,6 +142,7 @@ const checks = [
     "Required fields",
     "Send document",
     "eformNumericPaymentValue(ticketPrice)",
+    "await waitForEformSendReady(page)",
     "operator_values_ready",
   ], ["__checkRequired", "__archiveCheckRequiredOriginal"]],
   ["scripts/process-studiomate-memo-write-jobs.mjs", [

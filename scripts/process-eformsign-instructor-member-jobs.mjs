@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { acquireEformsignBrowserLock } from "./lib/eformsign-browser-lock.mjs";
-import { runEformStage, waitForEformOperatorFields, resolvedEformErrorPatch, eformNumericPaymentValue } from "./lib/eformsign-send-readiness.mjs";
+import { runEformStage, waitForEformOperatorFields, waitForEformSendReady, resolvedEformErrorPatch, eformNumericPaymentValue } from "./lib/eformsign-send-readiness.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION, canonicalSignupPhone, parseSignupProfile } from "./lib/instructor-signup-profile.mjs";
@@ -520,6 +520,7 @@ async function assertOperatorFieldsReady(page, frame, expected, { requireCounter
 
 async function openSendDialog(page, sendButton) {
   const heading = page.getByRole("heading", { name: /^(문서 전송|Send document)$/ }).filter({ visible: true }).first();
+  await waitForEformSendReady(page);
   await sendButton.click();
   await heading.waitFor({ state: "visible", timeout: 30_000 });
   return heading;

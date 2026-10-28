@@ -4,12 +4,16 @@ const legacyFamilyError = '다인 주문 수강자 중 취소·변경·미확인
 
 export function isKnownUnsentInstructorEformFailure(message) {
   if (message === legacyFamilyError) return true;
-  const prefix = '[eformsign:send_transition] TimeoutError timeoutMs=30000 ';
-  if (typeof message !== 'string' || !message.startsWith(prefix)) return false;
+  const prefixes = [
+    ['[eformsign:send_transition] TimeoutError timeoutMs=30000 ', ['Next', '다음']],
+    ['[eformsign:send_dialog] TimeoutError timeoutMs=30000 ', ['Send', '전송']],
+  ];
+  const entry = prefixes.find(([prefix]) => typeof message === 'string' && message.startsWith(prefix));
+  if (!entry) return false;
   try {
-    const state = JSON.parse(message.slice(prefix.length));
+    const state = JSON.parse(message.slice(entry[0].length));
     return state.path === '/eform/document/view_service.html' && state.framePresent === true
-      && ['Next', '다음'].includes(state.processText);
+      && state.viewerStatus === '1' && entry[1].includes(state.processText);
   } catch { return false; }
 }
 
