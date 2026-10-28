@@ -13,6 +13,7 @@ import {
 } from "./studiomate-native-contract-source.mjs";
 import { resolveContractCandidateGroups } from "./studiomate-membership-contract-observer.mjs";
 import { selectNativeMembershipContractCandidate } from "./studiomate-membership-contract-native-selection.mjs";
+import { signatureMaintenanceRecovery, signatureRecoverySelectionPolicy } from "./studiomate-membership-contract-maintenance-recovery.mjs";
 import {
   executeStudioMateMembershipContract,
   buildStudioMateSignatureRequestPayload,
@@ -130,6 +131,8 @@ export async function runStudioMateMembershipContractCandidates({
           }),
         ]);
         if (!memberDispatchWindow(now()).allowed) return deferHints(remainingHints);
+        const recovery = signatureRecoverySelectionPolicy({ config, hint, member: memberResult.member, ticketRead, now: now() });
+        if (discovery.signatureRecovery && !recovery) throw new Error("signature_recovery_native_binding_unverified");
         const selected = selectNativeMembershipContractCandidate({
           group,
           member: memberResult.member,
@@ -137,7 +140,8 @@ export async function runStudioMateMembershipContractCandidates({
           contractHistory,
           previousDownloadedAt: hint?.previousDownloadedAt || discovery.previousDownloadedAt,
           sourceDownloadedAt: discovery.sourceDownloadedAt,
-          config,
+          config: recovery?.config || config,
+          ...(recovery ? { issuanceWindowEndAt: recovery.issuanceWindowEndAt } : {}),
         });
         if (selected.status === "excluded") {
           await markHint(db, hint?.hintId, "excluded", selected.reason, {
@@ -156,6 +160,16 @@ export async function runStudioMateMembershipContractCandidates({
           result.review += 1;
           continue;
         }
+        if (recovery) {
+          if (selected.selection.userTicketId !== recovery.ticketId) throw new Error("signature_recovery_ticket_changed");
+          if ((await db.doc(`${JOBS}/${selected.selection.jobKey}`).get()).exists)
+            throw new Error("signature_recovery_existing_job_requires_review");
+          if (contractHistory.records.some(contract => !contract.ticket?.userTicketId && contract.categoryId === 1
+            && contract.ticket?.productId === selected.ticket.productId
+            && contract.ticket?.availabilityStartAt === selected.ticket.availabilityStartAt
+            && contract.ticket?.expireAt === selected.ticket.expireAt))
+            throw new Error("signature_recovery_unbound_contract_requires_review");
+        }
         const templateRule = MEMBERSHIP_CONTRACT_TEMPLATES[selected.selection.action];
         const listedTemplate = availableTemplates.find(
           (item) => item.id === templateRule.id && item.title === templateRule.title,
@@ -170,7 +184,16 @@ export async function runStudioMateMembershipContractCandidates({
           id: String(config.contractStaffId || ""),
           name: String(config.contractStaffName || "").trim(),
         };
-        const journal = firestoreJournal(db, null, now);
+        const journal = firestoreJournal(db, recovery?.approval || null, now);
+        const authorizeDispatch = recovery ? async () => {
+          try {
+            const current = (await db.doc(SETTINGS).get()).data();
+            const approval = signatureMaintenanceRecovery(current, now());
+            const bounded = signatureRecoverySelectionPolicy({ config: current, hint, member: memberResult.member, ticketRead, now: now() });
+            if (approval && approval.approvalHash === recovery.approval.approvalHash && bounded?.ticketId === recovery.ticketId) return;
+          } catch { /* An unavailable approval is not an attempted provider request. */ }
+            throw Object.assign(new Error("signature_recovery_approval_unavailable"), { code: "contract_dispatch_authorization_paused" });
+        } : undefined;
         const outcome = await executeStudioMateMembershipContract({
           api,
           journal,
@@ -182,6 +205,7 @@ export async function runStudioMateMembershipContractCandidates({
           terms: loaded.terms,
           sealPath,
           now,
+          authorizeDispatch,
         });
         if (outcome.status === "deferred") return deferHints(remainingHints);
         if (["waiting", "signed", "existing"].includes(outcome.status)) {

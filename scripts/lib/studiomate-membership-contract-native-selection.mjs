@@ -68,6 +68,7 @@ export function selectNativeMembershipContractCandidate({
   sourceDownloadedAt,
   config,
   recoveryApproval = null,
+  issuanceWindowEndAt = sourceDownloadedAt,
 }) {
   const review = (reason, details = {}) => ({
     status: "review",
@@ -96,6 +97,7 @@ export function selectNativeMembershipContractCandidate({
     !Array.isArray(contractHistory.records) ||
     (!recoveryApproval && !validInstant(previousDownloadedAt)) ||
     !validInstant(sourceDownloadedAt) ||
+    !validInstant(issuanceWindowEndAt) || Date.parse(issuanceWindowEndAt) > Date.parse(sourceDownloadedAt) ||
     (!recoveryApproval && Date.parse(previousDownloadedAt) >= Date.parse(sourceDownloadedAt))
   )
     return review("incomplete_native_selection_source");
@@ -129,7 +131,7 @@ export function selectNativeMembershipContractCandidate({
       recoveryApproval
         ? ticket.userTicketId === recoveryApproval.userTicketId
         : Date.parse(ticket.issuedAt) > Date.parse(previousDownloadedAt) &&
-          Date.parse(ticket.issuedAt) <= Date.parse(sourceDownloadedAt),
+          Date.parse(ticket.issuedAt) <= Date.parse(issuanceWindowEndAt),
   );
   if (!candidates.length)
     return {

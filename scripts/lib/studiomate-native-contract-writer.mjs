@@ -222,7 +222,10 @@ export async function executeStudioMateMembershipContract({
   sealPath,
   operatorTestApproval,
   now = Date.now,
+  authorizeDispatch,
 }) {
+  const authorizationPaused = error => error?.code === "contract_dispatch_authorization_paused";
+  const dispatchPaused = error => isMemberDispatchDeferred(error) || authorizationPaused(error);
   const deferred = () => ({ ...memberDispatchWindow(now()), status: "deferred", jobKey: selection?.jobKey });
   if (!memberDispatchWindow(now()).allowed) return deferred();
   const payload = buildStudioMateJoinContractPayload({
@@ -238,9 +241,11 @@ export async function executeStudioMateMembershipContract({
   let claim;
   try {
     assertMemberDispatchAllowed(now());
+    await authorizeDispatch?.();
     claim = await journal.claim({ jobKey: selection.jobKey, payloadHash, selection });
   } catch (error) {
     if (isMemberDispatchDeferred(error)) return deferred();
+    if (authorizationPaused(error)) return { status: "review", reason: "signature_recovery_approval_unavailable" };
     throw error;
   }
   if (!claim || !["claimed", "resume", "complete"].includes(claim.status))
@@ -260,7 +265,10 @@ export async function executeStudioMateMembershipContract({
     postStarted = false;
     blockedStage = stage;
     assertMemberDispatchAllowed(now());
+    await authorizeDispatch?.();
     await journal.stage(selection.jobKey, stage, { contractId, ...fields });
+    assertMemberDispatchAllowed(now());
+    await authorizeDispatch?.();
     assertMemberDispatchAllowed(now());
     postStarted = true;
     return api.post(url, body);
@@ -282,7 +290,7 @@ export async function executeStudioMateMembershipContract({
         safeStage = "created";
         postStarted = false;
       } catch (error) {
-        if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+        if (dispatchPaused(error) && !postStarted) throw error;
         await journal.stage(selection.jobKey, "unknown", {
           reason: "contract_create_outcome_unknown",
         });
@@ -317,7 +325,7 @@ export async function executeStudioMateMembershipContract({
           signature_data: signatureData,
         }, { sealSha256: seal.sha256 });
       } catch (error) {
-        if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+        if (dispatchPaused(error) && !postStarted) throw error;
         // A failed response may still have committed. Read back once, never blind-retry.
       }
       readback = validateCreatedContractReadback(
@@ -362,7 +370,7 @@ export async function executeStudioMateMembershipContract({
         try {
           prepared = await post("attempting_signature_request", `/v2/staff/contract/signature/request/${contractId}`);
         } catch (error) {
-          if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+          if (dispatchPaused(error) && !postStarted) throw error;
           // Preparation may have completed, but it does not send the member message.
           // Stop rather than guessing a second write payload.
           await journal.stage(selection.jobKey, "review", {
@@ -411,7 +419,7 @@ export async function executeStudioMateMembershipContract({
           requestPayload,
         );
       } catch (error) {
-        if (isMemberDispatchDeferred(error) && !postStarted) throw error;
+        if (dispatchPaused(error) && !postStarted) throw error;
         // The provider may have accepted the send before a transport failure.
         // Resolve that ambiguity through the authoritative contract status below.
         signatureMessageError = true;
@@ -459,6 +467,11 @@ export async function executeStudioMateMembershipContract({
       contractId,
     };
   } catch (error) {
+    if (authorizationPaused(error) && !postStarted) {
+      await journal.stage(selection.jobKey, safeStage, { contractId, preparedPayload,
+        reason: "signature_recovery_approval_unavailable" });
+      return { status: "review", reason: "signature_recovery_approval_unavailable", contractId };
+    }
     if (!isMemberDispatchDeferred(error) || postStarted) throw error;
     const window = memberDispatchWindow(now());
     await journal.stage(selection.jobKey, safeStage, { contractId, preparedPayload, reason: null,

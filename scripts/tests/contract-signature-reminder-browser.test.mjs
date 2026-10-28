@@ -9,10 +9,11 @@ const plan={memberId:"701",memberName:"Synthetic Member",memberPhone:"0100000070
 test("real SMS UI fixture never dispatches before source/claim callback and validates single recipient",async t=>{
   const browser=await chromium.launch({headless:true});
   try {
-    for(const mode of ["accepted","without_main","delayed_identity","callback_rejects","wrong_recipient","multiple_recipients","wrong_phone","bad_receipt"]) {
+    for(const mode of ["accepted","without_main","delayed_identity","callback_rejects","wrong_recipient","multiple_recipients","wrong_phone","bad_receipt","crossing_20"]) {
       await t.test(mode,async()=>{
         const context=await browser.newContext(),page=await context.newPage();
         let posts=0,checked=false,unexpected=0,profileRequested,releaseProfile;
+        let clock=Date.parse("2026-10-28T01:00:00.000Z");
         const requested=new Promise(resolve=>{profileRequested=resolve;});
         const released=new Promise(resolve=>{releaseProfile=resolve;});
         try {
@@ -53,7 +54,8 @@ test("real SMS UI fixture never dispatches before source/claim callback and vali
           });
           const send=()=>sendContractReminderSms(page,plan,async()=>{
             if(mode==="callback_rejects")throw new Error("changed_signature");checked=true;
-          });
+            if(mode==="crossing_20")clock=Date.parse("2026-10-28T11:00:00.000Z");
+          },{now:()=>clock});
           if(mode==="delayed_identity") {
             const pending=send().then(result=>({result}),error=>({error}));
             await requested;

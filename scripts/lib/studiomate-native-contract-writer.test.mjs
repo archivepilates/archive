@@ -14,6 +14,38 @@ const CONTRACT_ID = "c".repeat(64);
 const dayClock = () => Date.parse("2026-10-22T01:00:00.000Z");
 const executeStudioMateMembershipContract = input => executeWithClock({ now: dayClock, ...input });
 
+test("revoked maintenance approval stops before a claim", async () => {
+  const result = await executeStudioMateMembershipContract({ ...fixture(),
+    authorizeDispatch: async () => { throw Object.assign(new Error("revoked"), { code: "contract_dispatch_authorization_paused" }); },
+    journal: { claim: () => assert.fail("no claim") }, api: { post: () => assert.fail("no POST") } });
+  assert.equal(result.reason, "signature_recovery_approval_unavailable");
+});
+
+test("approval expiry across each journal await preserves the unsent checkpoint without replay", async t => {
+  for (const crossing of ["attempting_create", "attempting_signature_request", "attempting_signature_message"]) {
+    await t.test(crossing, async () => {
+      const input = fixture(); let paused = false, saved;
+      const posts = [];
+      const result = await executeStudioMateMembershipContract({ ...input,
+        authorizeDispatch: async () => { if (paused) throw Object.assign(new Error("expired"), { code: "contract_dispatch_authorization_paused" }); },
+        journal: { claim: async ({ payloadHash }) => ({ status: "claimed", payloadHash }),
+          stage: async (_key, stage, fields) => { saved = { stage, ...fields }; if (stage === crossing) paused = true; } },
+        api: { get: async () => nativeContract(input, "draft"), post: async url => {
+          posts.push(url);
+          if (url.endsWith("/join")) return { id: CONTRACT_ID };
+          if (url.endsWith(`/request/${CONTRACT_ID}`)) return { contract_id_hash: CONTRACT_ID,
+            contractor_name: input.member.name, contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}` };
+          assert.fail("must not send");
+        } } });
+      assert.equal(result.reason, "signature_recovery_approval_unavailable");
+      assert.ok(!saved.stage.startsWith("attempting_"));
+      assert.equal(saved.reason, "signature_recovery_approval_unavailable");
+      assert.equal(posts.some(url => url.includes("/sms/")), false);
+      assert.equal(posts.length, ["attempting_create", "attempting_signature_request", "attempting_signature_message"].indexOf(crossing));
+    });
+  }
+});
+
 test("quiet boundaries reject before journal/API access even with historical daytime operator approval", async () => {
   for (const time of ["2026-10-22T14:00:00.000Z", "2026-10-22T15:00:00.000Z", "2026-10-22T23:59:59.999Z"]) {
     for (const input of [fixture(), operatorTestFixture()]) {

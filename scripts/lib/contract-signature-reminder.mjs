@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
+import { isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
+import { contractReminderDispatchWindow, assertContractReminderDispatchAllowed } from "./contract-signature-reminder-window.mjs";
 import { membershipContractObservationHistory } from "./studiomate-membership-contract-completion-state.mjs";
 import { membershipContractJobKey,normalizeMembershipPhone } from "./studiomate-membership-contract-policy.mjs";
 import { membershipContractMemberGradeDecision } from "./studiomate-membership-contract-native-selection.mjs";
@@ -109,8 +110,8 @@ export function assertContractReminderLive(source, plan, live, now = new Date())
 
 /** One irreversible contract-scoped attempt; neither lost responses nor later runs resend. */
 export async function processContractSignatureReminder({db,source,id,readLive,sendSms,now=()=>new Date(Date.now()),apply=false,scheduled=false}) {
-  const deferred = () => ({...memberDispatchWindow(now()),status:"deferred",contractId:id});
-  if (!memberDispatchWindow(now()).allowed) return deferred();
+  const deferred = () => ({...contractReminderDispatchWindow(now()),status:"deferred",contractId:id});
+  if (!contractReminderDispatchWindow(now()).allowed) return deferred();
   const plan = planContractSignatureReminder(source,id,now());
   if (["attempting","review"].includes(source?.signatureReminder?.status))
     return {status:"review",contractId:id,stage:"postclaim",reason:"prior_attempt_requires_reconciliation"};
@@ -131,19 +132,19 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
   });
   try {
     const live = await readLive();
-    assertMemberDispatchAllowed(now());
+    assertContractReminderDispatchAllowed(now());
     assertContractReminderLive(source,plan,live,now());
     const receipt = await sendSms(plan,async()=>{
-      assertMemberDispatchAllowed(now());
+      assertContractReminderDispatchAllowed(now());
       const fresh = await readLive();
-      assertMemberDispatchAllowed(now());
+      assertContractReminderDispatchAllowed(now());
       assertContractReminderLive(source,plan,fresh,now());
       await db.runTransaction(async tx=>{
         const latest=(await tx.get(ref)).data(),config=(await tx.get(db.doc("systemSettings/membershipContractAutomation"))).data();
-        assertMemberDispatchAllowed(now());
+        assertContractReminderDispatchAllowed(now());
         const current=planContractSignatureReminder(latest,id,now());
         if (!contractReminderEnabled(config) || current.status!=="ready" || current.fingerprint!==plan.fingerprint) fail();
-        assertMemberDispatchAllowed(now());
+        assertContractReminderDispatchAllowed(now());
         attemptedAt = now().toISOString();
         tx.update(ref,{signatureReminder:{policy:CONTRACT_REMINDER_POLICY,key:plan.key,fingerprint:plan.fingerprint,
           status:"attempting",attempts:1,firstConfirmedAt:plan.firstConfirmedAt,timingBasis:plan.timingBasis,
@@ -151,7 +152,7 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
           attemptedAt,memberId:plan.memberId,updatedAt:now().toISOString()}});
       });
       claimed = true;
-      assertMemberDispatchAllowed(now());
+      assertContractReminderDispatchAllowed(now());
       return () => { dispatchStarted = true; };
     });
     if (!claimed || !Number.isSafeInteger(receipt?.smsId) || receipt.smsId <= 0) fail();
@@ -167,7 +168,7 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
           if (row.status !== "attempting" || row.dispatchToken !== dispatchToken || row.attemptedAt !== attemptedAt) fail();
           const at = now().toISOString();
           tx.update(ref,{signatureReminder:{...row,status:"deferred",attempts:0,deferredBeforeTransport:true,
-            reason:memberDispatchWindow(now()).reason,nextAllowedAt:memberDispatchWindow(now()).nextAllowedAt,
+            reason:contractReminderDispatchWindow(now()).reason,nextAllowedAt:contractReminderDispatchWindow(now()).nextAllowedAt,
             deferrals:[...(row.deferrals || []),{dispatchToken,attemptedAt,fingerprint:plan.fingerprint,deferredAt:at,providerPostCount:0}],updatedAt:at}});
           return null;
         });
