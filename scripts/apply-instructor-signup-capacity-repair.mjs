@@ -13,6 +13,7 @@ const stat=await lstat(source);assert(stat.isFile()&&!stat.isSymbolicLink()&&(st
 const proof=JSON.parse(await readFile(source,'utf8')),hash=createHash('sha256').update(JSON.stringify(proof)).digest('hex');
 assert(Date.now()-Date.parse(proof.nativeCheckedAt)>=0 && Date.now()-Date.parse(proof.nativeCheckedAt)<=10*60000);
 assert(proof.lectureCoverage.complete===true);
+assert.deepEqual(proof.lectures.map(row=>String(row.id)).sort(),['98900618','98900887'],'Only the two approved native lecture IDs may be imported.');
 const native={data:proof.lectures,meta:{last_page:1,total:proof.lectures.length}};
 const selected=assertTeamLectures(native);
 assert(selected.length===2 && new Set(selected.map(x=>x.id)).size===2);
