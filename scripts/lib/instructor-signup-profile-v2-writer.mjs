@@ -17,7 +17,7 @@ export function splitSignupPostalAddress(value) {
   const checked=normalizeSignupAddressV2(value);if(checked.status!=='verified')return null;
   const match=checked.value.match(/^(.+?(?:대로|번길|길|로|동|리|가)\s+\d+(?:-\d+)?)(?:\s*[,，]?\s*)(.*)$/u);
   if(!match)return null;
-  if(/\d{6}|(?:\+?82[\s().-]*)?0?1[016789][\s().-]*\d{3,4}[\s().-]*\d{4}|생년|전화|연락|이름|회원|건강|상세|\d+\s*(?:동|호|층)(?:\s|$)/u.test(match[1]))return null;
+  if(/\d{6}|\d{4}[./-]\d{1,2}[./-]\d{1,2}|(?:\+?82[\s().-]*)?0?1[016789][\s().-]*\d{3,4}[\s().-]*\d{4}|생년|전화|연락|이름|회원|건강|상세|\d+\s*(?:동|호|층)(?:\s|$)/u.test(match[1]))return null;
   return {base:match[1],detail:match[2]};
 }
 async function choosePostalAddress(page,field,parts) {

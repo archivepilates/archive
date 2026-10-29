@@ -168,7 +168,7 @@ try {
             claimToken: null,
             ...(writeResult.studiomateMemberId ? { studiomateMemberId: writeResult.studiomateMemberId } : {}),
             ...(writeResult.profileStatus ? { profileStatus: writeResult.profileStatus } : {}),
-            ...(activeData.profileUpdate?.version === 2 ? { profileSyncStatus: profileNeedsReview ? 'review_required' : 'synced' } : {}),
+            ...(activeData.profileUpdate?.version === 2 ? { profileSyncStatus: profileNeedsReview ? 'review_required' : 'synced',memoWriteState:'verified' } : {}),
             writtenAt: admin.firestore.Timestamp.now(),
             lastError: null,
             updatedAt: admin.firestore.Timestamp.now(),
@@ -607,7 +607,18 @@ async function writeMemo(page, job, authorization) {
     return { studiomateMemberId, alreadyExists: true, profileStatus };
   }
   if (job.profileUpdate?.version === 2) {
-    await writeMemoViaUi(page, studiomateMemberId, content);
+    if(job.memoWriteState==='intent'){
+      const error=new Error('가입서 완료 메모의 이전 저장 결과를 확인해야 합니다. 중복 저장하지 않습니다.');error.nonRetryable=true;throw error;
+    }
+    await writeMemoViaUi(page, studiomateMemberId, content, {beforeSave:async()=>{
+      const ref=db.doc(`studiomateMemoWriteJobs/${job.jobId}`);
+      await db.runTransaction(async tx=>{
+        const snap=await tx.get(ref);
+        if(snap.get('claimToken')!==job.claimToken||snap.get('status')!=='processing'||snap.get('memoWriteState')==='intent')
+          throw Object.assign(new Error('가입서 완료 메모 저장 선점이 변경되어 중단했습니다.'),{nonRetryable:true});
+        tx.update(ref,{memoWriteState:'intent',memoWriteIntentAt:admin.firestore.Timestamp.now(),updatedAt:admin.firestore.Timestamp.now()});
+      });
+    }});
     if (!(await studioMateMemoExists(page, studiomateMemberId, content))) throw new Error('Signup completion memo readback unavailable');
     return {studiomateMemberId,profileStatus};
   }
@@ -721,7 +732,7 @@ async function writeMemoViaBrowserRequest(page, memberId, content, authorization
   if (!result.ok) throw new Error(`StudioMate memo write failed ${result.status}: ${result.text}`);
 }
 
-async function writeMemoViaUi(page, memberId, content) {
+async function writeMemoViaUi(page, memberId, content, {beforeSave} = {}) {
   await page.goto(new URL(`/users/detail?id=${encodeURIComponent(memberId)}`, config.baseUrl).toString(), {
     waitUntil: "networkidle",
     timeout: 60000,
@@ -731,6 +742,7 @@ async function writeMemoViaUi(page, memberId, content) {
   await page.getByText("메모 추가", { exact: true }).click({ timeout: 15000 });
   const textarea = page.locator("textarea").last();
   await textarea.fill(content, { timeout: 15000 });
+  if(beforeSave)await beforeSave();
   await page.getByText("저장", { exact: true }).last().click({ timeout: 15000 });
   await page.waitForTimeout(2500);
   const body = await page.locator("body").innerText({ timeout: 10000 });

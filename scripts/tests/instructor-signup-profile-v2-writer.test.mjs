@@ -337,14 +337,14 @@ function memoOrchestrator(j, m) {
     data: () => ({ status: 'done', synthetic: true }), get: key => key === 'claimToken' ? j.claimToken : 'processing',
   }) });
   const db = { collection: name => ({ doc: id => { events.push(['read-reference', name, id]); return ref(name + '/' + id); } }),
-    doc: path => ref(path), runTransaction: async action => action({ get: async r => r.get(), update: () => { events.push(['progress']); } }) };
+    doc: path => ref(path), runTransaction: async action => action({ get: async r => r.get(), update: (_ref,patch) => { events.push(['progress',patch]); } }) };
   const ctx = { db, Date, config: { baseUrl: BASE }, admin: { firestore: { Timestamp: { now: () => NOW } } },
     resolveStudioMateMemberId: async () => MEMBER,
     assertSignupProfileV2Source: () => {}, // The actual validator is covered in the integration suite.
     applySignupProfileV2: (page, job, memberId, baseUrl, options) => applySignupProfileV2(page, job, memberId, baseUrl, { ...options, lookupApproved: false }),
     studioMateMemoExists: async (_page, _memberId, content) => memos.has(content),
-    writeMemoViaBrowserRequest: async (_page, memberId, content) => { assert.equal(memberId, MEMBER); events.push(['memo-write']); memos.add(content); },
-    writeMemoViaUi: async (_page, memberId, content) => { assert.equal(memberId, MEMBER); events.push(['memo-write']); memos.add(content); },
+    writeMemoViaBrowserRequest: async () => assert.fail('v2 must use native memo UI only'),
+    writeMemoViaUi: async (_page, memberId, content, options) => { assert.equal(memberId, MEMBER); if(options?.beforeSave)await options.beforeSave(); events.push(['memo-write']); memos.add(content); },
     assertSignupProfileSource: () => assert.fail('v1 must not run'), applySignupBirthDate: () => assert.fail('v1 must not run'),
   };
   const writeMemo = vm.runInNewContext(writeMemoDeclaration.getText(tree) + '\nwriteMemo', ctx, { timeout: 1000 });
@@ -366,6 +366,19 @@ test('regular registration orchestration must read a DocumentSnapshot before dat
   const result = await q.run();
   assert.equal(result.profileStatus.birthDate.status, 'conflict'); assert(q.memos.has(j.content));
   assert(q.events.some(e => e[0] === 'read-reference' && e[1] === 'instructorLessonRegistrations'));
+});
+test('v2 records native memo intent before its single save and never replays an unresolved intent',async()=>{
+  const j=job(),m=nativePage(j,{birthDate:'1989-01-02'}),q=memoOrchestrator(j,m);
+  await q.run();
+  const intent=q.events.findIndex(e=>e[0]==='progress'&&e[1]?.memoWriteState==='intent');
+  assert(intent>=0&&intent<q.events.findIndex(e=>e[0]==='memo-write'));
+  const unknown=job();unknown.memoWriteState='intent';
+  const blocked=memoOrchestrator(unknown,nativePage(unknown,{birthDate:'1989-01-02'}));
+  await assert.rejects(blocked.run(),error=>error.nonRetryable===true);
+  assert.equal(blocked.events.filter(e=>e[0]==='memo-write').length,0);
+  blocked.memos.add(unknown.content);
+  assert.equal((await blocked.run()).alreadyExists,true);
+  assert.equal(blocked.events.filter(e=>e[0]==='memo-write').length,0);
 });
 
 const declares = (node, name) => ts.isVariableStatement(node)
