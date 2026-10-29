@@ -205,6 +205,31 @@ test("native binding compares only known numeric evidence and profile identities
   assert.equal(numericFallback.counts.covered, 1);
 });
 
+test("a canonical verified native registration covers an unlinked Excel profile without changing it", () => {
+  const p = profile({ memberId: 'excel_synthetic' });
+  const result = run({ profiles: [p], registrations: [registration({
+    steps: { member: { status: 'verified' }, ticket: { status: 'verified' } },
+    evidence: { studiomateMemberId: '10001' },
+  })] });
+  assert.equal(result.counts.covered, 1);
+  assert.deepEqual(result.items[0].reasons, []);
+  assert.equal(p.data.studiomateMemberId, undefined);
+});
+
+test("explicit canonical complimentary approval is intake coverage, never paid evidence", () => {
+  const approved = { source: { type: 'studiomate_existing_complimentary_ticket_operator' }, ticketPrice: 0,
+    operatorChecks: { complimentaryConfirmed: true, paymentBasis: 'operator_approved_complimentary' },
+    steps: { member: { status: 'verified' }, ticket: { status: 'verified' } },
+    evidence: { studiomateMemberId: '10001', ticketPaymentAmount: 0,
+      complimentaryApproval: { expectedAmount: 0, actor: 'operator', operationKey: 'exact-key' } } };
+  const input = { profiles: [profile({ memberId: 'excel_synthetic', memberGrade: '스텝',
+    activeTickets: [ticket({ paymentAmount: 0 })] })], registrations: [registration(approved)] };
+  assert.equal(run(input).counts.covered, 1);
+  const unapproved = structuredClone(input); delete unapproved.registrations[0].data.operatorChecks.complimentaryConfirmed;
+  assert.equal(run(unapproved).counts.operator_review, 1);
+  assert.equal(run(input).deliveryVerified, false);
+});
+
 test("freshness requires successful complete source evidence, not recent profile edit timestamps", () => {
   for (const evidence of [{}, { ...fresh, stale: true }, { ...fresh, latestAttemptSucceeded: false },
     { ...fresh, sourceObservedAt: new Date(nowMs - 96 * 60_000).toISOString() },

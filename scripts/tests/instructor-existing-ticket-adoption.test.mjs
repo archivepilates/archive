@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planInstructorExistingTicketAdoption } from '../lib/instructor-existing-ticket-adoption.mjs';
+import { planInstructorExistingTicketAdoption, planInstructorComplimentaryTicketAdoption } from '../lib/instructor-existing-ticket-adoption.mjs';
 import { instructorLessonRegistrationId } from '../lib/instructor-lesson-registration-contract.mjs';
 const now = new Date('2026-10-29T06:00:00Z');
 function fixture() {
@@ -84,3 +84,43 @@ for (const [mode, status, eformStatus] of [
   p.source.priorRegistrations.push({ id: 'conflicting-signup', date: '2026-10-24', memberId: '1234567', mode, status, eformStatus });
   assert.throws(() => planInstructorExistingTicketAdoption(p));
 });
+function freeFixture(staff = false) {
+  const p = fixture(), s = p.source;
+  s.name = staff ? '정유리' : '안소은'; s.date = '2026-11-28'; s.excelPaidAmount = 0;
+  s.grade = staff ? '스텝' : '강사회원'; s.member.memberId = staff ? '4818049' : '4342056';
+  s.member.name = s.name; s.member.memberGrade = s.grade;
+  s.registrationId = instructorLessonRegistrationId('5330', s.phone, s.date);
+  p.approval = { ...p.approval, action: 'adopt_existing_complimentary_ticket_notice', registrationId: s.registrationId,
+    complimentaryConfirmed: true, expectedAmount: 0, memberId: s.member.memberId };
+  s.priorRegistrations = staff ? [{ id: 'prior-staff', memberId: s.member.memberId, mode: 'returning_member', status: 'completed', eformStatus: 'not_required' }] : [];
+  Object.assign(s.tickets[0], { memberId: s.member.memberId, availabilityStartAt: s.date, expireAt: s.date,
+    payment: { status: 'review', reason: 'invalid_payment_total', totalAmount: 0, paidAmount: 0,
+      outstandingAmount: 0, refundedAmount: 0, transactions: [], verified: false, complete: false } });
+  return p;
+}
+test('explicit complimentary approval keeps zero price and does not claim unknown signup complete', () => {
+  const p = freeFixture(), plan = planInstructorComplimentaryTicketAdoption(p);
+  assert.equal(plan.registration.ticketPrice, 0);
+  assert.equal(plan.registration.paymentMethod, null);
+  assert.equal(plan.registration.mode, 'unresolved');
+  assert.equal(plan.registration.steps.eformsign.status, 'review_required');
+  assert.equal(plan.createsEformJob, false);
+  assert.equal(plan.registration.operatorChecks.paymentBasis, 'operator_approved_complimentary');
+});
+test('the specifically approved staff target retains proven returning signup state', () => {
+  const plan = planInstructorComplimentaryTicketAdoption(freeFixture(true));
+  assert.equal(plan.registration.mode, 'returning_member');
+  assert.equal(plan.registration.steps.eformsign.status, 'not_required');
+});
+for (const [label, change] of [
+  ['approval absent', p => { delete p.approval.complimentaryConfirmed; }],
+  ['different target', p => { p.source.member.memberId = '999'; }],
+  ['different name', p => { p.source.name = 'Other'; }],
+  ['wrong date', p => { p.source.date = '2026-11-29'; }],
+  ['not zero', p => { p.source.tickets[0].payment.totalAmount = 70000; }],
+  ['outstanding', p => { p.source.tickets[0].payment.outstandingAmount = 1; }],
+  ['refund', p => { p.source.tickets[0].payment.refundedAmount = 1; }],
+  ['prior send', p => { p.source.providerRows = [{ status: 'COMPLETE' }]; }],
+  ['cancelled', p => { p.source.tickets[0].cancelled = true; }],
+  ['unknown signup', p => { p.source.priorRegistrations = [{ mode: 'new_member', status: 'waiting_signature' }]; }],
+]) test('complimentary ' + label + ' is blocked', () => { const p = freeFixture(); change(p); assert.throws(() => planInstructorComplimentaryTicketAdoption(p)); });

@@ -6,15 +6,17 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 import { captureStudioMateNativeApiClient, readExactStudioMateMember, readStudioMateUserTickets } from './lib/studiomate-native-contract-source.mjs';
-import { planInstructorExistingTicketAdoption } from './lib/instructor-existing-ticket-adoption.mjs';
+import { planInstructorExistingTicketAdoption, planInstructorComplimentaryTicketAdoption } from './lib/instructor-existing-ticket-adoption.mjs';
 import { instructorLessonRegistrationId } from './lib/instructor-lesson-registration-contract.mjs';
 import { makeLessonVideoSolapiRequest } from './lib/lesson-video-notice-solapi.mjs';
 import { assertMemberDispatchAllowed } from './lib/member-dispatch-window.mjs';
 
-const TARGETS = new Set(['김예지', '김윤화', '이주홍']);
 const ROOT = path.resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2), apply = args.includes('--apply');
-assert(args.length === (apply ? 3 : 1) && args.every(a => a === '--apply' || a.startsWith('--audit=') || a.startsWith('--expected-commit=')));
+const complimentary = args.includes('--complimentary-only');
+const TARGETS = new Set(complimentary ? ['안소은', '정유리'] : ['김예지', '김윤화', '이주홍']);
+assert(args.length === (apply ? 3 : 1) + Number(complimentary)
+  && args.every(a => a === '--apply' || a === '--complimentary-only' || a.startsWith('--audit=') || a.startsWith('--expected-commit=')));
 const auditPath = args.find(a => a.startsWith('--audit='))?.slice(8);
 assert(auditPath?.startsWith('/Users/archivepilates/ArchiveIN/operations/november-instructor-confirmation-20261029/') && path.resolve(auditPath) === auditPath);
 const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim();
@@ -33,8 +35,9 @@ if (apply) {
   }
 }
 const audit = JSON.parse(await readFile(auditPath, 'utf8'));
-const inputs = audit.rows.filter(r => TARGETS.has(r.name) && r.date === '2026-11-29');
-assert.equal(inputs.length, 3);
+const inputs = audit.rows.filter(r => TARGETS.has(r.name) && r.date === (complimentary ? '2026-11-28' : '2026-11-29'));
+assert.equal(inputs.length, TARGETS.size);
+const planAdoption = complimentary ? planInstructorComplimentaryTicketAdoption : planInstructorExistingTicketAdoption;
 const require = createRequire('/Users/archivepilates/dev/archive-in-runtime/package.json');
 const { chromium } = require('playwright');
 const admin = require('./firebase/kangsain-functions/functions/node_modules/firebase-admin');
@@ -72,8 +75,10 @@ try {
     const sendsQuery = db.collection('alimtalkSends').where('memberPhone', '==', input.phone).limit(201);
     const cancellationQuery = db.collection('studiomateInstructorLessonCancellations').where('registrationId', '==', id).limit(2);
     const cancelId = 'ilc_' + createHash('sha256').update(`5330|${native.member.memberId}|${input.date}`).digest('hex').slice(0, 32);
+    const [year, month, day] = input.date.split('-').map(Number);
+    const datePattern = new RegExp(`${year}년\\s*${month}월\\s*${day}일|${input.date.replaceAll('-', '[-./]')}`);
     const relevant = d => d.payload?.registrationId === id || d.payload?.lessonDate === input.date
-      || d.sourceActionKey === id || d.variables?.['#{수업일}']?.includes('11월 29일');
+      || d.sourceActionKey === id || datePattern.test(d.variables?.['#{수업일}'] || '');
     async function history(tx) {
       const read = ref => tx ? tx.get(ref) : ref.get();
       const current = await read(ref), job = await read(db.doc('studiomateInstructorLessonJobs/' + id));
@@ -89,7 +94,7 @@ try {
     const currentHistory = await history();
     const provider = await get('/messages/v4/list?' + new URLSearchParams({ to: input.phone, dateType: 'CREATED', startDate: '2026-09-01T00:00:00Z', endDate: new Date().toISOString(), limit: '500' }), 'GET');
     assert(!provider.nextKey);
-    const providerRows = Object.values(provider.messageList || {}).filter(m => /2026년\s*11월\s*29일|2026[-./]11[-./]29/.test(m.text || '')
+    const providerRows = Object.values(provider.messageList || {}).filter(m => datePattern.test(m.text || '')
       && (m.kakaoOptions?.templateId === template.templateId || /강사레슨/.test(m.text || '')));
     const source = { ...input, ...currentHistory, checkedAt, nativeStatus: native.status,
       member: { memberId: native.member.memberId, name: native.member.name, phone: native.member.phone,
@@ -98,9 +103,10 @@ try {
       providerRows, providerCheckedAt: new Date().toISOString(),
       priorRegistrations: all.filter(r => r.lessonDate !== input.date).map(r => ({ id: r.id, date: r.lessonDate,
         mode: r.mode, status: r.status, memberId: r.evidence?.studiomateMemberId, eformStatus: r.steps?.eformsign?.status })) };
-    const approval = { action: 'adopt_existing_paid_returning_ticket_notice', registrationId: id,
-      actor: 'operator-approved-current-chat-november-confirmation-recovery', operationKey: key, approvedAt: new Date().toISOString() };
-    const plan = planInstructorExistingTicketAdoption({ source, approval });
+    const approval = { action: complimentary ? 'adopt_existing_complimentary_ticket_notice' : 'adopt_existing_paid_returning_ticket_notice', registrationId: id,
+      actor: 'operator-approved-current-chat-november-confirmation-recovery', operationKey: key, approvedAt: new Date().toISOString(),
+      ...(complimentary ? { complimentaryConfirmed: true, expectedAmount: 0, memberId: native.member.memberId } : {}) };
+    const plan = planAdoption({ source, approval });
     if (apply) {
       assertMemberDispatchAllowed();
       await db.runTransaction(async tx => {
@@ -111,7 +117,7 @@ try {
         assert.equal(freshHistory.size, histories.size, 'Recipient registrations changed.');
         assert(!freshHistory.docs.some(s => s.data().lessonDate === input.date));
         for (const snap of histories.docs) assert(freshHistory.docs.find(s => s.id === snap.id)?.updateTime?.isEqual(snap.updateTime), 'Prior registration changed.');
-        const freshPlan = planInstructorExistingTicketAdoption({ source, approval });
+        const freshPlan = planAdoption({ source, approval });
         assertMemberDispatchAllowed();
         const at = admin.firestore.FieldValue.serverTimestamp();
         tx.create(reportRef, { approval, sourceProof: source, planHash: hash(freshPlan), sourceCommit: git('rev-parse', 'HEAD'), createdAt: at });

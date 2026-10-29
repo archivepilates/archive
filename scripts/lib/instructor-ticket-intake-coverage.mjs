@@ -94,6 +94,18 @@ export function classifyInstructorTicketIntakeCoverage({
       .map((row) => [row.id, row])).values()];
     const refs = [...group.sourceRefs, ...matched.map(({ id }) => reference("instructorLessonRegistrations", id))];
     const reasons = [];
+    const bound = matched.length === 1 && matched[0].id === group.key
+      && matched[0].data.registrationId === group.key && validPhone(matched[0].data.memberPhone) === group.phone
+      && matched[0].data.lessonDate === group.date && matched[0].data.steps?.member?.status === 'verified'
+      && matched[0].data.steps?.ticket?.status === 'verified' && Boolean(numericMemberId(matched[0].data.evidence?.studiomateMemberId));
+    const boundRegistration = bound ? matched[0].data : null;
+    const complimentary = boundRegistration?.source?.type === 'studiomate_existing_complimentary_ticket_operator'
+      && boundRegistration.operatorChecks?.complimentaryConfirmed === true
+      && boundRegistration.operatorChecks?.paymentBasis === 'operator_approved_complimentary'
+      && boundRegistration.ticketPrice === 0 && boundRegistration.evidence?.ticketPaymentAmount === 0
+      && boundRegistration.evidence?.complimentaryApproval?.expectedAmount === 0
+      && Boolean(boundRegistration.evidence?.complimentaryApproval?.operationKey)
+      && Boolean(boundRegistration.evidence?.complimentaryApproval?.actor);
     const ambiguous = phoneIdentities.get(group.phone)?.size !== 1;
     const cancelled = group.tickets.some(({ ticket }) => cancellation(ticket)) || matched.some(({ data }) => cancellation(data));
     if (ambiguous) reasons.push("ambiguous_same_phone_identity");
@@ -101,13 +113,13 @@ export function classifyInstructorTicketIntakeCoverage({
     if (group.tickets.length > 1) reasons.push("multiple_ticket_evidence");
     for (const { ticket, profile, expiry } of group.tickets) {
       if (expiry !== group.date) reasons.push("unsupported_ticket_date_range");
-      if (profile.isStaff === true || profile.staffId || /staff|직원|스태프|스텝/i.test(String(profile.memberGrade || ""))) reasons.push("staff_review");
+      if (!complimentary && (profile.isStaff === true || profile.staffId || /staff|직원|스태프|스텝/i.test(String(profile.memberGrade || "")))) reasons.push("staff_review");
       const amount = ticket.paymentAmount;
-      if (amount === 0) reasons.push("zero_payment_review");
+      if (amount === 0) { if (!complimentary) reasons.push("zero_payment_review"); }
       else if (typeof amount !== "number" || !Number.isFinite(amount)) reasons.push("payment_source_unknown");
       else if (amount !== INSTRUCTOR_LESSON_TICKET_PRICE || /미수|분납|partial|refund|환불/i.test(String(ticket.paymentType || ""))) reasons.push("unsupported_payment_review");
       if (!/^(사용전|사용중|사용예정|사용 전|사용 중|사용 예정|active|scheduled|available)$/i.test(String(ticket.status || ""))) reasons.push("unsupported_ticket_status");
-      if (!profileNativeMemberId(profile) || profile.profileKind === "reservation_only") reasons.push("native_identity_unresolved");
+      if ((!profileNativeMemberId(profile) || profile.profileKind === "reservation_only") && !bound) reasons.push("native_identity_unresolved");
     }
     if (matched.length > 1 || matched.some(({ id, data }) => id !== group.key || data.registrationId !== group.key)) reasons.push("noncanonical_registration_identity");
     if (matched.some(({ data }) => validPhone(data.memberPhone) !== group.phone || data.lessonDate !== group.date)) reasons.push("registration_binding_mismatch");

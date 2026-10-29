@@ -75,3 +75,57 @@ export function planInstructorExistingTicketAdoption({ source: s, approval, now 
     createdBy: { staffId: '1979746', name: 'ARCHIVE PILATES OPS', approvalActor: approval.actor }, lastError: null };
   return { registration, createsStudioMateJob: false, issuesTicket: false, createsEformJob: false, manualSend: false };
 }
+
+export function planInstructorComplimentaryTicketAdoption({ source: s, approval, now = new Date() }) {
+  const allowed = { '4342056': '안소은', '4818049': '정유리' };
+  assert(s && Number.isFinite(now.getTime()));
+  const memberId = s.member?.memberId, name = normalizeInstructorLessonName(s.name);
+  const phone = normalizeInstructorLessonPhone(s.phone);
+  assert(allowed[memberId] === name && normalizeInstructorLessonName(s.member.name) === name);
+  assert(/^010\d{8}$/.test(phone) && normalizeInstructorLessonPhone(s.member.phone) === phone);
+  assert(s.date === '2026-11-28' && s.date > new Date(now.getTime() + 9 * 3600000).toISOString().slice(0, 10));
+  const id = instructorLessonRegistrationId('5330', phone, s.date);
+  assert(s.registrationId === id && approval?.registrationId === id && approval.action === 'adopt_existing_complimentary_ticket_notice'
+    && approval.actor && approval.operationKey && approval.complimentaryConfirmed === true
+    && approval.expectedAmount === 0 && approval.memberId === memberId
+    && recent(approval.approvedAt, now.getTime(), 48 * 3600000));
+  assert(recent(s.checkedAt, now.getTime(), 120000) && recent(s.providerCheckedAt, now.getTime(), 120000));
+  assert(s.nativeStatus === 'verified' && s.ticketReadStatus === 'verified' && s.member.inactive === false);
+  assert(s.ticketName === '강사레슨 (2T)' && s.excelPaidAmount === 0 && ['사용예정', '사용 예정'].includes(s.excelStatus));
+  assert(memberId === '4818049' ? s.member.memberGrade === '스텝' && s.grade === '스텝'
+    : isInstructorMemberGrade(s.member.memberGrade) && isInstructorMemberGrade(s.grade));
+  assert.equal(s.currentRegistration, null);
+  for (const field of ['candidates', 'sends', 'providerRows']) assert(Array.isArray(s[field]) && s[field].length === 0);
+  assert(Array.isArray(s.tickets) && s.tickets.length === 1 && Array.isArray(s.priorRegistrations));
+  const t = s.tickets[0], p = t.payment;
+  assert(nativeId(t.userTicketId) && t.memberId === memberId && t.studioId === '5330' && t.verified === true && t.complete === true
+    && t.active === true && t.usable === true && t.cancelled === false && t.refunded === false
+    && t.title === s.ticketName && t.availabilityStartAt === s.date && t.expireAt === s.date);
+  // A zero-price approval is not a paid receipt; preserve the native review classification.
+  assert(p?.status === 'review' && p.reason === 'invalid_payment_total' && p.totalAmount === 0 && p.paidAmount === 0
+    && p.outstandingAmount === 0 && p.refundedAmount === 0 && Array.isArray(p.transactions) && p.transactions.length === 0);
+  const returning = s.priorRegistrations.some(r => r.status === 'completed' && r.mode === 'returning_member'
+    && r.memberId === memberId && r.eformStatus === 'not_required');
+  const conflict = s.priorRegistrations.some(r => !['returning_member', 'new_member'].includes(r.mode)
+    || r.mode === 'new_member' && (r.status !== 'completed' || r.eformStatus !== 'verified'));
+  assert(!conflict, 'Prior signup ambiguity requires reconciliation.');
+  const mode = returning ? 'returning_member' : 'unresolved';
+  const step = (status, label, detail) => ({ status, label, detail });
+  const steps = {
+    member: step('verified', '회원·등급 확인', '현재 원본 신원·무료 수강 대상 승인 확인'),
+    ticket: step('verified', '강사레슨 (2T) 발급', '기존 0원 수강권 독립 확인 · 유료 결제로 표기하지 않음'),
+    confirmation: step('pending', '예약확정 안내', '무료 수강 대상 별도 승인 · 기존 최초 안내 처리기 사용'),
+    bookings: step('not_required', '반배정·예약(수동)', '기존 예약 보존'),
+    eformsign: step(returning ? 'not_required' : 'review_required', '강사회원 가입서', returning ? '과거 완료된 재수강 원장 유지' : '기존 가입서 대상·이력 별도 확인 필요 · 발송하지 않음'),
+    memo: step(returning ? 'not_required' : 'pending', '가입서 완료 메모', '가입서 완료를 추정하거나 새 메모를 생성하지 않음'),
+  };
+  return { registration: { registrationId: id, idempotencyKey: id, studioId: '5330', memberName: name, memberPhone: phone,
+    phoneLast4: phone.slice(-4), lessonDate: s.date, ticketName: t.title, ticketPrice: 0, paymentMethod: null, mode,
+    ...deriveInstructorLessonRegistrationState({ mode, steps }), steps,
+    operatorChecks: { paymentConfirmed: true, seatConfirmed: true, paymentBasis: 'operator_approved_complimentary', complimentaryConfirmed: true },
+    source: { type: 'studiomate_existing_complimentary_ticket_operator', sourceId: t.userTicketId, checkedAt: s.checkedAt, approvalKey: approval.operationKey },
+    evidence: { studiomateMemberId: memberId, ticketId: t.userTicketId, ticketPaymentAmount: 0, existingTicketAdopted: true,
+      complimentaryApproval: { operationKey: approval.operationKey, actor: approval.actor, approvedAt: approval.approvedAt, expectedAmount: 0 } },
+    createdBy: { staffId: '1979746', name: 'ARCHIVE PILATES OPS', approvalActor: approval.actor }, lastError: null },
+    createsStudioMateJob: false, issuesTicket: false, createsEformJob: false, manualSend: false };
+}
