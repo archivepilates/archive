@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { staffMembers, staffPages, STAFF_VIDEO_POLICY } from './imweb-staff-video-sync.mjs';
-import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT, videoGroups } from './imweb-staff-video-policy.mjs';
+import { COMMON_STAFF_ACCESS_MODE, STAFF_GRADE, STAFF_GROUP, SITE, UNIT, videoGroups } from './imweb-staff-video-policy.mjs';
+import { assertCommonStaffAcl } from './imweb-staff-common-acl.mjs';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function groupSet(value) {
@@ -12,21 +13,25 @@ function groupSet(value) {
 }
 
 // The caller owns MEMBER_GROUP_LOCK. This function performs native reads only.
-export function verifyStaffVideoAccess({ run, state, onlyMemberCode = '', expectedGroupCodes = [] }) {
+export function verifyStaffVideoAccess({ run, state, onlyMemberCode = '', expectedGroupCodes = [], commonAccess = null }) {
   assert.equal(typeof run, 'function', 'Native reader required');
   assert.ok(typeof onlyMemberCode === 'string' && (!onlyMemberCode || /^m[0-9a-f]+$/.test(onlyMemberCode)), 'Invalid verification member');
   const expected = groupSet(expectedGroupCodes);
   assert.ok(state?.policyVersion === STAFF_VIDEO_POLICY && state.approved === true
     && state.members && typeof state.members === 'object' && !Array.isArray(state.members), 'Approved ownership ledger required');
+  assert.ok(!commonAccess || commonAccess.mode === COMMON_STAFF_ACCESS_MODE, 'Unsupported common staff access mode');
   const context = run(['config', 'context']);
   assert.ok(context?.effective_profile === 'default' && context.resolved_profile?.site_code === SITE
     && context.resolved_profile?.unit_code === UNIT, 'Verification site/unit/profile mismatch');
   const groups = staffPages(run, ['member', 'groups', 'list']);
-  const catalog = videoGroups(groups);
+  const catalog = videoGroups(groups, { commonAccess: !!commonAccess });
   assert.ok(catalog.length >= 30, 'Incomplete verification video catalog');
   assert.equal(groups.filter(row => row.siteGroupCode === STAFF_GROUP && row.title === 'ARCHIVE STAFF').length, 1, 'Verification staff group mismatch');
   assert.ok(expected.every(code => catalog.includes(code)), 'Expected video groups missing from native catalog');
-  const desired = [...catalog, STAFF_GROUP].sort();
+  const nativeAcl = commonAccess ? assertCommonStaffAcl({
+    menus: run(['site', 'menu', '--unit-code', UNIT]).data, catalog, baselineMenus: commonAccess.baselineMenus,
+  }) : null;
+  const desired = commonAccess ? [STAFF_GROUP] : [...catalog, STAFF_GROUP].sort();
   const members = staffMembers(run), index = new Map(members.map(member => [member.memberCode, member]));
   const staff = members.filter(member => member.grade === STAFF_GRADE);
   const targets = onlyMemberCode ? [onlyMemberCode]
@@ -43,8 +48,13 @@ export function verifyStaffVideoAccess({ run, state, onlyMemberCode = '', expect
     assert.ok(detail.grade == null || typeof detail.grade === 'string', 'Ambiguous verification member grade');
     assert.equal(detail.grade, source.grade, 'Native grade changed during verification');
     const current = groupSet(detail.group), baseline = groupSet(entry.baselineGroups);
-    assert.ok(baseline.every(group => current.includes(group)), 'Verification baseline permission missing');
     const isStaff = detail.grade === STAFF_GRADE;
+    const requiredBaseline = commonAccess && !isStaff && entry.commonStaffGroupManaged === true
+      ? baseline.filter(group => group !== STAFF_GROUP) : baseline;
+    assert.ok(requiredBaseline.every(group => current.includes(group)), 'Verification baseline permission missing');
+    if (commonAccess && !isStaff) {
+      assert.ok(!current.includes(STAFF_GROUP), 'Inactive member retains common STAFF access; manual review required');
+    }
     if (isStaff) {
       assert.ok(desired.every(group => current.includes(group)), 'Verification staff permission missing');
       active.push(code);
@@ -52,8 +62,22 @@ export function verifyStaffVideoAccess({ run, state, onlyMemberCode = '', expect
     memberDetails.push({ memberKeyHash: hash([SITE, UNIT, code]), memberGroupsHash: hash(current),
       staff: isStaff, baselinePreserved: true, requiredGroupsVerified: isStaff ? desired.length : 0 });
   }
-  if (active.length) for (const code of desired) {
+  if (active.length || commonAccess) for (const code of desired) {
     const rows = staffPages(run, ['member', 'groups', 'members', code, '--unit-code', UNIT]);
+    if (commonAccess) {
+      const seen = new Set();
+      for (const row of rows) {
+        const source = index.get(row.memberCode), entry = state.members[row.memberCode];
+        assert.ok(source && source.grade === STAFF_GRADE && entry
+          && entry.memberCode === row.memberCode && entry.uid === source.uid,
+        'Untracked or non-staff common STAFF membership; manual review required');
+        assert.ok(!seen.has(row.memberCode), 'Duplicate common STAFF membership');
+        seen.add(row.memberCode);
+        assert.ok((row.siteCode === undefined || row.siteCode === SITE)
+          && (row.unitCode === undefined || row.unitCode === UNIT)
+          && (row.uid === undefined || row.uid === source.uid), 'Independent group identity mismatch');
+      }
+    }
     for (const memberCode of active) {
       const matches = rows.filter(row => row.memberCode === memberCode);
       assert.equal(matches.length, 1, 'Independent group membership missing or duplicated');
@@ -65,8 +89,9 @@ export function verifyStaffVideoAccess({ run, state, onlyMemberCode = '', expect
   }
   const titles = new Map(groups.map(row => [row.siteGroupCode, row.title]));
   return { ok: true, verifiedAt: new Date().toISOString(), scope: onlyMemberCode ? 'member' : 'all_tracked',
+    accessMode: commonAccess?.mode ?? null, nativeAcl,
     catalogFingerprint: hash(catalog.map(code => [code, titles.get(code)])), catalogGroups: catalog.length,
     scannedMembers: members.length, staffMembers: staff.length, verifiedMembers: targets.length,
-    memberDetails, independentlyVerifiedGroupLists: active.length ? desired.length : 0,
+    memberDetails, independentlyVerifiedGroupLists: active.length || commonAccess ? desired.length : 0,
     ordinaryMemberPlayback: 'not_verified' };
 }

@@ -4,12 +4,14 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash,randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { STAFF_GRADE, STAFF_GROUP, SITE, UNIT, videoGroups, planStaffGroups,
+import { COMMON_STAFF_ACCESS_MODE, STAFF_GRADE, STAFF_GROUP, SITE, UNIT, videoGroups, planStaffGroups,
   protectedPurchaseGroups, assertMemberPreserved } from './imweb-staff-video-policy.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { imwebRequestFailure, isLocalImwebWriteQuotaFailure } from './imweb-read-failure.mjs';
 import { readStudentShareLedgers, protectedStudentShareGroups, STUDENT_SHARE_SOURCES } from './imweb-student-share-policy.mjs';
 import { verifyStaffVideoAccess } from './imweb-staff-video-verification.mjs';
+import { assertCommonStaffAcl } from './imweb-staff-common-acl.mjs';
+import { commonStaffAccess } from './imweb-staff-common-config.mjs';
 
 export const STAFF_VIDEO_POLICY = 'imweb-staff-video-v1';
 export const STAFF_VIDEO_DIR = path.join(os.homedir(), 'ArchiveIN/automation/imweb-staff-video');
@@ -115,18 +117,22 @@ function verifyContext(run) {
 }
 
 export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>{},now=Date.now(),onlyMemberCode='',
-  readStudentShares=readStudentShareLedgers,reconcilePending,expectedGroupCodes=[]}={}) {
+  readStudentShares=readStudentShareLedgers,reconcilePending,expectedGroupCodes=[],commonAccess=null}={}) {
   if(!apply)state=structuredClone(state);
   if(state.policyVersion!==STAFF_VIDEO_POLICY||state.approved!==true)throw Error('Approved staff policy required');
   if(!state.members||Array.isArray(state.members)||typeof state.members!=='object')throw Error('Ownership members map missing or invalid');
+  if(commonAccess && commonAccess.mode!==COMMON_STAFF_ACCESS_MODE)throw Error('Unsupported common staff access mode');
   verifyContext(run);
   const groups=staffPages(run,['member','groups','list']);
   if(groups.filter(g=>g.siteGroupCode===STAFF_GROUP&&g.title==='ARCHIVE STAFF').length!==1)throw Error('Staff group mismatch');
   const grades=staffPages(run,['member','grades','list']);
   if(grades.filter(g=>g.memberGradeCode===STAFF_GRADE&&g.title==='스텝'&&g.useAutoGrade==='N').length!==1)throw Error('Staff grade mismatch');
-  const catalog=videoGroups(groups);
+  const catalog=videoGroups(groups,{commonAccess:!!commonAccess});
   if(catalog.length<30)throw Error('Unexpectedly incomplete video catalog');
   if(!Array.isArray(expectedGroupCodes) || expectedGroupCodes.some(code=>!catalog.includes(code))) throw Error('Expected video group missing from native catalog');
+  const nativeAcl=commonAccess ? assertCommonStaffAcl({
+    menus:run(['site','menu','--unit-code',UNIT]).data,catalog,baselineMenus:commonAccess.baselineMenus,
+  }) : null;
   const members=staffMembers(run);const index=new Map(members.map(m=>[m.memberCode,m]));
   if(reconcilePending && (onlyMemberCode!==reconcilePending.memberCode || !state.members[onlyMemberCode]?.pending)) {
     throw Error('Operator recovery requires one existing pending member');
@@ -169,7 +175,8 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
       entry.lastVerifiedAt=stamp();if(apply){state.members[code]=entry;save(state);}
     }
     let protectedGroups=[];
-    if(before.grade!==STAFF_GRADE&&(entry.ownedAddedGroups||[]).some(g=>before.group.includes(g))) {
+    if(before.grade!==STAFF_GRADE&&((entry.ownedAddedGroups||[]).some(g=>before.group.includes(g))
+      ||commonAccess&&entry.commonStaffGroupManaged===true&&before.group.includes(STAFF_GROUP))) {
       orders??=staffPages(run,['order','list','--unit-code',UNIT]);
       protectedGroups=[...new Set([...protectedPurchaseGroups(orders,code,now),
         ...protectedStudentShareGroups(readStudentShares(),code,now)])].sort();
@@ -179,7 +186,7 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
         &&!protectedGroups.includes(group.siteGroupCode));
       if(unknownShareGroups.length)throw Error('Unregistered student-share source; manual entitlement review required');
     }
-    const plan=planStaffGroups(before,entry,catalog,protectedGroups);
+    const plan=planStaffGroups(before,entry,catalog,protectedGroups,{commonAccess:!!commonAccess});
     if(plan.afterGroups.length>50)throw Error('Member group hard limit exceeded; no quota override');
     let dry;
     if(plan.action==='update') {
@@ -202,6 +209,8 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
           ...protectedStudentShareGroups(readStudentShares(),code,checkedAt)])].sort();
         if(!sameGroups(protectedGroups,latestProtected))throw Error('Purchase/student-share protection changed; no group removal');
       }
+      if(commonAccess)assertCommonStaffAcl({menus:run(['site','menu','--unit-code',UNIT]).data,
+        catalog,baselineMenus:commonAccess.baselineMenus});
       const fresh=readMember(code);assertMemberPreserved(before,fresh,plan.beforeGroups);
       entry.pending={status:'intent',at:stamp(),memberHash:memberHash(before),beforeGroups:plan.beforeGroups,
         afterGroups:plan.afterGroups,nextManagedGroups:plan.nextManagedGroups};
@@ -227,10 +236,12 @@ export function reconcileStaffVideos(state,{run=staffImweb,apply=false,save=()=>
       delete entry.pending;
     }
     entry.ownedAddedGroups=plan.nextManagedGroups;entry.lastGrade=before.grade;entry.lastVerifiedAt=stamp();
+    if(commonAccess&&before.grade===STAFF_GRADE)entry.commonStaffGroupManaged=true;
     entry.status=before.grade===STAFF_GRADE?'staff_active':'staff_removed';
     state.members[code]=entry;save(state);
   }
-  const result={ok:true,mode:apply?'apply':'dry_run',catalogGroups:catalog.length,scannedMembers:members.length,
+  const result={ok:true,mode:apply?'apply':'dry_run',accessMode:commonAccess?.mode??null,nativeAcl,
+    catalogGroups:catalog.length,scannedMembers:members.length,
     staffMembers:members.filter(m=>m.grade===STAFF_GRADE).length,outcomes,finishedAt:stamp()};
   return result;
 }
@@ -249,6 +260,7 @@ export async function runStaffVideoSync({apply=false,onlyMemberCode='',directory
   try {
     const config=JSON.parse(fs.readFileSync(path.join(directory,'config.json'),'utf8'));
     if(config.policyVersion!==STAFF_VIDEO_POLICY||config.approved!==true||config.siteCode!==SITE||config.unitCode!==UNIT)throw Error('Staff sync not activated');
+    const commonAccess=commonStaffAccess(config);
     const file=path.join(directory,'state.json');
     if(!fs.existsSync(file))throw Error('Ownership ledger missing; operator review required');
     const state=JSON.parse(fs.readFileSync(file,'utf8'));
@@ -258,9 +270,9 @@ export async function runStaffVideoSync({apply=false,onlyMemberCode='',directory
       fs.renameSync(temp,file);
       const parent=fs.openSync(directory,'r');try{fs.fsyncSync(parent);}finally{fs.closeSync(parent);}
     };
-    const result=reconcileStaffVideos(state,{run,apply,save,onlyMemberCode,reconcilePending,expectedGroupCodes});
+    const result=reconcileStaffVideos(state,{run,apply,save,onlyMemberCode,reconcilePending,expectedGroupCodes,commonAccess});
     if(!apply)return result;
-    const verification=await verify({run,state,onlyMemberCode,expectedGroupCodes});
+    const verification=await verify({run,state,onlyMemberCode,expectedGroupCodes,commonAccess});
     if(verification?.ok!==true || verification.catalogGroups!==result.catalogGroups)throw Error('Independent staff video verification failed or catalog changed');
     const complete={...result,finishedAt:stamp(),accessVerified:true,verification};
     if(!onlyMemberCode)state.lastRun=complete;

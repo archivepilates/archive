@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 export const STAFF_GRADE = 'g2026101335a27ee84d335';
 export const STAFF_GROUP = 'g20261013852db0f48eb41';
+export const COMMON_STAFF_ACCESS_MODE = 'common_staff_group_v1';
 export const SITE = 'S20260516852c71a014d08';
 export const UNIT = 'u2026051698c99ea234719';
 
@@ -14,7 +15,7 @@ function strings(value, name) {
   return [...value];
 }
 
-export function videoGroups(groups) {
+export function videoGroups(groups, { commonAccess = false } = {}) {
   assert.ok(Array.isArray(groups), 'groups must be an array');
   const codes = new Set();
   const titles = new Set();
@@ -29,11 +30,12 @@ export function videoGroups(groups) {
       && (/^ARCHIVE METHOD [A-Z0-9-]+ 40D$/.test(row.title)
         || /^PRIVATE LESSON [A-Z0-9 -]+ 40D$/.test(row.title))) selected.push(row.siteGroupCode);
   }
-  assert.ok(selected.length <= 48, 'Video catalog exceeds 48 groups');
+  const catalogLimit = commonAccess ? 1000 : 48;
+  assert.ok(selected.length <= catalogLimit, `Video catalog exceeds ${catalogLimit} groups`);
   return selected.sort();
 }
 
-export function planStaffGroups(member, ledger, catalogGroups, protectedGroups = []) {
+export function planStaffGroups(member, ledger, catalogGroups, protectedGroups = [], { commonAccess = false } = {}) {
   assert.equal(member?.siteCode, SITE, 'Unexpected member siteCode');
   assert.equal(member?.unitCode, UNIT, 'Unexpected member unitCode');
   const beforeGroups = strings(member.group, 'member.group').sort();
@@ -45,8 +47,12 @@ export function planStaffGroups(member, ledger, catalogGroups, protectedGroups =
   const current = new Set(beforeGroups);
   const active = member.grade === STAFF_GRADE;
   const removable = new Set(owned.filter(code => !protectedSet.has(code)));
+  if (commonAccess && !active && ledger?.commonStaffGroupManaged === true) {
+    assert.ok(!protectedSet.has(STAFF_GROUP), 'Protected STAFF group requires manual review; no automatic role removal');
+    removable.add(STAFF_GROUP);
+  }
   const afterGroups = active
-    ? sorted([...beforeGroups, ...catalog, STAFF_GROUP])
+    ? sorted([...beforeGroups, ...(commonAccess ? [] : catalog), STAFF_GROUP])
     : beforeGroups.filter(code => !removable.has(code));
   const after = new Set(afterGroups);
   const addedGroups = afterGroups.filter(code => !current.has(code));

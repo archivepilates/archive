@@ -2,13 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runStaffVideoSync } from './lib/imweb-staff-video-sync.mjs';
-import { SITE, UNIT } from './lib/imweb-staff-video-policy.mjs';
+import { SITE, UNIT, STAFF_GROUP } from './lib/imweb-staff-video-policy.mjs';
 
 export function validateVideoReadiness(proof,now=Date.now()) {
   const age=now-Date.parse(proof?.verifiedAt);
   if(proof?.siteCode!==SITE || proof.unitCode!==UNIT || !Number.isFinite(age) || age<0 || age>900000
     || proof.nativePagesPublished!==true || proof.catalogConnectionVerified!==true
-    || !Array.isArray(proof.videos) || !proof.videos.length || proof.videos.length>48) throw Error('Fresh media/page/catalog verification required');
+    || !Array.isArray(proof.videos) || !proof.videos.length || proof.videos.length>1000) throw Error('Fresh media/page/catalog verification required');
   const groups=new Set();
   for(const row of proof.videos) {
     if(!/^[A-Za-z0-9_-]{11}$/.test(row.youtubeId||'') || !/^g[0-9a-f]+$/.test(row.groupCode||'')
@@ -26,6 +26,14 @@ export async function completeVideoAccess(proof,{run=runStaffVideoSync,now,clock
   const expectedGroupCodes=validateVideoReadiness(proof,current());
   const result=await run({apply:true,expectedGroupCodes});
   if(result.ok!==true || result.accessVerified!==true || result.verification?.ok!==true) throw Error('Video access completion not independently verified');
+  if(result.accessMode==='common_staff_group_v1') {
+    const acl=result.verification.nativeAcl;
+    if(acl?.ok!==true || !Array.isArray(acl.mapping) || !proof.videos.every(video=>acl.mapping.some(menu=>
+      menu.url.replace(/^\//,'')===video.watchPath.slice(1) && menu.groupCodes.includes(video.groupCode)
+        && menu.groupCodes.includes(STAFF_GROUP)))) {
+      throw Error('New video native STAFF and buyer ACL not independently verified');
+    }
+  }
   validateVideoReadiness(proof,current());
   return {ok:true,status:'staff_access_verified',videoCount:proof.videos.length,
     groupCount:expectedGroupCodes.length,verifiedAt:result.verification.verifiedAt};

@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { staffImweb, STAFF_VIDEO_DIR, MEMBER_GROUP_LOCK } from './lib/imweb-staff-video-sync.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 import { verifyStaffVideoAccess } from './lib/imweb-staff-video-verification.mjs';
+import { commonStaffAccess } from './lib/imweb-staff-common-config.mjs';
 
 export { verifyStaffVideoAccess };
 
@@ -15,7 +16,10 @@ export async function runStaffVideoVerification({ run = staffImweb, directory = 
   let temporary;
   try {
     const state = JSON.parse(io.readFileSync(path.join(directory, 'state.json'), 'utf8'));
-    const result = verifyStaffVideoAccess({ run, state, onlyMemberCode, expectedGroupCodes });
+    const configFile = path.join(directory, 'config.json');
+    const commonAccess = io.existsSync(configFile)
+      ? commonStaffAccess(JSON.parse(io.readFileSync(configFile, 'utf8'))) : null;
+    const result = verifyStaffVideoAccess({ run, state, onlyMemberCode, expectedGroupCodes, commonAccess });
     temporary = path.join(directory, `.verification-${randomUUID()}.tmp`);
     io.writeFileSync(temporary, JSON.stringify(result, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
     io.renameSync(temporary, path.join(directory, 'verification.json'));

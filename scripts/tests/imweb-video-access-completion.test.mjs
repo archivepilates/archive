@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { completeVideoAccess,validateVideoReadiness } from '../complete-imweb-video-access.mjs';
-import { SITE,UNIT } from '../lib/imweb-staff-video-policy.mjs';
+import { SITE,UNIT,STAFF_GROUP } from '../lib/imweb-staff-video-policy.mjs';
 const now=Date.parse('2026-10-29T01:00:00Z');
 const proof=()=>({siteCode:SITE,unitCode:UNIT,verifiedAt:new Date(now).toISOString(),nativePagesPublished:true,catalogConnectionVerified:true,
   videos:[{youtubeId:'abcdefghijk',groupCode:'g123abc',watchPath:'/archive-method-watch-test',processing:'succeeded',privacyStatus:'unlisted',playbackVerified:true,pageAccessVerified:true}]});
@@ -34,4 +34,14 @@ test('proof expiring during slow verification remains pending without repeating 
     calls++;time+=900001;return {ok:true,accessVerified:true,verification:{ok:true}};
   }}),/Fresh media/);
   assert.equal(calls,1);
+});
+
+test('common completion verifies exact new watch URL and buyer group from native ACL mapping',async()=>{
+  const result=()=>({ok:true,accessVerified:true,accessMode:'common_staff_group_v1',verification:{ok:true,
+    nativeAcl:{ok:true,mapping:[{url:'/archive-method-watch-test',groupCodes:['g123abc',STAFF_GROUP]}]}}});
+  assert.equal((await completeVideoAccess(proof(),{now,run:async()=>result()})).ok,true);
+  for(const mutate of [r=>delete r.verification.nativeAcl,r=>r.verification.nativeAcl.ok=false,
+    r=>r.verification.nativeAcl.mapping[0].url='/wrong',r=>r.verification.nativeAcl.mapping[0].groupCodes=[]]) {
+    const r=result();mutate(r);await assert.rejects(completeVideoAccess(proof(),{now,run:async()=>r}),/native STAFF/);
+  }
 });
