@@ -22,7 +22,7 @@ completed returning-member registration. Current-date registration absent, no
 matching candidate/send/provider notice. Lee's old 11/28 cancelled source must
 remain cancelled. Current 11/29 admission uses the separate current native ticket.
 
-Additional scope requiring clarification: An So-eun 0 KRW instructor ticket and
+Initial additional scope (subsequently approved for the two free recipients): An So-eun 0 KRW instructor ticket and
 Jung Yu-ri 0 KRW staff ticket, both 11/28; five separate Team tickets on 11/21 are
 80000 KRW and have no existing 2T official calendar binding. Do not relabel them
 2T, infer payment, skip staff policy, or promise D-1 workflow without validation.
@@ -45,9 +45,9 @@ review signal, not proof that no external message was delivered. Source freshnes
 partial reads, zero-price and staff exceptions stay explicit. Health writes use
 only existing operational health/action ledgers, not member/ticket/registration data.
 
-Local verification: 2481 broad instructor/Imweb/health tests passed before three
-additional signup-conflict regressions; the adoption pure suite is now 42 passed.
-Coverage plus health regressions 105 passed; rules/catalog responsive and strict
+Final local verification: 2478 broad instructor/Imweb/health tests across 65 unique
+MJS files passed with zero failures/skips; the adoption pure suite has 54 tests.
+Rules/catalog responsive and strict
 one-note release checks passed at 320/390/768/1440. Hosting validation passed.
 Fresh live dry-run adoption passed all three exact recipients. Independent review
 required (and now code rejects) any same-date legacy-ID registration/query insertion
@@ -56,7 +56,7 @@ and newer unfinished signup history despite an older completed returning record.
 The explicitly requested one-off notice recovery can execute only from a clean
 committed exact lane worktree with an explicit expected commit, or synchronized
 runtime main. It creates canonical registrations only. It does not activate a
-production worker or authorize deploying the health/rules changes.
+new production worker; health/rules deployment received separate explicit approval.
 
 2026-10-29 operational update:
 - User approved the two complimentary recipients and scoped prevention deployment.
@@ -94,4 +94,18 @@ production worker or authorize deploying the health/rules changes.
   ICS status. Latest Team suite: 16 passed; rollback/calendar/address guards pass.
   The two already-created Team files require a scoped known-baseline update;
   all other 73 hashes/config remain preserved. No member replay is permitted.
+- Address-only calendar update e482cba12e2f5259 deployed from clean main c2a77173
+  and verified at 15:38:15 KST. Both exact source hashes match live URLs, ICS MIME
+  text/calendar, and all other 73 files/config preserved. CORE intake rule still
+  present in the concurrently updated operating-rules page (HTTP 200).
+- Deployment boundary: existing runtime health script plus the scoped CORE rules
+  and member calendar Hosting files. No Functions implementation, Firestore schema,
+  IAM, DNS, ordinary sender or scheduler change. Affected detection conservatively
+  includes all codebases for CI workflow edits; CI builds/checks those codebases,
+  not an instruction to redeploy unchanged Functions.
+- Task-owned Playwright contexts closed and StudioMate/Hosting locks released.
+  Runtime preserves its pre-existing untracked scripts/__pycache__/ only.
+- Final implementation CI on c2a77173: CORE MCP Check 40830371677 success;
+  main Functions Affected Check 40830371713 success (all steps, 2m16s).
+  Initial b0c4e64 legacy-calendar failure is superseded by this successful run.
 Private proofs remain under ~/ArchiveIN/operations/november-instructor-confirmation-20261029/.
