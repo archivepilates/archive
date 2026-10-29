@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { stableHash } from "../firebase/kangsain-functions/functions/src/utils/hash";
 import { db } from "../firebase/kangsain-functions/functions/src/config/firebase";
 import {
   cleanRequestId, mealResponseSourceHash, saveRecommendedMealProgramDraftHandler,
@@ -57,7 +58,7 @@ async function main() {
   const auditDir = value("audit-dir");
   fs.mkdirSync(auditDir, { recursive: true, mode: 0o700 });
   const auditFile = path.join(auditDir, "operator-draft-apply.json");
-  const inputHash = digest(input);
+  const inputHash = stableHash(input);
   const evidence: Record<string, unknown> = {
     requestId, memberId, inputHash, responseHash: digest(response), previousRevision: draft?.revision,
     previousDraftHash: digest(draft), ledgersBefore, unrelatedBefore, checkedAt: new Date().toISOString(),
@@ -71,9 +72,9 @@ async function main() {
   if (plan.inputHash !== inputHash || plan.responseHash !== evidence.responseHash
     || plan.previousRevision !== evidence.previousRevision || plan.previousDraftHash !== evidence.previousDraftHash
     || plan.memberId !== memberId || plan.requestId !== requestId) throw Error("Plan changed: prepare a new verified plan");
-  if (fs.existsSync(auditFile)) throw Error("Prior apply intent: read back, never replay");
   const saveAudit = () => fs.writeFileSync(auditFile, JSON.stringify(evidence, null, 2), { mode: 0o600 });
-  evidence.applyIntentAt = new Date().toISOString(); saveAudit();
+  evidence.applyIntentAt = new Date().toISOString();
+  fs.writeFileSync(auditFile, JSON.stringify(evidence, null, 2), { flag: "wx", mode: 0o600 });
   // This local operator-only path reuses the exact deployed transaction. It has no publish/send capability.
   const actor = { staffId: "codex-operator", uid: "service:archive-codex-operator",
     name: "ARCHIVE PILATES OPS 관리자 호출", studioId: request.studioId } as StaffDoc;
@@ -87,18 +88,21 @@ async function main() {
   const history = draft?.revision
     ? (await db.collection(collections[2]).doc(requestId).collection("revisions").doc(draft.revision).get()).data() : null;
   const preserved = history ? Object.fromEntries(Object.keys(draft).map(k => [k, history[k]])) : null;
+  const previousDraftArchived = !draft || result.reused === true
+    ? !draft || digest(after[collections[2]]) === digest(draft)
+    : digest(preserved) === digest(draft);
   const ledgersAfter = await ledger(), unrelatedAfter = await unrelated();
   const verified = digest(after[collections[1]]) === digest(response)
     && after[collections[2]]?.provider === "operator_assisted" && after[collections[2]]?.model === "codex-chat"
-    && digest(after[collections[2]].publicContent) === inputHash
+    && stableHash(after[collections[2]].publicContent) === inputHash
     && after[collections[3]]?.publicationStatus === "draft" && after[collections[3]]?.approvalStatus === "draft"
     && !after[collections[3]]?.candidateId && !after[collections[3]]?.approvedSnapshot
     && !after[collections[3]]?.publishedSnapshot && !after[collections[3]]?.sentSnapshot
-    && (!draft || digest(preserved) === digest(draft))
+    && previousDraftArchived
     && digest(ledgersAfter) === digest(ledgersBefore) && digest(unrelatedAfter) === digest(unrelatedBefore);
   Object.assign(evidence, { verified, completedAt: new Date().toISOString(),
     revision: (result.draft as Record<string, unknown>)?.revision, responsePreserved: digest(after[collections[1]]) === digest(response),
-    previousDraftArchived: !draft || digest(preserved) === digest(draft), ledgersUnchanged: digest(ledgersAfter) === digest(ledgersBefore),
+    previousDraftArchived, ledgersUnchanged: digest(ledgersAfter) === digest(ledgersBefore),
     unrelatedUnchanged: digest(unrelatedAfter) === digest(unrelatedBefore), publicationStatus: after[collections[3]]?.publicationStatus });
   saveAudit();
   if (!verified) throw Error("Readback mismatch; inspect audit without replay");
