@@ -45,9 +45,14 @@ Local CORE static preview: http://127.0.0.1:4195/instructor-lessons/.
 Owned preview server PID 26646 serves only core/, bound to 127.0.0.1. Kept running
 for the user's local review. HTTP 200 confirmed; live authentication not verified.
 
-Status: local implementation/validation complete, not deployed or pushed.
-Awaiting the explicit asynchronous CORE Hosting/commit/push approval. No Firebase
-deploy dry-run or production mutation was performed. After approval, use clean
-main, preserve the live Hosting manifest/config and publish only these three
-changed static assets (app.js, styles.css, alimtalk-catalog.json), verify hashes
-and actual date/title rendering, then complete CI, push and runtime alignment.
+The operator explicitly approved verification, CORE Hosting publication, commit
+and push. Deployment is prepared with a three-existing-file publisher using
+pinned baseline 9d953603 and reviewed UI 0a7a6451. Read-only plan verifies live
+version sites/archive-pilates-core/versions/405f9ffb8466497e, all 63 file entries,
+the three raw/gzip baseline hashes and preserved Hosting config. Only app.js,
+styles.css and alimtalk-catalog.json change; the other 60 files stay identical.
+Journal and shared CORE Hosting lock prevent blind retry/concurrent publication.
+Independent publisher review and pure manifest test passed. Expanded UI/cancel/
+release suite: 25 passed. Live rollback/calendar/address guards passed. CI now
+includes the new UI and release tests. No Functions implementation changed.
+Status: approved and validated for publication, not yet claimed as deployed.
