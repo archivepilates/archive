@@ -14,6 +14,18 @@ import { assertMemberDispatchAllowed, isMemberDispatchDeferred } from './lib/mem
 export const TEAM_TEST_ID = 'instructor_team_confirmation_test_261121_operator_20261029_v1';
 const TEMPLATE = 'KA01TP2608241233353269Jgtoiwnzi6', CHANNEL = 'KA01PF260511123407631PSoAflYAVXs';
 const PHONE = '01086488585';
+export function teamTestReceipt(response) {
+  const record=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+  assert(record(response));
+  const rows=Array.isArray(response.messageList)?response.messageList:record(response.messageList)?Object.values(response.messageList):[];
+  const failed=response.failedMessageList;
+  assert(failed==null||Array.isArray(failed)||record(failed));
+  assert(!Object.keys(failed||{}).length&&rows.length===1&&record(rows[0]));
+  const row=rows[0];
+  assert(/^M[A-Za-z0-9]+$/.test(row.messageId||'')&&(row.to==null||row.to===PHONE)
+    &&(row.kakaoOptions?.templateId==null||row.kakaoOptions.templateId===TEMPLATE));
+  return row.messageId;
+}
 export function teamTestVariables(member) {
   assert(member?.name === '김기효' && member.phone === PHONE && /^[1-9]\d+$/.test(member.memberId));
   return { '#{이름}': '김기효 (Team 안내 테스트)', '#{수업일}': TEAM_EVENT.dateText,
@@ -76,8 +88,11 @@ async function main() {
     await db.runTransaction(async tx=>{const c=await tx.get(candidateRef),s=await tx.get(sendRef);assert(c.data()?.status==='processing'&&s.data()?.status==='processing');ensureFresh();tx.update(candidateRef,{attempts:1,externalEffectStarted:true});tx.update(sendRef,{attempts:1});});
     ensureFresh();effectStarted=true;
     const response=await request('/messages/v4/send-many/detail','POST',{messages:[{to:PHONE,type:'ATA',kakaoOptions:{pfId:CHANNEL,templateId:TEMPLATE,disableSms:true,variables},customFields:{archiveActionKey:TEAM_TEST_ID,purpose:'team_confirmation_preview'}}],strict:true,allowDuplicates:false,showMessageList:true});
-    const accepted=response.messageList;if(response.failedMessageList?.length||!Array.isArray(accepted)||accepted.length!==1||accepted[0].to!==PHONE||!/^M[A-Za-z0-9]+$/.test(accepted[0].messageId||''))throw Error('Ambiguous test receipt.');
-    const messageId=accepted[0].messageId;
+    const messageId=teamTestReceipt(response);
+    await db.runTransaction(async tx=>{await tx.get(candidateRef);await tx.get(sendRef);tx.update(candidateRef,{solapiMessageId:messageId});tx.update(sendRef,{solapiMessageId:messageId});});
+    const confirmation=await request('/messages/v4/list?'+new URLSearchParams({to:PHONE,type:'ATA',dateType:'CREATED',startDate:'2026-10-29T00:00:00Z',endDate:new Date().toISOString(),limit:'500'}),'GET');
+    const matched=Object.values(confirmation.messageList||{}).filter(m=>m.messageId===messageId);
+    assert(!confirmation.nextKey&&matched.length===1&&matched[0].to===PHONE&&matched[0].kakaoOptions?.templateId===TEMPLATE&&matched[0].customFields?.archiveActionKey===TEAM_TEST_ID);
     await db.runTransaction(async tx=>{const c=await tx.get(candidateRef),s=await tx.get(sendRef);assert(c.data()?.status==='processing'&&s.data()?.status==='processing');const at=admin.firestore.FieldValue.serverTimestamp();tx.update(candidateRef,{status:'sent',solapiMessageId:messageId,sentAt:at,updatedAt:at});tx.update(sendRef,{status:'done',solapiMessageId:messageId,acceptedAt:at,updatedAt:at});});
     const directory='/Users/archivepilates/ArchiveIN/operations/november-instructor-confirmation-20261029';await mkdir(directory,{recursive:true,mode:0o700});
     const h=await open(path.join(directory,'team-test-accepted.json'),'wx',0o600);try{await h.writeFile(JSON.stringify({candidateId:TEAM_TEST_ID,messageId,sourceCommit:commit,approval,variables,acceptedAt:new Date().toISOString()},null,2));}finally{await h.close();}

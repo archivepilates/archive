@@ -78,6 +78,20 @@ production worker or authorize deploying the health/rules changes.
   98585168 establish November 21 13:30-14:20 reformer/block and 14:30-15:20
   barrel/stick. Additive static calendar publication and preview transport use
   canonical claims, current source/template validation and the normal window.
-- Team calendar responsive/offline/ICS/release/test-policy suite: 13 passed.
-  Release and operator preview end-to-end readbacks remain pending in this commit.
+- Team initial calendar release 667eb92629bed6aa verified at 15:31:27 KST,
+  preserving all 73 baseline files/config and adding only two files.
+- Kim Gi-hyo preview accepted at 15:31:47 KST and COMPLETE/4000 confirmed by GET
+  at 15:33:26 KST, matching exact recipient/template/rendered body/action key.
+  Message M4V20261029153147AOMWNDQEZKIEEPM. Actual Team recipients sent: zero.
+- Initial preview receipt parsing assumed an array. Provider GET proved the
+  one accepted message, and canonical sent/done was reconciled without replay.
+  Support keyed/array provisional receipts, preserve receipt before independent
+  identity GET, reject failures/multiple/contradictory receipts. Existing candidate
+  readback now returns sent/replayed:false without another provider POST.
+- First Team commit CI caught a legacy validator that assumed every calendar was
+  METHOD #8 at 13:00-15:10. Add exact verified Team builder comparison without
+  relaxing any legacy course check. Add full canonical venue address and confirmed
+  ICS status. Latest Team suite: 16 passed; rollback/calendar/address guards pass.
+  The two already-created Team files require a scoped known-baseline update;
+  all other 73 hashes/config remain preserved. No member replay is permitted.
 Private proofs remain under ~/ArchiveIN/operations/november-instructor-confirmation-20261029/.

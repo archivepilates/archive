@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { TEAM_EVENT, renderTeamCalendarHtml, renderTeamCalendarIcs } from './build-team-261121-calendar.mjs';
 
 const root = resolve(import.meta.dirname, "..");
 const methodRoot = join(root, "archivein", "method");
@@ -44,6 +45,13 @@ for (const entry of readdirSync(methodRoot)) {
   const ics = icsBuffer.toString("utf8");
   const htmlFile = relative(htmlPath);
   const icsFile = relative(icsPath);
+  const isTeam = entry === 'team-261121';
+  if (isTeam) {
+    const stamp = ics.match(/DTSTAMP:(\d{8}T\d{6}Z)/)?.[1];
+    if (html !== renderTeamCalendarHtml() || !stamp || ics !== renderTeamCalendarIcs(stamp)) {
+      fail(htmlFile, 'Team calendar must exactly match its independently verified schedule builder');
+    }
+  }
 
   if (!html.includes(`data-event-date="${isoDate}"`)) {
     fail(htmlFile, `data-event-date must be ${isoDate}`);
@@ -51,15 +59,17 @@ for (const entry of readdirSync(methodRoot)) {
   if (!html.includes(`href="./${icsName}"`)) {
     fail(htmlFile, `ICS link must point to ./${icsName}`);
   }
-  if (!html.includes(`dates=${year}${month}${day}T040000Z%2F${year}${month}${day}T061000Z`)) {
-    fail(htmlFile, "Google Calendar dates must match 13:00-15:10 KST");
+  const start = isTeam ? TEAM_EVENT.start : `${year}${month}${day}T040000Z`;
+  const end = isTeam ? TEAM_EVENT.end : `${year}${month}${day}T061000Z`;
+  if (!html.includes(`dates=${start}%2F${end}`)) {
+    fail(htmlFile, "Google Calendar dates must match the specific verified course");
   }
   if (html.includes("상세 안내 보기")) fail(htmlFile, "detail button must not be present");
   if (html.includes(forbiddenDetailHost)) fail(htmlFile, "Notion detail link must not be present");
   if (!html.includes(expectedAddress)) {
     fail(htmlFile, "ARCHIVE PILATES address is missing or stale");
   }
-  if (!html.includes("../../assets/method-calendar.css")) {
+  if (!isTeam && !html.includes("../../assets/method-calendar.css")) {
     fail(htmlFile, "shared calendar stylesheet is missing");
   }
 
@@ -79,15 +89,15 @@ for (const entry of readdirSync(methodRoot)) {
   for (const marker of [
     "BEGIN:VCALENDAR",
     "BEGIN:VEVENT",
-    `UID:archive-method-8-external-feedback-${dateToken}@archivepilates.com`,
-    `DTSTART:${year}${month}${day}T040000Z`,
-    `DTEND:${year}${month}${day}T061000Z`,
-    "SUMMARY:ARCHIVE METHOD #8 외부 피드백",
+    `UID:${isTeam ? TEAM_EVENT.uid : `archive-method-8-external-feedback-${dateToken}@archivepilates.com`}`,
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    isTeam ? `SUMMARY:${TEAM_EVENT.title}` : "SUMMARY:ARCHIVE METHOD #8 외부 피드백",
     "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",
   ]) {
-    if (!ics.includes(marker)) fail(icsFile, `missing ${marker}`);
+    if (!ics.replace(/\r\n[ \t]/g, '').includes(marker)) fail(icsFile, `missing ${marker}`);
   }
 
   const unfoldedIcs = ics.replace(/\r\n[ \t]/g, "");

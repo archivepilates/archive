@@ -30,7 +30,7 @@ test("ICS is one combined UTC event with stable Team UID and public URL", () => 
   assert.equal(text.split("BEGIN:VEVENT").length - 1, 1);
   for (const line of ["UID:team-261121@archivepilates.com", `DTSTAMP:${stamp}`,
     "DTSTART:20261121T043000Z", "DTEND:20261121T062000Z", `SUMMARY:${TEAM_EVENT.title}`,
-    "LOCATION:ARCHIVE PILATES 명지", `URL:${TEAM_EVENT.url}`,
+    `LOCATION:${icsEscape(TEAM_EVENT.location)}`, "STATUS:CONFIRMED", `URL:${TEAM_EVENT.url}`,
     "DESCRIPTION:은영쌤 리포머 + 블럭\\n민진쌤 바렐 + 스틱"]) assert.ok(text.includes(`${line}\r\n`), line);
   assert.equal(text.startsWith("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"), true);
   assert.equal(text.endsWith("END:VEVENT\r\nEND:VCALENDAR\r\n"), true);

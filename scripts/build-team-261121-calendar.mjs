@@ -7,7 +7,7 @@ export const TEAM_EVENT = Object.freeze({
   date: "2026-11-21",
   dateText: "2026년 11월 21일(토)",
   timeText: "13:30~15:20",
-  location: "ARCHIVE PILATES 명지",
+  location: "ARCHIVE PILATES 명지, 부산광역시 강서구 명지국제2로28번길 34 에코팰리스 704호",
   url: "https://in.archivepilates.com/method/team-261121/calendar/",
   icsName: "archive-method-261121.ics",
   uid: "team-261121@archivepilates.com",
@@ -47,7 +47,7 @@ export function renderTeamCalendarIcs(stamp = new Date().toISOString().replace(/
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//ARCHIVE PILATES//Team Instructor Lesson//KO",
     "CALSCALE:GREGORIAN", "BEGIN:VEVENT", `UID:${e.uid}`, `DTSTAMP:${stamp}`,
     `DTSTART:${e.start}`, `DTEND:${e.end}`, `SUMMARY:${icsEscape(e.title)}`,
-    `LOCATION:${icsEscape(e.location)}`, `DESCRIPTION:${icsEscape(e.composition)}`,
+    `LOCATION:${icsEscape(e.location)}`, `DESCRIPTION:${icsEscape(e.composition)}`, 'STATUS:CONFIRMED',
     `URL:${e.url}`, "END:VEVENT", "END:VCALENDAR"];
   return lines.map(foldIcsLine).join("\r\n") + "\r\n";
 }
