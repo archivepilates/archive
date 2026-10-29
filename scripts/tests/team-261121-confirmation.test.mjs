@@ -41,6 +41,11 @@ test('canonical and cross-channel same-date/unknown confirmation history blocks 
   assert(!relevant({ templateCode: template, payload: { lessonDate: '2026-11-28' } }));
   assert(!relevant({ text: '다른 내용' }));
 });
+test('unrelated old material notices are not unknown-date reservation confirmations', () => {
+  assert(!relevant({ kakaoOptions: { templateId: 'KA01TP260825074722212ylmndmsB3V4' }, text: '강사레슨 수업 안내, 다음 예약 안내를 참고해 주세요.' }));
+  assert(!relevant({ text: '자료 변경 2026-10-16, 제출일 2026-10-17' }));
+  assert(relevant({ text: '강사레슨 예약이 확정되었어요. 날짜 확인필요' }));
+});
 test('one provisional receipt supports provider maps and rejects failures/multiple/wrong identities', () => {
   const row = { messageId: 'MEXAMPLE' };
   for (const messageList of [[row], { MEXAMPLE: row }]) assert.equal(receipt({ messageList }, '01012345678'), row.messageId);

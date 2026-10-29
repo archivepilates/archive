@@ -48,17 +48,18 @@ export function teamConfirmationVariables(member, tickets) {
 }
 
 export function isTeamConfirmationHistory(row) {
+  const sameFamily = row?.type === 'instructor_lesson_confirmation'
+    || row?.templateCode === TEAM_CONFIRMATION_TEMPLATE || row?.kakaoOptions?.templateId === TEAM_CONFIRMATION_TEMPLATE
+    || /강사\s*레슨/.test(row?.text || '') && /예약\s*(?:이\s*)?확정|확정\s*(?:안내|되었)/.test(row.text);
   const fields = [row?.payload?.lessonDate, row?.payload?.classDate, row?.lessonDate, row?.variables?.['#{수업일}']]
     .filter(x => x !== undefined && x !== null && x !== '');
+  if (!sameFamily && !fields.length) return false;
   const evidence = [...fields, ...(row?.text ? [row.text] : [])];
   if (evidence.some(x => typeof x !== 'string')) return true;
   const dates = new Set(evidence.flatMap(value => [...value.matchAll(/(\d{4})(?:년\s*|[-./])(\d{1,2})(?:월\s*|[-./])(\d{1,2})(?:일)?/g)]
     .map(m => `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`)));
   if (dates.size > 1 || dates.has(TEAM_EVENT.date)) return true;
   if (dates.size === 1) return false;
-  const sameFamily = row?.type === 'instructor_lesson_confirmation'
-    || row?.templateCode === TEAM_CONFIRMATION_TEMPLATE || row?.kakaoOptions?.templateId === TEAM_CONFIRMATION_TEMPLATE
-    || /강사\s*레슨/.test(row?.text || '') && /예약/.test(row.text);
   // Missing/unparseable or contradictory evidence cannot prove a different lesson.
   return sameFamily || fields.length > 0;
 }

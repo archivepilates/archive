@@ -145,11 +145,12 @@ try {
     const handle = await fs.open(DIR + '/' + key + '-accepted.json', 'wx', 0o600); try { await handle.writeFile(JSON.stringify(result, null, 2)); } finally { await handle.close(); }
     console.log(JSON.stringify(result));
   }
-} catch {
+} catch (error) {
   if (activeClaim) { const patch = { status: 'review_required', attempts: effectStarted ? 1 : 0, externalEffectStarted: effectStarted,
     lastError: effectStarted ? '접수 결과 확인 필요 · 재발송 금지' : '전송 전 확인 중단 · 공급자 요청 없음', updatedAt: admin.firestore.FieldValue.serverTimestamp() };
     await db.runTransaction(async tx => { const c = await tx.get(activeClaim.c), s = await tx.get(activeClaim.s);
       if (c.data()?.status === 'sent' || s.data()?.status === 'done') return;
       tx.update(activeClaim.c, patch); tx.update(activeClaim.s, patch); }).catch(() => {}); }
-  console.error(JSON.stringify({ ok: false, code: 'TEAM_CONFIRMATIONS_STOPPED', acceptedCount: results.length, effectStarted, replay: false })); process.exitCode = 1;
+  console.error(JSON.stringify({ ok: false, code: 'TEAM_CONFIRMATIONS_STOPPED', acceptedCount: results.length, effectStarted, replay: false,
+    diagnostic: { code: error?.code || error?.name, locations: String(error?.stack || '').split('\n').filter(l => /^\s+at /.test(l) && /send-team-261121-confirmations|team-261121-confirmation/.test(l)).map(l => l.trim()) } })); process.exitCode = 1;
 } finally { await context?.close(); await release?.(); await app.delete(); }
