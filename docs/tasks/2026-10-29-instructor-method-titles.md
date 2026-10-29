@@ -42,8 +42,9 @@ They exercise actual renderer functions and actual CSS, not authenticated live
 data. Playwright browser/context closed; no production action was tested.
 
 Local CORE static preview: http://127.0.0.1:4195/instructor-lessons/.
-Owned preview server PID 26646 serves only core/, bound to 127.0.0.1. Kept running
-for the user's local review. HTTP 200 confirmed; live authentication not verified.
+Owned preview server PID 26646 served only core/, bound to 127.0.0.1, during local
+review. It was stopped after successful production publication. Use the live
+https://core.archivepilates.com/instructor-lessons/ instead.
 
 The operator explicitly approved verification, CORE Hosting publication, commit
 and push. Deployment is prepared with a three-existing-file publisher using
@@ -55,4 +56,26 @@ Journal and shared CORE Hosting lock prevent blind retry/concurrent publication.
 Independent publisher review and pure manifest test passed. Expanded UI/cancel/
 release suite: 25 passed. Live rollback/calendar/address guards passed. CI now
 includes the new UI and release tests. No Functions implementation changed.
-Status: approved and validated for publication, not yet claimed as deployed.
+Publication completed from clean main 0f446f5692e67c98da5bf2b2293f1b3b1e1c7362.
+Version: sites/archive-pilates-core/versions/2cab2cc6294c4b50.
+Release: sites/archive-pilates-core/releases/1793258857553000.
+Provider release intent 2026-10-29T07:27:37.502Z, live verified at 07:27:40.017Z
+(16:27 KST). All three live raw hashes exactly match reviewed source. Remaining
+60 manifest entries and complete Hosting config are unchanged. Immutable private
+journal: ~/ArchiveIN/operations/core-instructor-method-titles-20261029/hosting-release.json.
+
+Independent production verification:
+- CORE MCP current read returns all three schedule date keys (stored operational
+  data, not a fresh StudioMate read); no source/capacity mutation performed.
+- Actual logged-in Chrome CORE page renders the exact three method titles.
+- Read-only selected Team roster shows #9; recent registration filter shows #10.
+- No registration, cancellation or member-facing action button was invoked.
+- Genuine live screenshot: artifacts/instructor-method-titles/live-overview.jpg.
+- CORE MCP Check 40835504611 and Functions Affected Check 40835504514 both success.
+  Workflow edits conservatively build/check all codebases; unchanged Functions
+  were not redeployed. No new operating-rule policy required by these UI labels.
+- Task-owned Chrome verification tab closed; local preview server stopped. Existing
+  user tabs/profiles and pre-existing runtime scripts/__pycache__/ preserved.
+
+Status: deployed and live-verified; main/feature pushes and runtime alignment
+completed for implementation. This final note records the verified result only.
