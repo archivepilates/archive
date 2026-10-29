@@ -10,7 +10,7 @@ import { imwebJson } from './lib/imweb-referral-source.mjs';
 import { staffMembers, MEMBER_GROUP_LOCK } from './lib/imweb-staff-video-sync.mjs';
 import { SITE, UNIT, assertMemberPreserved } from './lib/imweb-staff-video-policy.mjs';
 import { C261025_SHARE, D261025_SHARE, readStudentShareLedgers, validatedShareEntries, shareInstant } from './lib/imweb-student-share-policy.mjs';
-import { matchLessonShareMember } from './lib/lesson-share-261024.mjs';
+import { matchLessonShareMember } from './lib/lesson-share-operator-identities.mjs';
 import { retainUiShareWindow, releaseUiShareLocks } from './ui-lesson-261024-recovery.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 

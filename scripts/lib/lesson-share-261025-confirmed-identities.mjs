@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { matchLessonShareMember } from './lesson-share-261024.mjs';
+import { matchLessonShareMember } from './lesson-share-operator-identities.mjs';
 import { SITE, UNIT } from './imweb-staff-video-policy.mjs';
 import { D261025_SHARE, shareInstant } from './imweb-student-share-policy.mjs';
 import { normalizeInstructorLessonPhone } from './instructor-lesson-registration-contract.mjs';

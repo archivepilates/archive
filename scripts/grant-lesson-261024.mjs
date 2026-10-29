@@ -9,7 +9,7 @@ import { staffMembers, MEMBER_GROUP_LOCK } from './lib/imweb-staff-video-sync.mj
 import { SITE, UNIT, STAFF_GRADE, assertMemberPreserved } from './lib/imweb-staff-video-policy.mjs';
 import { A261024_SHARE, B261024_SHARE, readStudentShareLedgers, validatedShareEntries,
   firstVerifiedShareWindow, shareInstant } from './lib/imweb-student-share-policy.mjs';
-import { matchLessonShareMember } from './lib/lesson-share-261024.mjs';
+import { matchLessonShareMember } from './lib/lesson-share-operator-identities.mjs';
 import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from './lib/lesson-share-registration-policy.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 
@@ -138,6 +138,7 @@ async function main() {
           eligibilityPolicy: LESSON_VIDEO_ELIGIBILITY_POLICY_ID, sessionAttendance: target.sessionAttendance,
           date: '2026-10-24', lessonIds: [...source.lessonIds], memberCode, verifiedAt: evidence.verifiedAt } };
       if (already) receipt.kind = 'student_share_existing_staff';
+      if (match.identityConfirmation) receipt.identityConfirmation = match.identityConfirmation;
       state.manualImmediateGrants[memberCode] = receipt; save(stateFile, state);
       let quotaBlockedBeforeDispatch = false;
       try {

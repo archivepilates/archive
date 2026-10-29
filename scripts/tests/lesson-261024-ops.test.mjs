@@ -91,12 +91,14 @@ for (const statuses of [['결석', '결석'], ['출석', '결석'], ['결석', '
         const memberCode = 'm001', state = { manualImmediateGrants: {} }, saves = [];
         const before = { grade: already ? STAFF_GRADE : 'ordinary',
           group: ['paid', 'unrelated-share', ...(already ? [source.groupCode] : [])] };
-        runInNewContext(receiptBody, { before, already, memberCode, state, stateFile: 'synthetic-only',
+        const match = { identityConfirmation: { source: 'synthetic-operator-approval' } };
+        runInNewContext(receiptBody, { before, already, memberCode, state, match, stateFile: 'synthetic-only',
           afterGroups: already ? [...before.group] : [...before.group, source.groupCode],
           hash: () => 'synthetic-invariant', Date: clock(NOW), source, target, evidence,
           LESSON_VIDEO_ELIGIBILITY_POLICY_ID, save: (_file, value) => saves.push(copy(value)) });
         const receipt = state.manualImmediateGrants[memberCode];
         assert.equal(saves.length, 1);
+        assert.equal(receipt.identityConfirmation, match.identityConfirmation);
         assert.equal(receipt.attendanceEvidence.source, 'studiomate_live_lesson_detail');
         assert.equal(receipt.attendanceEvidence.status, 'both_sessions_registered');
         assert.equal(receipt.attendanceEvidence.eligibilityPolicy, LESSON_VIDEO_ELIGIBILITY_POLICY_ID);
