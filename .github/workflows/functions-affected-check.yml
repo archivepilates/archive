@@ -117,7 +117,7 @@ jobs:
         run: node --test scripts/tests/instructor-registration-recovery.test.mjs scripts/tests/instructor-ticket-response-diagnostics.test.mjs scripts/tests/instructor-eform-search-evidence.test.mjs scripts/tests/instructor-ticket-recovery-evidence.test.mjs scripts/tests/instructor-existing-ticket-adoption.test.mjs scripts/tests/instructor-ticket-intake-coverage.test.mjs
 
       - name: Test operator-only Team confirmation preview
-        run: node --test scripts/tests/team-confirmation-test-policy.test.mjs scripts/tests/team-calendar-release.test.mjs
+        run: node --test scripts/tests/team-confirmation-test-policy.test.mjs scripts/tests/team-calendar-release.test.mjs scripts/tests/team-261121-confirmation.test.mjs
 
       - name: Test instructor signup identity and profile guards
         run: node --test scripts/tests/instructor-signup*.test.mjs

@@ -109,3 +109,19 @@ new production worker; health/rules deployment received separate explicit approv
   main Functions Affected Check 40830371713 success (all steps, 2m16s).
   Initial b0c4e64 legacy-calendar failure is superseded by this successful run.
 Private proofs remain under ~/ArchiveIN/operations/november-instructor-confirmation-20261029/.
+
+## Approved Team Recipient Dispatch
+
+The operator approved the delivered Kim preview content and explicitly requested
+dispatch to the five real Team recipients on October 29. This authorizes only
+Byun Go-eun, Jang Yeong-eun, Jung Ji-hye, Jo Ha-rin and Choi Da-som for November 21;
+it does not activate a generic Team sender, signup, new registration or D-1 job.
+Existing canonical candidate and send-dedupe hash formulas are preserved. The
+one-off sender validates exact native identities/tickets/current paid state,
+schedule, approved template/buttons, live calendar and all bounded prior histories.
+It rereads cancellation and linked legacy histories transactionally. Preparation
+uses reviewed (outside ordinary queue selection); transport intent atomically
+uses processing with maxAttempts=attempts=1, recognized by cancellation guards
+and not replayable by a stale worker. Confirmed acceptance survives local proof
+file failures. Conflicting date fields or rendered bodies fail closed.
+Local pure/recovery tests: 25 passed. No real Team send performed at this note.
