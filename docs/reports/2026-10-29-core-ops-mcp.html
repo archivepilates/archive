@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES OPS · CORE MCP 검증</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#222;font:16px/1.75 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px 72px}h1{font-size:28px}h2{font-size:20px;margin-top:32px}p,li{max-width:75ch}section{border-top:1px solid #d6d9df;padding-top:12px}code{overflow-wrap:anywhere;font-size:14px}a{color:#246957}table{width:100%;border-collapse:collapse}th,td{padding:10px;text-align:left;border-bottom:1px solid #d6d9df;vertical-align:top}.status{color:#246957;font-weight:650}@media(max-width:480px){main{padding:20px 16px}h1{font-size:24px}th,td{padding:8px 4px}}</style></head><body><main>
+<p>ARCHIVE PILATES OPS · 2026-10-29</p><h1>CORE MCP 연결·조회·수정 검증</h1>
+<p class="status">구현 및 실제 조회·격리 수정 테스트 통과. 운영 등록·릴리스 결과는 아래 최종 확인에 기록합니다.</p>
+<section><h2>지원 범위</h2><p>로컬 stdio 서버 <code>archive-core-mcp</code>에 MCP 도구 8개, 고정 업무 45개(조회 18·수정 27), canonical 원장 조회 영역 46개를 구현했습니다. 기존 실시간 StudioMate 조회 전용 <code>archivepilates-mcp</code>는 변경하지 않습니다.</p>
+<p>추천식단 조회·초안 저장·승인 공개, 주차, 에어컨, 강사레슨 접수·취소 요청, 평가, SNS 초안·발행 승인, 기존 출석·메모 업무, 재등록 상담 상태와 본인 시퀀스를 지원합니다. 실제 업무 지원과 이번 실행 검증 범위는 다릅니다. 모든 운영 발송·기기 제어·환불·취소를 실실행 시험한 것은 아닙니다.</p></section>
+<section><h2>실제 검증</h2><table><tbody>
+<tr><th>조회</th><td>기존 활성 CORE 소유자와 Firebase Auth 계정을 대조한 뒤 정상 ID 토큰으로 기존 식단 처리기를 호출했습니다. 초안 본문·원본 해시·미공개 상태를 확인했고 건강 원문·InBody·전체 전화번호는 결과에서 제외했습니다.</td></tr>
+<tr><th>기존 식단 보존</th><td>김기효 기존 테스트 초안의 동일 본문 저장이 <code>reused=true</code>로 반환됐습니다. 설문·요청·초안·공개 원장, 초안 이력과 관련 알림톡 원장의 해시를 전후 대조해 변경 없음으로 확인했습니다.</td></tr>
+<tr><th>실제 수정</th><td>운영자 본인 전용 테스트 시퀀스 생성(revision 1) → 제목 수정(2) → 동일 실행 중복 차단 → 삭제 표시(3)를 실제 저장 후 독립 재조회했습니다. 본문은 비우고 재생성 방지 tombstone만 남겼습니다.</td></tr>
+<tr><th>발송·공개</th><td>회원 발송 0건, 식단 공개 없음, 기존 설문 재제출 없음, 실제 기기 제어·예약·수강권·결제 변경 없음.</td></tr>
+<tr><th>회귀·의존성</th><td>가짜 데이터 보안·서비스·원본 연결·직접 어댑터·릴리스 테스트 244건과 callable 전체 분류·반응형 검사 6건 통과. npm audit 취약점 0건. 기존 CORE Hosting 검증 통과. 영향 Functions 0개.</td></tr>
+<tr><th>반응형</th><td>새 운영규칙 구간을 320·390·768·1440px에서 실제 CSS로 렌더링해 가림·겹침·구간 넘침 없음 확인. 별도 기존 구간의 모바일 가로 넘침은 이번 변경 범위 밖으로 보존했습니다. 인증·외부 통신 없는 격리 검사이며 전체 로그인 화면 검증을 대신하지 않습니다.</td></tr>
+</tbody></table></section>
+<section><h2>안전장치</h2><ul>
+<li>활성 소유자·기존 인증 계정·센터 연결을 매 호출 확인하고 기존 서버 권한과 Firestore 보안규칙을 그대로 적용합니다. 새 IAM 권한이나 공개 서버는 추가하지 않습니다.</li>
+<li>수정은 정확한 원본·입력·고정 업무 키를 봉인한 10분 계획과 실행 확인을 사용합니다. 실제 발송·공개·취소·삭제는 해당 사용자 요청이 있어야 합니다.</li>
+<li>변경된 원본·다른 예약의 회원/수업·대체 Excel 예약 쓰기를 차단합니다. 결과 불명확은 업무 키·본문을 바꿔도 같은 canonical 업무에서 재실행할 수 없습니다.</li>
+<li>전화번호 표기만 바꾼 중복과 A→B→A의 완료 입력 재사용을 보존 이력으로 차단합니다. 실행 접수 기록은 제공자 최종 전달이나 외부 동기화 완료 증거가 아닙니다.</li>
+<li>기존 09:00 이상 23:00 미만 KST 회원 발송 규칙, 업무별 검증·중복방지·정기 실행 주기는 유지합니다.</li>
+</ul></section>
+<section><h2>명시적 제한</h2><p>임의 DB 필드 편집·쉘·비밀번호·임시코드·IAM·시크릿 수정은 지원하지 않습니다. StudioMate API 동기화와 스케줄·트리거·일반 HTTP 업무를 callable로 위장하지 않습니다. 시퀀스는 정확한 본인 소유 기록만 수정하며, 이미지 추가·교체·삭제는 기존 CORE 편집기를 사용합니다. 이미지가 있는 노트의 기존 참조를 보존하고 삭제 표시 후 첨부를 강제 삭제하지 않습니다.</p>
+<p>MCP는 데이터·기존 업무 처리의 직접 연결입니다. 웹사이트의 CSS·메뉴·프로그램 코드 수정은 기존 Git·검증·배포 절차로 진행합니다. 새 메일이나 설문이 이 채팅을 자동 실행하도록 하는 연결은 이번 범위가 아닙니다.</p></section>
+<section id="release"><h2>최종 릴리스 확인</h2><p>운영 등록 및 Hosting 배포·GitHub 반영 확인 후 갱신합니다. 소스: <code>codex/mini/core-ops-mcp-20261029</code>. 실제 실행과 Hosting 증거는 로컬 비공개 <code>~/ArchiveIN/operations/core-mcp/</code>에 보존합니다. 비밀·회원 원문은 Git에 포함하지 않습니다.</p></section>
+<section><h2>공식 연결 문서</h2><p><a href="https://learn.chatgpt.com/docs/extend/mcp">OpenAI 공식 MCP 연결 안내</a> · <a href="https://learn.chatgpt.com/docs/config-file/config-reference">MCP 도구별 승인 설정</a>. 설치된 명령으로 stdio handshake를 별도로 확인하며, 현재 채팅의 도구 목록이 이전 상태면 MCP 연결 새로고침이 필요할 수 있습니다.</p></section>
+</main></body></html>
