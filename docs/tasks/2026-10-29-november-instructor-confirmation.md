@@ -58,7 +58,26 @@ committed exact lane worktree with an explicit expected commit, or synchronized
 runtime main. It creates canonical registrations only. It does not activate a
 production worker or authorize deploying the health/rules changes.
 
-Status: audit and scoped implementation/local tests completed; apply and any
-approved runtime/rules deployment and final provider readbacks remain pending.
-User clarification and runtime/go-live authorization requested asynchronously.
+2026-10-29 operational update:
+- User approved the two complimentary recipients and scoped prevention deployment.
+- Five missing notices each accepted once by the established queue: paid recipients
+  at 15:12:04/06/08 KST; complimentary recipients at 15:22:03/04 KST.
+- Independent SOLAPI GET at 15:23:54-55 KST proved COMPLETE/4000 for all five,
+  matching message ID, recipient, approved template and canonical ledger. These
+  are query-confirmation times; no provider completion timestamp was supplied.
+- No ticket, member, signup or reservation was issued; old cancellation preserved.
+- An So-eun's missing prior signup evidence remains a separate action-required
+  item. Notice delivery does not establish signup completion or member consent.
+- Source a10e1324 and 84935deb promoted to origin/main and runtime. Current bounded
+  coverage read is complete with 18 covered and no findings, intake scope only.
+- CORE rules release 8cdc830635341c29 preserved 62 other files/config. Initial
+  propagation readback mismatch was reconciled to exact source hash at 15:20:29
+  KST without replaying the accepted release.
+- Team real five remain unsent pending content approval. Only Kim Gi-hyo's single
+  visibly marked preview is authorized. Fresh native Team lectures 98585018 and
+  98585168 establish November 21 13:30-14:20 reformer/block and 14:30-15:20
+  barrel/stick. Additive static calendar publication and preview transport use
+  canonical claims, current source/template validation and the normal window.
+- Team calendar responsive/offline/ICS/release/test-policy suite: 13 passed.
+  Release and operator preview end-to-end readbacks remain pending in this commit.
 Private proofs remain under ~/ArchiveIN/operations/november-instructor-confirmation-20261029/.

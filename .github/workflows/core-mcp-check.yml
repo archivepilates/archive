@@ -10,6 +10,10 @@ on:
       - 'scripts/tests/core-meal-mcp.test.mjs'
       - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
       - 'core/rules/index.html'
+      - 'archivein/method/team-261121/**'
+      - 'scripts/build-team-261121-calendar.mjs'
+      - 'scripts/tests/team-261121-calendar.test.mjs'
+      - 'scripts/tests/team-calendar-release.test.mjs'
       - 'firebase/kangsain-functions/functions/src/exports/**'
       - '.github/workflows/core-mcp-check.yml'
   pull_request:
@@ -21,6 +25,10 @@ on:
       - 'scripts/tests/core-meal-mcp.test.mjs'
       - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
       - 'core/rules/index.html'
+      - 'archivein/method/team-261121/**'
+      - 'scripts/build-team-261121-calendar.mjs'
+      - 'scripts/tests/team-261121-calendar.test.mjs'
+      - 'scripts/tests/team-calendar-release.test.mjs'
       - 'firebase/kangsain-functions/functions/src/exports/**'
       - '.github/workflows/core-mcp-check.yml'
 permissions:
@@ -57,3 +65,4 @@ jobs:
       - run: node --test scripts/tests/core-meal-mcp.test.mjs scripts/tests/new-instructor-ticket-rules-release.test.mjs scripts/tests/instructor-intake-rules-release.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: node --test scripts/tests/core-mcp-rules-ui.test.mjs
+      - run: node scripts/build-team-261121-calendar.mjs --check && node --test scripts/tests/team-261121-calendar.test.mjs scripts/tests/team-calendar-release.test.mjs
