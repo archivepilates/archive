@@ -3,7 +3,7 @@ import test from 'node:test';
 import { MEAL_RELEASE_TARGETS, mealReleaseManifest } from '../release-team-instructor-intake-20261029.mjs';
 const hash = 'a'.repeat(64), old = 'b'.repeat(64);
 test('Team release replaces only four CORE assets and preserves all other paths', () => {
-  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification']);
+  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment']);
   const expected = ['/instructor-lessons/index.html', '/assets/app.js', '/rules/index.html', '/assets/alimtalk-catalog.json'];
   assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS.core.files), expected);
   const replacements = Object.fromEntries(expected.map(f => [f, hash]));
@@ -14,6 +14,13 @@ test('Team release replaces only four CORE assets and preserves all other paths'
   assert.throws(() => mealReleaseManifest(files, { ...replacements, '/unrelated.html': hash }, 'core'));
   assert.throws(() => mealReleaseManifest(files.slice(1), replacements, 'core'));
   assert.throws(() => mealReleaseManifest(files, replacements, 'member'));
+});
+test('Team fulfillment replaces only app and rules without changing other assets', () => {
+  assert.deepEqual(MEAL_RELEASE_TARGETS.fulfillment.files, {'/assets/app.js':'core/assets/app.js','/rules/index.html':'core/rules/index.html'});
+  const files=[{path:'/assets/app.js',hash:old},{path:'/rules/index.html',hash:old},{path:'/instructor-lessons/index.html',hash:old}];
+  const manifest=mealReleaseManifest(files,{'/assets/app.js':hash,'/rules/index.html':hash},'fulfillment');
+  assert.equal(manifest['/instructor-lessons/index.html'],old);
+  assert.throws(()=>mealReleaseManifest(files,{'/assets/app.js':hash,'/rules/index.html':hash,'/instructor-lessons/index.html':hash},'fulfillment'));
 });
 test('post-verification release cannot change app or other assets', () => {
   assert.deepEqual(MEAL_RELEASE_TARGETS.verification.files, { '/rules/index.html': 'core/rules/index.html' });

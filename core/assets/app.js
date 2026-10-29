@@ -7543,6 +7543,13 @@ async function handleInstagramListAction(event) {
 
 const INSTRUCTOR_LESSON_STEP_KEYS = ["member", "ticket", "confirmation", "eformsign", "memo", "bookings"];
 const INSTRUCTOR_LESSON_STEP_LABELS = ["회원", "수강권", "안내", "가입서", "메모", "예약"];
+const INSTRUCTOR_TEAM_STEP_KEYS = ["member", "ticket", "eformsign", "memo", "confirmation"];
+const INSTRUCTOR_TEAM_STEP_LABELS = ["회원", "수강권", "가입서", "메모", "안내"];
+const INSTRUCTOR_TEAM_STEP_STATUS_LABELS = Object.assign(Object.create(null), {
+  pending: "대기", queued: "대기열", processing: "처리중", sent: "발송됨",
+  waiting_external: "외부 확인 대기", waiting_completion: "작성 대기",
+  verified: "완료", not_required: "해당 없음", review_required: "확인필요", failed: "실패",
+});
 const INSTRUCTOR_LESSON_ACTIVE_STATUSES = new Set([
   "queued",
   "processing",
@@ -7754,7 +7761,11 @@ function renderInstructorLessonRoster(schedule) {
     const registration = registrations.find((item) => member.registrationId && item.registrationId === member.registrationId);
     const steps = registration?.steps || {};
     const intakeOnly = registration?.courseKind === "team" || registration?.intakeOnly === true || schedule.courseKind === "team";
-    const details = intakeOnly ? "팀레슨 접수 · 수강권/가입서/안내 확인 대기" : registration
+    const teamFulfillment = intakeOnly && registration?.teamFulfillmentStarted === true;
+    const details = teamFulfillment
+      ? INSTRUCTOR_TEAM_STEP_KEYS.map((key, index) => `${INSTRUCTOR_TEAM_STEP_LABELS[index]} ${INSTRUCTOR_TEAM_STEP_STATUS_LABELS[steps[key]?.status || "pending"] || "상태 확인필요"}`)
+        .concat(`다음 단계: ${registration.nextAction || "다음 단계 확인필요"}`, registration.lastError || []).join(" · ")
+      : intakeOnly ? "팀레슨 접수 · 수강권/가입서/안내 확인 대기" : registration
       ? [`가입서 ${instructorLessonStepStatusLabel(steps.eformsign?.status || "pending")}`, `안내 ${instructorLessonStepStatusLabel(steps.confirmation?.status || "pending")}`].join(" · ")
       : "가입서·안내 기록 연결 전";
     const name = member.memberId ? `<a href="${escapeHtml(coreHref(`members/detail/?id=${encodeURIComponent(member.memberId)}`))}">${escapeHtml(member.memberName)}</a>` : escapeHtml(member.memberName);
@@ -8420,6 +8431,9 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
     const status = String(item.status || "");
     const steps = item.steps && typeof item.steps === "object" ? item.steps : {};
     const intakeOnly = item.courseKind === "team" || item.intakeOnly === true;
+    const teamFulfillment = intakeOnly && item.teamFulfillmentStarted === true;
+    const stepKeys = teamFulfillment ? INSTRUCTOR_TEAM_STEP_KEYS : INSTRUCTOR_LESSON_STEP_KEYS;
+    const stepLabels = teamFulfillment ? INSTRUCTOR_TEAM_STEP_LABELS : INSTRUCTOR_LESSON_STEP_LABELS;
     const methodTitle = instructorLessonMethodTitle(item);
     return `
       <article class="instructor-registration-item">
@@ -8432,22 +8446,26 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
           <span class="pill ${instructorLessonStatusTone(status)}">${escapeHtml(instructorLessonStatusLabel(status))}</span>
         </div>
         <div class="instructor-registration-meta">
-          <span>${intakeOnly ? "내부 접수" : escapeHtml(instructorLessonModeLabel(item.mode))}</span>
-          <span>${intakeOnly ? "수강권 확인 대기" : escapeHtml(item.ticketName || "강사레슨 (2T)")}</span>
+          <span>${teamFulfillment ? "팀레슨 진행" : intakeOnly ? "내부 접수" : escapeHtml(instructorLessonModeLabel(item.mode))}</span>
+          <span>${teamFulfillment ? escapeHtml(item.ticketName || "Team 강사레슨") : intakeOnly ? "수강권 확인 대기" : escapeHtml(item.ticketName || "강사레슨 (2T)")}</span>
           <span>${escapeHtml(instructorLessonPaymentLabel(item.paymentMethod))}</span>
           ${intakeOnly && Number.isSafeInteger(item.paymentAmount) && item.paymentAmount > 0 ? `<span>${escapeHtml(item.paymentAmount.toLocaleString("ko-KR"))}원</span>` : ""}
           <span>최근 ${escapeHtml(compactDateTime(item.updatedAt))}</span>
         </div>
-        ${intakeOnly ? '<p class="instructor-registration-note">팀레슨 접수 완료 · 수강권/가입서/안내 확인 대기</p>' : `<ol class="instructor-registration-progress" aria-label="${escapeHtml(item.memberName || "강사")} 등록 진행 단계">
-          ${INSTRUCTOR_LESSON_STEP_KEYS.map((key, index) => {
+        ${intakeOnly && !teamFulfillment ? '<p class="instructor-registration-note">팀레슨 접수 완료 · 수강권/가입서/안내 확인 대기</p>' : `<ol class="instructor-registration-progress" aria-label="${escapeHtml(item.memberName || "강사")} 등록 진행 단계">
+          ${stepKeys.map((key, index) => {
             const step = steps[key] || {};
             const stepStatus = String(step.status || "pending");
-            return `<li class="${instructorLessonStepClass(stepStatus)}" title="${escapeHtml(step.detail || step.label || "")}"><span>${index + 1}</span><small>${escapeHtml(step.label || INSTRUCTOR_LESSON_STEP_LABELS[index])}</small><em>${escapeHtml(instructorLessonStepStatusLabel(stepStatus))}</em></li>`;
+            const statusLabel = teamFulfillment
+              ? INSTRUCTOR_TEAM_STEP_STATUS_LABELS[stepStatus] || "상태 확인필요"
+              : instructorLessonStepStatusLabel(stepStatus);
+            return `<li class="${instructorLessonStepClass(stepStatus)}" title="${escapeHtml(step.detail || step.label || "")}"><span>${index + 1}</span><small>${escapeHtml(step.label || stepLabels[index])}</small><em>${escapeHtml(statusLabel)}</em></li>`;
           }).join("")}
         </ol>`}
         <div class="instructor-registration-next ${INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status) ? "is-error" : ""}">
           <strong>${INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status) ? "확인할 내용" : "다음 단계"}</strong>
-          <span>${escapeHtml(item.lastError || item.nextAction || (intakeOnly ? "수강권/가입서/안내 확인 대기" : "없음"))}</span>
+          <span>${escapeHtml(teamFulfillment ? item.nextAction || "다음 단계 확인필요" : item.lastError || item.nextAction || (intakeOnly ? "수강권/가입서/안내 확인 대기" : "없음"))}</span>
+          ${teamFulfillment && item.lastError ? `<span>${escapeHtml(item.lastError)}</span>` : ""}
         </div>
         ${instructorLessonConfirmationAction(item)}
       </article>

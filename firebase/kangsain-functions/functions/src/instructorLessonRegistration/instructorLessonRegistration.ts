@@ -439,6 +439,8 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
     paymentMethod: cleanText(data.paymentMethod, 20),
     ticketName: cleanText(data.ticketName, 80),
     ...(data.courseKind === "team" ? { courseKind: "team", intakeOnly: data.intakeOnly === true,
+      teamFulfillmentStarted: Boolean(data.teamFulfillment && typeof data.teamFulfillment === "object"
+        && (data.teamFulfillment as any).approval?.scope === "six_existing_20261120_team_registrations_member_ticket_signup_confirmation"),
       lessonTime: cleanText(data.lessonTime, 5), lessonTopic: cleanText(data.lessonTopic, 100),
       paymentAmount: data.paymentAmount } : {}),
     mode: cleanText(data.mode, 40),
