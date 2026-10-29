@@ -124,4 +124,33 @@ uses reviewed (outside ordinary queue selection); transport intent atomically
 uses processing with maxAttempts=attempts=1, recognized by cancellation guards
 and not replayable by a stale worker. Confirmed acceptance survives local proof
 file failures. Conflicting date fields or rendered bodies fail closed.
-Local pure/recovery tests: 25 passed. No real Team send performed at this note.
+Preparation pure/recovery tests: 25 passed before the additional old-material
+regression. A preflight correctly stopped before any claim/provider attempt when
+the broadened unknown-date predicate confused an October material notice with a
+reservation confirmation. Independent readback proved all ten canonical documents
+absent; provider GET identified the different material template. Narrowed body-only
+matching to actual confirmation wording while keeping every explicit lesson-date
+conflict blocked. New Team suite: 21 passed (26 with receipt/release regressions).
+
+## Team Dispatch Verified
+
+User-approved real five were sent from committed source 97c42edb at 15:58:00-20
+KST. Each had a fresh native identity, exactly one current Team ticket with full
+payment verified, matching November 21 two-session source, no cancellation and no
+same-purpose canonical/provider history. Each canonical action has attempts=1.
+Independent provider GET at 15:58:47-50 KST proved COMPLETE/4000 and exact message,
+recipient, template, rendered content and action key for all five; these are query
+confirmation times, not a provider-supplied delivery completion timestamp.
+Private immutable proof: team-five-delivery-proof.json in the existing operations
+directory. The stable canonical candidate IDs and normal confirmation send-dedupe
+IDs are used. Final canonical states are sent/done, provider COMPLETE/4000.
+No member, ticket, reservation, registration, registration-job, eform job or D-1
+job was created. The previous Kim preview was not replayed. A future generic Team
+or D-1 automated flow is NOT activated by this one-off approval. Existing operating
+rules did not change, so no additional CORE rules/Hosting/Functions deploy is
+needed; canonical send/audit records carry the approved one-off result.
+Implementation source 97c42edb is on origin/main and the Mac mini runtime. Final
+main Functions Affected Check 40832503626 passed all steps in 2m25s, including the
+26 Team/receipt/release regressions and all shared guard/build checks. Task-owned
+browser context and shared profile lock were closed/released. Only pre-existing
+untracked runtime scripts/__pycache__/ is preserved.
