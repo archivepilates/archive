@@ -107,6 +107,9 @@ jobs:
       - name: Test reel email-button approval and publication guards
         run: npm run test:reel-approval && npm run test:reel-layout
 
+      - name: Test operator-confirmed lesson identity and original access windows
+        run: node --test scripts/tests/lesson-share-*.test.mjs scripts/tests/lesson-261025-confirmed-identities.test.mjs scripts/tests/ui-lesson-2610*-recovery.test.mjs scripts/tests/lesson-261024-ops.test.mjs scripts/tests/lesson-261025-ops.test.mjs scripts/tests/lesson-identity-rules-release.test.mjs
+
       - name: Validate instructor lesson registration release
         run: node scripts/validate-instructor-lesson-registration-release.mjs
 

@@ -10,7 +10,7 @@ import { staffMembers, MEMBER_GROUP_LOCK } from './lib/imweb-staff-video-sync.mj
 import { SITE, UNIT, assertMemberPreserved } from './lib/imweb-staff-video-policy.mjs';
 import { readStudentShareLedgers, A261024_SHARE, B261024_SHARE, validatedShareEntries,
   firstVerifiedShareWindow, shareInstant } from './lib/imweb-student-share-policy.mjs';
-import { matchLessonShareMember } from './lib/lesson-share-261024.mjs';
+import { matchLessonShareMember } from './lib/lesson-share-operator-identities.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 
 const ROOT = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES/lesson-videos-261024');
