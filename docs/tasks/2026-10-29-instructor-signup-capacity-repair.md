@@ -1,0 +1,12 @@
+# Existing Signup And Team Capacity Repair
+
+- Requested: resolve one November 28 signup review and the November 20 Team capacity warning.
+- Worktree: team-instructor-intake-20261029; branch codex/mini/instructor-signup-capacity-repair-20261029; base 2a88328c.
+- Signup cause: complimentary-ticket adoption intentionally left member mode unresolved without completed signup evidence. Current native eform search found one completed 2025-12-30 document; exact template, single actual recipient and full canonical phone/native identity are revalidated. Existing confirmation is preserved; no new signup request or memo is created, and memo-synced is not claimed.
+- Capacity cause: two existing November 20 native classes were absent from canonical lectures. The previous Team predicate also incorrectly required every sequential class to start at the intake start time.
+- Source policy: use the existing lectures canonical schema and normalizeLecture helper for exactly two native IDs, not a new mirror/collection or an API-mode switch. A complete native list readback records source path, source hash, timestamp and field-bound capacityEvidence. Nullable Excel capacity cannot erase that separately verified evidence; changed identity/time/room/title invalidates it. No reservation counters are invented.
+- Canonical keys: original registration ID and native lecture IDs. Require exact registration updateTime, absent matching eform/fulfillment jobs and absent target lecture source in a transaction; ambiguous/existing data stops rather than overwrites.
+- Readers: existing dashboard loader and registration review. Forbidden downstream actions: no sends, ticket issuance, reservation writes, member edits, profile/consent substitution or queue execution. No new scheduler or change to normal Excel sync.
+- Calculation: validate Team earliest start, valid nonoverlapping sequential slots, same-start parallel sum then minimum across sequential slots; missing/invalid capacity remains unverified. Regular schedule behavior remains unchanged.
+- Dry-run source: private mode-0600 evidence in /Users/archivepilates/ArchiveIN/operations/instructor-signup-capacity-repair-20261029; no private proof is committed.
+- Deployment scope: affected functions-app dashboard callable only plus CORE rules-only Hosting. Fresh source and CAS guard must pass before applying source repairs. Live dashboard, counts and native bindings determine completion; see the HTML report and private apply/release evidence.

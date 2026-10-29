@@ -212,12 +212,11 @@ export function buildInstructorLessonScheduleSummaries(input: {
     });
     let metadata = teamScheduleMetadata([...(registrationMembers.get(date)?.values() || [])].flat());
     const expectedTeamStart = metadata.lessonTime ? Date.parse(`${date}T${metadata.lessonTime}:00+09:00`) : 0;
-    if (metadata.courseKind === "team" && dateLectures.some(row => !/team|팀/i.test(
-      [row.title, row.lessonTitle, row.lectureTitle, row.ticketName].filter(Boolean).join(" "))
-      || millis(row.startAt) !== expectedTeamStart)) {
+    const isTeam = metadata.courseKind === "team" || (dateLectures.length > 0 && dateLectures.every(isTeamLecture));
+    if (isTeam && dateLectures.length && !validTeamSequence(dateLectures, expectedTeamStart)) {
       metadata = { courseKind: "team", metadataSource: "conflict" };
     }
-    const lectureCapacity = metadata.metadataSource === "conflict" ? 0 : concurrentLectureCapacity(dateLectures);
+    const lectureCapacity = metadata.metadataSource === "conflict" ? 0 : concurrentLectureCapacity(dateLectures, isTeam);
     const capacity = lectureCapacity || defaultCapacity;
     const timestamps = dateLectures
       .flatMap((lecture) => [millis(lecture.startAt), millis(lecture.endAt)])
@@ -304,7 +303,24 @@ function currentInstructorLessonTicketDates(holder: SourceRecord): unknown[] {
   return Array.isArray(holder.instructorLessonDates) ? holder.instructorLessonDates : [];
 }
 
-function concurrentLectureCapacity(lectures: SourceRecord[]): number {
+function isTeamLecture(lecture: SourceRecord): boolean {
+  return /team|팀/i.test([lecture.title, lecture.lessonTitle, lecture.lectureTitle, lecture.ticketName].filter(Boolean).join(" "));
+}
+
+function validTeamSequence(lectures: SourceRecord[], expectedStart: number): boolean {
+  const slots = new Map<number, number>();
+  for (const lecture of lectures) {
+    const start = millis(lecture.startAt), end = millis(lecture.endAt);
+    if (!isTeamLecture(lecture) || !Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end <= start) return false;
+    slots.set(start, Math.max(slots.get(start) || 0, end));
+  }
+  const ordered = [...slots].sort(([a], [b]) => a - b);
+  if (expectedStart && ordered[0]?.[0] !== expectedStart) return false;
+  // Same-start rooms are parallel; distinct slots must not overlap the preceding slot.
+  return ordered.every(([start], index) => index === 0 || start >= ordered[index - 1][1]);
+}
+
+function concurrentLectureCapacity(lectures: SourceRecord[], team = false): number {
   const slots = new Map<string, SourceRecord[]>();
   for (const lecture of lectures) {
     const start = millis(lecture.startAt);
@@ -315,16 +331,20 @@ function concurrentLectureCapacity(lectures: SourceRecord[]): number {
     slots.set(key, rows);
   }
   const capacities = [...slots.values()]
-    .filter((rows) => rows.length > 0 && rows.every((row) => verifiedLectureCapacity(row) > 0))
-    .map((rows) => rows.reduce((sum, row) => sum + verifiedLectureCapacity(row), 0));
-  return capacities.length ? Math.max(...capacities) : 0;
+    .filter((rows) => rows.length > 0 && rows.every((row) => verifiedLectureCapacity(row, team) > 0))
+    .map((rows) => rows.reduce((sum, row) => sum + verifiedLectureCapacity(row, team), 0));
+  if (team && capacities.length !== slots.size) return 0;
+  return capacities.length ? (team ? Math.min(...capacities) : Math.max(...capacities)) : 0;
 }
 
-function verifiedLectureCapacity(lecture: SourceRecord): number {
+function verifiedLectureCapacity(lecture: SourceRecord, strict = false): number {
   const evidence = lecture.capacityEvidence;
+  const nativeListEvidence = evidence?.source === "studiomate_lecture_list_readback"
+    && evidence.complete === true && /^[a-f0-9]{64}$/.test(cleanText(evidence.proofHash))
+    && evidence.sourcePath === `/v2/staff/lectures?start_date=${lecture.date}&end_date=${lecture.date}&limit=100&page=1&sort_by_name=start_on&sort_by_type=asc&with=room%3Bdivision%3Bstaff.profile`;
   // Excel does not export group capacity. Keep native evidence separate from its nullable field.
   if (
-    evidence?.source === "studiomate_lecture_detail" &&
+    (evidence?.source === "studiomate_lecture_detail" || nativeListEvidence) &&
     /^\d+$/.test(cleanText(evidence.nativeLectureId)) &&
     evidence.sourceUrl === `https://arcpilates.studiomate.kr/lecture/detail?id=${evidence.nativeLectureId}` &&
     Number.isInteger(evidence.capacity) && evidence.capacity > 0 &&
@@ -336,6 +356,7 @@ function verifiedLectureCapacity(lecture: SourceRecord): number {
       (key) => cleanText(lecture[key]) && cleanText(evidence[key]) === cleanText(lecture[key]),
     )
   ) return evidence.capacity;
+  if (strict) return Number.isInteger(lecture.capacity) && lecture.capacity > 0 ? lecture.capacity : 0;
   return positiveInteger(lecture.capacity);
 }
 
