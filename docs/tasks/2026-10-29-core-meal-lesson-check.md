@@ -33,7 +33,25 @@ empty document list, not an empty DOM alone. Freshness starts before each native
 member lookup and the oldest required eform search. Two fresh read-only recovery
 plans passed at 12:08 KST, retaining attempt count and the original ticket IDs.
 
-Source promotion/runtime/rule deployment, fresh-proof apply and independent
-downstream readback remain pending. Final HTML
-report must distinguish receipt repair, first notice acceptance/delivery and actual
-member signature; do not mark pending signatures completed.
+Source 905957d8 promoted to origin/main and runtime; CI checkout-history correction
+60692da8 also promoted. CORE rules-only release bc7dba201c6a2044 independently
+matches the local source hash; all other 62 files/config preserved. No Functions
+or schema/IAM/DNS deployment was needed. CI affected check and CORE MCP check pass.
+
+Fresh-proof apply at 12:11 KST bound the original ticket IDs atomically, without
+issuing tickets or resetting attempts. Existing registration workers naturally
+processed both follow-ups at 12:11/12:14. Attention count is now zero. At 12:14:56
+complete native ticket reads independently confirmed exactly one original ticket
+per target. Existing first confirmation sends were accepted at 12:12:06/07;
+provider GET at 12:13:54/55 confirmed COMPLETE/4000, exact message/recipient/template
+and canonical send, one attempt each. The latter timestamps are query confirmation,
+not provider-reported delivery times.
+
+Eform regular run 12:18:47-12:19:06 sent Lee's signup once, waiting_completion;
+independent progress search 12:20:31 found the same document/template exactly once.
+Ham's canonical eform job remains normal pending, attempts zero, next in the
+unchanged 600-second/one-job regular queue. No manual queue execution, new scheduler
+or retry. Both registrations remain waiting_signature, not completed; memo is
+created only after the member actually completes the signup. See final HTML report
+for exact proven boundaries. Existing runtime untracked scripts/__pycache__/ is
+unrelated and preserved. All task-owned browser contexts/locks were closed.
