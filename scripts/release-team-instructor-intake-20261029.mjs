@@ -15,6 +15,7 @@ export const MEAL_RELEASE_TARGETS = {
     '/assets/app.js': 'core/assets/app.js', '/rules/index.html': 'core/rules/index.html',
     '/assets/alimtalk-catalog.json': 'core/assets/alimtalk-catalog.json',
   } },
+  verification: { site: 'archive-pilates-core', files: { '/rules/index.html': 'core/rules/index.html' } },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
 
@@ -68,7 +69,8 @@ async function main() {
   if (!baseline.config || baseline.name !== baselineRelease.version.name) throw Error('Missing baseline config');
   const sources = [];
   for (const [resource, file] of Object.entries(selected.files)) {
-    const base = execFileSync('git', ['show', `${BASE}:${file}`]), source = fs.readFileSync(path.join(root, file));
+    const sourceBase = target === 'verification' ? 'd918050bc51bd24da9dce7466c07937e0a0799ea' : BASE;
+    const base = execFileSync('git', ['show', `${sourceBase}:${file}`]), source = fs.readFileSync(path.join(root, file));
     const url = `https://${selected.site}.web.app${resource.replace(/index\.html$/, '')}`;
     const live = await fetch(url, { cache: 'no-store' });
     if (!live.ok || sha(Buffer.from(await live.arrayBuffer())) !== sha(base)) throw Error(`Meal baseline source drift: ${resource}`);
