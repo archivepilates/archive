@@ -71,6 +71,7 @@ test("current policy passes markers and mandates offline semantic suites without
     "scripts/tests/alimtalk-release-policy-guard.test.mjs",
     "scripts/tests/instructor-lesson-bounded-send.test.mjs",
     "scripts/tests/recommended-meal-api.test.ts",
+    "scripts/tests/recommended-meal-operator-cli.test.ts",
     "scripts/tests/recommended-meal-choice-policy.test.ts",
     "scripts/tests/recommended-meal-test-window.test.ts",
   ]);

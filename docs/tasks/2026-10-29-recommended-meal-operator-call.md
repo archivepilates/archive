@@ -15,3 +15,14 @@
 - Deployment scope: functions-app and functions-alimtalk only; CORE four meal/UI/rule/catalog assets; member and compatibility survey HTML only. Retain unrelated live Hosting manifest/config and concurrent staff-video fix.
 - No IAM, secrets, billing, DNS, Firestore client rules, invitation, report publication, notification or scheduler changes.
 - Release evidence and final status: docs/reports/2026-10-29-recommended-meal-operator-call.html.
+
+## Verified Outcome
+
+- Code/UI ee961bb6 and operator audit fix 9c99ef79 are promoted to origin/main. Both CI runs succeeded.
+- functions-app and functions-alimtalk deployed independently with root firebase.json and clean main guards. No force or function deletion used.
+- Scoped Hosting releases: CORE 399a4f48728b12d2; member 638498271e27cb7a; compatibility b8af0ce038a7850c. Baseline config/manifests retained.
+- Approved test draft saved and read back at 2026-10-29T00:59:55.748Z; source response unchanged, previous draft archived, matching invitation/report ledgers and unrelated original records unchanged.
+- Authenticated CORE UI independently displayed the new draft. Actual member survey GET remains submitted/reportReady=false; report GET 404 confirms no public content.
+- 398 focused tests pass (267 API/policy/test-window, 8 CLI, 123 UI/submit); five codebase builds, rollback guard and scoped dry-run pass. All browser resources cleaned.
+- Prior-draft history is server-only operational audit under the existing draft identity. It is not a send/publication source, CRM mirror or new member-targeting collection.
+- No model API, publication or member send executed. New live-member submission and browser re-save were intentionally not performed.
