@@ -122,6 +122,14 @@ test('canonical binding hashes are stable across object key order, not identity 
   assert.equal(hash({ uid: 'fake', studioId: '5330' }), hash({ studioId: '5330', uid: 'fake' }));
   assert.notEqual(hash({ uid: 'fake' }), hash({ uid: 'other' }));
 });
+test('phone-like digits inside opaque hashes cannot corrupt plan confirmations or IDs', () => {
+  const digest = 'a'.repeat(20) + '01012345678' + 'b'.repeat(33);
+  assert.equal(digest.length, 64);
+  assert.equal(publicResult(digest), digest);
+  assert.equal(publicResult('saveDraft:' + digest), 'saveDraft:' + digest);
+  assert.equal(publicResult('holding_notice_' + digest), 'holding_notice_' + digest);
+  assert.equal(publicResult('전화 01012345678'), '전화 ***-****-5678');
+});
 
 test('identifier validation rejects URL/path injection', () => {
   assert.equal(identifier('fake_Record-123'), 'fake_Record-123');
