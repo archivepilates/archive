@@ -29,8 +29,21 @@ were independently hash-compared unchanged. Internal owner-only sequence note wa
 created revision 1, modified revision 2, repeated execution blocked, then tombstoned
 revision 3 with empty payload. No member messages or publication. Private evidence:
 `~/ArchiveIN/operations/core-mcp/live-test-20261029.json` plus sealed plans/receipts.
-Registered configuration, runtime/main promotion, CORE rule deployment and CI are
-pending until the final release verification below is recorded.
+Registered command readback passed: eight tools, meal review, single record and
+filtered list. CLI parses new server; execute approval is prompt. Existing read-only
+MCP's command, nine tools and read-only env were independently preserved. The installed
+CLI rejects the docs' newer writes enum, so default auto + explicit execute prompt
+is used. Current chat's cached tools do not include the new server yet; app UI is
+not available for computer use, no restart/bypass was attempted. Refresh the MCP
+connection or load it in a new conversation for native tool visibility.
+
+Main/runtime code: 4d036dc2, 7d69ef6e, 25de1dd4. Scoped CORE Hosting version
+`a80f4076b5873e9b`, verified 2026-10-29T02:42:10.492Z. Only rules HTML changed;
+62 other files and all Hosting config preserved. No Functions/rules/DNS deployment.
+246 fake tests + 6 UI/catalog tests passed locally; CI discovered and fixed the
+phone-redaction collision with opaque plan hashes. Final CI is recorded in HTML.
+Release source and feature worktrees are clean; runtime retains only pre-existing
+untracked `scripts/__pycache__/`. All test browser contexts and stdio clients closed.
 
 Live modification test scope: the existing Kim Ki-hyo meal test only, unpublished
 draft. First reuse the identical current draft through the native save handler and
