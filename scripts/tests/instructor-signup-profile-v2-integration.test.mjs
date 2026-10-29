@@ -12,7 +12,8 @@ const REG = 'ilr_' + 'b'.repeat(24), OTHER_REG = 'ilr_' + 'd'.repeat(24);
 const TEMPLATE = 'a5b5ea6b85ec44c8bcb4af1e980e94eb';
 const PROVIDER_COMPLETED = '2025-12-30T06:36:27.123Z';
 const clone = structuredClone;
-const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+const sha = value => createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
 beforeEach(t => {
   t.mock.timers.enable({ apis: ['Date'], now: NOW });
   t.mock.method(globalThis, 'fetch', () => assert.fail('No live network permitted'));
@@ -143,6 +144,11 @@ test('regular source validation returns the exact signed profile without mutatio
   const f = fixture(), before = clone(f);
   assert.equal(assertSignupProfileV2Source(f.job, f.source, f.registration), f.profile);
   assert.deepEqual(f, before);
+});
+test('Firestore field-order normalization preserves exact source hashes and completed proof',()=>{
+  const f=fixture();
+  f.source.submittedProfile=Object.fromEntries(Object.entries(f.profile).sort(([a],[b])=>a.localeCompare(b)));
+  assert.equal(assertSignupProfileV2Source(f.job,f.source,f.registration),f.source.submittedProfile);
 });
 test('backfill baseline is document-keyed with empty registration IDs, never a fabricated ilr', () => {
   const f = fixture({ baseline: true }), before = clone(f);

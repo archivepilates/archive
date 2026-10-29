@@ -22,7 +22,8 @@ const sourcePath = id => 'eformsignInstructorMemberJobs/' + id;
 const registrationPath = id => 'instructorLessonRegistrations/' + id;
 const clone = structuredClone;
 const plain = value => JSON.parse(JSON.stringify(value));
-const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+const sha = value => createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
 
 // Parse declarations only: importing this executable worker would start real jobs.
 const require = createRequire(new URL('../../firebase/kangsain-functions/functions/package.json', import.meta.url));

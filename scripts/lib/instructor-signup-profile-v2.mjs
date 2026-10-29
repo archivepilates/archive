@@ -5,7 +5,9 @@ import { SIGNUP_PROFILE_FIELDS } from './instructor-signup-profile.mjs';
 import { assertOrderContactBinding } from './instructor-signup-order-identity.mjs';
 
 export const signupProfileV2Id = doc => {assert(/^[a-f0-9]{32}$/.test(doc));return `instructor_member_completion_${doc}`;};
-const sha=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
+  ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+const sha=value=>createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
 export function parseSignupProfileV2(profile,job,documentId) {
   assert(profile?.version===2&&documentId===job.documentId&&profile.documentId===documentId&&/^[a-f0-9]{32}$/.test(documentId)
     &&profile.templateId===TEMPLATE&&job.studioId==='5330'&&/^[1-9]\d*$/.test(String(job.studiomateMemberId)));
