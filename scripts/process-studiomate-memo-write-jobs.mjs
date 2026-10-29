@@ -11,6 +11,8 @@ import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { deriveInstructorLessonRegistrationState } from "./lib/instructor-lesson-registration-contract.mjs";
 import { applySignupBirthDate, assertSignupProfileSource, signupProfileMemoPresent } from "./lib/instructor-signup-profile.mjs";
+import { assertSignupProfileV2Source } from "./lib/instructor-signup-profile-v2.mjs";
+import { applySignupProfileV2 } from "./lib/instructor-signup-profile-v2-writer.mjs";
 import { assertHoldingMemoWriteSource, holdingMemoContentPresent, assertHoldingMemoMemberProfile, pendingHoldingMemoAlerts, settleHoldingMemoAlert } from "./lib/holding-delivery-memo.mjs";
 import { preparePendingMemberOperations } from "./lib/member-operation-service.mjs";
 import { readHoldingMemberProfile } from "./lib/holding-member-identity.mjs";
@@ -22,6 +24,11 @@ const args = new Set(process.argv.slice(2));
 const apply = args.has("--apply");
 const limit = Number(valueArg("--limit") || process.env.STUDIOMATE_MEMO_WRITE_LIMIT || "10");
 const jobId = valueArg("--job-id") || process.env.STUDIOMATE_MEMO_WRITE_JOB_ID || "";
+const signupSelectorFlags=process.argv.slice(2).filter(arg=>arg==='--signup-job-ids'||arg.startsWith('--signup-job-ids='));
+const signupJobIds = valueArg('--signup-job-ids') ? valueArg('--signup-job-ids').split(',') : [];
+if(signupSelectorFlags.length&&(signupSelectorFlags.length!==1||!signupJobIds.length))throw new Error('Missing or duplicate bounded signup selector');
+if (signupJobIds.length && (jobId || signupJobIds.length>10 || new Set(signupJobIds).size!==signupJobIds.length
+  || signupJobIds.some(id=>!/^instructor_member_completion_[a-f0-9]{32}$/.test(id)))) throw new Error('Invalid bounded signup memo selection');
 const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
   baseUrl: process.env.STUDIOMATE_WEB_BASE_URL || "https://arcpilates.studiomate.kr",
@@ -57,7 +64,7 @@ await mkdir(config.profileDir, { recursive: true });
 await mkdir(path.dirname(config.runLogPath), { recursive: true });
 
 // Explicit acceptance/delivery policies share the existing outbox; no historical backfill.
-if (apply && !jobId) {
+if (apply && !jobId && !signupJobIds.length) {
   try {
     result.holdingMemoProjection = await preparePendingMemberOperations({db,stamp:()=>admin.firestore.Timestamp.now()});
     for (const alert of await pendingHoldingMemoAlerts(db)) {
@@ -129,7 +136,9 @@ try {
   if (!capturedAuthorization) {
     await page.waitForTimeout(1500);
   }
-  if (!capturedAuthorization) throw new Error("StudioMate browser authorization header was not captured.");
+  if (!capturedAuthorization && jobs.some(({data}) => data.profileUpdate?.version !== 2)) {
+    throw new Error("StudioMate browser authorization header was not captured.");
+  }
 
   for (const { ref, data } of jobs) {
     const item = { jobId: data.jobId || ref.id, memberName: data.memberName, status: "pending" };
@@ -151,23 +160,29 @@ try {
         claimedThisRun = true;
         result.processed += 1;
         const writeResult = await writeMemo(page, activeData, capturedAuthorization);
-        await ref.set(
-          {
+        const profileNeedsReview = activeData.profileUpdate?.version === 2 && ['birthDate','address'].some(
+          key => ['conflict','review','unknown','awaiting_address_lookup_approval'].includes(writeResult.profileStatus?.[key]?.status));
+        const donePatch = {
             status: "done",
             attempts: Number(activeData.attempts || 0),
             claimToken: null,
             ...(writeResult.studiomateMemberId ? { studiomateMemberId: writeResult.studiomateMemberId } : {}),
             ...(writeResult.profileStatus ? { profileStatus: writeResult.profileStatus } : {}),
+            ...(activeData.profileUpdate?.version === 2 ? { profileSyncStatus: profileNeedsReview ? 'review_required' : 'synced' } : {}),
             writtenAt: admin.firestore.Timestamp.now(),
             lastError: null,
             updatedAt: admin.firestore.Timestamp.now(),
-          },
-          { merge: true },
-        );
+          };
+        if (activeData.profileUpdate?.version === 2) {
+          await db.runTransaction(async tx=>{const current=await tx.get(ref);
+            if(current.get('claimToken')!==activeData.claimToken||current.get('status')!=='processing')throw new Error('Signup profile writer lease changed');
+            tx.update(ref,donePatch);});
+        } else await ref.set(donePatch,{merge:true});
         await updateMemberMemoSyncStatus(activeData.jobId || ref.id, {
           syncStatus: "synced",
           syncedAt: admin.firestore.Timestamp.now(),
           syncError: null,
+          ...(activeData.profileUpdate?.version === 2 ? { profileSyncStatus: profileNeedsReview ? 'review_required' : 'synced', profileStatus: writeResult.profileStatus } : {}),
         });
         await updateMemberSignupContractSyncStatus(activeData, {
           status: "done",
@@ -176,7 +191,11 @@ try {
         });
         await updateInstructorLessonRegistrationMemoStatus(activeData, {
           status: "done",
-          reason: activeData.profileUpdate ? "StudioMate 생년월일·가입서 메모 반영 완료" : "StudioMate 회원 메모 반영 완료",
+          reason: activeData.profileUpdate?.version === 2
+            ? profileNeedsReview ? '가입서 완료 메모 반영 · 회원정보 일부 확인필요(기존 값 보존)' : '가입서 완료 메모·회원정보 빈칸 보완 확인'
+            : activeData.profileUpdate ? "StudioMate 생년월일·가입서 메모 반영 완료" : "StudioMate 회원 메모 반영 완료",
+          profileNeedsReview,
+          profileStatus: writeResult.profileStatus,
         });
         await markMemberIdLookupDone(activeData, writeResult.studiomateMemberId);
         item.status = "done";
@@ -191,16 +210,21 @@ try {
         ? (error?.nonRetryable ? error.message : "가입서 정보 반영 중 StudioMate 메모 저장·재조회 실패. 원본 확인 후 재처리합니다.")
         : error instanceof Error ? error.message : String(error);
       const status = error?.nonRetryable || attempts >= maxAttempts ? "failed" : "retry";
-      await ref.set(
-        {
+      const failurePatch = {
           status,
           attempts,
           claimToken: null,
           lastError: message,
           updatedAt: admin.firestore.Timestamp.now(),
-        },
-        { merge: true },
-      );
+        };
+      if (activeData.profileUpdate?.version === 2) {
+        const owned=await db.runTransaction(async tx=>{
+          const current=await tx.get(ref);
+          if(current.get('claimToken')!==activeData.claimToken||current.get('status')!=='processing')return false;
+          tx.update(ref,failurePatch);return true;
+        });
+        if(!owned){item.status='review_required';item.error='Signup writer outcome retained; current lease or completed state changed';result.failed++;result.jobs.push(item);continue;}
+      } else await ref.set(failurePatch,{merge:true});
       await updateMemberMemoSyncStatus(activeData.jobId || ref.id, {
         syncStatus: status,
         syncError: message,
@@ -236,6 +260,15 @@ try {
 }
 
 async function loadPendingJobs(max) {
+  if(signupJobIds.length){
+    const snapshots=await db.getAll(...signupJobIds.map(id=>db.doc(`studiomateMemoWriteJobs/${id}`)));
+    for(const snapshot of snapshots){
+      const data=snapshot.data();
+      if(!snapshot.exists||data.jobId!==snapshot.id||data.source!=='instructor_member_eformsign'||data.profileUpdate?.version!==2)
+        throw new Error('Bounded signup memo source mismatch');
+    }
+    return snapshots.filter(s=>['pending','retry'].includes(s.get('status'))).map(s=>({ref:s.ref,data:s.data()}));
+  }
   if (jobId) {
     const doc = await db.collection("studiomateMemoWriteJobs").doc(jobId).get();
     if (!doc.exists) return [];
@@ -331,12 +364,36 @@ async function updateMemberSignupContractSyncStatus(job, patch) {
 
 async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
   if (String(job.source || "") !== "instructor_member_eformsign") return;
+  if (job.profileUpdate?.version === 2) {
+    const latest=(await db.doc(`studiomateMemoWriteJobs/${job.jobId}`).get()).data();
+    const ids=[...new Set([job.registrationId,...(job.registrationIds || []),...(latest?.registrationIds || [])].filter(Boolean))];
+    for (const registrationId of ids) {
+      await db.runTransaction(async transaction=>{
+        const registrationRef=db.doc(`instructorLessonRegistrations/${registrationId}`);
+        const [snapshot,sourceSnapshot]=await Promise.all([transaction.get(registrationRef),transaction.get(db.doc(`eformsignInstructorMemberJobs/${registrationId}`))]);
+        const current=snapshot.data(),source=sourceSnapshot.data();
+        if (!current || current.cancellation?.jobId || source?.profileMemoJobId!==job.jobId
+          || source.documentId!==job.profileUpdate.documentId || String(source.studiomateMemberId)!==String(job.memberId)
+          || String(current.studiomateMemberId || current.evidence?.studiomateMemberId)!==String(job.memberId)
+          || digitsOnly(current.memberPhone)!==digitsOnly(job.memberPhone) || String(current.memberName).trim()!==String(job.memberName).trim()) return;
+        const now=admin.firestore.Timestamp.now(),completed=patch.status==='done';
+        const steps={...current.steps,memo:{...current.steps?.memo,
+          status:completed&&!patch.profileNeedsReview?'verified':patch.status==='retry'?'retry':'review_required',
+          label:'가입서 정보 반영',detail:String(patch.reason || '').slice(0,240),updatedAt:now}};
+        const state=deriveInstructorLessonRegistrationState({mode:current.mode,steps});
+        transaction.set(registrationRef,{status:state.status,nextAction:state.nextAction,steps,
+          profileEnrichment:{status:completed?(patch.profileNeedsReview?'review_required':'synced'):patch.status,fields:patch.profileStatus || {},updatedAt:now},
+          ...(state.status==='completed'?{completedAt:current.completedAt || now}:{}),updatedAt:now},{merge:true});
+      });
+    }
+    return;
+  }
   const registrationId = String(job.registrationId || "").trim();
   if (!registrationId) return;
   const registrationRef = db.collection("instructorLessonRegistrations").doc(registrationId);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(registrationRef);
-    const sourceSnapshot = await transaction.get(db.collection("eformsignInstructorMemberJobs").doc(registrationId));
+    const sourceSnapshot = await transaction.get(db.collection("eformsignInstructorMemberJobs").doc(String(job.profileSourceJobId || registrationId)));
     const profileMemoJobId = sourceSnapshot.data()?.profileMemoJobId;
     // Older completion-only memos cannot finish the newer profile-and-memo step.
     if (profileMemoJobId && profileMemoJobId !== job.jobId) return;
@@ -354,7 +411,7 @@ async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
       ...(current.steps || {}),
       memo: {
         ...currentMemo,
-        status: completed ? "verified" : failed ? "review_required" : "retry",
+        status: completed ? patch.profileNeedsReview ? "review_required" : "verified" : failed ? "review_required" : "retry",
         label: job.profileUpdate ? "가입서 정보 반영" : "가입서 완료 메모",
         detail: String(patch.reason || "").slice(0, 240),
         updatedAt: now,
@@ -365,6 +422,7 @@ async function updateInstructorLessonRegistrationMemoStatus(job, patch) {
       status: state.status,
       nextAction: state.nextAction,
       steps,
+      ...(job.profileUpdate?.version === 2 ? { profileEnrichment: {status: patch.profileNeedsReview ? 'review_required' : 'synced',fields:patch.profileStatus || {},updatedAt:now} } : {}),
       ...(state.status === "completed" ? { completedAt: current.completedAt || now } : {}),
       updatedAt: now,
     }, { merge: true });
@@ -521,20 +579,37 @@ async function writeMemo(page, job, authorization) {
   let profileStatus;
   if (job.profileUpdate) {
     try {
-      const source = (await db.collection("eformsignInstructorMemberJobs").doc(String(job.registrationId || "")).get()).data();
-      const registration = (await db.collection("instructorLessonRegistrations").doc(String(job.registrationId || "")).get()).data();
-      assertSignupProfileSource(job, source, registration);
-      profileStatus = await applySignupBirthDate(page, job, studiomateMemberId, config.baseUrl);
+      const source = (await db.collection("eformsignInstructorMemberJobs").doc(String(job.profileSourceJobId || job.registrationId || "")).get()).data();
+      const registration = job.registrationId ? (await db.collection("instructorLessonRegistrations").doc(String(job.registrationId)).get()).data() : null;
+      if (job.profileUpdate.version === 2) {
+        assertSignupProfileV2Source(job, source, registration);
+        profileStatus = await applySignupProfileV2(page, job, studiomateMemberId, config.baseUrl, { recordProgress: async progress => {
+          const ref=db.doc(`studiomateMemoWriteJobs/${job.jobId}`);
+          await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(snap.get('claimToken')!==job.claimToken||snap.get('status')!=='processing')throw new Error('Signup profile writer lease changed');
+            const sourceNow=(await tx.get(db.doc(`eformsignInstructorMemberJobs/${job.profileSourceJobId}`))).data();
+            const registrationNow=job.registrationId?(await tx.get(db.doc(`instructorLessonRegistrations/${job.registrationId}`))).data():null;
+            assertSignupProfileV2Source(job,sourceNow,registrationNow);
+            tx.update(ref,{profileStatus:progress,updatedAt:admin.firestore.Timestamp.now()});});
+        } });
+      } else {
+        assertSignupProfileSource(job, source, registration);
+        profileStatus = await applySignupBirthDate(page, job, studiomateMemberId, config.baseUrl);
+      }
     } catch (error) {
       const safeError = new Error(/기존 생년월일/.test(String(error?.message || ""))
         ? "StudioMate 기존 생년월일과 가입서가 다릅니다. 덮어쓰지 않고 확인필요"
-        : "가입서 원본·회원 일치·생년월일 저장 검증 실패. 원본 확인 후 재처리하세요.");
+        : "가입서 원본·회원 일치·회원정보 저장 검증 실패. 원본 확인 후 재처리하세요.");
       safeError.nonRetryable = true;
       throw safeError;
     }
   }
   if (await studioMateMemoExists(page, studiomateMemberId, content)) {
     return { studiomateMemberId, alreadyExists: true, profileStatus };
+  }
+  if (job.profileUpdate?.version === 2) {
+    await writeMemoViaUi(page, studiomateMemberId, content);
+    if (!(await studioMateMemoExists(page, studiomateMemberId, content))) throw new Error('Signup completion memo readback unavailable');
+    return {studiomateMemberId,profileStatus};
   }
   try {
     await writeMemoViaBrowserRequest(page, studiomateMemberId, content, authorization);
@@ -666,7 +741,7 @@ async function writeMemoViaUi(page, memberId, content) {
 
 function bodyContainsMemoContent(body, content) {
   if (content.startsWith("[홀딩 안내]")) return holdingMemoContentPresent(body,content);
-  if (content.includes("[ARCHIVE PILATES 강사회원 가입서 정보]")) return signupProfileMemoPresent(body, content);
+  if (content.includes("[ARCHIVE PILATES 강사회원 가입서 정보]") || content.startsWith('[ARCHIVE PILATES 강사회원 가입서 완료]')) return signupProfileMemoPresent(body, content);
   const normalizedBody = normalizeMemoText(body);
   const normalizedContent = normalizeMemoText(content);
   if (!normalizedContent) return false;

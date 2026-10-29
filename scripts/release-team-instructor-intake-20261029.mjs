@@ -25,6 +25,7 @@ export const MEAL_RELEASE_TARGETS = {
     '/rules/index.html': 'core/rules/index.html',
   } },
   capacityRepairVerification: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
+  signupProfileV2: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
 
@@ -78,7 +79,8 @@ async function main() {
   if (!baseline.config || baseline.name !== baselineRelease.version.name) throw Error('Missing baseline config');
   const sources = [];
   for (const [resource, file] of Object.entries(selected.files)) {
-    const sourceBase = target === 'capacityRepairVerification' ? '2a88328c68a580b79ad9a5cd593112cdafe35e11'
+    const sourceBase = target === 'signupProfileV2' ? 'd50c6830e7ca3fd0a60e8e49f91efd5966113bc5'
+      : target === 'capacityRepairVerification' ? '2a88328c68a580b79ad9a5cd593112cdafe35e11'
       : target === 'scheduleDisplay' ? 'f356b2dcc3c303c9ea4aabe87a8d29f82aae59fc'
       : target === 'fulfillmentVerification' ? '5869a67ea0b6e94379f1ab4af14354094c1ee4fa'
       : target === 'fulfillment' ? 'e942b7d7e9db39751f50f9a95212a99bf7ca01b6'

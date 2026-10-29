@@ -12,6 +12,7 @@ import { runEformStage, waitForEformOperatorFields, waitForEformSendReady, resol
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION, canonicalSignupPhone, parseSignupProfile } from "./lib/instructor-signup-profile.mjs";
+import { readCompletedSignupProfileV2, parseSignupProfileV2, signupV2Projection } from "./lib/instructor-signup-profile-v2.mjs";
 import { buildOrderContactBinding, canRecheckCompletedSignup, readCompletedRecipientEvidence, readSignupMemberIdentity } from "./lib/instructor-signup-order-identity.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import {
@@ -396,7 +397,7 @@ function isCompletionCandidate(data) {
   if (config.refreshCompletedFields) return (data?.status === "done"
     || (data?.status === "send_review_required" && data?.completedAt
       && data?.lastError === "완료 가입서 답변·회원 일치·생년월일 확인필요. 원본 확인 후 재처리하세요."))
-    && data?.submittedProfile?.version !== SIGNUP_PROFILE_VERSION;
+    && ![SIGNUP_PROFILE_VERSION, 2].includes(data?.submittedProfile?.version);
   return ["sent", "waiting_completion"].includes(String(data?.status || ""));
 }
 
@@ -745,16 +746,18 @@ async function inspectCompletion(page, ref, job) {
   await page.goto(EFORMSIGN_COMPLETED_DOCUMENTS_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   const completedEvidence = await documentRowEvidenceAfterLoad(page, job.documentName || "", job.documentId || "");
   if (completedEvidence.found) {
-    let profile;
+    let profile, completion;
     try {
-      profile = await readCompletedSignupProfile(page, job, completedEvidence, {
+      completion = await readCompletedRecipientEvidence(page, job);
+      profile = await readCompletedSignupProfileV2(page, job, completedEvidence, {
         verifyOrderContact: fields => verifyCompletedOrderContact(page, ref, job, fields),
       });
+      signupV2Projection({ job, profile, completion, memberId: job.studiomateMemberId, registrationId: ref.id });
     } catch {
       return markCompletionReviewRequired(ref, job, "완료 가입서 답변·회원 일치·생년월일 확인필요. 원본 확인 후 재처리하세요.");
     }
-    await finalizeCompletedDocument(ref, job, completedEvidence, profile);
-    return { status: "completed", detail: "가입서 완료 · 생년월일 및 메모 반영 대기" };
+    await finalizeCompletedDocument(ref, job, completedEvidence, profile, completion);
+    return { status: "completed", detail: "가입서 완료 · 생년월일·주소·완료 메모 반영 대기" };
   }
   if (completedEvidence.nameMatchCount > 0) {
     return markCompletionReviewRequired(ref, job, "완료 문서명이 같지만 저장된 문서 ID와 일치하지 않습니다.");
@@ -1018,20 +1021,25 @@ async function writeSendClaimedState(ref, claimToken, allowedStatuses, jobPatch,
   });
 }
 
-async function finalizeCompletedDocument(ref, job, evidence, profile) {
+async function finalizeCompletedDocument(ref, job, evidence, profile, completion = null) {
   const registrationRef = db.collection("instructorLessonRegistrations").doc(ref.id);
   const documentId = String(job.documentId || evidence.documentId || "").slice(0, 160);
   if (!documentId || documentId !== String(evidence.documentId || "")) {
     throw new Error("완료 문서 ID가 발송 후 저장한 문서 ID와 일치하지 않습니다.");
   }
-  const memoId = `instructor_member_profile_${documentId}`;
+  const isV2 = profile.version === 2;
   const consentMemberId = String(job.studiomateMemberId || "");
   if (!consentMemberId) throw new Error("강사회원 동의 기록에 필요한 StudioMate 회원 ID가 없습니다.");
+  const projection = isV2 ? signupV2Projection({ job, profile, completion,
+    memberId: consentMemberId, registrationId: ref.id }) : null;
+  const memoId = projection ? projection.memoId : `instructor_member_profile_${documentId}`;
+  if (isV2 && memoId !== `instructor_member_completion_${documentId}`) throw new Error("가입서 완료 메모 문서키 불일치");
+  const profileUpdate = projection ? projection.profileUpdate : { version: profile.version, birthDate: profile.birthDate, documentId };
   const consentId = `consent_${String(job.studioId || "")}_${consentMemberId}`;
   const consentRef = db.collection("instructorMemberConsents").doc(consentId);
   const memoRef = db.collection("memberMemos").doc(memoId);
   const memoJobRef = db.collection("studiomateMemoWriteJobs").doc(memoId);
-  const memoContent = [
+  const memoContent = projection ? projection.content : [
     "[ARCHIVE PILATES 강사회원 가입서 정보 반영]",
     `수강일: ${job.lessonDate || "-"}`,
     `수강권: ${job.ticketName || "강사레슨 (2T)"}`,
@@ -1054,7 +1062,15 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
     const registration = registrationSnapshot.data() || {};
     if (registration.cancellation?.jobId) throw new Error("수강 취소 요청으로 가입서 후속 반영 중단");
     const memberId = String(job.studiomateMemberId || registration.studiomateMemberId || "");
-    parseSignupProfile(profile, currentJob, documentId);
+    if (isV2) {
+      parseSignupProfileV2(profile, currentJob, documentId);
+      const currentProjection = signupV2Projection({ job: currentJob, profile, completion,
+        memberId, registrationId: ref.id });
+      if (currentProjection.memoId !== memoId || currentProjection.content !== memoContent
+        || JSON.stringify(currentProjection.profileUpdate) !== JSON.stringify(profileUpdate)) {
+        throw new Error("가입서 완료 메모 원본이 변경되어 반영 중단");
+      }
+    } else parseSignupProfile(profile, currentJob, documentId);
     const canonicalPhone = canonicalSignupPhone(profile, currentJob, registration);
     if (String(registration.studiomateMemberId || registration.evidence?.studiomateMemberId || "") !== memberId
       || String(currentJob.studiomateMemberId || '') !== memberId
@@ -1063,7 +1079,27 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
       || normalizeInstructorLessonPhone(registration.memberPhone) !== canonicalPhone
       || normalizeInstructorLessonName(registration.memberName) !== profile.memberName
       || currentJob.documentId !== documentId) throw new Error("가입서 완료 원본 회원정보가 변경되어 반영을 중단했습니다.");
+    if (isV2) {
+      for (const snapshot of [memoSnapshot, memoJobSnapshot]) {
+        if (!snapshot.exists) continue;
+        const existing = snapshot.data() || {};
+        if (existing.studioId !== job.studioId || String(existing.memberId) !== memberId || existing.content !== memoContent) {
+          throw new Error("같은 가입서 문서의 기존 메모·회원 연결 확인필요");
+        }
+      }
+      if (memoJobSnapshot.exists) {
+        const existing = memoJobSnapshot.data() || {};
+        if (existing.jobId !== memoId || existing.source !== "instructor_member_eformsign"
+          || String(existing.studiomateMemberId) !== memberId || existing.profileUpdate?.version !== 2
+          || existing.profileUpdate?.documentId !== documentId || !existing.profileSourceJobId
+          || existing.profileUpdate.sourceHash!==profileUpdate.sourceHash
+          || existing.profileUpdate.birthDateRaw!==profileUpdate.birthDateRaw || existing.profileUpdate.addressRaw!==profileUpdate.addressRaw) {
+          throw new Error("같은 가입서 문서의 기존 정보 반영 작업 확인필요");
+        }
+      }
+    }
     const now = FieldValue.serverTimestamp();
+    // Preserve the existing completed-template consent projection and its scope.
     transaction.set(consentRef, {
       consentId,
       registrationId: ref.id,
@@ -1078,7 +1114,7 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
       documentUrl: job.documentUrl || "",
       status: "completed",
       consentScope: "instructor_lesson_recording_content_and_lesson_promotion",
-      completedAt: job.completedAt || now,
+      completedAt: isV2 ? completion.providerCompletedAt : job.completedAt || now,
       createdAt: job.completedAt || now,
       updatedAt: now,
     }, { merge: true });
@@ -1101,7 +1137,7 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
         createdAt: now,
         updatedAt: now,
       });
-    } else if (String(memoSnapshot.data()?.syncStatus || "") !== "synced") {
+    } else if (!isV2 && String(memoSnapshot.data()?.syncStatus || "") !== "synced") {
       transaction.set(memoRef, { content: memoContent, updatedAt: now }, { merge: true });
     }
     if (!memoJobSnapshot.exists) {
@@ -1112,7 +1148,9 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
         status: "pending",
         writeMode: "playwright",
         registrationId: ref.id,
-        profileUpdate: { version: profile.version, birthDate: profile.birthDate, documentId },
+        ...(isV2 ? { profileSourceJobId: ref.id, completionProof: projection.completionProof,
+          registrationIds: FieldValue.arrayUnion(ref.id) } : {}),
+        profileUpdate,
         studiomateMemberId: memberId,
         memberId,
         memberName: job.memberName,
@@ -1125,25 +1163,34 @@ async function finalizeCompletedDocument(ref, job, evidence, profile) {
         createdAt: now,
         updatedAt: now,
       });
+    } else if (isV2) {
+      // Retain the first source binding and any completed field/memo effects on reuse.
+      transaction.set(memoJobRef, { registrationIds: FieldValue.arrayUnion(ref.id), updatedAt: now }, { merge: true });
     } else if (String(memoJobSnapshot.data()?.status || "") !== "done") {
-      transaction.set(memoJobRef, { content: memoContent, profileUpdate: { version: profile.version, birthDate: profile.birthDate, documentId }, updatedAt: now }, { merge: true });
+      transaction.set(memoJobRef, { content: memoContent, profileUpdate, updatedAt: now }, { merge: true });
     }
     transaction.set(ref, {
       status: "done",
       submittedProfile: profile,
+      ...(isV2 ? { completionProof: projection.completionProof } : {}),
       profileMemoJobId: memoId,
       profileExtractedAt: now,
       claimToken: null,
       claimedAt: null,
       claimedBy: null,
-      completedAt: job.completedAt || now,
+      completedAt: isV2 ? completion.providerCompletedAt : job.completedAt || now,
       updatedAt: now,
       lastError: null,
     }, { merge: true });
     transaction.update(registrationRef, deriveRegistrationPatch(registration, {
       ...resolvedEformErrorPatch(registration, job.lastError),
       "steps.eformsign": stepValue("verified", "강사회원 가입서", "이폼싸인 작성 완료 확인"),
-      "steps.memo": stepValue(memoJobSnapshot.data()?.status === "done" ? "verified" : "queued", "가입서 정보 반영", memoJobSnapshot.data()?.status === "done" ? "생년월일·메모 반영 완료" : "생년월일·경력·소속·주소 반영 대기"),
+      "steps.memo": stepValue(memoJobSnapshot.data()?.status === "done"
+        ? isV2 && memoJobSnapshot.data()?.profileSyncStatus === "review_required" ? "review_required" : "verified"
+        : isV2 && memoJobSnapshot.exists && !['pending','retry','processing'].includes(memoJobSnapshot.data()?.status) ? "review_required" : "queued", "가입서 정보 반영", memoJobSnapshot.data()?.status === "done"
+        ? (isV2 ? "가입서 후속 처리 완료 · 항목별 결과 확인" : "생년월일·메모 반영 완료")
+        : (isV2 ? memoJobSnapshot.exists && !['pending','retry','processing'].includes(memoJobSnapshot.data()?.status)
+          ? "가입서 정보 반영 작업 확인필요 · 기존 상태 보존" : "생년월일·주소·완료 메모 반영 대기" : "생년월일·경력·소속·주소 반영 대기")),
       "evidence.eformsignDocumentId": documentId,
       updatedAt: now,
     }));
