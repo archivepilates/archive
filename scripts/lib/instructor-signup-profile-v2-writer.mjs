@@ -64,6 +64,12 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
       detail:await field('상세 주소를 입력해 주세요').inputValue(),protectedHash:sha(protectedFields)};
   };
   const before=await openEditor(),expected=job.profileUpdate;
+  if(expected.mode==='completion_only'){
+    assert(expected.fieldReviewReason==='signed_fields_unverified'&&!('birthDateRaw'in expected)&&!('addressRaw'in expected));
+    const result={version:2,birthDate:{status:'review',reason:'signed_fields_unverified'},address:{status:'review',reason:'signed_fields_unverified'},
+      checkedAt:new Date().toISOString(),beforeFieldHashes:{birthDate:sha(before.birthDate),address:sha(before.address),detail:sha(before.detail),protectedHash:before.protectedHash}};
+    await recordProgress(result);return result;
+  }
   const birthDate=normalizeSignupBirthDateV2(expected.birthDateRaw);
   const birthDecision=decideSignupProfileFieldV2({field:'birthDate',current:before.birthDate,expected:expected.birthDateRaw});
   const combined=clean([before.address,before.detail].filter(Boolean).join(' '));

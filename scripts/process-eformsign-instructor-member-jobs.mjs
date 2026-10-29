@@ -12,7 +12,7 @@ import { runEformStage, waitForEformOperatorFields, waitForEformSendReady, resol
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION, canonicalSignupPhone, parseSignupProfile } from "./lib/instructor-signup-profile.mjs";
-import { readCompletedSignupProfileV2, parseSignupProfileV2, signupV2Projection } from "./lib/instructor-signup-profile-v2.mjs";
+import { readCompletedSignupProfileV2, parseSignupProfileV2, signupV2Projection,completionOnlySignupProfileV2 } from "./lib/instructor-signup-profile-v2.mjs";
 import { buildOrderContactBinding, canRecheckCompletedSignup, readCompletedRecipientEvidence, readSignupMemberIdentity } from "./lib/instructor-signup-order-identity.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import {
@@ -746,18 +746,23 @@ async function inspectCompletion(page, ref, job) {
   await page.goto(EFORMSIGN_COMPLETED_DOCUMENTS_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   const completedEvidence = await documentRowEvidenceAfterLoad(page, job.documentName || "", job.documentId || "");
   if (completedEvidence.found) {
-    let profile, completion;
+    let profile, completion,orderVerificationFailed=false;
     try {
       completion = await readCompletedRecipientEvidence(page, job);
-      profile = await readCompletedSignupProfileV2(page, job, completedEvidence, {
-        verifyOrderContact: fields => verifyCompletedOrderContact(page, ref, job, fields),
-      });
+      try { profile = await readCompletedSignupProfileV2(page, job, completedEvidence, {
+        verifyOrderContact: async fields => {try{return await verifyCompletedOrderContact(page, ref, job, fields);}catch(error){orderVerificationFailed=true;throw error;}},
+      }); } catch {
+        if(orderVerificationFailed||/login|signin|captcha|\/auth\//i.test(new URL(page.url()).pathname)
+          || await page.locator('input[type="password"]:visible').count()
+          || /보안 확인|자동입력 방지|비정상적인 접근|security verification|verify you are human|captcha/i.test(await page.locator('body').innerText()))throw new Error('Completed signup security/source stop');
+        profile=completionOnlySignupProfileV2(job);
+      }
       signupV2Projection({ job, profile, completion, memberId: job.studiomateMemberId, registrationId: ref.id });
     } catch {
       return markCompletionReviewRequired(ref, job, "완료 가입서 답변·회원 일치·생년월일 확인필요. 원본 확인 후 재처리하세요.");
     }
     await finalizeCompletedDocument(ref, job, completedEvidence, profile, completion);
-    return { status: "completed", detail: "가입서 완료 · 생년월일·주소·완료 메모 반영 대기" };
+    return { status: "completed", detail: profile.mode==='completion_only'?'가입서 완료 메모 반영 대기 · 개인정보 확인필요':"가입서 완료 · 생년월일·주소·완료 메모 반영 대기" };
   }
   if (completedEvidence.nameMatchCount > 0) {
     return markCompletionReviewRequired(ref, job, "완료 문서명이 같지만 저장된 문서 ID와 일치하지 않습니다.");
@@ -1172,7 +1177,7 @@ async function finalizeCompletedDocument(ref, job, evidence, profile, completion
     transaction.set(ref, {
       status: "done",
       submittedProfile: profile,
-      ...(isV2 ? { completionProof: projection.completionProof } : {}),
+      ...(isV2 ? { completionProof: projection.completionProof,profileReadStatus:profile.mode==='completion_only'?'review_required':'verified' } : {}),
       profileMemoJobId: memoId,
       profileExtractedAt: now,
       claimToken: null,
@@ -1190,7 +1195,7 @@ async function finalizeCompletedDocument(ref, job, evidence, profile, completion
         : isV2 && memoJobSnapshot.exists && !['pending','retry','processing'].includes(memoJobSnapshot.data()?.status) ? "review_required" : "queued", "가입서 정보 반영", memoJobSnapshot.data()?.status === "done"
         ? (isV2 ? "가입서 후속 처리 완료 · 항목별 결과 확인" : "생년월일·메모 반영 완료")
         : (isV2 ? memoJobSnapshot.exists && !['pending','retry','processing'].includes(memoJobSnapshot.data()?.status)
-          ? "가입서 정보 반영 작업 확인필요 · 기존 상태 보존" : "생년월일·주소·완료 메모 반영 대기" : "생년월일·경력·소속·주소 반영 대기")),
+          ? "가입서 정보 반영 작업 확인필요 · 기존 상태 보존" : profile.mode==='completion_only'?"완료 메모 반영 대기 · 개인정보 확인필요":"생년월일·주소·완료 메모 반영 대기" : "생년월일·경력·소속·주소 반영 대기")),
       "evidence.eformsignDocumentId": documentId,
       updatedAt: now,
     }));

@@ -165,6 +165,13 @@ test('existing conflicting DOB is preserved and returns reviewable independent s
   assert.equal(m.stored().birthDate, '1989-01-02'); assert.equal(m.saves(), 0);
   assert(!m.events.some(e => ['fill', 'type', 'popup', 'save'].includes(e.operation)));
 });
+test('completion-only mode never writes profile fields or opens postcode even when native fields are empty',async()=>{
+  const j=job();j.profileUpdate={version:2,mode:'completion_only',documentId:DOC,fieldReviewReason:'signed_fields_unverified'};
+  const m=nativePage(j),r=await run(m,j,{lookupApproved:true});
+  assert.equal(r.birthDate.status,'review');assert.equal(r.address.status,'review');assert.equal(m.saves(),0);
+  assert(!m.events.some(e=>['fill','type','postal-query','popup','save'].includes(e.operation)));
+  const q=memoOrchestrator(j,m);await q.run();assert(q.memos.has(j.content));
+});
 test('address clash never blocks independent DOB completion or alters the existing address/detail', async () => {
   const j = job(), m = nativePage(j, { address: '서울특별시 강남구 테헤란로 124', detail: '기존 801호' });
   const before = m.stored(), result = await run(m, j);

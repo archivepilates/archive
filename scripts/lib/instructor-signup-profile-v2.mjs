@@ -8,10 +8,20 @@ export const signupProfileV2Id = doc => {assert(/^[a-f0-9]{32}$/.test(doc));retu
 const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
 const sha=value=>createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
+export function completionOnlySignupProfileV2(job) {
+  return {version:2,mode:'completion_only',documentId:job.documentId,templateId:TEMPLATE,
+    memberName:job.memberName,memberPhone:job.memberPhone,fieldReviewReason:'signed_fields_unverified'};
+}
 export function parseSignupProfileV2(profile,job,documentId) {
   assert(profile?.version===2&&documentId===job.documentId&&profile.documentId===documentId&&/^[a-f0-9]{32}$/.test(documentId)
     &&profile.templateId===TEMPLATE&&job.studioId==='5330'&&/^[1-9]\d*$/.test(String(job.studiomateMemberId)));
   assert(name(profile.memberName)===name(job.memberName)&&/^010\d{8}$/.test(phone(profile.memberPhone)));
+  if(profile.mode==='completion_only'){
+    assert(phone(profile.memberPhone)===phone(job.memberPhone)&&profile.fieldReviewReason==='signed_fields_unverified'
+      &&Object.keys(profile).sort().join(',')===['version','mode','documentId','templateId','memberName','memberPhone','fieldReviewReason'].sort().join(','));
+    return profile;
+  }
+  assert(profile.mode==null,'Unknown signed profile mode');
   if(profile.orderContactBinding) assertOrderContactBinding(profile.orderContactBinding,job,profile.memberPhone);
   else assert(phone(profile.memberPhone)===phone(job.memberPhone),'Signed form identity mismatch');
   for(const key of ['birthDateRaw','addressRaw','career','affiliation']) assert(typeof profile[key]==='string'&&profile[key].length<=1000);
@@ -50,7 +60,8 @@ export function signupV2Projection({job,profile,completion,memberId,registration
   const kst=new Date(completed+9*3600000).toISOString().replace('T',' ').replace(/Z$/,'');
   const content=['[ARCHIVE PILATES 강사회원 가입서 완료]',`완료 시각: ${kst} KST`,`문서 ID: ${job.documentId}`].join('\n');
   return {memoId:signupProfileV2Id(job.documentId),content,profileUpdate:{version:2,documentId:job.documentId,
-    birthDateRaw:profile.birthDateRaw,addressRaw:profile.addressRaw,sourceHash:sha(profile)},completionProof:completion};
+    ...(profile.mode==='completion_only'?{mode:'completion_only',fieldReviewReason:profile.fieldReviewReason}
+      :{birthDateRaw:profile.birthDateRaw,addressRaw:profile.addressRaw}),sourceHash:sha(profile)},completionProof:completion};
 }
 export function assertSignupProfileV2Source(job,source,registration) {
   const profile=source?.submittedProfile;
@@ -67,7 +78,7 @@ export function assertSignupProfileV2Source(job,source,registration) {
     &&job.profileUpdate.birthDateRaw===profile.birthDateRaw&&job.profileUpdate.addressRaw===profile.addressRaw);
   const original=signupV2Projection({job:source,profile,completion:source.completionProof,memberId:job.memberId,
     registrationId:source.registrationId||'',now:new Date(source.completionProof.observedAt)});
-  assert(job.content===original.content);
+  assert(job.content===original.content&&sha(job.profileUpdate)===sha(original.profileUpdate));
   if(source.baselineOnly===true) assert(source.source==='completed_signup_profile_baseline_v2'&&source.sendAllowed===false
     &&source.registrationId===''&&job.registrationId==='');
   else assert(source.registrationId&&job.registrationId===source.registrationId&&registration?.registrationId===source.registrationId

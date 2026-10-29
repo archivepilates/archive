@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { beforeEach, test } from 'node:test';
 import { signupProfileV2Id, parseSignupProfileV2, readCompletedSignupProfileV2,
-  signupV2Projection, assertSignupProfileV2Source } from '../lib/instructor-signup-profile-v2.mjs';
+  signupV2Projection, assertSignupProfileV2Source,completionOnlySignupProfileV2 } from '../lib/instructor-signup-profile-v2.mjs';
 import { parseCompletedRecipientStatus } from '../lib/instructor-signup-order-identity.mjs';
 import { SIGNUP_PROFILE_FIELDS } from '../lib/instructor-signup-profile.mjs';
 
@@ -149,6 +149,22 @@ test('Firestore field-order normalization preserves exact source hashes and comp
   const f=fixture();
   f.source.submittedProfile=Object.fromEntries(Object.entries(f.profile).sort(([a],[b])=>a.localeCompare(b)));
   assert.equal(assertSignupProfileV2Source(f.job,f.source,f.registration),f.source.submittedProfile);
+});
+test('completion-only metadata never fabricates signed answers and still requires exact recipient source proof',()=>{
+  const f=fixture({baseline:true});f.profile=completionOnlySignupProfileV2(f.source);f.source.submittedProfile=f.profile;
+  const p=signupV2Projection({job:f.source,profile:f.profile,completion:f.completion,memberId:f.job.memberId,now:NOW});
+  f.job.profileUpdate=p.profileUpdate;
+  assert.equal(assertSignupProfileV2Source(f.job,f.source,undefined),f.profile);
+  assert.equal(p.profileUpdate.mode,'completion_only');
+  for(const key of ['birthDateRaw','addressRaw','career','affiliation'])assert(!Object.hasOwn(f.profile,key)&&!Object.hasOwn(p.profileUpdate,key));
+  f.completion.recipients[0].phone='01000000002';
+  assert.throws(()=>signupV2Projection({job:f.source,profile:f.profile,completion:f.completion,memberId:f.job.memberId,now:NOW}));
+});
+test('completion-only source cannot smuggle profile answers or turn itself into field-write mode',()=>{
+  for(const key of ['birthDateRaw','addressRaw','career','affiliation','health']){
+    const f=fixture({baseline:true}),p=completionOnlySignupProfileV2(f.source);p[key]='DO_NOT_COPY';
+    assert.throws(()=>parseSignupProfileV2(p,f.source,DOC));
+  }
 });
 test('backfill baseline is document-keyed with empty registration IDs, never a fabricated ilr', () => {
   const f = fixture({ baseline: true }), before = clone(f);

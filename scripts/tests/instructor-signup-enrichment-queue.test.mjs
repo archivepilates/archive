@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { beforeEach, test } from 'node:test';
 import { buildSignupEnrichmentPlan, applySignupEnrichmentPlan } from '../lib/instructor-signup-enrichment-queue.mjs';
+import { completionOnlySignupProfileV2 } from '../lib/instructor-signup-profile-v2.mjs';
 
 const NOW = new Date('2026-10-30T04:00:00.000Z');
 const DOC = 'a'.repeat(32), TEMPLATE = 'a5b5ea6b85ec44c8bcb4af1e980e94eb';
@@ -73,6 +74,14 @@ test('pure plan keeps stable document IDs, canonical schema and original audit h
   assert.equal(plan.projection.profileUpdate.birthDateRaw, '900102');
   assert.doesNotMatch(plan.projection.content, /900102|Synthetic unverified address|01000000001|동의/);
   assert.deepEqual(buildSignupEnrichmentPlan(value), plan);
+});
+test('verified recipient completion may queue a metadata-only note without inventing personal answers',async()=>{
+  const value=row();value.profile=completionOnlySignupProfileV2({documentId:DOC,memberName:value.member.name,memberPhone:value.member.phone});
+  const plan=buildSignupEnrichmentPlan(value),db=memoryDb();
+  const result=await applySignupEnrichmentPlan({db,plan,stamp:'stamp',apply:true});
+  assert.equal(result.profileMode,'completion_only');assert.equal(result.birthDateSource,'review');
+  const job=db.docs.get(refs(plan).job);assert.equal(job.profileUpdate.mode,'completion_only');assert(!('birthDateRaw'in job.profileUpdate)&&!('addressRaw'in job.profileUpdate));
+  assert.equal(db.docs.size,3);
 });
 
 for (const [label, change] of Object.entries({

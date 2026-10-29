@@ -171,7 +171,7 @@ async function privateDirectory() {
     && await realpath(DIRECTORY) === DIRECTORY, "PRIVATE_DIRECTORY_REQUIRED");
 }
 
-async function browserPhase(kind, report, callback) {
+export async function browserPhase(kind, report, callback) {
   let context, release;
   const cleanup = { phase: kind, contextClosed: false, lockReleased: false };
   report.cleanup.push(cleanup);
@@ -206,7 +206,7 @@ async function securityCheck(page, state, eform = true) {
   if (eform) requireProof(new URL(page.url()).origin === WEB && text.includes(ACCOUNT), "EFORMSIGN_ACCOUNT_UNVERIFIED");
 }
 
-async function eformSession(context, report, documents) {
+export async function eformSession(context, report, documents) {
   const state = { documentIds: new Set(documents.map(doc => doc.documentId)), titles: new Set(documents.map(doc => doc.title)), viewerDocumentId: null, securityStop: false };
   await context.route("**/*", async route => {
     let kind = "blocked_non_read";
@@ -234,7 +234,7 @@ async function eformSession(context, report, documents) {
   return { page, state };
 }
 
-async function bootstrapStatus(context, page, state, doc) {
+export async function bootstrapStatus(context, page, state, doc) {
   let stage = "LIST_NAVIGATION";
   let captured;
   const observe = response => {

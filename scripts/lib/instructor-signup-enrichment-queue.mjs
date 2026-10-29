@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { signupV2Projection, parseSignupProfileV2, signupProfileV2Id } from './instructor-signup-profile-v2.mjs';
+import { signupV2Projection, parseSignupProfileV2, signupProfileV2Id,completionOnlySignupProfileV2 } from './instructor-signup-profile-v2.mjs';
 import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID as TEMPLATE,
   normalizeInstructorLessonPhone as phone, normalizeInstructorLessonName as name } from './instructor-lesson-registration-contract.mjs';
 import { normalizeSignupBirthDateV2, normalizeSignupAddressV2 } from './instructor-signup-profile-v2-policy.mjs';
@@ -13,9 +13,35 @@ const regularId = value => typeof value === 'string' && /^ilr_[a-f0-9]{24}$/.tes
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const PROFILE_KEYS = ['version', 'documentId', 'templateId', 'memberName', 'memberPhone', 'birthDateRaw', 'addressRaw', 'career', 'affiliation'];
+const COMPLETION_PROFILE_KEYS=['version','mode','documentId','templateId','memberName','memberPhone','fieldReviewReason'];
+const profileKeys=profile=>profile?.mode==='completion_only'?COMPLETION_PROFILE_KEYS:PROFILE_KEYS;
 const SOURCE_KEYS = ['jobId', 'source', 'baselineOnly', 'sendAllowed', 'status', 'registrationId', 'studioId',
   'studiomateMemberId', 'memberName', 'memberPhone', 'documentId', 'documentName', 'submittedProfile',
   'completionProof', 'profileNativeReadbackAt', 'sourceAuditHash', 'profileMemoJobId'];
+
+export function assertSignupEnrichmentSubset(subset,parent) {
+  assert(subset?.source==='instructor_signup_verified_subset_v2'&&subset.parentAuditComplete===false
+    &&subset.ok===true&&subset.coverage?.complete===true&&subset.coverage.scope==='verified_completed_native_members');
+  assert(parent?.source==='instructor_signup_enrichment_native_sources_v2'&&parent.coverage?.inventoryComplete===true
+    &&parent.coverage.scopeComplete===true&&parent.coverage.documentStatus.attempted===parent.coverage.documentStatus.expected
+    &&parent.coverage.nativeMembers.attempted===parent.coverage.nativeMembers.expected
+    &&parent.cleanup?.length===3&&parent.cleanup.every(x=>x.contextClosed&&x.lockReleased)
+    &&parent.errors.every(x=>['document_status','completed_profiles'].includes(x.phase)));
+  assert(Array.isArray(subset.rows)&&subset.rows.length===parent.members.length&&new Set(subset.rows.map(x=>x.member.memberId)).size===subset.rows.length);
+  for(const row of subset.rows){
+    const m=parent.members.find(x=>x.documentId===row.documentId),doc=parent.documents.find(x=>x.documentId===row.documentId);
+    assert(m&&doc&&row.status==='verified'&&row.baselineOnly===true&&row.sendAllowed===false);
+    assert(isDeepStrictEqual(row.member,{memberId:m.memberId,name:m.memberName,phone:m.memberPhone,memberGrade:m.memberGrade,inactive:m.inactive}));
+    assert(row.nativeCheckedAt===m.checkedAt);
+    const original=parent.rows.find(x=>x.documentId===row.documentId);
+    if(original)assert(isDeepStrictEqual(row,original),'Do not change verified signed-field evidence');
+    else{
+      assert(row.documentName===doc.title&&row.checkedAt===m.checkedAt&&isDeepStrictEqual(row.completionProof,doc.completionProof)
+        &&isDeepStrictEqual(row.profile,completionOnlySignupProfileV2(m.job)),'Completion-only subset must retain real provider/native evidence and no submitted answers');
+    }
+  }
+  return subset.rows;
+}
 
 function exactKeys(value, keys) {
   assert(record(value) && isDeepStrictEqual(Object.keys(value).sort(), [...keys].sort()), 'Unexpected source schema');
@@ -69,7 +95,7 @@ export function buildSignupEnrichmentPlan(row, { now = new Date() } = {}) {
   assert(nativeChecked <= checked, 'Native source chronology mismatch');
   completionFor({ ...canonical, documentId: row.documentId }, completion, now);
   assert(fresh(completion.observedAt, now) <= checked, 'Completion proof chronology mismatch');
-  exactKeys(row.profile, PROFILE_KEYS);
+  exactKeys(row.profile, profileKeys(row.profile));
   assert(typeof row.profile.memberPhone === 'string' && /^[+\d\s().-]+$/.test(row.profile.memberPhone)
     && typeof row.profile.memberName === 'string' && row.profile.memberName.length <= 40
     && phone(row.profile.memberPhone) === phone(member.phone), 'Signed profile identity mismatch');
@@ -99,7 +125,7 @@ function validatePlan(plan, now) {
     && source.profileMemoJobId === signupProfileV2Id(source.documentId)
     && typeof source.documentName === 'string' && source.documentName.trim()
     && /^[a-f0-9]{64}$/.test(source.sourceAuditHash || ''), 'Invalid baseline plan source');
-  exactKeys(source.submittedProfile, PROFILE_KEYS);
+  exactKeys(source.submittedProfile, profileKeys(source.submittedProfile));
   fresh(source.profileNativeReadbackAt, now);
   fresh(source.completionProof?.observedAt, now);
   completionFor(source, source.completionProof, now);
@@ -151,8 +177,9 @@ export async function applySignupEnrichmentPlan({ db, plan, stamp, apply = false
   const jobRef = db.doc('studiomateMemoWriteJobs/' + p.memoId);
   const result = status => ({ status, sourceId: source.jobId, jobId: p.memoId, documentId: source.documentId,
     memberId: source.studiomateMemberId,
-    birthDateSource: normalizeSignupBirthDateV2(source.submittedProfile.birthDateRaw).status,
-    addressSource: normalizeSignupAddressV2(source.submittedProfile.addressRaw).status });
+    profileMode:source.submittedProfile.mode || 'verified_fields',
+    birthDateSource: source.submittedProfile.mode==='completion_only'?'review':normalizeSignupBirthDateV2(source.submittedProfile.birthDateRaw).status,
+    addressSource: source.submittedProfile.mode==='completion_only'?'review':normalizeSignupAddressV2(source.submittedProfile.addressRaw).status });
   return db.runTransaction(async tx => {
     validatePlan(copy, new Date());
     const [s, m, j] = await Promise.all([tx.get(sourceRef), tx.get(memoRef), tx.get(jobRef)]);

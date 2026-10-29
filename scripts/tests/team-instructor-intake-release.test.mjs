@@ -20,7 +20,7 @@ test('schedule display replaces exactly app, interface CSS and rules', () => {
   assert.throws(() => mealReleaseManifest(files.slice(1),replacements,'scheduleDisplay'));
 });
 test('Team release replaces only four CORE assets and preserves all other paths', () => {
-  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2']);
+  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification']);
   const expected = ['/instructor-lessons/index.html', '/assets/app.js', '/rules/index.html', '/assets/alimtalk-catalog.json'];
   assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS.core.files), expected);
   const replacements = Object.fromEntries(expected.map(f => [f, hash]));
@@ -37,6 +37,12 @@ test('signup profile release changes only the operating rules',()=>{
   const files=[{path:'/rules/index.html',hash:old},{path:'/assets/app.js',hash:old}];
   assert.equal(mealReleaseManifest(files,{'/rules/index.html':hash},'signupProfileV2')['/assets/app.js'],old);
   assert.throws(()=>mealReleaseManifest(files,{'/rules/index.html':hash,'/assets/app.js':hash},'signupProfileV2'));
+});
+test('profile completion separation release remains rules-only',()=>{
+  assert.deepEqual(MEAL_RELEASE_TARGETS.signupProfileV2Verification.files,{'/rules/index.html':'core/rules/index.html'});
+  const files=[{path:'/rules/index.html',hash:old},{path:'/assets/app.js',hash:old}];
+  assert.equal(mealReleaseManifest(files,{'/rules/index.html':hash},'signupProfileV2Verification')['/assets/app.js'],old);
+  assert.throws(()=>mealReleaseManifest(files,{'/rules/index.html':hash,'/assets/app.js':hash},'signupProfileV2Verification'));
 });
 test('Team fulfillment replaces only app and rules without changing other assets', () => {
   assert.deepEqual(MEAL_RELEASE_TARGETS.fulfillment.files, {'/assets/app.js':'core/assets/app.js','/rules/index.html':'core/rules/index.html'});

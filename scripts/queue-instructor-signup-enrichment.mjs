@@ -2,13 +2,19 @@ import assert from 'node:assert/strict';
 import { readFile,lstat,realpath,mkdir,open } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { buildSignupEnrichmentPlan,applySignupEnrichmentPlan } from './lib/instructor-signup-enrichment-queue.mjs';
+import { buildSignupEnrichmentPlan,applySignupEnrichmentPlan,assertSignupEnrichmentSubset } from './lib/instructor-signup-enrichment-queue.mjs';
 
 const args=process.argv.slice(2),apply=args.includes('--apply'),file=args.find(x=>x.startsWith('--sources='))?.slice(10),memberId=args.find(x=>x.startsWith('--member-id='))?.slice(12);
 assert(file&&args.every(x=>['--apply',`--sources=${file}`,`--member-id=${memberId}`].includes(x)));
 const dir='/Users/archivepilates/ArchiveIN/operations/instructor-signup-enrichment-20261030';
 assert((await realpath(file)).startsWith(dir+'/'));const stat=await lstat(file);assert(stat.isFile()&&(stat.mode&0o077)===0&&!stat.isSymbolicLink());
 const audit=JSON.parse(await readFile(file,'utf8'));assert(audit.ok===true&&audit.coverage?.complete===true&&Array.isArray(audit.rows));
+if(audit.source==='instructor_signup_verified_subset_v2'){
+  assert(typeof audit.parentAuditPath==='string'&&(await realpath(audit.parentAuditPath)).startsWith(dir+'/'));
+  const parentStat=await lstat(audit.parentAuditPath);assert(parentStat.isFile()&&!parentStat.isSymbolicLink()&&(parentStat.mode&0o077)===0);
+  const raw=await readFile(audit.parentAuditPath,'utf8');assert(createHash('sha256').update(raw).digest('hex')===audit.parentAuditSha256);
+  assertSignupEnrichmentSubset(audit,JSON.parse(raw));
+}else assert(audit.source==='instructor_signup_enrichment_native_sources_v2');
 const rows=audit.rows.filter(row=>row.status==='verified'&&(!memberId||row.member.memberId===memberId));
 assert(rows.length>0&&rows.length<=200&&new Set(rows.map(x=>x.member.memberId)).size===rows.length);
 const require=createRequire(import.meta.url),admin=require('../firebase/kangsain-functions/functions/node_modules/firebase-admin');
