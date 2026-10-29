@@ -5,6 +5,8 @@ import { requireManager, requireStaff } from "../security/authGuards";
 import type { StaffDoc } from "../types/models";
 import { nowTimestamp, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
+import { parseInstructorCourseInput, sameInstructorCourse, teamIntakeFields,
+  type InstructorCourseInput } from "./instructorLessonTeamIntake";
 import { INSTRUCTOR_CANCELLATIONS, assertInstructorCancellationIdle, cancellationBlocksRegistration,
   instructorCancellationId, parseInstructorCancellation } from "./instructorLessonCancellationPolicy";
 import {
@@ -13,6 +15,7 @@ import {
   INSTRUCTOR_LESSON_DEFAULT_CAPACITY,
   instructorLessonScheduleDateRange,
   isInstructorLessonSyntheticTest,
+  isInstructorLesson,
 } from "./instructorLessonSchedule";
 
 const REGISTRATIONS = "instructorLessonRegistrations";
@@ -55,7 +58,7 @@ type RegistrationStep = {
   updatedAt?: unknown;
 };
 
-type RegistrationInput = {
+type RegistrationInput = InstructorCourseInput & {
   memberName: string;
   memberPhone: string;
   lessonDate: string;
@@ -90,7 +93,37 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
         duplicate: true,
         registrationId,
         status: existingStatus || "queued",
+        ...(existing.intakeOnly === true ? { intakeOnly: true } : {}),
       };
+    }
+
+    if (input.courseKind === "team") {
+      if (jobSnapshot.exists) throw new AppError("INVALID_ARGUMENT", "기존 발급 작업을 먼저 확인하세요.");
+      const [dayRegistrations, dayLectures] = await Promise.all([
+        transaction.get(db.collection(REGISTRATIONS).where("studioId", "==", staff.studioId)
+          .where("lessonDate", "==", input.lessonDate)),
+        transaction.get(db.collection("lectures").where("studioId", "==", staff.studioId)
+          .where("date", "==", input.lessonDate)),
+      ]);
+      const conflictingIntake = dayRegistrations.docs.some(doc => {
+        const row = doc.data();
+        return !["cancelled", "canceled", "rejected"].includes(String(row.status || ""))
+          && !sameInstructorCourse(row, input);
+      });
+      if (conflictingIntake || dayLectures.docs.some(doc => isInstructorLesson(doc.data()))) {
+        throw new AppError("INVALID_ARGUMENT", "같은 날짜의 기존 강사레슨 일정·접수를 먼저 대조하세요.");
+      }
+      transaction.set(registrationRef, {
+        registrationId, idempotencyKey: registrationId, studioId: staff.studioId,
+        memberName: input.memberName, memberPhone: input.memberPhone,
+        phoneLast4: input.memberPhone.slice(-4), lessonDate: input.lessonDate,
+        paymentMethod: input.paymentMethod, ...teamIntakeFields(input),
+        operatorChecks: { paymentConfirmed: true, seatConfirmed: true },
+        source: { type: "archive_core_operator", sourceId: registrationId },
+        createdBy: { staffId: staff.staffId, name: staff.name, email: staff.email || null },
+        lastError: null, createdAt: now, updatedAt: now,
+      });
+      return { duplicate: false, registrationId, status: "action_required", intakeOnly: true };
     }
 
     const steps: Record<string, RegistrationStep> = {
@@ -381,7 +414,13 @@ export function parseRegistrationInput(data: unknown): RegistrationInput {
   if (value.paymentConfirmed !== true || value.seatConfirmed !== true) {
     throw new AppError("INVALID_ARGUMENT", "입금과 수강 접수를 확인한 뒤 등록을 확정하세요.");
   }
-  return { memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed: true, seatConfirmed: true };
+  const course = parseInstructorCourseInput(value);
+  if (course.courseKind === "team" && (new Date(`${lessonDate}T00:00:00Z`).toISOString().slice(0, 10) !== lessonDate
+    || lessonDate < todayKst())) {
+    throw new AppError("INVALID_ARGUMENT", "팀레슨 수강일은 오늘 이후의 유효한 날짜여야 합니다.");
+  }
+  return { memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed: true, seatConfirmed: true,
+    ...course };
 }
 
 function safeRegistration(id: string, data: Record<string, unknown>): Record<string, unknown> {
@@ -399,6 +438,9 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
     lessonDate: cleanText(data.lessonDate, 10),
     paymentMethod: cleanText(data.paymentMethod, 20),
     ticketName: cleanText(data.ticketName, 80),
+    ...(data.courseKind === "team" ? { courseKind: "team", intakeOnly: data.intakeOnly === true,
+      lessonTime: cleanText(data.lessonTime, 5), lessonTopic: cleanText(data.lessonTopic, 100),
+      paymentAmount: data.paymentAmount } : {}),
     mode: cleanText(data.mode, 40),
     status: cleanText(data.status, 40),
     nextAction: cleanText(data.nextAction, 160),
@@ -445,7 +487,7 @@ function assertSameRegistration(existing: Record<string, unknown>, input: Regist
     cleanText(existing.memberName, 40) !== input.memberName ||
     normalizePhone(existing.memberPhone) !== input.memberPhone ||
     cleanText(existing.lessonDate, 10) !== input.lessonDate ||
-    cleanText(existing.paymentMethod, 20) !== input.paymentMethod
+    cleanText(existing.paymentMethod, 20) !== input.paymentMethod || !sameInstructorCourse(existing, input)
   ) {
     throw new AppError("INVALID_ARGUMENT", "같은 중복키의 등록 정보가 다릅니다. 기존 건을 먼저 확인하세요.");
   }

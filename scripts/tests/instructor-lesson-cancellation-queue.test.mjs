@@ -41,7 +41,93 @@ const crypto = { createHash };
 const policy = evaluate("instructorLessonRegistration/instructorLessonCancellationPolicy", {
   "node:crypto": crypto, "../utils/errors": { AppError },
 });
-const schedule = evaluate("instructorLessonRegistration/instructorLessonSchedule", { "node:crypto": crypto });
+const teamIntake = evaluate("instructorLessonRegistration/instructorLessonTeamIntake", { "../utils/errors": { AppError } });
+const schedule = evaluate("instructorLessonRegistration/instructorLessonSchedule", {
+  "node:crypto": crypto, "./instructorLessonTeamIntake": teamIntake,
+});
+
+test("Team intake writes only one canonical registration, deduplicates concurrently and rejects changed payload", async () => {
+  const f = fixture();
+  f.store.delete(f.paths.registration);
+  f.store.delete(f.paths.job);
+  const data = { memberName: NAME, memberPhone: PHONE, lessonDate: TODAY, paymentMethod: "wiretransfer",
+    paymentConfirmed: true, seatConfirmed: true, courseKind: "team", lessonTime: "14:00",
+    lessonTopic: "ARCHIVE METHOD #1 Synthetic", paymentAmount: 80000 };
+  const create = (patch = {}) => f.runtime.operatorCreateInstructorLessonRegistrationHandler({
+    auth: f.request.auth, data: { ...data, ...patch },
+  });
+  const [first, second] = await Promise.all([create(), create()]);
+  assert.equal(first.intakeOnly, true);
+  assert.equal(second.duplicate, true);
+  assert.equal(f.writes.length, 1);
+  assert.equal(f.writes[0].path, f.paths.registration);
+  assert.equal(f.store.get(f.paths.registration).paymentAmount, 80000);
+  assert.equal(f.store.get(f.paths.registration).mode, "team_intake");
+  for (const patch of [{ paymentAmount: 70000 }, { lessonTime: "15:00" }, { lessonTopic: "other" },
+    { memberName: "Different" }, { paymentMethod: "card" }]) {
+    await assert.rejects(create(patch), error => error.code === "INVALID_ARGUMENT");
+  }
+  assert.equal(f.writes.length, 1);
+  assert.equal(f.store.has(f.paths.job), false);
+});
+
+test("Team intake rejects orphan issuance jobs, existing standard intake and cancelled registrations without writes", async () => {
+  for (const issue of ["job", "standard", "cancelled"]) {
+    const f = fixture();
+    if (issue === "job") f.store.delete(f.paths.registration);
+    if (issue === "cancelled") f.store.get(f.paths.registration).status = "cancelled";
+    const before = clone(f.store);
+    await assert.rejects(f.runtime.operatorCreateInstructorLessonRegistrationHandler({ auth: f.request.auth, data: {
+      memberName: NAME, memberPhone: PHONE, lessonDate: TODAY, paymentMethod: "wiretransfer",
+      paymentConfirmed: true, seatConfirmed: true, courseKind: "team", lessonTime: "14:00",
+      lessonTopic: "Synthetic", paymentAmount: 80000,
+    } }), error => error.code === "INVALID_ARGUMENT");
+    assert.deepEqual(f.store, before);
+    assert.equal(f.writes.length, 0);
+  }
+});
+
+test("legacy standard intake still creates its original issuance job and rejects missing approvals", async () => {
+  const f = fixture();
+  f.store.delete(f.paths.registration);
+  f.store.delete(f.paths.job);
+  const data = { memberName: NAME, memberPhone: PHONE, lessonDate: TODAY, paymentMethod: "card",
+    paymentConfirmed: true, seatConfirmed: true };
+  await assert.rejects(f.runtime.operatorCreateInstructorLessonRegistrationHandler({ auth: f.request.auth,
+    data: { ...data, paymentConfirmed: false } }));
+  assert.equal(f.writes.length, 0);
+  const result = await f.runtime.operatorCreateInstructorLessonRegistrationHandler({ auth: f.request.auth, data });
+  assert.equal(result.status, "queued");
+  assert.equal(result.intakeOnly, undefined);
+  assert.equal(f.writes.length, 2);
+  assert.equal(f.store.get(f.paths.job).ticketName, TICKET);
+});
+
+test("Team date/course collision, invalid dates and unauthenticated input cannot write", async () => {
+  const data = { memberName: NAME, memberPhone: PHONE, lessonDate: TODAY, paymentMethod: "wiretransfer",
+    paymentConfirmed: true, seatConfirmed: true, courseKind: "team", lessonTime: "14:00",
+    lessonTopic: "Synthetic", paymentAmount: 80000 };
+  for (const scenario of ["standard", "other_time", "lecture", "division", "date", "past", "auth"]) {
+    const f = fixture();
+    f.store.delete(f.paths.registration); f.store.delete(f.paths.job);
+    if (scenario === "standard" || scenario === "other_time") f.store.set("instructorLessonRegistrations/other", {
+      studioId: "5330", lessonDate: TODAY, status: "action_required",
+      ...(scenario === "other_time" ? { ...data, lessonTime: "15:00", intakeOnly: true } : {}),
+    });
+    if (scenario === "lecture") f.store.set("lectures/existing", { studioId: "5330", date: TODAY,
+      title: "강사레슨 (2T)", startAt: `${TODAY}T09:00:00+09:00` });
+    if (scenario === "division") f.store.set("lectures/existing", { studioId: "5330", date: TODAY,
+      divisionName: "강사레슨", startAt: `${TODAY}T09:00:00+09:00` });
+    const before = clone(f.store);
+    await assert.rejects(f.runtime.operatorCreateInstructorLessonRegistrationHandler({
+      auth: scenario === "auth" ? undefined : f.request.auth,
+      data: { ...data, ...(scenario === "date" ? { lessonDate: "2026-02-30" } : {}),
+        ...(scenario === "past" ? { lessonDate: "2026-10-15" } : {}) },
+    }));
+    assert.deepEqual(f.store, before);
+    assert.equal(f.writes.length, 0);
+  }
+});
 
 function memoryFirestore(seed) {
   const store = new Map(Object.entries(seed).map(([path, data]) => [path, clone(data)]));
@@ -171,6 +257,7 @@ function fixture() {
       },
     },
     "./instructorLessonCancellationPolicy": policy, "./instructorLessonSchedule": schedule,
+    "./instructorLessonTeamIntake": teamIntake,
   });
   const request = { auth: { uid: staff.uid }, data: { memberId: "101", lessonDate: TODAY,
     registrationId, confirmed: true, reason: "Operator cancellation" } };

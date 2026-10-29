@@ -7660,7 +7660,12 @@ function instructorLessonScheduleTimeLabel(startAt, endAt) {
 }
 
 function instructorLessonMethodTitle(value) {
-  const date = String(value || "").slice(0, 10);
+  const metadata = value && typeof value === "object"
+    && ["date", "lessonDate", "lessonTopic", "metadataSource"].some((key) => key in value) ? value : null;
+  if (metadata?.metadataSource === "conflict") return "";
+  const topic = typeof metadata?.lessonTopic === "string" ? metadata.lessonTopic.trim() : "";
+  if (topic) return topic;
+  const date = String(metadata ? metadata.date || metadata.lessonDate || "" : value || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
   return {
     "2026-11-21": "ARCHIVE METHOD #9 외부피드백2",
@@ -7679,10 +7684,15 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
     return;
   }
   const items = Array.isArray(schedule?.items) ? schedule.items : [];
-  const remainingSeats = items.reduce((sum, item) => sum + toNumber(item.remainingSeats), 0);
+  const unverifiedTeamCount = items.filter((item) => item.courseKind === "team" && item.capacitySource !== "lecture").length;
+  const remainingSeats = items.reduce((sum, item) => sum + (item.courseKind === "team" && item.capacitySource !== "lecture" ? 0 : toNumber(item.remainingSeats)), 0);
+  const remainingLabel = unverifiedTeamCount === items.length ? "정원 확인 전" : `잔여 ${remainingSeats.toLocaleString("ko-KR")}석`;
+  const unverifiedTeamLabel = unverifiedTeamCount && unverifiedTeamCount < items.length ? ` · 팀 ${unverifiedTeamCount}개 정원 확인 전` : "";
   setText(
     "instructorLessonScheduleSummary",
-    items.length ? `${items.length.toLocaleString("ko-KR")}개 일정 · 잔여 ${remainingSeats.toLocaleString("ko-KR")}석` : "예정 일정 없음",
+    items.length
+      ? `${items.length.toLocaleString("ko-KR")}개 일정 · ${remainingLabel}${unverifiedTeamLabel}`
+      : "예정 일정 없음",
   );
   if (!items.length) {
     container.innerHTML = '<div class="empty-state">예정된 강사레슨 접수 또는 예약이 없습니다.</div>';
@@ -7690,32 +7700,35 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
     return;
   }
   container.innerHTML = items.map((item) => {
+    const isTeam = item.courseKind === "team";
+    const metadataConflict = item.metadataSource === "conflict";
+    const unverifiedTeam = isTeam && item.capacitySource !== "lecture";
     const occupied = toNumber(item.occupiedCount);
     const capacity = Math.max(1, toNumber(item.capacity));
     const remaining = toNumber(item.remainingSeats);
     const overbooked = toNumber(item.overbookedCount);
     const percentage = Math.min(100, Math.round((occupied / capacity) * 100));
-    const tone = overbooked ? "danger" : remaining === 0 ? "good" : remaining <= 2 ? "warn" : "";
-    const seatLabel = overbooked ? `정원 초과 ${overbooked}명` : remaining === 0 ? "마감" : `잔여 ${remaining}석`;
-    const methodTitle = instructorLessonMethodTitle(item.date);
+    const tone = unverifiedTeam ? "warn" : overbooked ? "danger" : remaining === 0 ? "good" : remaining <= 2 ? "warn" : "";
+    const seatLabel = unverifiedTeam ? "정원 확인 전" : overbooked ? `정원 초과 ${overbooked}명` : remaining === 0 ? "마감" : `잔여 ${remaining}석`;
+    const methodTitle = instructorLessonMethodTitle(item);
     return `
       <article class="instructor-seat-item">
         <div class="instructor-seat-item-head">
           <div>
-            <strong>${escapeHtml(instructorLessonScheduleDateLabel(item.date))}</strong>
-            <span>${escapeHtml(instructorLessonScheduleTimeLabel(item.startAt, item.endAt))}</span>
+            <strong>${isTeam ? "팀레슨 · " : ""}${escapeHtml(instructorLessonScheduleDateLabel(item.date))}</strong>
+            <span>${metadataConflict ? "접수 시간 확인필요" : escapeHtml(instructorLessonScheduleTimeLabel(item.startAt, item.endAt))}${item.metadataSource === "registration" ? " · 접수 기준" : ""}</span>
           </div>
           <span class="pill ${tone}">${escapeHtml(seatLabel)}</span>
         </div>
-        ${methodTitle ? `<p class="instructor-seat-method">${escapeHtml(methodTitle)}</p>` : ""}
+        ${metadataConflict ? '<p class="instructor-seat-method">접수 정보 확인필요 · 팀레슨 시간·주제 불일치</p>' : methodTitle ? `<p class="instructor-seat-method">${escapeHtml(methodTitle)}</p>` : ""}
         <div class="instructor-seat-counts">
-          <span><small>예약·접수</small><strong>${occupied.toLocaleString("ko-KR")}</strong></span>
-          <span><small>정원</small><strong>${capacity.toLocaleString("ko-KR")}</strong></span>
-          <span><small>남은 좌석</small><strong>${remaining.toLocaleString("ko-KR")}</strong></span>
+          <span><small>${unverifiedTeam ? "접수 인원" : "예약·접수"}</small><strong>${occupied.toLocaleString("ko-KR")}</strong></span>
+          ${unverifiedTeam ? "" : `<span><small>정원</small><strong>${capacity.toLocaleString("ko-KR")}</strong></span>
+          <span><small>남은 좌석</small><strong>${remaining.toLocaleString("ko-KR")}</strong></span>`}
         </div>
-        <div class="instructor-seat-progress" role="img" aria-label="${occupied}명 접수, 정원 ${capacity}명">
+        ${unverifiedTeam ? "" : `<div class="instructor-seat-progress" role="img" aria-label="${occupied}명 접수, 정원 ${capacity}명">
           <span style="width:${percentage}%"></span>
-        </div>
+        </div>`}
         <small class="instructor-seat-source">${escapeHtml(instructorLessonScheduleSourceLabel(item.countSource, item.confirmedPendingRegistrationCount))}</small>
         <button type="button" class="secondary-action" data-instructor-schedule-date="${escapeHtml(item.date)}" aria-controls="instructorLessonScheduleDetail" aria-expanded="${selectedInstructorLessonDate === item.date}">수강 명단 보기</button>
       </article>
@@ -7734,19 +7747,21 @@ function renderInstructorLessonRoster(schedule) {
     container.innerHTML = '<div class="empty-state">명단 연결 확인이 필요합니다. 접수 건수와 수강권 보유 인원은 다를 수 있습니다.</div>';
     return;
   }
-  const methodTitle = instructorLessonMethodTitle(schedule.date);
-  container.innerHTML = `<h3>${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))} · ${roster.length}명</h3>`
-    + (methodTitle ? `<p class="instructor-roster-method">${escapeHtml(methodTitle)}</p>` : "") + roster.map((member, index) => {
+  const methodTitle = instructorLessonMethodTitle(schedule);
+  const metadataConflict = schedule.metadataSource === "conflict";
+  container.innerHTML = `<h3>${schedule.courseKind === "team" ? "팀레슨 · " : ""}${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))}${!metadataConflict && schedule.courseKind === "team" && schedule.lessonTime ? ` · ${escapeHtml(schedule.lessonTime)}` : ""} · ${roster.length}명</h3>`
+    + (metadataConflict ? '<p class="instructor-roster-method">접수 정보 확인필요 · 팀레슨 시간·주제 불일치</p>' : methodTitle ? `<p class="instructor-roster-method">${escapeHtml(methodTitle)}</p>` : "") + roster.map((member, index) => {
     const registration = registrations.find((item) => member.registrationId && item.registrationId === member.registrationId);
     const steps = registration?.steps || {};
-    const details = registration
+    const intakeOnly = registration?.courseKind === "team" || registration?.intakeOnly === true || schedule.courseKind === "team";
+    const details = intakeOnly ? "팀레슨 접수 · 수강권/가입서/안내 확인 대기" : registration
       ? [`가입서 ${instructorLessonStepStatusLabel(steps.eformsign?.status || "pending")}`, `안내 ${instructorLessonStepStatusLabel(steps.confirmation?.status || "pending")}`].join(" · ")
       : "가입서·안내 기록 연결 전";
     const name = member.memberId ? `<a href="${escapeHtml(coreHref(`members/detail/?id=${encodeURIComponent(member.memberId)}`))}">${escapeHtml(member.memberName)}</a>` : escapeHtml(member.memberName);
     const cancellation = member.cancellation || instructorLessonCancellationReceipts.get(instructorLessonCancellationKey(schedule.date, member));
     const cancellationLabel = instructorLessonCancellationStatusLabel(cancellation?.status);
     const statusId = `instructorLessonCancellationRowStatus-${index}`;
-    const action = canCancelInstructorLesson(schedule.date, member)
+    const action = !intakeOnly && canCancelInstructorLesson(schedule.date, member)
       ? `<button type="button" class="secondary-action instructor-lesson-cancel-button" data-instructor-cancel-key="${escapeHtml(member.memberKey)}" data-instructor-cancel-date="${escapeHtml(schedule.date)}" aria-label="${escapeHtml(member.memberName)} · ${escapeHtml(schedule.date)} 수강 취소" aria-describedby="${statusId}"${instructorLessonCancellationBusy ? " disabled" : ""}>수강 취소</button>`
       : "";
     return `<div class="status-row instructor-lesson-roster-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p><p id="${statusId}" class="instructor-lesson-cancellation-status" role="status" aria-label="${escapeHtml(member.memberName)} 취소 상태">${escapeHtml(cancellationLabel)}${cancellation?.lastError ? ` · ${escapeHtml(cancellation.lastError)}` : ""}</p></div><div class="instructor-lesson-roster-actions"><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource, schedule.confirmedPendingRegistrationCount))}</span>${action}</div></div>`;
@@ -8404,33 +8419,35 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
   container.innerHTML = visibleItems.map((item) => {
     const status = String(item.status || "");
     const steps = item.steps && typeof item.steps === "object" ? item.steps : {};
-    const methodTitle = instructorLessonMethodTitle(item.lessonDate);
+    const intakeOnly = item.courseKind === "team" || item.intakeOnly === true;
+    const methodTitle = instructorLessonMethodTitle(item);
     return `
       <article class="instructor-registration-item">
         <div class="instructor-registration-item-head">
           <div>
             <strong>${escapeHtml(item.memberName || "이름 확인 필요")}</strong>
-            <span>${escapeHtml(item.lessonDate || "수강일 확인 필요")} · ***-****-${escapeHtml(item.phoneLast4 || "----")}</span>
+            <span>${intakeOnly ? "팀레슨 · " : ""}${escapeHtml(item.lessonDate || "수강일 확인 필요")}${intakeOnly && item.lessonTime ? ` · ${escapeHtml(item.lessonTime)}` : ""} · ***-****-${escapeHtml(item.phoneLast4 || "----")}</span>
             ${methodTitle ? `<span class="instructor-registration-method">${escapeHtml(methodTitle)}</span>` : ""}
           </div>
           <span class="pill ${instructorLessonStatusTone(status)}">${escapeHtml(instructorLessonStatusLabel(status))}</span>
         </div>
         <div class="instructor-registration-meta">
-          <span>${escapeHtml(instructorLessonModeLabel(item.mode))}</span>
-          <span>${escapeHtml(item.ticketName || "강사레슨 (2T)")}</span>
+          <span>${intakeOnly ? "내부 접수" : escapeHtml(instructorLessonModeLabel(item.mode))}</span>
+          <span>${intakeOnly ? "수강권 확인 대기" : escapeHtml(item.ticketName || "강사레슨 (2T)")}</span>
           <span>${escapeHtml(instructorLessonPaymentLabel(item.paymentMethod))}</span>
+          ${intakeOnly && Number.isSafeInteger(item.paymentAmount) && item.paymentAmount > 0 ? `<span>${escapeHtml(item.paymentAmount.toLocaleString("ko-KR"))}원</span>` : ""}
           <span>최근 ${escapeHtml(compactDateTime(item.updatedAt))}</span>
         </div>
-        <ol class="instructor-registration-progress" aria-label="${escapeHtml(item.memberName || "강사")} 등록 진행 단계">
+        ${intakeOnly ? '<p class="instructor-registration-note">팀레슨 접수 완료 · 수강권/가입서/안내 확인 대기</p>' : `<ol class="instructor-registration-progress" aria-label="${escapeHtml(item.memberName || "강사")} 등록 진행 단계">
           ${INSTRUCTOR_LESSON_STEP_KEYS.map((key, index) => {
             const step = steps[key] || {};
             const stepStatus = String(step.status || "pending");
             return `<li class="${instructorLessonStepClass(stepStatus)}" title="${escapeHtml(step.detail || step.label || "")}"><span>${index + 1}</span><small>${escapeHtml(step.label || INSTRUCTOR_LESSON_STEP_LABELS[index])}</small><em>${escapeHtml(instructorLessonStepStatusLabel(stepStatus))}</em></li>`;
           }).join("")}
-        </ol>
+        </ol>`}
         <div class="instructor-registration-next ${INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status) ? "is-error" : ""}">
           <strong>${INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status) ? "확인할 내용" : "다음 단계"}</strong>
-          <span>${escapeHtml(item.lastError || item.nextAction || "없음")}</span>
+          <span>${escapeHtml(item.lastError || item.nextAction || (intakeOnly ? "수강권/가입서/안내 확인 대기" : "없음"))}</span>
         </div>
         ${instructorLessonConfirmationAction(item)}
       </article>
@@ -8439,6 +8456,7 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
 }
 
 function instructorLessonConfirmationAction(item) {
+  if (item?.courseKind === "team" || item?.intakeOnly === true) return "";
   if (INSTRUCTOR_LESSON_CANCELLATION_STATUSES.has(String(item?.status || ""))) return "";
   const steps = item?.steps && typeof item.steps === "object" ? item.steps : {};
   const memberReady = steps.member?.status === "verified";
@@ -8470,16 +8488,41 @@ function setInstructorLessonRegistrationStatus(message, tone = "") {
   element.className = `form-status ${tone}`.trim();
 }
 
+function handleInstructorLessonCourseKindChange() {
+  const isTeam = qs("instructorLessonCourseKind")?.value === "team";
+  const fields = qs("instructorLessonTeamFields");
+  if (fields) fields.hidden = !isTeam;
+  ["instructorLessonTime", "instructorLessonTopic", "instructorLessonPaymentAmount"].forEach((id) => {
+    const input = qs(id);
+    if (!input) return;
+    input.disabled = !isTeam;
+    input.required = isTeam;
+  });
+  const regularFlow = qs("instructorLessonRegularFlow");
+  const teamFlow = qs("instructorLessonTeamFlow");
+  if (regularFlow) regularFlow.hidden = isTeam;
+  if (teamFlow) teamFlow.hidden = !isTeam;
+  setText("instructorLessonFlowSummary", isTeam ? "내부 접수 · 수강권/가입서/안내 확인 대기" : "자동 안내·가입서, 직접 반배정·예약");
+  setText("instructorLessonRegistrationNote", isTeam
+    ? "팀레슨은 내부 접수만 완료됩니다. 수강권/가입서/안내 확인 대기이며 자동 발급·발송은 진행하지 않습니다."
+    : "수업 생성 전에도 접수할 수 있습니다. 수강권 발급 뒤 안내는 자동 발송되며, 반배정·예약은 직접 처리합니다.");
+  setText("instructorLessonRegistrationSubmit", isTeam ? "팀레슨 접수 확정" : "등록 확정");
+}
+
 async function handleInstructorLessonRegistrationSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const submit = qs("instructorLessonRegistrationSubmit");
+  if (submit?.disabled) return;
+  const courseKindInput = qs("instructorLessonCourseKind");
+  const isTeam = courseKindInput?.value === "team";
   const memberName = String(qs("instructorLessonMemberName")?.value || "").replace(/\s+/g, " ").trim();
   const memberPhone = normalizePhone(qs("instructorLessonMemberPhone")?.value || "");
   const lessonDate = String(qs("instructorLessonDate")?.value || "").trim();
   const paymentMethod = String(qs("instructorLessonPaymentMethod")?.value || "").trim();
   const paymentConfirmed = Boolean(qs("instructorLessonPaymentConfirmed")?.checked);
   const seatConfirmed = Boolean(qs("instructorLessonSeatConfirmed")?.checked);
+  const teamParams = {};
   if (!form.reportValidity()) return;
   if (!/^010\d{8}$/.test(memberPhone)) {
     setInstructorLessonRegistrationStatus("010 휴대폰번호 11자리를 확인하세요.", "danger");
@@ -8487,16 +8530,46 @@ async function handleInstructorLessonRegistrationSubmit(event) {
     return;
   }
 
+  if (isTeam) {
+    const lessonTime = String(qs("instructorLessonTime")?.value || "").trim();
+    const lessonTopic = String(qs("instructorLessonTopic")?.value || "").trim();
+    const amountText = String(qs("instructorLessonPaymentAmount")?.value || "").trim();
+    const paymentAmount = Number(amountText);
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(lessonTime)) {
+      setInstructorLessonRegistrationStatus("팀레슨 수업 시간을 HH:mm 형식으로 확인하세요.", "danger");
+      qs("instructorLessonTime")?.focus();
+      return;
+    }
+    if (!lessonTopic || lessonTopic.length > 100) {
+      setInstructorLessonRegistrationStatus("팀레슨 수업 주제를 1~100자로 입력하세요.", "danger");
+      qs("instructorLessonTopic")?.focus();
+      return;
+    }
+    if (!/^\d+$/.test(amountText) || !Number.isSafeInteger(paymentAmount) || paymentAmount <= 0 || paymentAmount > 10_000_000) {
+      setInstructorLessonRegistrationStatus("결제금액은 1~10,000,000원 사이의 정수로 입력하세요.", "danger");
+      qs("instructorLessonPaymentAmount")?.focus();
+      return;
+    }
+    Object.assign(teamParams, { courseKind: "team", lessonTime, lessonTopic, paymentAmount });
+  }
+
   if (submit) submit.disabled = true;
-  setInstructorLessonRegistrationStatus("등록 작업을 만들고 있습니다.");
+  if (courseKindInput) courseKindInput.disabled = true;
+  setInstructorLessonRegistrationStatus(isTeam ? "팀레슨 접수를 저장하고 있습니다." : "등록 작업을 만들고 있습니다.");
   try {
     const runtime = await initFirebase();
     const callable = runtime.httpsCallable(runtime.functionsClient, "operatorCreateInstructorLessonRegistration");
-    const result = await callable({ memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed, seatConfirmed });
+    const result = await callable({ memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed, seatConfirmed, ...teamParams });
     const duplicate = Boolean(result?.data?.duplicate);
+    const teamIntakeConfirmed = result?.data?.intakeOnly === true;
+    if (isTeam) instructorLessonRegistrationFilter = "review";
     setInstructorLessonRegistrationStatus(
-      duplicate ? "같은 강사·수강일의 기존 등록 건을 열었습니다." : "등록했습니다. StudioMate 자동 처리를 시작합니다.",
-      "good",
+      isTeam
+        ? teamIntakeConfirmed
+          ? `${duplicate ? "기존 팀레슨 접수 확인 · " : ""}팀레슨 접수 완료 · 수강권/가입서/안내 확인 대기`
+          : "팀레슨 접수 상태 확인필요 · 중복 등록하지 말고 등록 내역을 확인하세요."
+        : duplicate ? "같은 강사·수강일의 기존 등록 건을 열었습니다." : "등록했습니다. StudioMate 자동 처리를 시작합니다.",
+      isTeam ? "warn" : "good",
     );
     if (!duplicate) {
       qs("instructorLessonMemberName").value = "";
@@ -8517,13 +8590,16 @@ async function handleInstructorLessonRegistrationSubmit(event) {
         message: refreshError?.message || String(refreshError),
       });
       renderInstructorLessonRegistrationDashboard(null);
-      setInstructorLessonRegistrationStatus("등록은 완료됐지만 목록 새로고침에 실패했습니다. 중복 등록하지 말고 연결 상태를 확인하세요.", "warn");
+      setInstructorLessonRegistrationStatus(isTeam
+        ? `${teamIntakeConfirmed ? "팀레슨 접수 완료 · 수강권/가입서/안내 확인 대기" : "팀레슨 접수 상태 확인필요"} · 목록 새로고침에 실패했습니다. 중복 등록하지 말고 연결 상태를 확인하세요.`
+        : "등록은 완료됐지만 목록 새로고침에 실패했습니다. 중복 등록하지 말고 연결 상태를 확인하세요.", "warn");
     }
   } catch (error) {
     if (isPermissionDenied(error)) showLoginGate("강사레슨 등록 권한을 확인해 주세요.");
     setInstructorLessonRegistrationStatus(error?.message || "강사레슨 등록에 실패했습니다.", "danger");
   } finally {
     if (submit) submit.disabled = false;
+    if (courseKindInput) courseKindInput.disabled = false;
   }
 }
 
@@ -8540,7 +8616,8 @@ async function handleInstructorLessonConfirmation(event) {
   const registrationId = String(button.dataset.confirmInstructorLesson || "").trim();
   if (!registrationId) return;
   const registration = state.instructorLessonRegistrationDashboard?.items?.find((item) => item.registrationId === registrationId);
-  if (!registration || INSTRUCTOR_LESSON_CANCELLATION_STATUSES.has(String(registration.status || ""))) return;
+  if (!registration || registration.courseKind === "team" || registration.intakeOnly === true
+    || INSTRUCTOR_LESSON_CANCELLATION_STATUSES.has(String(registration.status || ""))) return;
   button.disabled = true;
   setInstructorLessonRegistrationStatus("수강권 발급 증거와 캘린더 설정을 확인하고 있습니다.");
   try {
@@ -9091,6 +9168,8 @@ qs("videoWatchRange")?.addEventListener("click", handleVideoWatchRangeClick);
 qs("videoWatchContentType")?.addEventListener("click", handleVideoWatchContentTypeClick);
 qs("videoWatchBuyerList")?.addEventListener("click", handleVideoWatchMemberClick);
 qs("instructorLessonRegistrationForm")?.addEventListener("submit", handleInstructorLessonRegistrationSubmit);
+qs("instructorLessonCourseKind")?.addEventListener("change", handleInstructorLessonCourseKindChange);
+if (qs("instructorLessonCourseKind")) handleInstructorLessonCourseKindChange();
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);
 qs("instructorLessonRegistrationList")?.addEventListener("click", handleInstructorLessonConfirmation);
 qs("instructorLessonScheduleDetail")?.addEventListener("click", handleInstructorLessonCancellationOpen);

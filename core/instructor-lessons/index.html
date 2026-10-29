@@ -76,9 +76,16 @@
         <section class="grid instructor-registration-layout">
           <details class="panel action-disclosure instructor-registration-panel">
             <summary><span><strong>수강 등록</strong><small>입금·접수 확인 후 등록</small></span></summary>
-            <p class="instructor-registration-note">수업 생성 전에도 접수할 수 있습니다. 수강권 발급 뒤 안내는 자동 발송되며, 반배정·예약은 직접 처리합니다.</p>
+            <p class="instructor-registration-note" id="instructorLessonRegistrationNote">수업 생성 전에도 접수할 수 있습니다. 수강권 발급 뒤 안내는 자동 발송되며, 반배정·예약은 직접 처리합니다.</p>
             <form id="instructorLessonRegistrationForm" class="instructor-registration-form">
               <div class="instructor-registration-fields">
+                <label>
+                  <span>수강 구분</span>
+                  <select id="instructorLessonCourseKind" name="courseKind" aria-controls="instructorLessonTeamFields">
+                    <option value="standard" selected>일반 (2T)</option>
+                    <option value="team">팀레슨</option>
+                  </select>
+                </label>
                 <label>
                   <span>강사 이름</span>
                   <input id="instructorLessonMemberName" name="memberName" type="text" autocomplete="name" maxlength="40" required />
@@ -101,6 +108,22 @@
                   </select>
                 </label>
               </div>
+              <div id="instructorLessonTeamFields" hidden>
+                <div class="instructor-registration-fields">
+                  <label>
+                    <span>수업 시간</span>
+                    <input id="instructorLessonTime" name="lessonTime" type="time" step="60" disabled />
+                  </label>
+                  <label>
+                    <span>수업 주제</span>
+                    <input id="instructorLessonTopic" name="lessonTopic" type="text" maxlength="100" disabled />
+                  </label>
+                  <label>
+                    <span>결제금액 (원)</span>
+                    <input id="instructorLessonPaymentAmount" name="paymentAmount" type="number" inputmode="numeric" min="1" max="10000000" step="1" value="80000" disabled />
+                  </label>
+                </div>
+              </div>
               <div class="instructor-registration-checks">
                 <label><input id="instructorLessonPaymentConfirmed" type="checkbox" required /> <span>입금 확인</span></label>
                 <label><input id="instructorLessonSeatConfirmed" type="checkbox" required /> <span>수강 접수 확인</span></label>
@@ -111,15 +134,18 @@
           </details>
 
           <details class="panel action-disclosure instructor-registration-flow">
-            <summary><span><strong>등록 후 처리 순서</strong><small>자동 안내·가입서, 직접 반배정·예약</small></span></summary>
-            <ol class="instructor-flow-steps">
-              <li><span>1</span><div><strong>회원 확인</strong><small>강사회원 조회 또는 신규 등록</small></div></li>
-              <li><span>2</span><div><strong>수강권</strong><small>강사레슨 (2T) 발급</small></div></li>
-              <li><span>3</span><div><strong>예약확정 안내</strong><small>수강권 발급 확인 후 자동 1회 발송</small></div></li>
-              <li><span>4</span><div><strong>가입서</strong><small>신규 강사회원에게 자동 발송</small></div></li>
-              <li><span>5</span><div><strong>완료 기록</strong><small>신규 가입서 메모까지 확인</small></div></li>
-              <li><span>6</span><div><strong>반배정·예약</strong><small>수업 생성 시 StudioMate에서 직접 처리</small></div></li>
-            </ol>
+            <summary><span><strong>등록 후 처리 순서</strong><small id="instructorLessonFlowSummary">자동 안내·가입서, 직접 반배정·예약</small></span></summary>
+            <div id="instructorLessonRegularFlow">
+              <ol class="instructor-flow-steps">
+                <li><span>1</span><div><strong>회원 확인</strong><small>강사회원 조회 또는 신규 등록</small></div></li>
+                <li><span>2</span><div><strong>수강권</strong><small>강사레슨 (2T) 발급</small></div></li>
+                <li><span>3</span><div><strong>예약확정 안내</strong><small>수강권 발급 확인 후 자동 1회 발송</small></div></li>
+                <li><span>4</span><div><strong>가입서</strong><small>신규 강사회원에게 자동 발송</small></div></li>
+                <li><span>5</span><div><strong>완료 기록</strong><small>신규 가입서 메모까지 확인</small></div></li>
+                <li><span>6</span><div><strong>반배정·예약</strong><small>수업 생성 시 StudioMate에서 직접 처리</small></div></li>
+              </ol>
+            </div>
+            <p id="instructorLessonTeamFlow" class="instructor-registration-note" hidden>팀레슨은 내부 접수만 완료됩니다. 수강권·가입서·안내는 확인 대기이며 StudioMate 작업이나 발송 대기열은 생성되지 않습니다.</p>
           </details>
         </section>
 

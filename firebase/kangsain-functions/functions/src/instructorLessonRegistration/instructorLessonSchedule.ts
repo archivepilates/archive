@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { teamScheduleMetadata } from "./instructorLessonTeamIntake";
 
 export const INSTRUCTOR_LESSON_DEFAULT_CAPACITY = 10;
 export const INSTRUCTOR_LESSON_SCHEDULE_WINDOW_DAYS = 120;
@@ -31,6 +32,10 @@ export type InstructorLessonScheduleSummary = {
   registrationCount: number;
   confirmedPendingRegistrationCount: number;
   roster?: InstructorLessonScheduleRosterRow[];
+  courseKind?: string;
+  lessonTime?: string;
+  lessonTopic?: string;
+  metadataSource?: string;
 };
 
 export function isInstructorLessonSyntheticTest(item: SourceRecord): boolean {
@@ -205,17 +210,27 @@ export function buildInstructorLessonScheduleSummaries(input: {
         issuedTicketVerified: effectiveTicketMembers.has(memberKey),
       } satisfies InstructorLessonScheduleRosterRow;
     });
-    const lectureCapacity = concurrentLectureCapacity(dateLectures);
+    let metadata = teamScheduleMetadata([...(registrationMembers.get(date)?.values() || [])].flat());
+    const expectedTeamStart = metadata.lessonTime ? Date.parse(`${date}T${metadata.lessonTime}:00+09:00`) : 0;
+    if (metadata.courseKind === "team" && dateLectures.some(row => !/team|팀/i.test(
+      [row.title, row.lessonTitle, row.lectureTitle, row.ticketName].filter(Boolean).join(" "))
+      || millis(row.startAt) !== expectedTeamStart)) {
+      metadata = { courseKind: "team", metadataSource: "conflict" };
+    }
+    const lectureCapacity = metadata.metadataSource === "conflict" ? 0 : concurrentLectureCapacity(dateLectures);
     const capacity = lectureCapacity || defaultCapacity;
     const timestamps = dateLectures
       .flatMap((lecture) => [millis(lecture.startAt), millis(lecture.endAt)])
       .filter(Boolean);
     const starts = dateLectures.map((lecture) => millis(lecture.startAt)).filter(Boolean);
     const ends = dateLectures.map((lecture) => millis(lecture.endAt)).filter(Boolean);
+    const intakeStart = !dateLectures.length && metadata.metadataSource === "registration"
+      ? new Date(`${date}T${metadata.lessonTime}:00+09:00`).toISOString() : null;
     return {
       date,
-      startAt: starts.length ? new Date(Math.min(...starts)).toISOString() : null,
-      endAt: ends.length
+      ...metadata,
+      startAt: metadata.metadataSource === "conflict" ? null : starts.length ? new Date(Math.min(...starts)).toISOString() : intakeStart,
+      endAt: metadata.metadataSource === "conflict" ? null : ends.length
         ? new Date(Math.max(...ends)).toISOString()
         : timestamps.length
           ? new Date(Math.max(...timestamps)).toISOString()
@@ -264,7 +279,7 @@ function activeBooking(booking: SourceRecord): boolean {
   );
 }
 
-function isInstructorLesson(item: SourceRecord): boolean {
+export function isInstructorLesson(item: SourceRecord): boolean {
   return /강사\s*레슨|archive\s*method|아카이브\s*메소드/i.test(
     [item.title, item.lectureTitle, item.lessonTitle, item.ticketName, item.divisionName].filter(Boolean).join(" "),
   );

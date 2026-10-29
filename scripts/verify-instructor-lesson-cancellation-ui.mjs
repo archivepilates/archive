@@ -9,7 +9,7 @@ const css = await fs.readFile(new URL("core/assets/styles.css", root), "utf8")
   + await fs.readFile(new URL("core/assets/interface.css", root), "utf8");
 const functions = new Map([...app.matchAll(/^(?:async )?function (\w+)\([^]*?^\}/gm)].map(m => [m[1], m[0]]));
 const names = ["qs", "setText", "escapeHtml", "instructorLessonStepStatusLabel", "instructorLessonScheduleSourceLabel",
-  "instructorLessonScheduleDateLabel", "renderInstructorLessonRoster", "instructorLessonCancellationKey",
+  "instructorLessonScheduleDateLabel", "instructorLessonMethodTitle", "renderInstructorLessonRoster", "instructorLessonCancellationKey",
   "instructorLessonCancellationStatusLabel", "canCancelInstructorLesson", "findInstructorLessonCancellationTarget",
   "setInstructorLessonCancellationMessage", "handleInstructorLessonCancellationOpen", "closeInstructorLessonCancellation",
   "handleInstructorLessonCancellationClose", "refreshInstructorLessonCancellationDashboard", "handleInstructorLessonCancellationSubmit",
