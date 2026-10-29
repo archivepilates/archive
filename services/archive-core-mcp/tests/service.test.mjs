@@ -78,6 +78,14 @@ test('modification requires exact operation and plan confirmation', async t => {
     confirmation: 'approved' }), { code: 'CONFIRMATION_REQUIRED' });
   assert.equal(f.calls(), 0);
 });
+test('quiet hours do not hide approved internal instructor intake from the roster', async t => {
+  const f = await fixture(t, Date.parse('2026-10-28T23:59:59Z'));
+  const p = await f.service.callTool('core_action_prepare', { operation: 'operatorCreateInstructorLessonRegistration',
+    params: { memberName: 'test', memberPhone: '01000000000', lessonDate: '2026-11-29', paymentMethod: 'card',
+      paymentConfirmed: true, seatConfirmed: true }, actionKey: 'night-intake-test-001' });
+  assert.equal((await f.execute(p)).result.requestCompleted, true);
+  assert.equal(f.calls(), 1);
+});
 test('meal review omits raw health and phone but returns source hash and public draft', () => {
   const result = mealReview({ request: { requestId: 'r', memberName: 'test', memberPhone: '01012345678', inbody: 'PRIVATE' },
     response: { sourceHash: 'hash', answers: { schemaVersion: 'meal-choice-v2', cookingAccess: '10분 이내 간단 조리', allergies: ['PRIVATE'], healthFlags: ['PRIVATE'] }, reviewReasons: ['allergy_reported'] },
