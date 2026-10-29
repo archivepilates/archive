@@ -215,6 +215,7 @@ try {
           attempts,
           claimToken: null,
           lastError: message,
+          ...(activeData.profileUpdate?.version===2?{failureStage:error?.failureStage || 'memo_read_or_write',failureCode:error?.failureCode || 'unknown'}:{}),
           updatedAt: admin.firestore.Timestamp.now(),
         };
       if (activeData.profileUpdate?.version === 2) {
@@ -578,18 +579,25 @@ async function writeMemo(page, job, authorization) {
   const studiomateMemberId = await resolveStudioMateMemberId(page, job);
   let profileStatus;
   if (job.profileUpdate) {
+    let profileStage='signed_source_read';
     try {
       const source = (await db.collection("eformsignInstructorMemberJobs").doc(String(job.profileSourceJobId || job.registrationId || "")).get()).data();
       const registration = job.registrationId ? (await db.collection("instructorLessonRegistrations").doc(String(job.registrationId)).get()).data() : null;
       if (job.profileUpdate.version === 2) {
+        profileStage='signed_source_validation';
         assertSignupProfileV2Source(job, source, registration);
+        profileStage='native_profile_read_or_save';
         profileStatus = await applySignupProfileV2(page, job, studiomateMemberId, config.baseUrl, { recordProgress: async progress => {
+          profileStage='profile_progress_claim';
           const ref=db.doc(`studiomateMemoWriteJobs/${job.jobId}`);
           await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(snap.get('claimToken')!==job.claimToken||snap.get('status')!=='processing')throw new Error('Signup profile writer lease changed');
+            profileStage='profile_progress_source';
             const sourceNow=(await tx.get(db.doc(`eformsignInstructorMemberJobs/${job.profileSourceJobId}`))).data();
             const registrationNow=job.registrationId?(await tx.get(db.doc(`instructorLessonRegistrations/${job.registrationId}`))).data():null;
             assertSignupProfileV2Source(job,sourceNow,registrationNow);
+            profileStage='profile_progress_write';
             tx.update(ref,{profileStatus:progress,updatedAt:admin.firestore.Timestamp.now()});});
+          profileStage='native_profile_read_or_save';
         } });
       } else {
         assertSignupProfileSource(job, source, registration);
@@ -600,6 +608,8 @@ async function writeMemo(page, job, authorization) {
         ? "StudioMate 기존 생년월일과 가입서가 다릅니다. 덮어쓰지 않고 확인필요"
         : "가입서 원본·회원 일치·회원정보 저장 검증 실패. 원본 확인 후 재처리하세요.");
       safeError.nonRetryable = true;
+      safeError.failureStage=profileStage;
+      safeError.failureCode=String(error?.code || error?.name || 'unknown').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40);
       throw safeError;
     }
   }
