@@ -38,7 +38,7 @@ export function publicResult(value, { review = false } = {}, depth = 0) {
         }
       } catch { return '[private URL]'; }
     }
-    return value.slice(0, 12000).replace(/(?:\+82[- ]?|0)1[016789][- ]?\d{3,4}[- ]?\d{4}/g,
+    return value.slice(0, 12000).replace(/(?<![A-Za-z0-9])(?:\+82[- ]?|0)1[016789][- ]?\d{3,4}[- ]?\d{4}(?![A-Za-z0-9])/g,
       phone => '***-****-' + phone.replace(/\D/g, '').slice(-4));
   }
   if (value?.toDate instanceof Function) return value.toDate().toISOString();

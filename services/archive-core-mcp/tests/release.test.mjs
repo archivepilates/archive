@@ -6,7 +6,7 @@ import { assertMcpRuleOnly } from '../../../scripts/release-core-mcp-rules.mjs';
 const root = new URL('../../../', import.meta.url);
 test('release changes only the MCP rules section with all other bytes preserved', async () => {
   const before = execFileSync('git', ['show', 'af066469:core/rules/index.html'], { cwd: root, encoding: 'utf8' });
-  const after = await readFile(new URL('core/rules/index.html', root), 'utf8');
+  const after = execFileSync('git', ['show', '4d036dc2:core/rules/index.html'], { cwd: root, encoding: 'utf8' });
   assert.doesNotThrow(() => assertMcpRuleOnly(before, after));
   assert.throws(() => assertMcpRuleOnly(before, after.replace('현재 운영 기준', 'changed')));
   assert.throws(() => assertMcpRuleOnly(before, before));

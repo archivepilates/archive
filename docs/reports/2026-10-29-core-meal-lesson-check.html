@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES OPS · MCP 식단 및 강사레슨 복구 검증</title>
+<style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;line-height:1.65;color:#202622;background:#f6f7f8;margin:0}main{max-width:980px;margin:auto;padding:36px 20px}h1{font-size:26px;line-height:1.4}h2{font-size:19px;margin-top:32px;border-top:1px solid #d8dfdc;padding-top:20px}p,li{max-width:75ch}table{width:100%;border-collapse:collapse;background:white}th,td{padding:12px;text-align:left;border-bottom:1px solid #d8dfdc;vertical-align:top;overflow-wrap:anywhere}th{background:#eaf1ed}.ok{color:#176344;font-weight:700}.pending{color:#825b09;font-weight:700}code{font-size:13px;overflow-wrap:anywhere}a{color:#135b91}@media(max-width:540px){main{padding:20px 14px}h1{font-size:23px}th,td{padding:8px;font-size:13px}}</style>
+<main><p>ARCHIVE PILATES OPS · 2026-10-29</p>
+<h1>CORE MCP 식단 조회·수정 테스트와 강사레슨 확인필요 2건 복구</h1>
+<h2>추천식단 MCP 검증</h2>
+<p class="ok">실제 연결 조회 → 비공개 초안 임시 수정 → 저장 확인 → 원상복원까지 통과했습니다.</p>
+<p>김기효 테스트 설문의 기존 응답과 식단은 보존했습니다. 기존 초안의 주말 전략에 검증용 문구를 잠시 추가한 후 원래 내용·리비전으로 복원했습니다. 변경 이력은 감사 목적으로 남겼습니다. 공개·알림톡·설문 재제출·AI 모델 API 호출은 하지 않았습니다.</p>
+<ul><li>대상: <code>meal-test-20261029-3minute-v2</code></li>
+<li>응답 해시: <code>8de007767363a2f2226aaf4bc59c16ce864214b74bd05a6bc63b539e6f92fb0a</code></li>
+<li>복원 리비전: <code>0b5e3e56ff088d3070b7a89d5212dc7cfc1d09c9b12285febcc0346c586aafe3</code></li>
+<li>직접 노출된 CORE MCP 도구와 등록된 stdio 연결을 각각 호출했습니다. 검증 스크립트는 기본 조회 전용이고 실제 수정은 명시적 apply 및 동일 작업 재실행 차단을 요구합니다.</li></ul>
+<h2>강사레슨 복구 결과</h2>
+<p>함다빈·이다희님의 11/29 수강권은 이미 발급됐으나 발급 응답에서 고유번호를 한 건으로 확인하지 못해 후속 절차가 보류됐습니다. 원래 HTTP 응답이 남아 있지 않아 구체적인 응답 포맷 원인은 확정하지 않았습니다. 임의의 ID 추출이나 재발급으로 처리하지 않았습니다.</p>
+<table><thead><tr><th>대상</th><th>수강권</th><th>예약확정 안내</th><th>가입서·메모</th></tr></thead><tbody>
+<tr><td>함다빈</td><td>기존 원본 1건 연결<br>중복 발급 없음</td><td class="ok">12:12:06 접수<br>COMPLETE / 4000</td><td class="pending" id="ham-stage">가입서 정기 발송 대기<br>작성 완료 메모는 서명 후</td></tr>
+<tr><td>이다희</td><td>기존 원본 1건 연결<br>중복 발급 없음</td><td class="ok">12:12:07 접수<br>COMPLETE / 4000</td><td class="pending" id="lee-stage">12:19:06 가입서 발송<br>회원 직접 작성 대기<br>완료 메모는 서명 후</td></tr>
+</tbody></table>
+<p>전달 완료는 솔라피 GET으로 12:13:54~55에 확인한 상태입니다. 제공자의 실제 완료시각으로 표현하지 않습니다. 메시지 ID·수신자·승인 템플릿·원장이 일치하며 발송 시도는 각각 1회였습니다.</p>
+<p>12:14:56 StudioMate 전체 수강권을 다시 조회해 같은 고유번호가 각각 정확히 한 건임을 확인했습니다. 12:14 정기 처리 보고서까지 두 등록 작업은 기존 수강권 재사용으로 끝났고 가입서 작업은 정상 대기열에 생성됐습니다. CORE 확인필요 2건은 0건, 두 건은 정상 서명대기 상태입니다.</p>
+<h2>검증·안전장치</h2>
+<ul><li>현재 홈페이지 결제 주문과 등록/작업의 회원·전화번호·수강일·금액·주문번호를 모두 연결했습니다.</li>
+<li>현재 원본 신원, 전체 수강권, 결제, 발급시각과 기존 실행 의도를 대조했습니다. 검증자료 유효시간은 각 최초 조회부터 120초입니다.</li>
+<li>이폼싸인 진행·완료 문서의 정확한 이름 검색이 정상 응답한 경우에만 문서 부재를 인정했습니다. 빈 화면이나 실패 응답은 부재로 간주하지 않습니다.</li>
+<li>새 회원의 가입서·서명 후 메모 단계와 기존 시도 횟수를 보존했습니다. 재수강자 방식으로 가입서를 생략하지 않았습니다.</li>
+<li>원장 버전·기존 후보/발송·가입서 작업을 트랜잭션에서 재확인하고 동일 복구의 감사키를 원자적으로 저장했습니다. 복구 감사자료는 대상 선택 원천이 아닙니다.</li>
+<li>응답 관찰은 구조·상태만 보관합니다. 응답 원문·전화번호·토큰은 진단에 기록하지 않습니다. 불명확한 발급은 계속 차단합니다.</li>
+<li>09:00~23:00 발송 창, 등록 처리 120초·가입서 600초 기존 주기 및 공용 브라우저 잠금을 유지했습니다. 새 스케줄러나 수동 발송을 추가하지 않았습니다.</li></ul>
+<h2>운영 반영·코드</h2>
+<p>기능 커밋 <code>905957d8</code>, CI 기준 이력 보완 <code>60692da8</code>를 main과 운영 실행기에 반영했습니다. CORE Hosting 버전 <code>bc7dba201c6a2044</code>에서 운영규칙 한 파일만 배포·해시 검증했습니다. 나머지 62개 파일과 기존 Hosting 설정은 보존했습니다. Functions·Firestore 규칙·DNS·IAM·공식 홈페이지는 변경하지 않았습니다.</p>
+<ul><li>강사레슨/아임웹/식단 회귀: 2,213건 통과</li><li>CORE MCP: 246건 통과</li><li>규칙·카탈로그: 320/390/768/1440px 6건 통과 및 화면 확인. 기존 다른 구역의 모바일 넘침은 별도 미수정입니다.</li><li>CORE Hosting 검증 및 변경 파일 범위 검증 통과</li>
+<li><a href="https://github.com/archivepilates/archive/actions/runs/40810628751">Functions Affected Check 성공</a></li>
+<li><a href="https://github.com/archivepilates/archive/actions/runs/40810764336">CORE MCP Check 성공</a>: 최초 실행의 얕은 체크아웃 오류를 수정한 후 통과했습니다.</li></ul>
+<p>12:18:47~12:19:06 기존 가입서 처리기는 이다희님 1건을 처리했고 발송 1·실패 0·확인필요 0입니다. 12:20:31 이폼싸인 진행 문서를 독립 검색해 동일 문서 ID·양식의 문서가 정확히 1건임을 확인했습니다. 함다빈님은 시도 0·정상 pending이며 기존 600초 주기·회당 1건 설정상 다음 순서입니다. 수동 실행이나 주기 변경은 하지 않았습니다.</p>
+<p id="remaining">남은 정상 절차: 함다빈님 가입서 정기 발송 → 두 분 직접 서명 → 가입서 완료 메모 저장·동기화. 가입서 전달 여부와 회원 서명 완료는 다르며 서명대기를 업무 완료로 표시하지 않습니다.</p>
+</main></html>

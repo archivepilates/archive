@@ -2,7 +2,7 @@
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES OPS · CORE MCP 검증</title>
 <style>*{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#222;font:16px/1.75 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px 72px}h1{font-size:28px}h2{font-size:20px;margin-top:32px}p,li{max-width:75ch}section{border-top:1px solid #d6d9df;padding-top:12px}code{overflow-wrap:anywhere;font-size:14px}a{color:#246957}table{width:100%;border-collapse:collapse}th,td{padding:10px;text-align:left;border-bottom:1px solid #d6d9df;vertical-align:top}.status{color:#246957;font-weight:650}@media(max-width:480px){main{padding:20px 16px}h1{font-size:24px}th,td{padding:8px 4px}}</style></head><body><main>
 <p>ARCHIVE PILATES OPS · 2026-10-29</p><h1>CORE MCP 연결·조회·수정 검증</h1>
-<p class="status">구현 및 실제 조회·격리 수정 테스트 통과. 운영 등록·릴리스 결과는 아래 최종 확인에 기록합니다.</p>
+<p class="status">운영 연결 등록·실제 조회·격리 수정·운영규칙 배포 검증 완료. 현재 열린 채팅의 도구 목록 갱신은 별도입니다.</p>
 <section><h2>지원 범위</h2><p>로컬 stdio 서버 <code>archive-core-mcp</code>에 MCP 도구 8개, 고정 업무 45개(조회 18·수정 27), canonical 원장 조회 영역 46개를 구현했습니다. 기존 실시간 StudioMate 조회 전용 <code>archivepilates-mcp</code>는 변경하지 않습니다.</p>
 <p>추천식단 조회·초안 저장·승인 공개, 주차, 에어컨, 강사레슨 접수·취소 요청, 평가, SNS 초안·발행 승인, 기존 출석·메모 업무, 재등록 상담 상태와 본인 시퀀스를 지원합니다. 실제 업무 지원과 이번 실행 검증 범위는 다릅니다. 모든 운영 발송·기기 제어·환불·취소를 실실행 시험한 것은 아닙니다.</p></section>
 <section><h2>실제 검증</h2><table><tbody>
@@ -10,7 +10,7 @@
 <tr><th>기존 식단 보존</th><td>김기효 기존 테스트 초안의 동일 본문 저장이 <code>reused=true</code>로 반환됐습니다. 설문·요청·초안·공개 원장, 초안 이력과 관련 알림톡 원장의 해시를 전후 대조해 변경 없음으로 확인했습니다.</td></tr>
 <tr><th>실제 수정</th><td>운영자 본인 전용 테스트 시퀀스 생성(revision 1) → 제목 수정(2) → 동일 실행 중복 차단 → 삭제 표시(3)를 실제 저장 후 독립 재조회했습니다. 본문은 비우고 재생성 방지 tombstone만 남겼습니다.</td></tr>
 <tr><th>발송·공개</th><td>회원 발송 0건, 식단 공개 없음, 기존 설문 재제출 없음, 실제 기기 제어·예약·수강권·결제 변경 없음.</td></tr>
-<tr><th>회귀·의존성</th><td>가짜 데이터 보안·서비스·원본 연결·직접 어댑터·릴리스 테스트 244건과 callable 전체 분류·반응형 검사 6건 통과. npm audit 취약점 0건. 기존 CORE Hosting 검증 통과. 영향 Functions 0개.</td></tr>
+<tr><th>회귀·의존성</th><td>가짜 데이터 보안·서비스·원본 연결·직접 어댑터·릴리스 테스트 246건과 callable 전체 분류·반응형 검사 6건 통과. npm audit 취약점 0건. 기존 CORE Hosting 검증 통과. 영향 Functions 0개. CI에서 발견한 해시의 전화번호 오인 가림은 수정하고 결정적 회귀 검사를 추가했습니다.</td></tr>
 <tr><th>반응형</th><td>새 운영규칙 구간을 320·390·768·1440px에서 실제 CSS로 렌더링해 가림·겹침·구간 넘침 없음 확인. 별도 기존 구간의 모바일 가로 넘침은 이번 변경 범위 밖으로 보존했습니다. 인증·외부 통신 없는 격리 검사이며 전체 로그인 화면 검증을 대신하지 않습니다.</td></tr>
 </tbody></table></section>
 <section><h2>안전장치</h2><ul>
@@ -22,6 +22,9 @@
 </ul></section>
 <section><h2>명시적 제한</h2><p>임의 DB 필드 편집·쉘·비밀번호·임시코드·IAM·시크릿 수정은 지원하지 않습니다. StudioMate API 동기화와 스케줄·트리거·일반 HTTP 업무를 callable로 위장하지 않습니다. 시퀀스는 정확한 본인 소유 기록만 수정하며, 이미지 추가·교체·삭제는 기존 CORE 편집기를 사용합니다. 이미지가 있는 노트의 기존 참조를 보존하고 삭제 표시 후 첨부를 강제 삭제하지 않습니다.</p>
 <p>MCP는 데이터·기존 업무 처리의 직접 연결입니다. 웹사이트의 CSS·메뉴·프로그램 코드 수정은 기존 Git·검증·배포 절차로 진행합니다. 새 메일이나 설문이 이 채팅을 자동 실행하도록 하는 연결은 이번 범위가 아닙니다.</p></section>
-<section id="release"><h2>최종 릴리스 확인</h2><p>운영 등록 및 Hosting 배포·GitHub 반영 확인 후 갱신합니다. 소스: <code>codex/mini/core-ops-mcp-20261029</code>. 실제 실행과 Hosting 증거는 로컬 비공개 <code>~/ArchiveIN/operations/core-mcp/</code>에 보존합니다. 비밀·회원 원문은 Git에 포함하지 않습니다.</p></section>
+<section id="release"><h2>최종 릴리스 확인</h2><p>구현 <code>4d036dc2</code>, 야간 내부 접수 보존 <code>7d69ef6e</code>, 해시 가림 수정 <code>25de1dd4</code>를 main에 반영하고 맥미니 runtime을 일치시켰습니다. 등록된 Codex 명령을 실제로 실행해 stdio 8개 도구와 식단·단건 원장·조건별 목록 조회를 확인했습니다. 실행 도구만 <code>approval_mode=prompt</code>로 별도 확인을 유지합니다. 설치된 CLI는 <code>writes</code> 열거값을 지원하지 않아 읽기 기본 auto·실행 prompt로 등록하고 CLI 설정 파싱을 검증했습니다. 기존 조회 전용 MCP의 명령·도구 9개·읽기 전용 설정을 별도 대조했습니다.</p>
+<p>CORE Hosting은 <code>a80f4076b5873e9b</code>, 2026-10-29 11:42 KST에 실제 확인했습니다. 기존 63개 파일 중 <code>/rules/index.html</code> 1개만 변경하고 나머지 62개 파일과 Hosting 설정을 동일하게 보존했습니다. Functions·Firestore 규칙·DNS·공식 홈페이지는 변경하지 않았습니다. 실제 실행과 Hosting 증거는 로컬 비공개 <code>~/ArchiveIN/operations/core-mcp/</code>에 보존합니다. 비밀·회원 원문은 Git에 포함하지 않습니다.</p>
+<p>현재 진행 중인 채팅에는 새 MCP 도구가 아직 자동 노출되지 않았습니다. 앱 설정 화면의 도구 조작이 제한돼 강제 재시작이나 우회는 하지 않았습니다. Codex에서 MCP 연결을 새로고침하거나 새 대화에서 연결을 불러오면 사용할 수 있습니다. 이는 등록 명령의 실제 연결·조회 검증과 구분합니다.</p>
+<p>CI: <a href="https://github.com/archivepilates/archive/actions/runs/40808092516">수정본 CORE MCP Check 통과</a>(246건·반응형·의존성 검사). 기존 Functions 영향 검사 <a href="https://github.com/archivepilates/archive/actions/runs/40807550512">통과 기록</a>. 배포 소스와 기능 worktree는 clean이며 runtime에는 기존 미추적 <code>scripts/__pycache__/</code>만 보존했습니다. 테스트용 브라우저와 stdio 클라이언트는 모두 종료했습니다.</p></section>
 <section><h2>공식 연결 문서</h2><p><a href="https://learn.chatgpt.com/docs/extend/mcp">OpenAI 공식 MCP 연결 안내</a> · <a href="https://learn.chatgpt.com/docs/config-file/config-reference">MCP 도구별 승인 설정</a>. 설치된 명령으로 stdio handshake를 별도로 확인하며, 현재 채팅의 도구 목록이 이전 상태면 MCP 연결 새로고침이 필요할 수 있습니다.</p></section>
 </main></body></html>

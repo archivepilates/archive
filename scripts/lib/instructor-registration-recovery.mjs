@@ -1,6 +1,7 @@
-import { deriveInstructorLessonRegistrationState, normalizeInstructorLessonPhone, isInstructorMemberGrade } from './instructor-lesson-registration-contract.mjs';
+import { deriveInstructorLessonRegistrationState, normalizeInstructorLessonPhone, isInstructorMemberGrade, INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID } from './instructor-lesson-registration-contract.mjs';
 const millis = v => v?.toMillis ? v.toMillis() : v?._seconds ? v._seconds * 1000 : Date.parse(v || '');
 const legacyFamilyError = '다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단';
+const missingTicketReceiptError = '수강권 발급 응답의 고유번호를 한 건으로 확인하지 못했습니다. 재발급하지 않습니다.';
 
 export function isKnownUnsentInstructorEformFailure(message) {
   if (message === legacyFamilyError) return true;
@@ -51,6 +52,50 @@ export function planInstructorRegistrationRecovery({ action, registration: r, jo
       || receipt.lessonDate !== r.lessonDate || receipt.orderNo !== r.externalOrder.orderNo
       || receipt.paidAmount !== r.externalOrder.paidAmount)
       throw new Error('보존된 발급 접수 증거가 원본과 달라 복구 중단');
+  }
+  if (action === 'bind_existing_new_member_ticket') {
+    const attempts = Number(job.attempts ?? 0);
+    const maxAttempts = Number(job.maxAttempts ?? 0);
+    if (r.mode !== 'new_member' || job.mode !== 'new_member'
+      || r.evidence.memberCreatedByRegistration !== true || job.memberCreatedByRegistration !== true
+      || r.evidence.newMemberSimulation || job.newMemberSimulation
+      || job.status !== 'review_required' || r.steps.ticket?.status !== 'review_required'
+      || job.currentStep !== 'ticket' || job.effectType !== 'ticket_issue' || job.externalEffectStarted !== true
+      || job.lastError !== missingTicketReceiptError
+      || String(job.studiomateMemberId || '') !== ticket.memberId
+      || job.studioId !== r.studioId || job.lessonDate !== r.lessonDate
+      || !Number.isFinite(millis(job.effectStartedAt)) || !Number.isFinite(millis(ticket.issuedAt))
+      || Math.abs(millis(ticket.issuedAt) - millis(job.effectStartedAt)) > 120000
+      || (job.ticketId && String(job.ticketId) !== ticket.userTicketId)
+      || !['pending', 'queued', 'waiting_external'].includes(steps.eformsign?.status)
+      || !['pending', 'queued', 'waiting_external'].includes(steps.memo?.status)
+      || r.evidence.eformsignDocumentId
+      || ['sendStartedAt', 'sendClickedAt', 'sentAt', 'documentId', 'documentUrl', 'completedAt', 'providerMessageId']
+        .some(k => Boolean(job[k]) || Boolean(steps.eformsign?.[k]))
+      || native.eformAbsence?.complete !== true || native.eformAbsence.account !== 'archivepilates@gmail.com'
+      || native.eformAbsence.registrationId !== r.registrationId || native.eformAbsence.memberName !== r.memberName
+      || native.eformAbsence.templateId !== INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID
+      || native.eformAbsence.progressCount !== 0 || native.eformAbsence.completedCount !== 0
+      || !Number.isFinite(millis(native.eformAbsence.checkedAt)) || now - millis(native.eformAbsence.checkedAt) > 120000
+      || millis(native.eformAbsence.checkedAt) > now.getTime() + 60000
+      || native.confirmationAbsent !== true || steps.confirmation?.status !== 'pending'
+      || ['confirmationCandidateId', 'confirmationSolapiMessageId'].some(k => Object.hasOwn(r.evidence, k))
+      || steps.confirmation.sentAt || steps.confirmation.evidence?.candidateId || steps.confirmation.evidence?.messageId
+      || !Number.isSafeInteger(attempts) || attempts < 0 || attempts >= Number.MAX_SAFE_INTEGER
+      || !Number.isSafeInteger(maxAttempts) || maxAttempts < 0)
+      throw new Error('신규 강사회원 발급 접수 오류와 기존 원본 수강권의 한정 연결을 증명하지 못함');
+    // Bind only; the explicit recovery runner owns audit and any later follow-up execution.
+    steps.ticket = { status: 'verified', label: '강사레슨 (2T) 발급', detail: '기존 발급 원본 고유번호·결제·수강일 독립 검증 완료 · 신규 발급 없음' };
+    return { jobPatch: { status: 'pending', currentStep: 'followup', ticketId: ticket.userTicketId,
+      maxAttempts: Math.max(maxAttempts, attempts + 1),
+      externalEffectStarted: false, effectType: null, effectStartedAt: null, claimToken: null,
+      claimedAt: null, claimedBy: null, leaseExpiresAt: null, nextRunAt: null, nextSourceCheckAt: null, lastError: null,
+      ticketIssueReceipt: { version: 1, status: 'verified_by_operator_readback', ticketId: ticket.userTicketId,
+        memberId: ticket.memberId, lessonDate: r.lessonDate, paidAmount: r.externalOrder.paidAmount,
+        orderNo: r.externalOrder.orderNo, checkedAt: native.checkedAt } },
+      registrationPatch: { ...deriveInstructorLessonRegistrationState({ mode: r.mode, steps }), steps,
+        lastError: null, 'evidence.ticketId': ticket.userTicketId,
+        'evidence.ticketPaymentAmount': ticket.payment.paidAmount } };
   }
   if (action === 'bind_existing_ticket') {
     if (job.status !== 'review_required' || job.currentStep !== 'ticket' || job.effectType !== 'ticket_issue'
