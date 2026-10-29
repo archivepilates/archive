@@ -28,3 +28,16 @@
   canonical registration's d1Followup, explicitly preparation_required and
   automaticDispatchEnabled=false. This is message-content approval, NOT evidence
   that D-1 material, scheduling, approval or dispatch has completed.
+- Outcome at 20:50 KST: six unique Team tickets, five native eformsign requests
+  awaiting member completion, one reused completed signup plus existing synced
+  memo. Six single-attempt confirmations accepted 20:49:27-20:50:12 KST, then
+  independently verified COMPLETE/4000 at 20:50:32-34 KST. No provider completion
+  timestamp is inferred from the GET observation time. No message replay.
+- App five-function deploy and CORE stage UI: 5869a67e. Member Hosting calendar
+  adbda6d9ba677c93 (75 previous files preserved, 77 total). CORE initial update
+  a946c15bd36f06c7 (63 files, only app/rules replaced).
+- CI 40866929194 found a calendar-validator assumption, not a service/send
+  failure. Scoped fix 182d2531 passed CI 40867917164; original CORE MCP check
+  40866929164 passed. No new Functions build is needed for the script-only fix.
+- Final CORE operating-rule readback and final Git/CI evidence are recorded in
+  the HTML report and final rules-only Hosting release metadata.

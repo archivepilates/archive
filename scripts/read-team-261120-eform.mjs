@@ -240,14 +240,16 @@ async function inspectProgress(page, registration, row, proof) {
   // Repeat the exact search before selecting its row; never open a send or edit control.
   const refresh = { mode: 'ip', complete: false };
   proof.refresh = refresh;
-  await searchDocuments(page, registration, 'ip', refresh);
-  location = { stage: 'progress_status', registrationId: registration.registrationId, documentId: row.documentId };
-  const current = refresh.matches.find(item => item.documentId === row.documentId && item.documentName === row.documentName);
-  assert(current, 'Progress document changed');
-  const element = page.locator('#RWDtable tr').filter({ hasText: row.documentName });
-  assert.equal(await element.count(), 1);
-  assert.equal(await element.getAttribute('id'), row.documentId);
   await captureStatus(page, row, async () => {
+    await searchDocuments(page, registration, 'ip', refresh);
+    location = { stage: 'progress_status', registrationId: registration.registrationId, documentId: row.documentId };
+    const current = refresh.matches.find(item => item.documentId === row.documentId && item.documentName === row.documentName);
+    assert(current, 'Progress document changed');
+    const element = page.locator('#RWDtable tr').filter({ hasText: row.documentName });
+    assert.equal(await element.count(), 1);
+    assert.equal(await element.getAttribute('id'), row.documentId);
+    // Fresh navigation can fetch the exact first row before search completion.
+    if (proof.statusResponse && await element.getAttribute('aria-selected') === 'true') return;
     const waiting = page.waitForResponse(response => {
       const url = new URL(response.url());
       return url.origin === 'https://kr-service.eformsign.com' && url.pathname === `${listPath}/${row.documentId}/status`
