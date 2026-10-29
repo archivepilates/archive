@@ -10,7 +10,7 @@ const functions = new Map([...source.matchAll(/^(?:async )?function (\w+)\([^]*?
 const names = [
   "qs", "setText", "escapeHtml", "instructorLessonStatusLabel", "instructorLessonStatusTone",
   "instructorLessonStepStatusLabel", "instructorLessonRegistrationMatchesFilter",
-  "instructorLessonScheduleSourceLabel", "instructorLessonScheduleDateLabel", "renderInstructorLessonRoster",
+  "instructorLessonScheduleSourceLabel", "instructorLessonScheduleDateLabel", "instructorLessonMethodTitle", "renderInstructorLessonRoster",
   "instructorLessonCancellationKey", "instructorLessonCancellationStatusLabel", "canCancelInstructorLesson",
   "findInstructorLessonCancellationTarget", "setInstructorLessonCancellationMessage",
   "handleInstructorLessonCancellationOpen", "closeInstructorLessonCancellation", "handleInstructorLessonCancellationClose",

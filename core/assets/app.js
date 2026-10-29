@@ -7659,6 +7659,16 @@ function instructorLessonScheduleTimeLabel(startAt, endAt) {
     : formatter.format(start);
 }
 
+function instructorLessonMethodTitle(value) {
+  const date = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  return {
+    "2026-11-21": "ARCHIVE METHOD #9 외부피드백2",
+    "2026-11-28": "ARCHIVE METHOD #10 전신 통합 움직임",
+    "2026-11-29": "ARCHIVE METHOD #10 전신 통합 움직임",
+  }[date] || "";
+}
+
 function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistrationDashboard?.schedule) {
   const container = qs("instructorLessonScheduleList");
   if (!container) return;
@@ -7687,6 +7697,7 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
     const percentage = Math.min(100, Math.round((occupied / capacity) * 100));
     const tone = overbooked ? "danger" : remaining === 0 ? "good" : remaining <= 2 ? "warn" : "";
     const seatLabel = overbooked ? `정원 초과 ${overbooked}명` : remaining === 0 ? "마감" : `잔여 ${remaining}석`;
+    const methodTitle = instructorLessonMethodTitle(item.date);
     return `
       <article class="instructor-seat-item">
         <div class="instructor-seat-item-head">
@@ -7696,6 +7707,7 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
           </div>
           <span class="pill ${tone}">${escapeHtml(seatLabel)}</span>
         </div>
+        ${methodTitle ? `<p class="instructor-seat-method">${escapeHtml(methodTitle)}</p>` : ""}
         <div class="instructor-seat-counts">
           <span><small>예약·접수</small><strong>${occupied.toLocaleString("ko-KR")}</strong></span>
           <span><small>정원</small><strong>${capacity.toLocaleString("ko-KR")}</strong></span>
@@ -7722,7 +7734,9 @@ function renderInstructorLessonRoster(schedule) {
     container.innerHTML = '<div class="empty-state">명단 연결 확인이 필요합니다. 접수 건수와 수강권 보유 인원은 다를 수 있습니다.</div>';
     return;
   }
-  container.innerHTML = `<h3>${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))} · ${roster.length}명</h3>` + roster.map((member, index) => {
+  const methodTitle = instructorLessonMethodTitle(schedule.date);
+  container.innerHTML = `<h3>${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))} · ${roster.length}명</h3>`
+    + (methodTitle ? `<p class="instructor-roster-method">${escapeHtml(methodTitle)}</p>` : "") + roster.map((member, index) => {
     const registration = registrations.find((item) => member.registrationId && item.registrationId === member.registrationId);
     const steps = registration?.steps || {};
     const details = registration
@@ -8390,12 +8404,14 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
   container.innerHTML = visibleItems.map((item) => {
     const status = String(item.status || "");
     const steps = item.steps && typeof item.steps === "object" ? item.steps : {};
+    const methodTitle = instructorLessonMethodTitle(item.lessonDate);
     return `
       <article class="instructor-registration-item">
         <div class="instructor-registration-item-head">
           <div>
             <strong>${escapeHtml(item.memberName || "이름 확인 필요")}</strong>
             <span>${escapeHtml(item.lessonDate || "수강일 확인 필요")} · ***-****-${escapeHtml(item.phoneLast4 || "----")}</span>
+            ${methodTitle ? `<span class="instructor-registration-method">${escapeHtml(methodTitle)}</span>` : ""}
           </div>
           <span class="pill ${instructorLessonStatusTone(status)}">${escapeHtml(instructorLessonStatusLabel(status))}</span>
         </div>
