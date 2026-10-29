@@ -7681,6 +7681,19 @@ function instructorLessonMethodTitle(value) {
   }[date] || "";
 }
 
+function instructorLessonSchedulePresentation(item = {}) {
+  const date = String(item.date || item.lessonDate || "").slice(0, 10);
+  const isTeam = item.courseKind === "team" || ["2026-11-20", "2026-11-21"].includes(date);
+  let timeLabel = instructorLessonScheduleTimeLabel(item.startAt, item.endAt);
+  // Approved display metadata does not change source classification, capacity or actions.
+  if (date === "2026-11-20" && item.metadataSource !== "conflict") {
+    const start = item.startAt ? instructorLessonScheduleTimeLabel(item.startAt) : item.lessonTime || "14:00";
+    const end = item.endAt ? instructorLessonScheduleTimeLabel(item.endAt) : "15:50";
+    timeLabel = start === "14:00" && end === "15:50" ? "14:00~15:50" : "시간 확인 필요";
+  }
+  return { isTeam, timeLabel };
+}
+
 function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistrationDashboard?.schedule) {
   const container = qs("instructorLessonScheduleList");
   if (!container) return;
@@ -7707,9 +7720,10 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
     return;
   }
   container.innerHTML = items.map((item) => {
-    const isTeam = item.courseKind === "team";
+    const presentation = instructorLessonSchedulePresentation(item);
+    const isTeam = presentation.isTeam;
     const metadataConflict = item.metadataSource === "conflict";
-    const unverifiedTeam = isTeam && item.capacitySource !== "lecture";
+    const unverifiedTeam = item.courseKind === "team" && item.capacitySource !== "lecture";
     const occupied = toNumber(item.occupiedCount);
     const capacity = Math.max(1, toNumber(item.capacity));
     const remaining = toNumber(item.remainingSeats);
@@ -7719,11 +7733,11 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
     const seatLabel = unverifiedTeam ? "정원 확인 전" : overbooked ? `정원 초과 ${overbooked}명` : remaining === 0 ? "마감" : `잔여 ${remaining}석`;
     const methodTitle = instructorLessonMethodTitle(item);
     return `
-      <article class="instructor-seat-item">
+      <article class="instructor-seat-item ${isTeam ? "is-team" : "is-standard"}">
         <div class="instructor-seat-item-head">
           <div>
-            <strong>${isTeam ? "팀레슨 · " : ""}${escapeHtml(instructorLessonScheduleDateLabel(item.date))}</strong>
-            <span>${metadataConflict ? "접수 시간 확인필요" : escapeHtml(instructorLessonScheduleTimeLabel(item.startAt, item.endAt))}${item.metadataSource === "registration" ? " · 접수 기준" : ""}</span>
+            <strong>${isTeam ? "팀레슨 · " : "정규레슨 · "}${escapeHtml(instructorLessonScheduleDateLabel(item.date))}</strong>
+            <span>${metadataConflict ? "접수 시간 확인필요" : escapeHtml(presentation.timeLabel)}${item.metadataSource === "registration" ? " · 접수 기준" : ""}</span>
           </div>
           <span class="pill ${tone}">${escapeHtml(seatLabel)}</span>
         </div>
@@ -7756,7 +7770,8 @@ function renderInstructorLessonRoster(schedule) {
   }
   const methodTitle = instructorLessonMethodTitle(schedule);
   const metadataConflict = schedule.metadataSource === "conflict";
-  container.innerHTML = `<h3>${schedule.courseKind === "team" ? "팀레슨 · " : ""}${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))}${!metadataConflict && schedule.courseKind === "team" && schedule.lessonTime ? ` · ${escapeHtml(schedule.lessonTime)}` : ""} · ${roster.length}명</h3>`
+  const presentation = instructorLessonSchedulePresentation(schedule);
+  container.innerHTML = `<h3>${presentation.isTeam ? "팀레슨 · " : ""}${escapeHtml(instructorLessonScheduleDateLabel(schedule.date))}${!metadataConflict && presentation.isTeam && presentation.timeLabel !== "반배정 전" ? ` · ${escapeHtml(presentation.timeLabel)}` : ""} · ${roster.length}명</h3>`
     + (metadataConflict ? '<p class="instructor-roster-method">접수 정보 확인필요 · 팀레슨 시간·주제 불일치</p>' : methodTitle ? `<p class="instructor-roster-method">${escapeHtml(methodTitle)}</p>` : "") + roster.map((member, index) => {
     const registration = registrations.find((item) => member.registrationId && item.registrationId === member.registrationId);
     const steps = registration?.steps || {};

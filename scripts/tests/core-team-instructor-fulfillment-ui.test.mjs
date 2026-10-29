@@ -9,7 +9,7 @@ const source = fs.readFileSync(new URL("core/assets/app.js", root), "utf8");
 const functions = new Map([...source.matchAll(/^(?:async )?function (\w+)\([^]*?^\}/gm)].map(match => [match[1], match[0]]));
 const names = ["qs", "setText", "escapeHtml", "toNumber", "compactDateTime",
   "instructorLessonMethodTitle", "instructorLessonScheduleDateLabel", "instructorLessonScheduleTimeLabel",
-  "instructorLessonScheduleSourceLabel", "instructorLessonStatusLabel", "instructorLessonStatusTone",
+  "instructorLessonScheduleSourceLabel", "instructorLessonSchedulePresentation", "instructorLessonStatusLabel", "instructorLessonStatusTone",
   "instructorLessonModeLabel", "instructorLessonPaymentLabel", "instructorLessonStepClass",
   "instructorLessonStepStatusLabel", "instructorLessonRegistrationMatchesFilter", "instructorLessonConfirmationAction",
   "instructorLessonCancellationKey", "instructorLessonCancellationStatusLabel", "canCancelInstructorLesson",

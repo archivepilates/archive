@@ -11,6 +11,7 @@ const names = [
   "qs", "setText", "escapeHtml", "instructorLessonStatusLabel", "instructorLessonStatusTone",
   "instructorLessonStepStatusLabel", "instructorLessonRegistrationMatchesFilter",
   "instructorLessonScheduleSourceLabel", "instructorLessonScheduleDateLabel", "instructorLessonMethodTitle", "renderInstructorLessonRoster",
+  "instructorLessonSchedulePresentation", "instructorLessonScheduleTimeLabel",
   "instructorLessonCancellationKey", "instructorLessonCancellationStatusLabel", "canCancelInstructorLesson",
   "findInstructorLessonCancellationTarget", "setInstructorLessonCancellationMessage",
   "handleInstructorLessonCancellationOpen", "closeInstructorLessonCancellation", "handleInstructorLessonCancellationClose",

@@ -20,6 +20,10 @@ export const MEAL_RELEASE_TARGETS = {
     '/assets/app.js': 'core/assets/app.js', '/rules/index.html': 'core/rules/index.html',
   } },
   fulfillmentVerification: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
+  scheduleDisplay: { site: 'archive-pilates-core', files: {
+    '/assets/app.js': 'core/assets/app.js', '/assets/interface.css': 'core/assets/interface.css',
+    '/rules/index.html': 'core/rules/index.html',
+  } },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
 
@@ -73,7 +77,8 @@ async function main() {
   if (!baseline.config || baseline.name !== baselineRelease.version.name) throw Error('Missing baseline config');
   const sources = [];
   for (const [resource, file] of Object.entries(selected.files)) {
-    const sourceBase = target === 'fulfillmentVerification' ? '5869a67ea0b6e94379f1ab4af14354094c1ee4fa'
+    const sourceBase = target === 'scheduleDisplay' ? 'f356b2dcc3c303c9ea4aabe87a8d29f82aae59fc'
+      : target === 'fulfillmentVerification' ? '5869a67ea0b6e94379f1ab4af14354094c1ee4fa'
       : target === 'fulfillment' ? 'e942b7d7e9db39751f50f9a95212a99bf7ca01b6'
       : target === 'verification' ? 'd918050bc51bd24da9dce7466c07937e0a0799ea' : BASE;
     const base = execFileSync('git', ['show', `${sourceBase}:${file}`]), source = fs.readFileSync(path.join(root, file));

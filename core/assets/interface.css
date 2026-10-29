@@ -265,6 +265,8 @@ input::placeholder, textarea::placeholder { color: #7a8691; font-weight: 400; op
 .instructor-registration-progress small, .instructor-registration-progress em { font-size: 0.75rem; font-weight: 500; }
 .instructor-registration-progress li > span { width: 26px; height: 26px; font-size: 0.6875rem; }
 .instructor-seat-item { min-height: 150px; border-color: var(--line); border-radius: 6px; background: #fff; gap: 14px; }
+.instructor-seat-item.is-standard { background: #fff; border-color: var(--line); }
+.instructor-seat-item.is-team { background: #eef9fa; border-color: #8abfc5; color: var(--text); }
 .instructor-seat-progress { height: 4px; background: var(--paper-deep); }
 .instructor-seat-progress > span { background: var(--green); }
 .instructor-seat-item-head strong { font-weight: 600; }

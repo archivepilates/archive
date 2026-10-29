@@ -16,7 +16,7 @@ const functions = new Map([...source.matchAll(/^(?:async )?function (\w+)\([^]*?
 const names = [
   "qs", "setText", "escapeHtml", "toNumber", "compactDateTime",
   "instructorLessonMethodTitle", "instructorLessonScheduleDateLabel", "instructorLessonScheduleTimeLabel",
-  "instructorLessonScheduleSourceLabel", "instructorLessonStatusLabel", "instructorLessonStatusTone",
+  "instructorLessonScheduleSourceLabel", "instructorLessonSchedulePresentation", "instructorLessonStatusLabel", "instructorLessonStatusTone",
   "instructorLessonModeLabel", "instructorLessonPaymentLabel", "instructorLessonStepClass",
   "instructorLessonStepStatusLabel", "instructorLessonRegistrationMatchesFilter",
   "instructorLessonConfirmationAction", "instructorLessonCancellationKey",
@@ -105,7 +105,7 @@ test("schedule uses actual title paragraphs after card heads and preserves seat 
   const before = JSON.stringify(a.data);
   a.api.renderInstructorLessonSchedule();
   const html = a.element("instructorLessonScheduleList").innerHTML;
-  const cards = [...html.matchAll(/<article class="instructor-seat-item">([\s\S]*?)<\/article>/g)].map(m => m[1]);
+  const cards = [...html.matchAll(/<article class="instructor-seat-item is-(?:team|standard)">([\s\S]*?)<\/article>/g)].map(m => m[1]);
   assert.equal(cards.length, 4);
   cards.forEach((card, index) => {
     const item = a.data.schedule.items[index];
@@ -131,7 +131,7 @@ test("each selected roster retains date, member links, cancellation IDs and butt
     a.api.select(item.date);
     a.api.renderInstructorLessonSchedule();
     const html = a.element("instructorLessonScheduleDetail").innerHTML;
-    assert.ok(html.startsWith(`<h3>${a.api.instructorLessonScheduleDateLabel(item.date)} · 1명</h3>`));
+    assert.ok(html.startsWith(`<h3>${item.date === "2026-11-21" ? "팀레슨 · " : ""}${a.api.instructorLessonScheduleDateLabel(item.date)} · 1명</h3>`));
     assert.ok(html.includes(`data-instructor-cancel-date="${item.date}"`));
     assert.ok(html.includes(`data-instructor-cancel-key="${item.roster[0].memberKey}"`));
     assert.ok(html.includes(`/core/members/detail/?id=${item.roster[0].memberId}`));

@@ -14,7 +14,7 @@ const functions = new Map([...source.matchAll(/^(?:async )?function (\w+)\([^]*?
 const names = [
   "qs", "setText", "escapeHtml", "toNumber", "normalizePhone", "compactDateTime",
   "instructorLessonMethodTitle", "instructorLessonScheduleDateLabel", "instructorLessonScheduleTimeLabel",
-  "instructorLessonScheduleSourceLabel", "instructorLessonStatusLabel", "instructorLessonStatusTone",
+  "instructorLessonScheduleSourceLabel", "instructorLessonSchedulePresentation", "instructorLessonStatusLabel", "instructorLessonStatusTone",
   "instructorLessonModeLabel", "instructorLessonPaymentLabel", "instructorLessonStepClass",
   "instructorLessonStepStatusLabel", "instructorLessonRegistrationMatchesFilter", "instructorLessonConfirmationAction",
   "instructorLessonCancellationKey", "instructorLessonCancellationStatusLabel", "canCancelInstructorLesson",
