@@ -1,5 +1,16 @@
 const nativeId = value => /^[1-9]\d{0,63}$/.test(String(value ?? ""));
 
+export function instructorTicketResponseDiagnostics({ observed, ok, status, contentType, payload }) {
+  const keys = value => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.keys(value).filter(k => /^[A-Za-z_][A-Za-z0-9_]{0,59}$/.test(k)).sort().slice(0, 20) : [];
+  const kind = value => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  return { version: 1, responseObserved: observed === true, httpOk: ok === true,
+    httpStatus: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+    contentType: typeof contentType === 'string' && /^[A-Za-z0-9+./;= -]{1,100}$/.test(contentType) ? contentType : null,
+    bodyKind: kind(payload), topLevelKeys: keys(payload), dataKind: kind(payload?.data),
+    dataKeys: keys(payload?.data), rowCount: Array.isArray(payload) ? payload.length : Array.isArray(payload?.data) ? payload.data.length : null };
+}
+
 export function issuedInstructorTicketId(payload) {
   const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data
     : payload?.data && typeof payload.data === "object" ? [payload.data] : [payload];

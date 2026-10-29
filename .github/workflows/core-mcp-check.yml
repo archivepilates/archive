@@ -6,6 +6,9 @@ on:
       - 'services/archive-core-mcp/**'
       - 'scripts/release-core-mcp-rules.mjs'
       - 'scripts/tests/core-mcp-rules-ui.test.mjs'
+      - 'scripts/test-core-meal-mcp.mjs'
+      - 'scripts/tests/core-meal-mcp.test.mjs'
+      - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
       - 'core/rules/index.html'
       - 'firebase/kangsain-functions/functions/src/exports/**'
       - '.github/workflows/core-mcp-check.yml'
@@ -14,6 +17,9 @@ on:
       - 'services/archive-core-mcp/**'
       - 'scripts/release-core-mcp-rules.mjs'
       - 'scripts/tests/core-mcp-rules-ui.test.mjs'
+      - 'scripts/test-core-meal-mcp.mjs'
+      - 'scripts/tests/core-meal-mcp.test.mjs'
+      - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
       - 'core/rules/index.html'
       - 'firebase/kangsain-functions/functions/src/exports/**'
       - '.github/workflows/core-mcp-check.yml'
@@ -46,5 +52,6 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: node --test scripts/tests/core-meal-mcp.test.mjs scripts/tests/new-instructor-ticket-rules-release.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: node --test scripts/tests/core-mcp-rules-ui.test.mjs

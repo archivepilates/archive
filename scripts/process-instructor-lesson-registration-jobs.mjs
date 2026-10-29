@@ -14,7 +14,7 @@ import { sanitizeImwebFailureDetails } from "./lib/imweb-read-failure.mjs";
 import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import { processInstructorLessonCancellations } from "./lib/instructor-lesson-cancellation-worker.mjs";
-import { issuedInstructorTicketId, instructorTicketReceipt, assertExistingInstructorTicketBinding } from "./lib/instructor-ticket-issue-evidence.mjs";
+import { issuedInstructorTicketId, instructorTicketReceipt, assertExistingInstructorTicketBinding, instructorTicketResponseDiagnostics } from "./lib/instructor-ticket-issue-evidence.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
   INSTRUCTOR_LESSON_TICKET_PRICE,
@@ -498,6 +498,13 @@ async function issueInstructorLessonTicket(page, ref, job) {
   if (response && !response.ok()) {
     throw new Error(`StudioMate 수강권 발급 실패: ${response.status()} ${JSON.stringify(payload).slice(0, 500)}`);
   }
+  // Retain structure only so an accepted-but-unparseable response can be reconciled without replay.
+  await commitClaimedState(ref, job.claimToken, {
+    ticketIssueResponseObservation: { ...instructorTicketResponseDiagnostics({ observed: !!response,
+      ok: response?.ok(), status: response?.status(), contentType: response?.headers()?.['content-type'], payload }),
+      observedAt: FieldValue.serverTimestamp() },
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { updatedAt: FieldValue.serverTimestamp() });
   const responseTicketId = issuedInstructorTicketId(payload);
   await commitClaimedState(ref, job.claimToken, {
     ticketIssueReceipt: { ...instructorTicketReceipt(job, responseTicketId), receivedAt: FieldValue.serverTimestamp() },

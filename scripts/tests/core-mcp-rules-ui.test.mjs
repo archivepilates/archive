@@ -200,6 +200,19 @@ test('actual CORE MCP rules remain readable with real styles at 320/390/768/1440
           assert.ok(report.bounds.left >= -1 && report.bounds.right <= width + 1, 'section fits viewport');
           assert.ok(report.sectionScrollWidth <= report.sectionClientWidth + 1, 'no horizontal overflow inside MCP section');
           assert.deepEqual(report.issues, [], 'no hidden, overlapping or clipped MCP text/blocks');
+          const recovery = page.locator('#instructor-new-ticket-recovery-policy');
+          await recovery.scrollIntoViewIfNeeded();
+          const recoveryLayout = await recovery.evaluate(node => {
+            const bounds = node.getBoundingClientRect();
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            return { left: bounds.left, right: bounds.right, client: node.clientWidth, scroll: node.scrollWidth,
+              overflow: [...range.getClientRects()].some(r => r.left < bounds.left - 1 || r.right > bounds.right + 1) };
+          });
+          assert.ok(recoveryLayout.left >= -1 && recoveryLayout.right <= width + 1);
+          assert.ok(recoveryLayout.scroll <= recoveryLayout.client + 1);
+          assert.equal(recoveryLayout.overflow, false);
+          await recovery.screenshot({ path: new URL(`recovery-${width}.png`, output).pathname });
           if (report.documentWidth > width + 1) {
             t.diagnostic(`Existing rules overflow outside MCP section at ${width}px: ${JSON.stringify(report.outside)}`);
           }

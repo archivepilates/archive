@@ -8,7 +8,9 @@ import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID } from "../lib/instructor-lesso
 const NOW = "2099-06-01T03:00:00.000Z";
 const LESSON_DATE = "2099-06-15";
 const LEGACY_ERROR = "다인 주문 수강자 중 취소·변경·미확인 건이 있어 공동 처리 중단";
-const ACTIONS = ["bind_existing_ticket", "retry_unsent_eform"];
+const RECEIPT_ERROR = "수강권 발급 응답의 고유번호를 한 건으로 확인하지 못했습니다. 재발급하지 않습니다.";
+const NEW_BIND_ACTION = "bind_existing_new_member_ticket";
+const ACTIONS = ["bind_existing_ticket", "retry_unsent_eform", NEW_BIND_ACTION];
 const at = (offset) => new Date(Date.parse(NOW) + offset).toISOString();
 
 function fixture(action = "bind_existing_ticket") {
@@ -82,6 +84,24 @@ function fixture(action = "bind_existing_ticket") {
     },
     confirmation: { verified: true, candidateId: "synthetic-candidate-a", messageId: "synthetic-message-a" },
   };
+  if (action === NEW_BIND_ACTION) {
+    delete registration.evidence.ticketId;
+    delete registration.evidence.confirmationCandidateId;
+    delete registration.evidence.confirmationSolapiMessageId;
+    registration.evidence.memberCreatedByRegistration = true;
+    registration.steps.ticket = { status: "review_required", detail: RECEIPT_ERROR };
+    registration.steps.eformsign = { status: "pending", detail: "synthetic onboarding pending" };
+    registration.steps.confirmation = { status: "pending", detail: "synthetic confirmation not yet created" };
+    delete native.confirmation;
+    native.confirmationAbsent = true;
+    Object.assign(job, {
+      memberCreatedByRegistration: true, studiomateMemberId: "900000001",
+      studioId: registration.studioId, lessonDate: LESSON_DATE,
+      status: "review_required", currentStep: "ticket", effectType: "ticket_issue",
+      externalEffectStarted: true, effectStartedAt: at(-60000), lastError: RECEIPT_ERROR,
+      attempts: 1, maxAttempts: 3, attemptHistory: [{ attempt: 1, outcome: "synthetic receipt parse failure" }],
+    });
+  }
   return {
     action, registration, job, native,
     approval: { operationKey: `synthetic-operation-${action}`, action, registrationId: registration.registrationId,
@@ -171,6 +191,75 @@ test("retry_unsent_eform queues only the legacy unsent new-member form and retai
   assert.deepStrictEqual(result.registrationPatch.steps.memo, input.registration.steps.memo);
   for (const key of ["claimToken", "claimedAt", "claimedBy", "nextSourceCheckAt", "lastError"]) assert.equal(result.jobPatch[key], null, key);
 });
+
+test("new-member binding verifies the existing ticket and leaves onboarding for follow-up without reissuance", () => {
+  const input = fixture(NEW_BIND_ACTION);
+  const result = plan(input);
+  assertPreserved(input, result);
+  assert.equal(result.jobPatch.status, "pending");
+  assert.equal(result.jobPatch.currentStep, "followup");
+  assert.equal(result.jobPatch.ticketId, "900000002");
+  assert.equal(result.jobPatch.maxAttempts, 3);
+  assert.equal(result.jobPatch.externalEffectStarted, false);
+  assert.equal(result.registrationPatch.status, "waiting_signature");
+  assert.equal(result.registrationPatch.steps.ticket.status, "verified");
+  assert.equal(result.registrationPatch["evidence.ticketPaymentAmount"], 12345);
+  for (const key of ["effectType", "effectStartedAt", "claimToken", "claimedAt", "claimedBy", "leaseExpiresAt",
+    "nextRunAt", "nextSourceCheckAt", "lastError"]) assert.equal(result.jobPatch[key], null, key);
+  for (const key of ["eformsign", "memo", "confirmation"]) {
+    assert.deepStrictEqual(result.registrationPatch.steps[key], input.registration.steps[key]);
+    assert.notEqual(result.registrationPatch.steps[key].status, "not_required");
+  }
+  assert.equal(Object.hasOwn(result.jobPatch, "mode"), false);
+  assert.equal(Object.hasOwn(result.registrationPatch, "mode"), false);
+  assert.equal(Object.hasOwn(result.jobPatch, "completedAt"), false);
+  assert.equal(Object.hasOwn(result.registrationPatch, "completedAt"), false);
+  assert.deepStrictEqual(result.jobPatch.ticketIssueReceipt, {
+    version: 1, status: "verified_by_operator_readback", ticketId: "900000002", memberId: "900000001",
+    lessonDate: LESSON_DATE, paidAmount: 12345, orderNo: "synthetic-order-a", checkedAt: at(-1000),
+  });
+});
+
+test("an exact new-member receipt failure cannot use the returning-member binding action", () => {
+  const input = fixture(NEW_BIND_ACTION);
+  input.action = input.approval.action = "bind_existing_ticket";
+  assert.throws(() => plan(input), /한정 연결/);
+});
+
+for (const eformStatus of ["pending", "queued", "waiting_external"]) {
+  for (const memoStatus of ["pending", "queued", "waiting_external"]) {
+    test(`new-member binding preserves unsent eform=${eformStatus} memo=${memoStatus}`, () => {
+      const input = fixture(NEW_BIND_ACTION);
+      input.registration.steps.eformsign = { status: eformStatus, detail: "synthetic unsent form" };
+      input.registration.steps.memo = { status: memoStatus, jobId: "synthetic-memo-a" };
+      const result = plan(input);
+      assertPreserved(input, result);
+      for (const key of ["eformsign", "memo"]) {
+        assert.deepStrictEqual(result.registrationPatch.steps[key], input.registration.steps[key]);
+        assert.notEqual(result.registrationPatch.steps[key].status, "not_required");
+      }
+      assert.equal(result.jobPatch.currentStep, "followup");
+    });
+  }
+}
+
+for (const [attempts, maxAttempts, expected] of [[0, 0, 1], [1, 3, 3], [3, 3, 4], [9, 4, 10], [3, 99, 99]]) {
+  test(`new-member binding retains ${attempts} attempts and never lowers budget ${maxAttempts}`, () => {
+    const input = fixture(NEW_BIND_ACTION);
+    Object.assign(input.job, { attempts, maxAttempts });
+    const result = plan(input);
+    assertPreserved(input, result);
+    assert.equal(result.jobPatch.maxAttempts, expected);
+  });
+}
+
+for (const offset of [-120000, -1000, 1000, 120000]) {
+  test(`new-member binding accepts issuance ${offset}ms from the original effect`, () => {
+    const input = fixture(NEW_BIND_ACTION);
+    input.native.ticketRead.tickets[0].issuedAt = new Date(Date.parse(input.job.effectStartedAt) + offset).toISOString();
+    assertPreserved(input, plan(input));
+  });
+}
 
 for (const attempts of [0, 1, 3, 9]) {
   test(`retry budget preserves ${attempts} attempts and permits exactly one additional attempt`, () => {
@@ -273,6 +362,90 @@ for (const [label, mutate] of [
   ["wrong job ticket binding", f => { f.job.ticketId = "900000099"; }],
   ["wrong registration ticket binding", f => { f.registration.evidence.ticketId = "900000099"; }],
 ]) rejects(label, mutate, BIND_ONLY);
+
+const NEW_BIND_ONLY = [NEW_BIND_ACTION];
+for (const [label, mutate] of [
+  ["returning-member registration", f => { f.registration.mode = "returning_member"; }],
+  ["returning-member job", f => { f.job.mode = "returning_member"; }],
+  ["missing registered creation evidence", f => { delete f.registration.evidence.memberCreatedByRegistration; }],
+  ["false registered creation evidence", f => { f.registration.evidence.memberCreatedByRegistration = false; }],
+  ["missing job creation evidence", f => { delete f.job.memberCreatedByRegistration; }],
+  ["false job creation evidence", f => { f.job.memberCreatedByRegistration = false; }],
+  ["registered simulation", f => { f.registration.evidence.newMemberSimulation = true; }],
+  ["job simulation", f => { f.job.newMemberSimulation = true; }],
+  ["job not under review", f => { f.job.status = "pending"; }],
+  ["ticket step not under review", f => { f.registration.steps.ticket.status = "pending"; }],
+  ["wrong current step", f => { f.job.currentStep = "eformsign"; }],
+  ["wrong effect type", f => { f.job.effectType = "eform_send"; }],
+  ["no issuance marker", f => { f.job.externalEffectStarted = false; }],
+  ["missing receipt error", f => { delete f.job.lastError; }],
+  ["generic issuance error", f => { f.job.lastError = "synthetic transport outcome unknown"; }],
+  ["eform send failure", f => { f.job.lastError = LEGACY_ERROR; }],
+  ["different send-stage error", f => { f.job.lastError = '[eformsign:send_dialog] TimeoutError timeoutMs=30000 {"path":"/eform/document/view_service.html","framePresent":true,"viewerStatus":"1","processText":"Send"}'; }],
+  ["missing job identity", f => { delete f.job.studiomateMemberId; }],
+  ["wrong job identity", f => { f.job.studiomateMemberId = "900000099"; }],
+  ["wrong job studio", f => { f.job.studioId = "synthetic-studio-b"; }],
+  ["wrong job lesson date", f => { f.job.lessonDate = "2099-06-16"; }],
+  ["missing effect time", f => { delete f.job.effectStartedAt; }],
+  ["invalid issuance time", f => { f.native.ticketRead.tickets[0].issuedAt = "synthetic-invalid-time"; }],
+  ["issuance 120001ms after effect", f => { f.native.ticketRead.tickets[0].issuedAt = at(60001); }],
+  ["issuance 120001ms before effect", f => { f.native.ticketRead.tickets[0].issuedAt = at(-180001); }],
+  ["wrong job ticket binding", f => { f.job.ticketId = "900000099"; }],
+  ["onboarding incorrectly not required", f => { f.registration.steps.eformsign.status = "not_required"; }],
+  ["memo incorrectly not required", f => { f.registration.steps.memo.status = "not_required"; }],
+  ["missing onboarding step", f => { delete f.registration.steps.eformsign; }],
+  ["missing memo step", f => { delete f.registration.steps.memo; }],
+  ["failed onboarding step", f => { f.registration.steps.eformsign.status = "failed"; }],
+  ["failed memo step", f => { f.registration.steps.memo.status = "failed"; }],
+  ["existing registered document", f => { f.registration.evidence.eformsignDocumentId = "synthetic-document-a"; }],
+  ["missing document absence proof", f => { delete f.native.eformAbsence; }],
+  ["incomplete document absence proof", f => { f.native.eformAbsence.complete = false; }],
+  ["wrong document absence account", f => { f.native.eformAbsence.account = "synthetic-operator@example.invalid"; }],
+  ["wrong document absence registration", f => { f.native.eformAbsence.registrationId = "synthetic-registration-b"; }],
+  ["wrong document absence name", f => { f.native.eformAbsence.memberName = "Synthetic Instructor B"; }],
+  ["wrong document absence template", f => { f.native.eformAbsence.templateId = "synthetic-template-b"; }],
+  ["existing in-progress document", f => { f.native.eformAbsence.progressCount = 1; }],
+  ["existing completed document", f => { f.native.eformAbsence.completedCount = 1; }],
+  ["missing document absence timestamp", f => { delete f.native.eformAbsence.checkedAt; }],
+  ["invalid document absence timestamp", f => { f.native.eformAbsence.checkedAt = "synthetic-invalid-time"; }],
+  ["stale document absence proof", f => { f.native.eformAbsence.checkedAt = at(-120001); }],
+  ["future document absence proof", f => { f.native.eformAbsence.checkedAt = at(60001); }],
+  ["missing canonical confirmation absence", f => { delete f.native.confirmationAbsent; }],
+  ["existing canonical confirmation", f => { f.native.confirmationAbsent = false; }],
+  ["non-boolean canonical confirmation absence", f => { f.native.confirmationAbsent = "true"; }],
+  ["confirmation step with send evidence", f => { f.registration.steps.confirmation.sentAt = at(-1000); }],
+  ["confirmation step with a prior candidate", f => { f.registration.steps.confirmation.evidence = { candidateId: "synthetic-candidate-a" }; }],
+  ["confirmation step with a prior message", f => { f.registration.steps.confirmation.evidence = { messageId: "synthetic-message-a" }; }],
+]) rejects(label, mutate, NEW_BIND_ONLY);
+
+for (const status of ["queued", "sent", "verified", "not_required", "failed", "review_required"]) {
+  rejects(`confirmation status ${status}`, f => { f.registration.steps.confirmation.status = status; }, NEW_BIND_ONLY);
+}
+for (const field of ["confirmationCandidateId", "confirmationSolapiMessageId"]) {
+  for (const value of ["synthetic-prior-send", null, ""]) {
+    rejects(`present ${field} ${JSON.stringify(value)}`, f => { f.registration.evidence[field] = value; }, NEW_BIND_ONLY);
+  }
+}
+for (const field of ["progressCount", "completedCount"]) {
+  for (const value of [undefined, "0", -1]) {
+    rejects(`invalid document absence ${field} ${JSON.stringify(value)}`, f => { f.native.eformAbsence[field] = value; }, NEW_BIND_ONLY);
+  }
+}
+for (const status of ["sent", "verified"]) {
+  rejects(`existing eform status ${status}`, f => { f.registration.steps.eformsign.status = status; }, NEW_BIND_ONLY);
+}
+rejects("completed memo", f => { f.registration.steps.memo.status = "verified"; }, NEW_BIND_ONLY);
+for (const field of ["sendStartedAt", "sendClickedAt", "sentAt", "documentId", "documentUrl", "completedAt", "providerMessageId"]) {
+  rejects(`job send/document marker ${field}`, f => { f.job[field] = "synthetic-prior-effect"; }, NEW_BIND_ONLY);
+  rejects(`eform step send/document marker ${field}`, f => { f.registration.steps.eformsign[field] = "synthetic-prior-effect"; }, NEW_BIND_ONLY);
+}
+
+for (const field of ["attempts", "maxAttempts"]) {
+  for (const value of [-1, 1.5, "invalid", Number.MAX_SAFE_INTEGER + 1]) {
+    rejects(`invalid ${field} ${value}`, f => { f.job[field] = value; }, NEW_BIND_ONLY);
+  }
+}
+rejects("attempt budget overflow", f => { f.job.attempts = Number.MAX_SAFE_INTEGER; }, NEW_BIND_ONLY);
 
 const RETRY_ONLY = ["retry_unsent_eform"];
 for (const [label, mutate] of [
