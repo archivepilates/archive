@@ -101,6 +101,9 @@ jobs:
       - name: Test Imweb referral award guards
         run: node --test scripts/tests/imweb-referral-*.test.mjs
 
+      - name: Test Imweb STAFF and student video access guards
+        run: node --test scripts/tests/imweb-staff*.test.mjs scripts/tests/imweb-student-share*.test.mjs scripts/tests/imweb-video-access-completion.test.mjs scripts/tests/staff-common-rules-release.test.mjs scripts/tests/staff-video-recovery-rules-release.test.mjs
+
       - name: Test reel email-button approval and publication guards
         run: npm run test:reel-approval && npm run test:reel-layout
 
