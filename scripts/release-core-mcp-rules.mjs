@@ -10,6 +10,7 @@ import { makeManifest, assertManifest } from './release-e261017-classroom.mjs';
 
 const BASE = 'af06646964c0dff68e44b8eabd09445c88f28630';
 const RECOVERY_BASE = '5c3dcc1a';
+const INTAKE_BASE = '6f6e979c';
 const SITE = 'archive-pilates-core';
 const ASSET = '/rules/index.html';
 const FILE = 'core/rules/index.html';
@@ -24,15 +25,21 @@ export function assertNewInstructorRecoveryRuleOnly(before, after) {
   if (before.includes('id="instructor-new-ticket-recovery-policy"') || (after.match(note) || []).length !== 1
     || after.replace(note, '') !== before) throw Error('Only the reviewed new-member ticket recovery note may be added.');
 }
+export function assertInstructorIntakeRuleOnly(before, after) {
+  const note = /^ +<li id="instructor-ticket-intake-coverage-policy"><strong>[^<>\r\n]+<\/strong>[^<>\r\n]+<\/li>\n/gm;
+  if (before.includes('id="instructor-ticket-intake-coverage-policy"') || (after.match(note) || []).length !== 1
+    || after.replace(note, '') !== before) throw Error('Only the reviewed instructor intake coverage note may be added.');
+}
 async function main() {
   const args = process.argv.slice(2), apply = args.includes('--apply');
   const recovery = args.includes('--new-instructor-ticket-recovery');
+  const intake = args.includes('--instructor-intake-coverage');
   const expected = args.find(a => a.startsWith('--expected-version='))?.slice(19);
-  if (new Set(args).size !== args.length || args.some(a => a !== '--apply' && a !== '--new-instructor-ticket-recovery' && !a.startsWith('--expected-version='))) throw Error('Invalid release arguments');
+  if (recovery && intake || new Set(args).size !== args.length || args.some(a => a !== '--apply' && a !== '--new-instructor-ticket-recovery' && a !== '--instructor-intake-coverage' && !a.startsWith('--expected-version='))) throw Error('Invalid release arguments');
   const git = args => execFileSync('git', args, { encoding: 'utf8' }).trim();
   const commit = git(['rev-parse', 'HEAD']);
-  const source = fs.readFileSync(FILE), baselineBytes = execFileSync('git', ['show', `${recovery ? RECOVERY_BASE : BASE}:${FILE}`]);
-  (recovery ? assertNewInstructorRecoveryRuleOnly : assertMcpRuleOnly)(baselineBytes.toString(), source.toString());
+  const source = fs.readFileSync(FILE), baselineBytes = execFileSync('git', ['show', `${intake ? INTAKE_BASE : recovery ? RECOVERY_BASE : BASE}:${FILE}`]);
+  (intake ? assertInstructorIntakeRuleOnly : recovery ? assertNewInstructorRecoveryRuleOnly : assertMcpRuleOnly)(baselineBytes.toString(), source.toString());
   const clean = () => {
     if (git(['branch', '--show-current']) !== 'main' || git(['status', '--porcelain'])
       || git(['rev-parse', 'HEAD']) !== commit || git(['rev-parse', 'origin/main']) !== commit) throw Error('Release requires synchronized clean main');
@@ -72,7 +79,7 @@ async function main() {
   const evidence = { site: SITE, sourceCommit: commit, baselineVersion: baseline.name, fileCount: files.length,
     changedPaths: [ASSET], unchangedFileCount: files.length - 1, sourceHash: sha(source), mode: apply ? 'apply' : 'plan' };
   if (!apply) { console.log(JSON.stringify(evidence)); return; }
-  const directory = path.join(os.homedir(), recovery ? 'ArchiveIN/operations/core-meal-lesson-check-20261029' : 'ArchiveIN/operations/core-mcp');
+  const directory = path.join(os.homedir(), intake ? 'ArchiveIN/operations/november-instructor-confirmation-20261029' : recovery ? 'ArchiveIN/operations/core-meal-lesson-check-20261029' : 'ArchiveIN/operations/core-mcp');
   const output = path.join(directory, 'hosting-release-20261029.json');
   if (fs.existsSync(output)) throw Error('Release evidence exists; reconcile before any retry');
   const lock = path.join(os.homedir(), 'ArchiveIN/automation/locks/firebase-hosting-' + SITE + '.lock');

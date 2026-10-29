@@ -12,6 +12,7 @@ import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retentio
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
 import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
 import { classifyPrivateChartStateIssues } from "./lib/private-chart-consistency.mjs";
+import { classifyInstructorTicketIntakeCoverage, instructorTicketIntakeBounds } from "./lib/instructor-ticket-intake-coverage.mjs";
 import {
   canAutoRetryQueueDocument,
   classifyNotionDocument,
@@ -719,6 +720,35 @@ async function checkQueues() {
     repairStatus: "retry",
   });
   await checkNotionSync();
+  await checkInstructorTicketIntakeCoverage();
+}
+
+async function checkInstructorTicketIntakeCoverage() {
+  const bounds = instructorTicketIntakeBounds(now.getTime());
+  let profiles = [];
+  let registrations = [];
+  let profileQueryFailed = false;
+  let registrationQueryFailed = false;
+  try {
+    const snap = await db.collection("memberProfiles").where("studioId", "==", bounds.studioId)
+      .where("activeTicketNames", "array-contains", "강사레슨 (2T)")
+      .limit(bounds.limit).get();
+    profiles = snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+  } catch { profileQueryFailed = true; }
+  try {
+    // Date-only query uses the existing single-field index; the helper enforces studio identity.
+    const snap = await db.collection("instructorLessonRegistrations")
+      .where("lessonDate", ">=", bounds.startDate).where("lessonDate", "<=", bounds.endDate)
+      .limit(bounds.limit).get();
+    registrations = snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+  } catch { registrationQueryFailed = true; }
+  const result = classifyInstructorTicketIntakeCoverage({ profiles, registrations, nowMs: now.getTime(),
+    sourceEvidence: syncEvidence.get("studiomate-excel-sync"), profileQueryFailed, registrationQueryFailed });
+  const { findings: intakeFindings, completedCheckKeys, items, ...summary } = result;
+  // Keep only counts and canonical reference paths, never source profile/phone/payment contents.
+  checked.push({ ...summary, reviewRefs: [...new Set(items.flatMap((item) => item.sourceRefs))].slice(0, 5) });
+  for (const key of completedCheckKeys) completedChecks.add(key);
+  for (const finding of intakeFindings) addFinding(finding);
 }
 
 async function inspectQueue(input) {

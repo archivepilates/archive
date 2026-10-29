@@ -54,6 +54,6 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: node --test scripts/tests/core-meal-mcp.test.mjs scripts/tests/new-instructor-ticket-rules-release.test.mjs
+      - run: node --test scripts/tests/core-meal-mcp.test.mjs scripts/tests/new-instructor-ticket-rules-release.test.mjs scripts/tests/instructor-intake-rules-release.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: node --test scripts/tests/core-mcp-rules-ui.test.mjs

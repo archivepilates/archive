@@ -111,7 +111,7 @@ jobs:
         run: node scripts/validate-instructor-lesson-registration-release.mjs
 
       - name: Test instructor ticket recovery evidence
-        run: node --test scripts/tests/instructor-registration-recovery.test.mjs scripts/tests/instructor-ticket-response-diagnostics.test.mjs scripts/tests/instructor-eform-search-evidence.test.mjs scripts/tests/instructor-ticket-recovery-evidence.test.mjs
+        run: node --test scripts/tests/instructor-registration-recovery.test.mjs scripts/tests/instructor-ticket-response-diagnostics.test.mjs scripts/tests/instructor-eform-search-evidence.test.mjs scripts/tests/instructor-ticket-recovery-evidence.test.mjs scripts/tests/instructor-existing-ticket-adoption.test.mjs scripts/tests/instructor-ticket-intake-coverage.test.mjs
 
       - name: Test instructor signup identity and profile guards
         run: node --test scripts/tests/instructor-signup*.test.mjs
