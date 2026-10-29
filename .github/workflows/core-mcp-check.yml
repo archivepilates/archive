@@ -9,6 +9,9 @@ on:
       - 'scripts/test-core-meal-mcp.mjs'
       - 'scripts/tests/core-meal-mcp.test.mjs'
       - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
+      - 'scripts/tests/instructor-intake-rules-release.test.mjs'
+      - 'scripts/release-lesson-identity-rules.mjs'
+      - 'scripts/tests/lesson-identity-rules-release.test.mjs'
       - 'core/rules/index.html'
       - 'archivein/method/team-261121/**'
       - 'scripts/build-team-261121-calendar.mjs'
@@ -24,6 +27,9 @@ on:
       - 'scripts/test-core-meal-mcp.mjs'
       - 'scripts/tests/core-meal-mcp.test.mjs'
       - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
+      - 'scripts/tests/instructor-intake-rules-release.test.mjs'
+      - 'scripts/release-lesson-identity-rules.mjs'
+      - 'scripts/tests/lesson-identity-rules-release.test.mjs'
       - 'core/rules/index.html'
       - 'archivein/method/team-261121/**'
       - 'scripts/build-team-261121-calendar.mjs'
@@ -62,7 +68,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: node --test scripts/tests/core-meal-mcp.test.mjs scripts/tests/new-instructor-ticket-rules-release.test.mjs scripts/tests/instructor-intake-rules-release.test.mjs
+      - run: node --test scripts/tests/core-meal-mcp.test.mjs scripts/tests/new-instructor-ticket-rules-release.test.mjs scripts/tests/instructor-intake-rules-release.test.mjs scripts/tests/lesson-identity-rules-release.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: node --test scripts/tests/core-mcp-rules-ui.test.mjs
       - run: node scripts/build-team-261121-calendar.mjs --check && node --test scripts/tests/team-261121-calendar.test.mjs scripts/tests/team-calendar-release.test.mjs
