@@ -1,5 +1,5 @@
 export const MEAL_CHOICE_SCHEMA = "meal-choice-v2";
-export const MEAL_CHOICE_CONSENT = "meal-preferences-gemini-v1-20261029";
+export const MEAL_CHOICE_CONSENT = "meal-preferences-operator-v1-20261029";
 export const MEAL_FREE_MODEL = "gemini-2.5-flash-lite";
 
 export const MEAL_CHOICES: Record<string, readonly string[]> = {

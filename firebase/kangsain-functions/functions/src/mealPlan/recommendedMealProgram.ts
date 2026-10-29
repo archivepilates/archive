@@ -1,11 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
-import { applicationDefault, getApp } from "firebase-admin/app";
 import type { Request, Response } from "express";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { db } from "../config/firebase";
-import { geminiApiKey } from "../config/secrets";
 import type { StaffDoc } from "../types/models";
 import { nowTimestamp } from "../utils/date";
 import { AppError, errorMessage } from "../utils/errors";
@@ -14,14 +12,11 @@ import {
   RECOMMENDED_MEAL_REQUEST_COLLECTION,
   RECOMMENDED_MEAL_RESPONSE_COLLECTION,
 } from "./recommendedMealSurvey";
-import { MEAL_FREE_MODEL, assertFreeGeminiProject, mealAiConsentCurrent,
-  mealGenerationPreferences, mealChoiceReviewReasons } from "./recommendedMealChoicePolicy";
 
 export const RECOMMENDED_MEAL_DRAFT_COLLECTION = "recommendedMealProgramDrafts";
 export const RECOMMENDED_MEAL_REPORT_COLLECTION = "recommendedMealProgramReports";
 export const RECOMMENDED_MEAL_REPORT_EXPIRES_DAYS = 90;
 
-const GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const REPORT_BASE_URL = "https://in.archivepilates.com/recommendedMealPlan/";
 
 export interface RecommendedMealDay {
@@ -65,6 +60,7 @@ export async function getRecommendedMealProgramReviewHandler(
           reviewReasons: stringArray(bundle.response.reviewReasons, 20, 80),
           recommendationStatus: cleanText(bundle.response.recommendationStatus, 80),
           submittedAt: timestampIso(bundle.response.submittedAt),
+          sourceHash: mealResponseSourceHash(bundle.response),
         }
       : null,
     inbody: bundle.inbody,
@@ -73,12 +69,22 @@ export async function getRecommendedMealProgramReviewHandler(
   };
 }
 
+export function mealResponseSourceHash(response: FirebaseFirestore.DocumentData): string {
+  return stableHash({
+    answers: objectValue(response.answers),
+    reviewReasons: stringArray(response.reviewReasons, 20, 80),
+    submittedAt: timestampIso(response.submittedAt),
+  });
+}
+
+// Legacy endpoints remain compatible, but never invoke a model or manufacture a draft.
 export async function generateRecommendedMealProgramDraftHandler(
   request: CallableRequest,
   staff: StaffDoc,
 ): Promise<Record<string, unknown>> {
-  const requestId = cleanRequestId((request.data as Record<string, unknown> | undefined)?.requestId);
-  return generateRecommendedMealProgramDraftForRequest(requestId, staff, { force: true });
+  const requestId = cleanRequestId(objectValue(request.data).requestId);
+  await markOperatorCallRequired(requestId, staff);
+  return { ok: true, requestId, status: "operator_call_required" };
 }
 
 export async function generateRecommendedMealProgramDraftForSubmittedResponse(
@@ -86,149 +92,58 @@ export async function generateRecommendedMealProgramDraftForSubmittedResponse(
   responseData: FirebaseFirestore.DocumentData,
 ): Promise<Record<string, unknown>> {
   const requestId = cleanRequestId(responseId);
-  const studioId = cleanText(responseData.studioId, 80) || DEFAULT_STUDIO_ID;
-  try {
-    return await generateRecommendedMealProgramDraftForRequest(
-      requestId,
-      { uid: "system", name: "설문 제출 자동 생성", studioId },
-      { force: false },
-    );
-  } catch (err) {
-    const message = errorMessage(err).slice(0, 400);
-    await db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId).set(
-      {
-        recommendationStatus: "draft_failed",
-        recommendationLastError: message,
-        updatedAt: nowTimestamp(),
-      },
-      { merge: true },
-    );
-    throw err;
+  await markOperatorCallRequired(requestId, {
+    uid: "system", name: "설문 접수",
+    studioId: cleanText(responseData.studioId, 80) || DEFAULT_STUDIO_ID,
+  });
+  return { ok: true, requestId, status: "operator_call_required" };
+}
+
+async function markOperatorCallRequired(requestId: string, actor: RecommendedMealActor): Promise<void> {
+  await db.runTransaction(async tx => {
+    const requestRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
+    const requestData = (await tx.get(requestRef)).data();
+    const response = (await tx.get(db.collection(RECOMMENDED_MEAL_RESPONSE_COLLECTION).doc(requestId))).data();
+    const draft = (await tx.get(db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(requestId))).data();
+    const report = (await tx.get(db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(requestId))).data();
+    assertSubmittedSource(requestData, response, actor);
+    if (draft || report) return;
+    tx.set(requestRef, {
+      recommendationStatus: stringArray(response!.reviewReasons, 20, 80).length
+        ? "review_required" : "operator_call_required",
+      updatedAt: nowTimestamp(),
+    }, { merge: true });
+  });
+}
+
+function assertSubmittedSource(
+  mealRequest: FirebaseFirestore.DocumentData | undefined,
+  response: FirebaseFirestore.DocumentData | undefined,
+  actor: RecommendedMealActor,
+): void {
+  if (!mealRequest) throw new AppError("NOT_FOUND", "추천식단 요청을 찾지 못했습니다.");
+  const studioId = String(mealRequest.studioId || DEFAULT_STUDIO_ID);
+  if (studioId !== String(actor.studioId || DEFAULT_STUDIO_ID)
+    || response && String(response.studioId || studioId) !== studioId) {
+    throw new AppError("PERMISSION_DENIED", "다른 지점의 추천식단 요청입니다.");
+  }
+  if (!response || mealRequest.status !== "submitted") {
+    throw new AppError("INVALID_ARGUMENT", "회원 설문 제출 상태를 다시 확인하세요.");
+  }
+  if (response.memberId && String(response.memberId) !== String(mealRequest.memberId)) {
+    throw new AppError("INVALID_ARGUMENT", "설문과 회원 원본이 일치하지 않습니다.");
   }
 }
 
-async function generateRecommendedMealProgramDraftForRequest(
-  requestId: string,
-  actor: RecommendedMealActor,
-  options: { force: boolean },
-): Promise<Record<string, unknown>> {
-  const bundle = await loadReviewBundle(requestId, actor);
-  if (!bundle.response) throw new AppError("INVALID_ARGUMENT", "회원 설문 제출 후 식단 초안을 만들 수 있습니다.");
-  if (["published", "sent"].includes(String(bundle.report?.publicationStatus || ""))) {
-    throw new AppError("INVALID_ARGUMENT", "이미 공개한 추천식단은 다시 생성할 수 없습니다.");
+function assertUnpublishedReport(report: FirebaseFirestore.DocumentData | undefined): void {
+  if (!report) return;
+  if (["approved", "published", "sent"].includes(String(report.publicationStatus || ""))
+    || ["approved", "sent"].includes(String(report.approvalStatus || ""))
+    || report.approvedSnapshot || report.publishedSnapshot || report.sentSnapshot
+    || report.approvedAt || report.publishedAt || report.sentAt || report.sentRevision
+    || report.candidateId) {
+    throw new AppError("INVALID_ARGUMENT", "승인·공개·발송 절차에 들어간 추천식단은 수정할 수 없습니다.");
   }
-
-  const answers = objectValue(bundle.response.answers);
-  const reviewReasons = stringArray(bundle.response.reviewReasons, 20, 80);
-  const sourceHash = stableHash({ answers, inbody: bundle.inbody, reviewReasons });
-  if (bundle.draft?.sourceResponseHash === sourceHash && bundle.draft?.publicContent) {
-    return { ok: true, requestId, reused: true, draft: safeDraftForOperator(bundle.draft) };
-  }
-  const fallback = deterministicMealPlan(bundle.request, answers, bundle.inbody, reviewReasons);
-  let publicContent = fallback;
-  let provider = "safe_fallback";
-  let model = "rule-based-v1";
-  let generationError = "";
-  const allergies = reportedAllergies(answers);
-  const excludedFoods = reportedFoodExclusions(answers);
-  if (!mealAiConsentCurrent(answers)) {
-    generationError = "현재 AI 처리 동의가 없어 기본 초안만 생성했습니다. 기존 응답은 보존합니다.";
-  } else if (mealChoiceReviewReasons(answers).length || reviewReasons.length && reviewReasons.some(v => v !== "latest_inbody_missing")) {
-    provider = "safe_health_review";
-    generationError = "건강·알레르기 확인 항목이 있어 AI 전송 없이 전문가 검토를 기다립니다.";
-  } else if (excludedFoods.length) {
-    provider = allergies.length ? "safe_allergy_review" : "safe_food_exclusion_review";
-    generationError = allergies.length
-      ? "알레르기 응답으로 특정 식품 자동 추천을 제한했습니다."
-      : "섭취 제외 식품 응답으로 특정 식품 자동 추천을 제한했습니다.";
-  } else {
-    try {
-      // Durable per-response/day limit also serializes manual and event-triggered generation.
-      const claimRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
-      await db.runTransaction(async tx => {
-        const current = (await tx.get(claimRef)).data();
-        const prior = current?.mealAiGenerationAttempt as { day?: string } | undefined;
-        const day = new Date().toISOString().slice(0, 10);
-        if (prior?.day === day) throw new Error("meal_ai_daily_attempt_already_claimed");
-        if (current?.status !== "submitted") throw new Error("meal_ai_response_not_submitted");
-        tx.update(claimRef, { mealAiGenerationAttempt: { day, sourceHash, claimedAt: nowTimestamp(), model: MEAL_FREE_MODEL } });
-      });
-      const generated = await generateGeminiMealPlan(answers);
-      publicContent = normalizePublicContent(generated, fallback);
-      publicContent.title = fallback.title;
-      publicContent.metricsSummary = fallback.metricsSummary;
-      publicContent.caution = fallback.caution;
-      provider = "gemini";
-      model = generated.model;
-    } catch (err) {
-      if (err instanceof Error && err.message === "meal_ai_daily_attempt_already_claimed") {
-        return { ok: true, requestId, status: "generation_in_progress_or_daily_limit", reused: true,
-          draft: safeDraftForOperator(bundle.draft) };
-      }
-      generationError = err instanceof Error && /^(gemini_|meal_ai_)/.test(err.message)
-        ? err.message.slice(0, 100) : "gemini_generation_unavailable_no_paid_fallback";
-    }
-  }
-
-  const now = nowTimestamp();
-  const revision = mealPlanRevision(sourceHash, publicContent);
-  const draft = {
-    requestId,
-    responseId: requestId,
-    studioId: cleanText(bundle.request.studioId, 80) || DEFAULT_STUDIO_ID,
-    memberId: cleanText(bundle.request.memberId, 120),
-    memberName: cleanText(bundle.request.memberName, 40),
-    sourceResponseHash: sourceHash,
-    publicContent,
-    revision,
-    status: reviewReasons.length ? "review_required" : "draft_ready",
-    reviewReasons,
-    reviewAcknowledgedAt: null,
-    reviewAcknowledgedByUid: "",
-    provider,
-    model,
-    generationError: generationError || null,
-    generatedByUid: actor.uid || "",
-    generatedByName: actor.name,
-    generatedAt: now,
-    updatedAt: now,
-    createdAt: bundle.draft?.createdAt || now,
-  };
-  await db.runTransaction(async tx => {
-    const reportRef = db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(requestId);
-    const requestRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
-    const currentReport = (await tx.get(reportRef)).data();
-    const currentRequest = (await tx.get(requestRef)).data();
-    if (["published", "sent"].includes(String(currentReport?.publicationStatus || "")) || currentRequest?.status !== "submitted")
-      throw new AppError("INVALID_ARGUMENT", "현재 공개·제출 상태가 변경되어 초안을 덮어쓰지 않았습니다.");
-    tx.set(db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(requestId), draft, { merge: false });
-    tx.set(reportRef,
-    {
-      reportId: requestId,
-      requestId,
-      studioId: draft.studioId,
-      memberId: draft.memberId,
-      memberName: draft.memberName,
-      reportRevision: revision,
-      approvedRevision: "",
-      sentRevision: "",
-      approvalStatus: "draft",
-      publicationStatus: "draft",
-      updatedAt: now,
-      createdAt: bundle.report?.createdAt || now,
-    },
-    { merge: true },
-    );
-    tx.set(requestRef,
-    {
-      recommendationStatus: reviewReasons.length ? "review_required" : "awaiting_operator_review",
-      draftRevision: revision,
-      updatedAt: now,
-    },
-    { merge: true },
-    );
-  });
-  return { ok: true, requestId, draft: safeDraftForOperator(draft) };
 }
 
 export async function saveRecommendedMealProgramDraftHandler(
@@ -237,56 +152,75 @@ export async function saveRecommendedMealProgramDraftHandler(
 ): Promise<Record<string, unknown>> {
   const data = objectValue(request.data);
   const requestId = cleanRequestId(data.requestId);
-  const bundle = await loadReviewBundle(requestId, staff);
-  if (!bundle.draft) throw new AppError("INVALID_ARGUMENT", "먼저 추천식단 초안을 생성하세요.");
-  if (["published", "sent"].includes(String(bundle.report?.publicationStatus || ""))) {
-    throw new AppError("INVALID_ARGUMENT", "회원에게 공개한 추천식단은 수정할 수 없습니다.");
+  if (typeof data.expectedRevision !== "string" || typeof data.expectedResponseHash !== "string"
+    || !/^[a-f0-9]{64}$/.test(data.expectedResponseHash)) {
+    throw new AppError("INVALID_ARGUMENT", "최신 설문과 초안을 다시 불러온 뒤 저장하세요.");
   }
-  const publicContent = normalizePublicContent(data.publicContent, bundle.draft.publicContent);
-  const revision = mealPlanRevision(cleanText(bundle.draft.sourceResponseHash, 128), publicContent);
-  const reviewAcknowledged = data.reviewAcknowledged === true;
+  const publicContent = normalizePublicContent(data.publicContent, data.publicContent);
   const now = nowTimestamp();
-  await db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(requestId).set(
-    {
-      publicContent,
-      revision,
+  const result = await db.runTransaction(async tx => {
+    const requestRef = db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId);
+    const responseRef = db.collection(RECOMMENDED_MEAL_RESPONSE_COLLECTION).doc(requestId);
+    const draftRef = db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(requestId);
+    const reportRef = db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(requestId);
+    const mealRequest = (await tx.get(requestRef)).data();
+    const response = (await tx.get(responseRef)).data();
+    const previous = (await tx.get(draftRef)).data();
+    const report = (await tx.get(reportRef)).data();
+    assertSubmittedSource(mealRequest, response, staff);
+    assertUnpublishedReport(report);
+    const sourceHash = mealResponseSourceHash(response!);
+    if (data.expectedRevision !== String(previous?.revision || "")
+      || data.expectedResponseHash !== sourceHash) {
+      throw new AppError("INVALID_ARGUMENT", "설문 또는 초안이 변경됐습니다. 다시 불러온 뒤 검토하세요.");
+    }
+    const revision = mealPlanRevision(sourceHash, publicContent);
+    const reviewAcknowledged = data.reviewAcknowledged === true;
+    if (previous?.revision === revision
+      && Boolean(previous.reviewAcknowledgedAt) === reviewAcknowledged) {
+      return { ...previous, reused: true };
+    }
+    const previousRevision = cleanText(previous?.revision, 128);
+    const historyRef = previousRevision
+      ? db.collection(RECOMMENDED_MEAL_DRAFT_COLLECTION).doc(requestId).collection("revisions").doc(previousRevision)
+      : null;
+    const history = historyRef ? await tx.get(historyRef) : null;
+    const assisted = data.authoringMode === "codex_operator";
+    const draft = {
+      requestId, responseId: requestId,
+      studioId: cleanText(mealRequest!.studioId, 80) || DEFAULT_STUDIO_ID,
+      memberId: cleanText(mealRequest!.memberId, 120),
+      memberName: cleanText(mealRequest!.memberName, 40),
+      sourceResponseHash: sourceHash, publicContent, revision,
       status: "operator_edited",
+      reviewReasons: stringArray(response!.reviewReasons, 20, 80),
       reviewAcknowledgedAt: reviewAcknowledged ? now : null,
       reviewAcknowledgedByUid: reviewAcknowledged ? staff.uid || "" : "",
-      editedByUid: staff.uid || "",
-      editedByName: staff.name,
-      editedAt: now,
-      updatedAt: now,
-    },
-    { merge: true },
-  );
-  await db.collection(RECOMMENDED_MEAL_REPORT_COLLECTION).doc(requestId).set(
-    {
-      reportRevision: revision,
-      approvedRevision: "",
-      approvalStatus: "draft",
-      publicationStatus: "draft",
-      approvedSnapshot: null,
-      updatedAt: now,
-    },
-    { merge: true },
-  );
-  await invalidateMutableCandidate(cleanText(bundle.report?.candidateId, 160), "추천식단 수정 후 재승인 필요");
-  await db.collection(RECOMMENDED_MEAL_REQUEST_COLLECTION).doc(requestId).set(
-    { recommendationStatus: "awaiting_operator_review", draftRevision: revision, updatedAt: now },
-    { merge: true },
-  );
-  return {
-    ok: true,
-    requestId,
-    draft: safeDraftForOperator({
-      ...bundle.draft,
-      publicContent,
-      revision,
-      status: "operator_edited",
-      reviewAcknowledgedAt: reviewAcknowledged ? now : null,
-    }),
-  };
+      provider: assisted ? "operator_assisted" : "operator",
+      model: assisted ? "codex-chat" : "manual",
+      generationError: null,
+      editedByUid: staff.uid || "", editedByName: staff.name,
+      editedAt: now, updatedAt: now, createdAt: previous?.createdAt || now,
+    };
+    if (historyRef && !history?.exists) {
+      tx.set(historyRef, { ...previous!, preservedAt: now, supersededByRevision: revision });
+    }
+    tx.set(draftRef, draft);
+    tx.set(reportRef, {
+      reportId: requestId, requestId, studioId: draft.studioId,
+      memberId: draft.memberId, memberName: draft.memberName,
+      reportRevision: revision, approvedRevision: "", sentRevision: "",
+      approvalStatus: "draft", publicationStatus: "draft",
+      updatedAt: now, createdAt: report?.createdAt || now,
+    }, { merge: true });
+    tx.set(requestRef, {
+      recommendationStatus: draft.reviewReasons.length && !reviewAcknowledged
+        ? "review_required" : "awaiting_operator_review",
+      draftRevision: revision, updatedAt: now,
+    }, { merge: true });
+    return draft;
+  });
+  return { ok: true, requestId, reused: "reused" in result, draft: safeDraftForOperator(result) };
 }
 
 export async function recommendedMealPlanApiHandler(request: Request, response: Response): Promise<void> {
@@ -442,160 +376,6 @@ async function loadInbodySummary(reference: FirebaseFirestore.DocumentData): Pro
   return safe;
 }
 
-async function generateGeminiMealPlan(
-  answers: Record<string, unknown>,
-): Promise<RecommendedMealPublicContent & { model: string }> {
-  const apiKey = geminiApiKey.value();
-  if (!apiKey) throw new Error("GEMINI_API_KEY secret이 설정되어 있지 않습니다.");
-  const credential = getApp().options.credential || applicationDefault();
-  const access = await credential.getAccessToken();
-  await assertFreeGeminiProject(apiKey, access.access_token);
-  const prompt = [
-    "ARCHIVE PILATES 회원용 추천식단을 한국어 JSON으로 작성합니다.",
-    "목표는 생활 습관 개선이며 의료적 영양 처방, 질환 진단, 치료 표현을 금지합니다.",
-    "극단적인 칼로리 제한, 단식 강요, 보충제 처방을 하지 않습니다.",
-    "건강·질환·약물·알레르기·신원·체성분 정보는 제공되지 않습니다. 추정하거나 만들어내지 않습니다.",
-    "정확히 7일 식단을 작성하고 각 끼니는 한국에서 쉽게 구할 수 있는 식품으로 제안합니다.",
-    "각 끼니는 음식과 대략적인 손바닥/주먹/컵 단위 분량을 짧게 포함합니다.",
-    "출력 키: title, summary, goal, metricsSummary, principles(3~5개), days(7개), hydration, exerciseNutrition, weekendStrategy, caution.",
-    "days 항목 키: day(1~7), label, breakfast, lunch, dinner, snack, timingTip.",
-    "예산, 조리 가능한 시간과 도구, 집밥·구내식당·배달·편의점 식사 환경에 맞게 현실적인 대체 메뉴를 제안합니다.",
-    `고정 선택지: ${JSON.stringify(mealGenerationPreferences(answers))}`,
-    "JSON 외 텍스트는 출력하지 않습니다.",
-  ].join("\n");
-  const model = MEAL_FREE_MODEL;
-      const response = await fetch(`${GEMINI_GENERATE_URL}/${encodeURIComponent(model)}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
-        signal: AbortSignal.timeout(45000),
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: "당신은 ARCHIVE PILATES의 생활습관 식단 에디터입니다. 안전하고 실천 가능한 JSON만 반환합니다." }],
-          },
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.35,
-            topP: 0.9,
-            maxOutputTokens: 4096,
-            responseMimeType: "application/json",
-          },
-        }),
-      });
-      const text = await response.text();
-      const json = text ? JSON.parse(text) : {};
-      if (!response.ok) throw new Error(`gemini_generation_http_${response.status}`);
-      const output = String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "");
-      const parsed = JSON.parse(output.replace(/^```json\s*|\s*```$/g, ""));
-      return { ...normalizePublicContent(parsed, parsed), model };
-}
-
-function deterministicMealPlan(
-  mealRequest: FirebaseFirestore.DocumentData,
-  answers: Record<string, unknown>,
-  inbody: Record<string, unknown> | null,
-  reviewReasons: string[],
-): RecommendedMealPublicContent {
-  const name = cleanText(mealRequest.memberName, 40) || "회원";
-  const goal = cleanText(answers.primaryGoal, 120) || "규칙적인 식사 습관 만들기";
-  const avoid = reportedFoodExclusions(answers);
-  const exercise = cleanText(answers.exerciseSchedule, 200);
-  const needsHealthReview = mealChoiceReviewReasons(answers).length > 0
-    || reviewReasons.some(v => v !== "latest_inbody_missing");
-  const mealSet = avoid.length || needsHealthReview ? safeAllergyReviewMealSet() : [
-    ["그릭요거트 1컵 + 제철 과일 1주먹 + 견과 1숟갈", "현미밥 1주먹 + 닭가슴살/두부 1손바닥 + 채소 2주먹", "잡곡밥 반~1주먹 + 생선 1손바닥 + 나물 2가지", "삶은 달걀 1개 또는 무가당 두유"],
-    ["달걀 2개 + 통밀빵 1장 + 토마토", "보리밥 1주먹 + 소고기/콩 1손바닥 + 쌈채소", "두부 버섯전골 + 밥 반주먹", "과일 1주먹 + 플레인 요거트"],
-    ["오트밀 반컵 + 우유/두유 + 바나나 반개", "비빔밥 1그릇(밥 1주먹, 채소 충분히, 단백질 추가)", "닭고기 채소구이 + 고구마 1주먹", "견과 1줌 또는 치즈 1장"],
-    ["밥 반주먹 + 국 + 달걀/두부 + 김", "메밀면 1인분 + 닭고기/달걀 + 채소", "잡곡밥 반주먹 + 돼지안심 1손바닥 + 채소 2주먹", "무가당 두유 또는 방울토마토"],
-    ["그릭요거트 1컵 + 오트 2숟갈 + 베리류", "현미김밥 1줄 또는 포케(소스 절반)", "연두부 1팩 + 생선/닭 1손바닥 + 채소", "삶은 달걀 1개 + 오이"],
-    ["달걀 2개 + 고구마 1주먹 + 과일 소량", "외식: 밥 반~1공기 + 구이/회/수육 + 채소", "채소 듬뿍 샤브샤브 + 면/죽은 소량", "배고플 때 요거트 또는 견과"],
-    ["평소 아침 식사와 같은 시간에 단백질 포함 식사", "한식 백반: 밥 1주먹, 단백질 반찬, 채소 반찬 우선", "가벼운 집밥: 국/찌개는 건더기 위주 + 밥 반주먹", "과일 1주먹 또는 무가당 음료"],
-  ];
-  const preferences = mealGenerationPreferences(answers);
-  if (!avoid.length && !needsHealthReview) {
-    for (const meals of mealSet) {
-      if (preferences.mainMealSource === "편의점·간편식") {
-        meals[1] = "편의점: 작은 즉석밥 + 구운 달걀 또는 두부 + 샐러드, 소스는 별도";
-        meals[2] = "간편식: 즉석밥 + 전자레인지 채소 + 두부 또는 닭고기, 영양표시와 나트륨 확인";
-      } else if (preferences.mainMealSource === "식당·배달") {
-        meals[1] = "식당·배달: 한식 백반 또는 비빔밥 + 단백질 반찬, 소스와 국물은 별도";
-        meals[2] = "식당·배달: 구이·두부·채소를 포함한 한 끼, 밥은 배고픔에 맞게 조절";
-      } else if (preferences.mainMealSource === "구내식당·급식") {
-        meals[1] = "구내식당: 제공된 밥·단백질 반찬·채소를 골고루, 국은 건더기 위주";
-      } else if (["전자레인지·조립만 가능", "조리 어려움"].includes(String(preferences.cookingAccess))) {
-        meals[1] = "즉석밥 + 두부 또는 구운 달걀 + 씻은 채소, 조리 없이 한 접시로 구성";
-        meals[2] = "전자레인지 채소 + 즉석밥 + 두부 또는 닭고기, 별도 소스 소량";
-      } else if (preferences.mealBudget === "하루 1만원 이하") {
-        meals[1] = "집밥·도시락: 밥 + 달걀 또는 두부 + 제철 채소, 같은 재료를 나누어 준비";
-        meals[2] = "밥 + 콩·두부 반찬 + 냉동 또는 제철 채소, 남은 재료 활용";
-      }
-      if (preferences.breakfastPattern === "거의 거름") meals[0] = "아침이 부담스러우면 무가당 두유·달걀·과일 등 평소 먹던 간단한 구성부터 선택";
-      if (preferences.cookingAccess === "10분 이내 간단 조리") meals[0] = "구운 달걀 또는 두부 + 통밀빵 또는 즉석밥 + 씻은 과일";
-      if (Array.isArray(preferences.snackPattern) && preferences.snackPattern.includes("거의 없음"))
-        meals[3] = "배고프지 않으면 간식은 생략하고 물 또는 무가당 음료 선택";
-    }
-  }
-  return {
-    title: `${name}님의 7일 추천식단`,
-    summary: `${goal}을 목표로, ${[preferences.mainMealSource, preferences.cookingAccess, preferences.mealBudget].filter(Boolean).join(" · ") || "현재 생활 패턴"}에서 반복하기 쉬운 식사 구성을 우선했습니다.`,
-    goal,
-    metricsSummary: "생활·식사 선택지를 참고한 일반 식단입니다. 건강 응답과 InBody 수치는 AI에 전송하지 않았습니다.",
-    principles: [
-      "매 끼니에 손바닥 크기의 단백질을 포함합니다.",
-      "채소는 하루 두 끼 이상, 한 끼에 두 주먹을 목표로 합니다.",
-      "완벽한 제한보다 비슷한 시간에 반복하는 식사를 우선합니다.",
-      avoid.length
-        ? `알레르기·섭취 어려움으로 확인된 음식(${avoid.join(", ")})은 제외하고, 기존에 안전하게 섭취한 식품만 사용합니다.`
-        : "몸에 맞지 않는 음식은 무리해서 먹지 않습니다.",
-    ],
-    days: mealSet.map((meals, index) => ({
-      day: index + 1,
-      label: `${index + 1}일차`,
-      breakfast: meals[0],
-      lunch: meals[1],
-      dinner: meals[2],
-      snack: meals[3],
-      timingTip: preferences.mealBreakWindow === "교대·야간근무" || preferences.mealBreakWindow === "매일 다름"
-        ? "정해진 시각보다 근무 중 확보 가능한 식사 시간을 기준으로 한 끼와 휴대 간식을 준비하세요."
-        : preferences.mealBreakWindow === "저녁 21시 이후"
-          ? "늦은 식사는 소화에 부담이 적은 평소 음식으로 준비하고, 무리한 공복이나 과식을 피하세요."
-          : "평소 식사 시간을 기준으로 배고픔과 포만감을 확인하며 조절하세요.",
-    })),
-    hydration: "물을 한 번에 많이 마시기보다 기상 후, 식사 사이, 운동 전후로 나누어 마십니다.",
-    exerciseNutrition: exercise
-      ? `운동 일정(${exercise}) 전후에는 소화가 쉬운 탄수화물과 단백질을 소량 보충하세요.`
-      : "운동 전후에는 소화가 쉬운 탄수화물과 단백질을 소량 보충하세요.",
-    weekendStrategy: "주말에도 첫 식사 시간을 평일과 2시간 이상 벌리지 않고, 외식은 단백질과 채소를 먼저 선택합니다.",
-    caution: avoid.length
-      ? "알레르기 응답이 있어 특정 식품명 대신 안전한 식품군으로 표시했습니다. 운영자와 회원이 실제로 안전한 대체 식품을 확인한 뒤 실천하세요. 새로운 식품을 임의로 시도하지 마세요."
-      : reviewReasons.length
-      ? "건강 관련 응답이 확인되었습니다. 불편감이나 치료 중인 상태가 있다면 담당 의료진 또는 영양 전문가의 안내를 우선하세요."
-      : "본 식단은 생활 습관 개선을 위한 일반 안내이며 의료적 영양 처방을 대신하지 않습니다.",
-  };
-}
-
-function reportedAllergies(answers: Record<string, unknown>): string[] {
-  return stringArray(answers.allergies, 12, 80).filter((item) => !/없음|아니오|해당 없음|없습니다/.test(item));
-}
-
-function reportedFoodExclusions(answers: Record<string, unknown>): string[] {
-  const avoidFoods = cleanText(answers.avoidFoods, 200);
-  return [
-    ...reportedAllergies(answers),
-    ...(!avoidFoods || /^(없음|아니오|해당 없음|없습니다)[.!]?$/i.test(avoidFoods) ? [] : [avoidFoods]),
-  ];
-}
-
-function safeAllergyReviewMealSet(): string[][] {
-  return Array.from({ length: 7 }, (_, index) => [
-    "기존에 안전하게 섭취한 탄수화물 1주먹 + 안전한 단백질 식품 1손바닥 + 평소 먹던 과일 1주먹",
-    "알레르기 유발 식품을 제외한 밥 또는 안전한 전분 1주먹 + 안전한 단백질 1손바닥 + 평소 먹던 채소 2주먹",
-    "기존에 안전하게 섭취한 탄수화물 반~1주먹 + 안전한 단백질 1손바닥 + 평소 먹던 채소 2주먹",
-    index % 2 === 0
-      ? "기존에 안전하게 섭취한 간식 1회분"
-      : "배고플 때 평소 문제없이 먹던 과일 또는 안전한 단백질 간식",
-  ]);
-}
-
 function normalizePublicContent(value: unknown, fallbackValue: unknown): RecommendedMealPublicContent {
   const source = objectValue(value);
   const fallback = objectValue(fallbackValue);
@@ -629,16 +409,6 @@ function normalizePublicContent(value: unknown, fallbackValue: unknown): Recomme
 
 function mealPlanRevision(sourceHash: string, content: RecommendedMealPublicContent): string {
   return stableHash({ sourceHash, content });
-}
-
-async function invalidateMutableCandidate(candidateId: string, reason: string): Promise<void> {
-  if (!candidateId) return;
-  const ref = db.collection("alimtalkCandidates").doc(candidateId);
-  const snap = await ref.get();
-  const status = String(snap.data()?.status || "");
-  if (snap.exists && !["sent", "skipped"].includes(status)) {
-    await ref.set({ status: "skipped", reasonCode: "content_revision_changed", lastError: reason, updatedAt: nowTimestamp() }, { merge: true });
-  }
 }
 
 function safeRequestForOperator(data: FirebaseFirestore.DocumentData): Record<string, unknown> {

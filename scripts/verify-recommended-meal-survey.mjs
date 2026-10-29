@@ -17,7 +17,7 @@ const viewports = [
   { name: "desktop-1440", width: 1440, height: 1000 }
 ];
 const schemaVersion = "meal-choice-v2";
-const consentVersion = "meal-preferences-gemini-v1-20261029";
+const consentVersion = "meal-preferences-operator-v1-20261029";
 const token = "a".repeat(48);
 // Synthetic fixed choices only: no measurements, medical details or real member identities.
 const choices = {
@@ -31,6 +31,7 @@ const posts = [];
 const failures = [];
 const responsive = [];
 const reportGates = [];
+let contractMismatchCases = 0;
 const server = await startServer();
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
 let browser;
@@ -43,6 +44,11 @@ try {
       await page.getByRole("button", { name: "설문 제출하기" }).waitFor();
       assert.equal(await page.getByRole("group").count(), 13);
       assert.equal(await page.locator("textarea, select, input:not([type=radio]):not([type=checkbox])").count(), 0);
+      const notice = await page.locator("#aiProcessingNotice").innerText();
+      assert.match(notice, /Gemini\/OpenAI API를 자동 호출하지 않습니다/);
+      assert.match(notice, /ChatGPT\/Codex/);
+      assert.match(notice, /제출 즉시 생성되거나 공개되지 않습니다/);
+      assert.match(await page.locator("#healthProcessingNotice").innerText(), /초안 작성 입력에 포함하지 않습니다/);
       const before = await inspectLayout(page);
       assertLayout(before, viewport.name);
       await page.screenshot({ path: path.join(outputDir, `${viewport.name}-viewport.png`) });
@@ -67,7 +73,7 @@ try {
       const name = `${existing ? "existing" : "new"}-${String(reportReady)}-${typeof reportReady}`;
       await withContext(viewports[1], async context => {
         const { page, id } = await openCase(context, name, { status: existing ? "submitted" : "sent", reportReady,
-          ...(existing ? { surveySchemaVersion: undefined, consentVersion: undefined } : {}) });
+          ...(existing ? { surveySchemaVersion: undefined, consentVersion: reportReady === true ? "meal-preferences-gemini-v1-20261029" : undefined } : {}) });
         const initialPosts = posts.length;
         if (!existing) {
           await fillChoices(page);
@@ -81,7 +87,13 @@ try {
         assert.equal(posts.length, initialPosts + (existing ? 0 : 1));
         const visible = reportReady === true;
         assert.equal(await page.locator("#mealReportLink").isVisible(), visible);
-        if (visible) assert.equal(await page.locator("#mealReportLink").getAttribute("href"), `../recommendedMealPlan/?id=${id}&token=${token}`);
+        if (visible) {
+          assert.equal(await page.locator("#mealReportLink").getAttribute("href"), `../recommendedMealPlan/?id=${id}&token=${token}`);
+          assert.match(await page.locator("#surveyMessageText").innerText(), /운영자가 공개한/);
+        } else {
+          assert.match(await page.locator("#surveyMessageText").innerText(), /운영자 검토를 기다리고 있습니다/);
+          assert.match(await page.locator("#surveyMessageText").innerText(), /관리자가 별도로 요청/);
+        }
         await page.locator("form").dispatchEvent("submit");
         assert.equal(posts.length, initialPosts + (existing ? 0 : 1), "submitted form stays locked");
         await page.screenshot({ path: path.join(outputDir, `${name}-completion.png`) });
@@ -92,7 +104,8 @@ try {
 
   for (const [index, metadata] of [
     { surveySchemaVersion: undefined }, { surveySchemaVersion: 3 }, { surveySchemaVersion: "meal-choice-v3" },
-    { consentVersion: undefined }, { consentVersion: [consentVersion] }, { consentVersion: "old-consent" }
+    { consentVersion: undefined }, { consentVersion: [consentVersion] }, { consentVersion: "old-consent" },
+    { consentVersion: "meal-preferences-gemini-v1-20261029" }
   ].entries()) {
     await withContext(viewports[1], async context => {
       const { page } = await openCase(context, `contract-${index}`, metadata);
@@ -102,6 +115,7 @@ try {
       const initialPosts = posts.length;
       await page.locator("form").dispatchEvent("submit");
       assert.equal(posts.length, initialPosts);
+      contractMismatchCases += 1;
     });
   }
 } catch (error) {
@@ -116,7 +130,7 @@ try {
 }
 
 console.log(JSON.stringify({ ok: !failures.length, failures, responsive, reportGates,
-  contractMismatchCases: 6, syntheticLocalPosts: posts.length, livePosts: 0,
+  contractMismatchCases, syntheticLocalPosts: posts.length, livePosts: 0,
   outputDir, browserClosed: !browser?.isConnected(), serverClosed: !server.listening }, null, 2));
 if (failures.length) process.exitCode = 1;
 

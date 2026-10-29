@@ -31,6 +31,7 @@ const RESPONSE = `recommendedMealProgramResponses/${ID}`;
 const DRAFT = `recommendedMealProgramDrafts/${ID}`;
 const REPORT = `recommendedMealProgramReports/${ID}`;
 const ACTOR = { uid: "synthetic-staff", name: "Synthetic operator", studioId: "5330" };
+const OPERATOR_CONSENT = "meal-preferences-operator-v1-20261029";
 const plain = (value: any) => JSON.parse(JSON.stringify(value));
 
 class Stamp {
@@ -47,7 +48,7 @@ function clone(value: any): any {
 }
 
 // Entire production modules run with an allowlisted require and an in-memory DB only.
-function fixture(options: Record<string, any> = {}) {
+function fixture() {
   let clock = NOW;
   class Clock extends Date {
     constructor(value: any = clock) { super(value); }
@@ -57,21 +58,25 @@ function fixture(options: Record<string, any> = {}) {
   const writes: any[] = [];
   const reads: string[] = [];
   const http: any[] = [];
+  const credentialCalls: string[] = [];
   const commits: any[][] = [];
-  let afterGeneration: (() => void) | undefined;
+  const transactionReads: string[][] = [];
   let beforeTransaction: (() => void) | undefined;
+  let beforeCommit: (() => void) | undefined;
+  let commitFailure = false;
   let transactionTail = Promise.resolve();
   const snap = (path: string) => {
     reads.push(path);
     return { exists: values.has(path), data: () => clone(values.get(path)) };
   };
   const apply = (path: string, value: any, merge: boolean) => {
-    assert.ok([REQUEST, RESPONSE, DRAFT, REPORT].includes(path), `Unscoped memory write: ${path}`);
+    assert.ok([REQUEST, RESPONSE, DRAFT, REPORT].includes(path) || path.startsWith(`${DRAFT}/revisions/`), `Unscoped memory write: ${path}`);
     values.set(path, merge ? { ...values.get(path), ...clone(value) } : clone(value));
     writes.push({ path, value: clone(value), merge });
   };
   const doc = (path: string) => ({ path, get: async () => snap(path),
-    set: async (value: any, opts: any = {}) => apply(path, value, !!opts.merge) });
+    set: async (value: any, opts: any = {}) => apply(path, value, !!opts.merge),
+    collection: (name: string) => ({ doc: (id: string) => doc(`${path}/${name}/${id}`) }) });
   const query = (name: string) => ({
     where: (..._args: any[]) => query(name), limit: (_cap: number) => query(name),
     get: async () => {
@@ -87,20 +92,34 @@ function fixture(options: Record<string, any> = {}) {
       transactionTail = new Promise<void>(resolve => { release = resolve; });
       await previous;
       const pending: any[] = [];
+      const observed = new Map<string, string | undefined>();
       try {
         const hook = beforeTransaction; beforeTransaction = undefined; hook?.();
         const result = await callback({
-          get: async (ref: any) => { assert.equal(pending.length, 0); return snap(ref.path); },
+          get: async (ref: any) => {
+            assert.equal(pending.length, 0, "All transaction guards must be read before any write");
+            observed.set(ref.path, JSON.stringify(values.get(ref.path)));
+            return snap(ref.path);
+          },
           set: (ref: any, value: any, opts: any = {}) => pending.push([ref.path, value, !!opts.merge]),
           update: (ref: any, value: any) => pending.push([ref.path, value, true]),
+          create: (ref: any, value: any) => {
+            assert.equal(values.has(ref.path), false, "Revision history cannot be overwritten");
+            pending.push([ref.path, value, false]);
+          },
         });
+        const commitHook = beforeCommit; beforeCommit = undefined; commitHook?.();
+        if ([...observed].some(([path, prior]) => JSON.stringify(values.get(path)) !== prior))
+          throw new Error("synthetic_transaction_conflict_rollback");
+        if (commitFailure) { commitFailure = false; throw new Error("synthetic_commit_failure_rollback"); }
         for (const [path, value, merge] of pending) apply(path, value, merge);
         commits.push(pending.map(([path]) => path));
+        transactionReads.push([...observed.keys()]);
         return result;
       } finally { release(); }
     },
   };
-  const generated = {
+  const content = {
     title: "Synthetic plan", summary: "Synthetic summary", goal: "Synthetic goal", metricsSummary: "Synthetic metrics",
     principles: ["Synthetic principle"], hydration: "Synthetic water", exerciseNutrition: "Synthetic exercise",
     weekendStrategy: "Synthetic weekend", caution: "Synthetic caution",
@@ -109,22 +128,7 @@ function fixture(options: Record<string, any> = {}) {
   };
   const fakeFetch = async (url: any, init: any = {}) => {
     const endpoint = String(url); http.push({ url: endpoint, ...init });
-    if (endpoint.startsWith("https://apikeys.googleapis.com/")) {
-      const status = options.lookupStatus || 200;
-      return { ok: status === 200, status, json: async () => Object.hasOwn(options, "identity") ? options.identity
-        : { parent: "projects/123456789/locations/global", name: "projects/123456789/locations/global/keys/synthetic" } };
-    }
-    if (endpoint === "https://cloudbilling.googleapis.com/v1/projects/123456789/billingInfo") {
-      const status = options.billingStatus || 200;
-      return { ok: status === 200, status, json: async () => Object.hasOwn(options, "billing") ? options.billing : { billingEnabled: false } };
-    }
-    assert.equal(endpoint, "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent", "Never use a paid/alternate model");
-    assert.equal(init.method, "POST");
-    return { ok: !options.generationFailure, status: options.generationFailure ? 503 : 200,
-      text: async () => {
-        afterGeneration?.();
-        return JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(generated) }] } }] });
-      } };
+    throw new Error("All network calls are forbidden in the operator-call lane");
   };
   class AppError extends Error { constructor(readonly code: string, message: string) { super(message); } }
   const globals = { Date: Clock, fetch: fakeFetch };
@@ -138,17 +142,19 @@ function fixture(options: Record<string, any> = {}) {
   };
   const survey = evaluate("mealPlan/recommendedMealSurvey", shared, globals);
   const hash = evaluate("utils/hash", { "node:crypto": crypto }, globals);
-  const credential = { getAccessToken: async () => ({ access_token: "synthetic-bearer-never-real" }) };
+  const forbiddenCredential = (name: string): never => {
+    credentialCalls.push(name); throw new Error(`Credential access forbidden: ${name}`);
+  };
   const program = evaluate("mealPlan/recommendedMealProgram", {
     ...shared, "./recommendedMealSurvey": survey,
-    "firebase-admin/app": { getApp: () => ({ options: { credential } }), applicationDefault: () => { throw new Error("ADC forbidden in pure tests"); } },
-    "../config/secrets": { geminiApiKey: { value: () => "synthetic-key-never-real" } },
+    "firebase-admin/app": { getApp: () => forbiddenCredential("getApp"), applicationDefault: () => forbiddenCredential("applicationDefault") },
+    "../config/secrets": { geminiApiKey: { value: () => forbiddenCredential("geminiApiKey") } },
     "../utils/hash": hash,
   }, globals);
   const answers = () => ({
     ...Object.fromEntries(Object.entries(policy.MEAL_CHOICES).map(([key, choices]: any) =>
       [key, ["snackPattern", "allergies", "preferredFoods", "healthFlags"].includes(key) ? [choices[0]] : choices[0]])),
-    schemaVersion: policy.MEAL_CHOICE_SCHEMA, consentVersion: policy.MEAL_CHOICE_CONSENT,
+    schemaVersion: policy.MEAL_CHOICE_SCHEMA, consentVersion: OPERATOR_CONSENT,
     consent: true, aiProcessingConsent: true,
   });
   values.set(REQUEST, {
@@ -158,7 +164,8 @@ function fixture(options: Record<string, any> = {}) {
   });
   const seedSubmitted = (overrides = {}) => {
     values.get(REQUEST).status = "submitted";
-    values.set(RESPONSE, { requestId: ID, answers: { ...answers(), ...overrides }, reviewReasons: [], inbody: { status: "missing" } });
+    values.set(RESPONSE, { requestId: ID, studioId: ACTOR.studioId, memberId: "synthetic-native-id",
+      answers: { ...answers(), ...overrides }, reviewReasons: [], submittedAt: new Stamp(NOW - 1000), inbody: { status: "missing" } });
   };
   const call = async (method: string, changes: any = {}) => {
     const result: any = { statusCode: 200, headers: {}, body: undefined };
@@ -171,11 +178,15 @@ function fixture(options: Record<string, any> = {}) {
       body: { requestId: ID, accessToken: TOKEN, ...answers(), ...changes.body }, get: () => "https://in.archivepilates.com" }, response);
     return result;
   };
-  return { values, writes, reads, http, commits, policy, survey, program, hash, answers, seedSubmitted, call,
+  const sourceHash = () => program.mealResponseSourceHash(values.get(RESPONSE));
+  const saveData = (changes: Record<string, any> = {}) => ({ requestId: ID, publicContent: clone(content),
+    expectedRevision: values.get(DRAFT)?.revision || "", expectedResponseHash: sourceHash(), ...changes });
+  return { values, writes, reads, http, credentialCalls, commits, transactionReads, content, policy, survey, program, hash, answers, seedSubmitted, call, sourceHash, saveData,
     beforeTransaction: (hook: () => void) => { beforeTransaction = hook; }, clock: (ms: number) => { clock = ms; },
-    afterGeneration: (hook: () => void) => { afterGeneration = hook; },
-    generate: () => program.generateRecommendedMealProgramDraftHandler({ data: { requestId: ID } }, ACTOR),
-    generationCalls: () => http.filter(row => row.url.includes(":generateContent")),
+    beforeCommit: (hook: () => void) => { beforeCommit = hook; }, failCommit: () => { commitFailure = true; },
+    generate: (staff = ACTOR) => program.generateRecommendedMealProgramDraftHandler({ data: { requestId: ID } }, staff),
+    trigger: () => program.generateRecommendedMealProgramDraftForSubmittedResponse(ID, clone(values.get(RESPONSE) || { studioId: ACTOR.studioId })),
+    save: (data = saveData(), staff = ACTOR) => program.saveRecommendedMealProgramDraftHandler({ data }, staff),
   };
 }
 
@@ -183,7 +194,7 @@ test("actual GET authenticates and returns current choice/consent versions witho
   const f = fixture(); const result = await f.call("GET");
   assert.equal(result.statusCode, 200); assert.equal(result.body.ok, true);
   assert.equal(result.body.surveySchemaVersion, "meal-choice-v2");
-  assert.equal(result.body.consentVersion, "meal-preferences-gemini-v1-20261029");
+  assert.equal(result.body.consentVersion, OPERATOR_CONSENT);
   assert.equal(result.headers["Cache-Control"], "no-store");
   for (const key of ["accessTokenHash", "memberId", "memberPhone", "answers", "inbody"]) assert.equal(Object.hasOwn(result.body, key), false);
   assert.equal(f.writes.length, 0); assert.equal(f.http.length, 0);
@@ -265,113 +276,343 @@ test("two concurrent valid submissions preserve the first committed answer set e
   assert.equal(f.writes.filter(row => row.path === RESPONSE).length, 1);
 });
 
-for (const [name, options] of [
-  ["lookup403", { lookupStatus: 403 }], ["invalid key", { lookupStatus: 400 }],
-  ["unknown key project", { identity: {} }], ["billing403", { billingStatus: 403 }],
-  ["paid", { billing: { billingEnabled: true, billingAccountName: "billingAccounts/synthetic" } }],
-  ["unknown billing", { billing: {} }],
-] as const) {
-  test(`actual program: ${name} free-gate failure makes zero generation calls and no paid fallback`, async () => {
-    const f = fixture(options); f.seedSubmitted();
-    await f.generate();
-    assert.equal(f.generationCalls().length, 0);
-    assert.equal(f.values.get(DRAFT).provider, "safe_fallback");
-    assert.equal(f.values.get(DRAFT).model, "rule-based-v1");
-    assert.match(f.values.get(DRAFT).generationError, /^gemini_/);
-  });
-}
+const assertNoExternalCalls = (f: ReturnType<typeof fixture>) => {
+  assert.equal(f.http.length, 0, "No AI, metadata, email or other network requests");
+  assert.deepEqual(f.credentialCalls, [], "No API key, ADC or OAuth token reads");
+};
+const operatorRequired = { ok: true, status: "operator_call_required", requestId: ID };
 
-test("actual external generation body excludes health, InBody, identity and legacy free text", async () => {
-  const f = fixture(); f.seedSubmitted({ medicalConditions: "PRIVATE_HEALTH_SENTINEL", medications: "PRIVATE_DRUG_SENTINEL",
-    additionalNote: "PRIVATE_TEXT_SENTINEL", inbody: { bmi: 123, weightKg: 999 }, memberId: "PRIVATE_ID_SENTINEL" });
-  f.values.get(RESPONSE).inbody = { eventId: "synthetic-event" };
-  f.values.set("inbodyWebhookEvents/synthetic-event", { measurementId: "synthetic-measurement" });
-  f.values.set("inbodyMeasurements/synthetic-measurement", { summary: { bmi: 123, weightKg: 999, bodyFatPercent: 88 } });
-  await f.generate();
-  assert.equal(f.generationCalls().length, 1);
-  const call = f.generationCalls()[0]; const body = JSON.parse(call.body);
-  assert.equal(call.headers["X-goog-api-key"], "synthetic-key-never-real");
-  assert.doesNotMatch(call.body, /PRIVATE_|weightKg|bodyFatPercent|"bmi"|medicalConditions|medications|additionalNote|allergies|healthFlags|consentVersion/);
-  assert.ok(body.contents[0].parts[0].text.includes("식사 습관 개선"));
-  assert.equal(f.values.get(DRAFT).provider, "gemini");
-  assert.equal(f.values.get(DRAFT).model, "gemini-2.5-flash-lite");
-  assert.deepEqual(f.commits.at(-1), [DRAFT, REPORT, REQUEST], "Final draft/report/request saves are atomic");
-});
-
-for (const issue of ["published", "sent", "cancelled", "missing request", "no longer submitted"]) {
-  test(`final generation save rechecks ${issue} and never overwrites a changed live state`, async () => {
-    const f = fixture(); f.seedSubmitted();
-    f.values.set(DRAFT, { preserved: "synthetic-existing-draft" });
-    f.afterGeneration(() => {
-      if (["published", "sent"].includes(issue)) f.values.set(REPORT, { publicationStatus: issue, approvedRevision: "synthetic-keep" });
-      if (issue === "cancelled") f.values.get(REQUEST).status = "cancelled";
-      if (issue === "missing request") f.values.delete(REQUEST);
-      if (issue === "no longer submitted") f.values.get(REQUEST).status = "queued";
-    });
-    await assert.rejects(() => f.generate());
-    assert.deepEqual(f.values.get(DRAFT), { preserved: "synthetic-existing-draft" });
-    assert.equal(f.writes.filter(row => [DRAFT, REPORT].includes(row.path)).length, 0);
-    assert.equal(f.generationCalls().length, 1);
-    if (["published", "sent"].includes(issue)) assert.equal(f.values.get(REPORT).publicationStatus, issue);
-  });
-}
-
-test("failed free generation does not try another model or overwrite the daily claim", async () => {
-  const f = fixture({ generationFailure: true }); f.seedSubmitted();
-  await f.generate();
-  assert.equal(f.generationCalls().length, 1);
-  assert.match(f.values.get(DRAFT).generationError, /gemini_generation_http_503/);
-  const claim = clone(f.values.get(REQUEST).mealAiGenerationAttempt);
-  f.values.get(RESPONSE).answers.primaryGoal = "체지방 감량";
-  const before = f.writes.length; const draft = clone(f.values.get(DRAFT));
-  const result = await f.generate();
-  assert.equal(result.status, "generation_in_progress_or_daily_limit");
-  assert.deepEqual(f.values.get(DRAFT), draft); assert.equal(f.writes.length, before);
-  assert.deepEqual(f.values.get(REQUEST).mealAiGenerationAttempt, claim);
-  assert.equal(f.generationCalls().length, 1);
-});
-
-test("matching draft sourceHash is reused without any metadata/generation requests or writes", async () => {
-  const f = fixture({ lookupStatus: 403 }); f.seedSubmitted();
-  await f.generate(); const draft = clone(f.values.get(DRAFT));
-  const httpBefore = f.http.length; const writesBefore = f.writes.length;
-  const result = await f.generate();
-  assert.equal(result.reused, true);
-  assert.deepEqual(f.values.get(DRAFT), draft); assert.equal(f.http.length, httpBefore); assert.equal(f.writes.length, writesBefore);
-});
-
-for (const [name, overrides] of [
-  ["allergy", { allergies: ["견과류"] }], ["health", { healthFlags: ["임신·수유"] }],
-  ["old consent", { consentVersion: "legacy-v1" }], ["no AI consent", { aiProcessingConsent: false }],
-] as const) {
-  test(`actual program: ${name} blocks all external model and metadata calls`, async () => {
-    const f = fixture(); f.seedSubmitted(overrides); await f.generate();
-    assert.equal(f.http.length, 0); assert.notEqual(f.values.get(DRAFT).provider, "gemini");
-    if (name === "health" || name === "allergy") {
-      assert.match(f.values.get(DRAFT).publicContent.days[0].lunch, /안전한/);
-      assert.doesNotMatch(f.values.get(DRAFT).publicContent.days[0].lunch, /닭가슴살|견과|우유/);
+for (const entry of ["generate", "trigger"] as const) {
+  test(`${entry}: automatic generation is replaced by an operator call, not a fallback draft`, async () => {
+    const f = fixture(); f.seedSubmitted(); const response = clone(f.values.get(RESPONSE));
+    assert.deepEqual(plain(await f[entry]()), operatorRequired);
+    assert.deepEqual(f.values.get(RESPONSE), response);
+    assert.equal(f.values.has(DRAFT), false); assert.equal(f.values.has(REPORT), false);
+    for (const write of f.writes) {
+      assert.equal(write.path, REQUEST);
+      assert.equal(write.value.recommendationStatus, "operator_call_required");
+      assert.ok(Object.keys(write.value).every(key => ["recommendationStatus", "updatedAt"].includes(key)));
     }
+    assert.equal(f.values.get(REQUEST).status, "submitted");
+    assert.equal(f.values.get(REQUEST).mealAiGenerationAttempt, undefined);
+    assertNoExternalCalls(f);
+  });
+
+  test(`${entry}: historical response and existing draft/report are immutable`, async () => {
+    const f = fixture(); f.seedSubmitted({ consentVersion: "legacy-v1", medicalConditions: "PRIVATE_LEGACY" });
+    f.values.set(DRAFT, { revision: "legacy-draft", publicContent: clone(f.content), preserved: "synthetic" });
+    f.values.set(REPORT, { publicationStatus: "draft", preserved: "synthetic-report" });
+    const before = clone([...f.values]);
+    assert.deepEqual(plain(await f[entry]()), operatorRequired);
+    assert.deepEqual([...f.values], before); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+  });
+
+  for (const [name, overrides] of [
+    ["current choices", {}], ["allergy", { allergies: ["견과류"] }], ["health", { healthFlags: ["임신·수유"] }],
+    ["malformed", { healthFlags: { diagnosis: "PRIVATE_HEALTH" }, allergies: "PRIVATE_ALLERGY", exerciseSchedule: "PRIVATE_TEXT" }],
+    ["old AI consent", { consentVersion: "meal-preferences-gemini-v1-20261029" }],
+    ["no AI consent", { aiProcessingConsent: false }],
+  ] as const) {
+    test(`${entry}: ${name} never leaves the process and never creates a draft`, async () => {
+      const f = fixture(); f.seedSubmitted(overrides);
+      f.values.get(RESPONSE).inbody = { eventId: "synthetic-event" };
+      f.values.set("inbodyWebhookEvents/synthetic-event", { measurementId: "synthetic-measurement" });
+      f.values.set("inbodyMeasurements/synthetic-measurement", { summary: { bmi: 123, weightKg: 999 } });
+      const response = clone(f.values.get(RESPONSE));
+      assert.deepEqual(plain(await f[entry]()), operatorRequired);
+      assert.deepEqual(f.values.get(RESPONSE), response);
+      assert.equal(f.values.has(DRAFT), false); assert.equal(f.values.has(REPORT), false); assertNoExternalCalls(f);
+    });
+  }
+
+  for (const issue of ["missing request", "missing response", "cancelled", "not submitted", "different studio"]) {
+    test(`${entry}: ${issue} cannot mutate canonical records`, async () => {
+      const f = fixture(); f.seedSubmitted();
+      if (issue === "missing request") f.values.delete(REQUEST);
+      if (issue === "missing response") f.values.delete(RESPONSE);
+      if (issue === "cancelled") f.values.get(REQUEST).status = "cancelled";
+      if (issue === "not submitted") f.values.get(REQUEST).status = "queued";
+      if (issue === "different studio") f.values.get(REQUEST).studioId = "synthetic-other-studio";
+      await assert.rejects(() => f[entry]());
+      assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+    });
+  }
+}
+
+test("automatic invocation cannot mark a request cancelled after the initial read", async () => {
+  const f = fixture(); f.seedSubmitted();
+  f.beforeTransaction(() => { f.values.get(REQUEST).status = "cancelled"; });
+  await assert.rejects(() => f.trigger());
+  assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+});
+
+test("operator consent supersedes old Gemini consent for all fresh submissions", async () => {
+  const f = fixture();
+  assert.equal(f.policy.MEAL_CHOICE_CONSENT, OPERATOR_CONSENT);
+  const result = await f.call("POST", { body: { consentVersion: "meal-preferences-gemini-v1-20261029" } });
+  assert.ok(result.statusCode >= 400); assert.equal(f.writes.length, 0);
+});
+
+function seedDraft(f: ReturnType<typeof fixture>) {
+  f.values.set(DRAFT, {
+    requestId: ID, responseId: ID, studioId: ACTOR.studioId, memberId: "synthetic-native-id",
+    memberName: "PRIVATE_NAME_SENTINEL", revision: "a".repeat(64), sourceResponseHash: f.sourceHash(),
+    publicContent: clone(f.content), status: "operator_edited", provider: "operator_assisted", model: "codex-chat",
+    reviewReasons: [], createdAt: new Stamp(NOW - 10000), updatedAt: new Stamp(NOW - 5000),
+  });
+  f.values.set(REPORT, { publicationStatus: "draft", approvalStatus: "draft", reportRevision: "a".repeat(64) });
+  f.values.get(REQUEST).draftRevision = "a".repeat(64);
+}
+
+test("response source hash is stable and binds answers, review reasons and submittedAt only", () => {
+  const f = fixture(); f.seedSubmitted(); const response = clone(f.values.get(RESPONSE)); const hash = f.sourceHash();
+  assert.match(hash, /^[a-f0-9]{64}$/);
+  assert.equal(hash, f.hash.stableHash({ answers: response.answers, reviewReasons: response.reviewReasons,
+    submittedAt: response.submittedAt.toDate().toISOString() }));
+  assert.equal(f.program.mealResponseSourceHash(clone(response)), hash);
+  assert.equal(f.program.mealResponseSourceHash({ ...response, memberId: "different", inbody: { bmi: 123 }, updatedAt: new Stamp(NOW) }), hash);
+  for (const patch of [{ answers: { ...response.answers, primaryGoal: "체지방 감량" } },
+    { reviewReasons: ["health_safety_review_required"] }, { submittedAt: new Stamp(NOW + 1) }]) {
+    assert.notEqual(f.program.mealResponseSourceHash({ ...response, ...patch }), hash);
+  }
+  assertNoExternalCalls(f);
+});
+
+test("operator review exposes the same response source hash without generating or saving", async () => {
+  const f = fixture(); f.seedSubmitted(); const before = clone([...f.values]);
+  const result = await f.program.getRecommendedMealProgramReviewHandler({ data: { requestId: ID } }, ACTOR);
+  assert.equal(result.response.sourceHash, f.sourceHash());
+  assert.deepEqual(plain(result.response.answers), plain(f.values.get(RESPONSE).answers));
+  assert.deepEqual([...f.values], before); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+});
+
+test("operator save creates the first draft from a submitted response with 3 atomic canonical saves", async () => {
+  const f = fixture(); f.seedSubmitted(); const response = clone(f.values.get(RESPONSE));
+  const result = await f.save(f.saveData({ authoringMode: "codex_operator", provider: "forged", model: "forged", memberId: "forged" }));
+  assert.equal(result.ok, true);
+  const draft = f.values.get(DRAFT); const report = f.values.get(REPORT); const request = f.values.get(REQUEST);
+  assert.equal(draft.provider, "operator_assisted"); assert.equal(draft.model, "codex-chat");
+  assert.equal(draft.sourceResponseHash, f.sourceHash()); assert.match(draft.revision, /^[a-f0-9]{64}$/);
+  assert.deepEqual(plain(draft.publicContent), f.content); assert.equal(draft.memberId, "synthetic-native-id");
+  assert.equal(report.publicationStatus, "draft"); assert.notEqual(report.approvalStatus, "approved");
+  assert.equal(report.reportRevision, draft.revision); assert.equal(request.draftRevision, draft.revision);
+  assert.equal(request.status, "submitted"); assert.deepEqual(f.values.get(RESPONSE), response);
+  assert.deepEqual([...f.commits.at(-1)!].sort(), [DRAFT, REPORT, REQUEST].sort());
+  assert.deepEqual([...f.transactionReads.at(-1)!].sort(), [DRAFT, REPORT, REQUEST, RESPONSE].sort());
+  assert.equal(f.writes.length, 3); assertNoExternalCalls(f);
+});
+
+test("a request's old survey invitation candidate is not a report candidate and is never invalidated", async () => {
+  const f = fixture(); f.seedSubmitted();
+  const invitationId = `${ID}-invite`;
+  const invitationPath = `alimtalkCandidates/${invitationId}`;
+  const invitation = { candidateId: invitationId, type: "recommended_meal_survey", status: "sent", sourceActionKey: ID };
+  f.values.get(REQUEST).candidateId = invitationId;
+  f.values.get(REQUEST).templateCode = "synthetic-survey-template";
+  f.values.set(invitationPath, clone(invitation));
+  f.values.set(REPORT, { publicationStatus: "draft", approvalStatus: "draft", reviewReasons: [] });
+  const response = clone(f.values.get(RESPONSE));
+  await f.save(f.saveData({ authoringMode: "codex_operator" }));
+  assert.equal(f.values.get(REQUEST).candidateId, invitationId);
+  assert.equal(f.values.get(REPORT).candidateId, undefined);
+  assert.deepEqual(f.values.get(invitationPath), invitation);
+  assert.equal(f.reads.includes(invitationPath), false);
+  assert.equal(f.writes.some(row => row.path === invitationPath), false);
+  assert.deepEqual(f.values.get(RESPONSE), response); assertNoExternalCalls(f);
+});
+
+test("saving an edited draft archives the entire prior revision inside the same transaction", async () => {
+  const f = fixture(); f.seedSubmitted(); seedDraft(f); const old = clone(f.values.get(DRAFT));
+  const data = f.saveData({ authoringMode: "codex_operator" }); data.publicContent.summary = "Changed operator summary";
+  await f.save(data);
+  const historyPath = `${DRAFT}/revisions/${old.revision}`; const history = f.values.get(historyPath);
+  assert.ok(history, "Prior revision must be durably retained");
+  for (const [key, value] of Object.entries(old)) assert.deepEqual(history[key], value, `History preserves ${key}`);
+  assert.notEqual(f.values.get(DRAFT).revision, old.revision);
+  assert.equal(f.values.get(DRAFT).createdAt.toMillis(), old.createdAt.toMillis());
+  assert.deepEqual([...f.commits.at(-1)!].sort(), [DRAFT, REPORT, REQUEST, historyPath].sort());
+  const before = clone([...f.values]); const writes = f.writes.length;
+  await assert.rejects(() => f.save(data), undefined, "An old expectedRevision must not be replayed");
+  assert.deepEqual([...f.values], before); assert.equal(f.writes.length, writes); assertNoExternalCalls(f);
+});
+
+test("identical content, source and review acknowledgement reuse the saved revision without writes", async () => {
+  const f = fixture(); f.seedSubmitted(); await f.save(f.saveData({ authoringMode: "codex_operator" }));
+  const before = clone([...f.values]); const writes = f.writes.length;
+  const result = await f.save(f.saveData({ authoringMode: "codex_operator" }));
+  assert.equal(result.reused, true); assert.equal(result.draft.revision, f.values.get(DRAFT).revision);
+  assert.deepEqual([...f.values], before); assert.equal(f.writes.length, writes); assertNoExternalCalls(f);
+});
+
+test("changing review acknowledgement is a real save, and a repeated acknowledgement is reused", async () => {
+  const f = fixture(); f.seedSubmitted({ healthFlags: ["임신·수유"] });
+  f.values.get(RESPONSE).reviewReasons = ["health_safety_review_required"];
+  const response = clone(f.values.get(RESPONSE));
+  await f.save(f.saveData({ authoringMode: "codex_operator", reviewAcknowledged: false }));
+  assert.equal(f.values.get(REQUEST).recommendationStatus, "review_required");
+  const old = clone(f.values.get(DRAFT));
+  const result = await f.save(f.saveData({ authoringMode: "codex_operator", reviewAcknowledged: true }));
+  assert.equal(result.reused, false);
+  assert.equal(f.values.get(DRAFT).reviewAcknowledgedByUid, ACTOR.uid);
+  assert.ok(f.values.get(DRAFT).reviewAcknowledgedAt instanceof Stamp);
+  assert.equal(f.values.get(REQUEST).recommendationStatus, "awaiting_operator_review");
+  assert.equal(f.values.get(`${DRAFT}/revisions/${old.revision}`).reviewAcknowledgedAt, null);
+  const writes = f.writes.length;
+  assert.equal((await f.save(f.saveData({ authoringMode: "codex_operator", reviewAcknowledged: true }))).reused, true);
+  assert.equal(f.writes.length, writes); assert.deepEqual(f.values.get(RESPONSE), response); assertNoExternalCalls(f);
+});
+
+test("preexisting revision history is preserved rather than overwritten by a later edit", async () => {
+  const f = fixture(); f.seedSubmitted(); seedDraft(f);
+  const path = `${DRAFT}/revisions/${f.values.get(DRAFT).revision}`;
+  const historical = { ...clone(f.values.get(DRAFT)), preservedAt: new Stamp(NOW - 30000), sentinel: "keep-first-history" };
+  f.values.set(path, clone(historical));
+  const data = f.saveData(); data.publicContent.summary = "New edit after existing archive";
+  await f.save(data);
+  assert.deepEqual(f.values.get(path), historical);
+  assert.equal(f.writes.filter(row => row.path === path).length, 0);
+  assert.deepEqual([...f.commits.at(-1)!].sort(), [DRAFT, REPORT, REQUEST].sort()); assertNoExternalCalls(f);
+});
+
+for (const authoringMode of [undefined, "", "manual", "system", "codex", true]) {
+  test(`only exact codex_operator authoring marks Codex provenance: ${String(authoringMode)}`, async () => {
+    const f = fixture(); f.seedSubmitted(); await f.save(f.saveData({ authoringMode, provider: "operator_assisted", model: "codex-chat" }));
+    assert.notEqual(f.values.get(DRAFT).provider, "operator_assisted");
+    assert.notEqual(f.values.get(DRAFT).model, "codex-chat"); assertNoExternalCalls(f);
   });
 }
 
-const fallbackScenarios: [string, any, (content: any) => void][] = [
-  ["convenience", { mainMealSource: "편의점·간편식" }, c => c.days.forEach((d: any) => { assert.match(d.lunch, /편의점/); assert.match(d.dinner, /간편식/); })],
-  ["restaurant", { mainMealSource: "식당·배달" }, c => c.days.forEach((d: any) => { assert.match(d.lunch, /식당·배달/); assert.match(d.dinner, /식당·배달/); })],
-  ["cafeteria", { mainMealSource: "구내식당·급식" }, c => c.days.forEach((d: any) => assert.match(d.lunch, /구내식당/))],
-  ["microwave", { cookingAccess: "전자레인지·조립만 가능" }, c => c.days.forEach((d: any) => { assert.match(d.lunch, /조리 없이/); assert.match(d.dinner, /전자레인지/); })],
-  ["no cook", { cookingAccess: "조리 어려움" }, c => c.days.forEach((d: any) => assert.match(d.lunch, /조리 없이/))],
-  ["budget", { mealBudget: "하루 1만원 이하" }, c => c.days.forEach((d: any) => { assert.match(d.lunch, /같은 재료/); assert.match(d.dinner, /남은 재료/); })],
-  ["breakfast skip", { breakfastPattern: "거의 거름" }, c => c.days.forEach((d: any) => assert.match(d.breakfast, /아침이 부담/))],
-  ["quick cooking", { cookingAccess: "10분 이내 간단 조리" }, c => c.days.forEach((d: any) => assert.match(d.breakfast, /구운 달걀 또는 두부/))],
-  ["shift work", { mealBreakWindow: "교대·야간근무" }, c => c.days.forEach((d: any) => assert.match(d.timingTip, /근무 중/))],
-  ["late dinner", { mealBreakWindow: "저녁 21시 이후" }, c => c.days.forEach((d: any) => assert.match(d.timingTip, /늦은 식사/))],
-  ["no snacks", { snackPattern: ["거의 없음"] }, c => c.days.forEach((d: any) => assert.match(d.snack, /간식은 생략/))],
+for (const existingDraft of [false, true]) {
+  for (const [key, value] of [["expectedResponseHash", undefined], ["expectedResponseHash", "b".repeat(64)],
+    ["expectedRevision", undefined], ["expectedRevision", "stale-revision"]] as const) {
+    test(`save ${existingDraft ? "revision" : "first draft"} rejects stale/missing ${key}: ${String(value)}`, async () => {
+      const f = fixture(); f.seedSubmitted(); if (existingDraft) seedDraft(f);
+      const before = clone([...f.values]);
+      await assert.rejects(() => f.save(f.saveData({ [key]: value })));
+      assert.deepEqual([...f.values], before); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+    });
+  }
+}
+
+const reportGuards = [
+  { publicationStatus: "published" }, { publicationStatus: "approved" }, { publicationStatus: "sent" },
+  { approvalStatus: "approved" }, { approvedSnapshot: { revision: "keep" } },
+  { publishedSnapshot: { revision: "keep" } }, { sentSnapshot: { revision: "keep" } },
+  { approvalStatus: "sent" }, { approvedAt: new Stamp(NOW - 1000) },
+  { publishedAt: new Stamp(NOW - 1000) }, { sentAt: new Stamp(NOW - 1000) },
+  { sentRevision: "synthetic-sent-revision" }, { candidateId: "synthetic-queued-candidate" },
 ];
-for (const [name, overrides, check] of fallbackScenarios) {
-  test(`actual deterministic fallback respects ${name} fixed choice across all 7 days`, async () => {
-    const f = fixture({ lookupStatus: 403 }); f.seedSubmitted(overrides); await f.generate();
-    const content = f.values.get(DRAFT).publicContent;
-    assert.equal(content.days.length, 7); check(content); assert.equal(f.generationCalls().length, 0);
+for (const guard of reportGuards) {
+  for (const race of [false, true]) {
+    test(`save blocks protected report ${JSON.stringify(guard)}${race ? " changed during transaction" : ""}`, async () => {
+      const f = fixture(); f.seedSubmitted(); seedDraft(f); const data = f.saveData();
+      const protect = () => { f.values.set(REPORT, { ...f.values.get(REPORT), ...clone(guard) }); };
+      if (race) f.beforeTransaction(protect); else protect();
+      await assert.rejects(() => f.save(data));
+      assert.equal(f.writes.length, 0);
+      for (const [key, value] of Object.entries(guard)) assert.deepEqual(f.values.get(REPORT)[key], value);
+      assertNoExternalCalls(f);
+    });
+  }
+}
+
+for (const issue of ["missing request", "missing response", "cancelled", "not submitted", "different studio"]) {
+  test(`operator save requires current canonical submitted source: ${issue}`, async () => {
+    const f = fixture(); f.seedSubmitted(); const data = f.saveData();
+    if (issue === "missing request") f.values.delete(REQUEST);
+    if (issue === "missing response") f.values.delete(RESPONSE);
+    if (issue === "cancelled") f.values.get(REQUEST).status = "cancelled";
+    if (issue === "not submitted") f.values.get(REQUEST).status = "queued";
+    if (issue === "different studio") f.values.get(REQUEST).studioId = "different-studio";
+    await assert.rejects(() => f.save(data)); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+  });
+}
+
+for (const issue of ["request cancelled", "request removed", "request studio changed", "response removed", "answers changed",
+  "review reasons changed", "submittedAt changed", "draft revision changed", "draft removed", "first draft appeared",
+  "response studio changed", "response member changed", "request member changed"]) {
+  test(`save transaction rechecks race: ${issue}`, async () => {
+    const f = fixture(); f.seedSubmitted(); if (issue !== "first draft appeared") seedDraft(f);
+    const data = f.saveData();
+    f.beforeTransaction(() => {
+      if (issue === "request cancelled") f.values.get(REQUEST).status = "cancelled";
+      if (issue === "request removed") f.values.delete(REQUEST);
+      if (issue === "request studio changed") f.values.get(REQUEST).studioId = "different-studio";
+      if (issue === "response removed") f.values.delete(RESPONSE);
+      if (issue === "answers changed") f.values.get(RESPONSE).answers.primaryGoal = "체지방 감량";
+      if (issue === "review reasons changed") f.values.get(RESPONSE).reviewReasons = ["health_safety_review_required"];
+      if (issue === "submittedAt changed") f.values.get(RESPONSE).submittedAt = new Stamp(NOW + 1);
+      if (issue === "draft revision changed") f.values.get(DRAFT).revision = "c".repeat(64);
+      if (issue === "draft removed") f.values.delete(DRAFT);
+      if (issue === "first draft appeared") seedDraft(f);
+      if (issue === "response studio changed") f.values.get(RESPONSE).studioId = "different-studio";
+      if (issue === "response member changed") f.values.get(RESPONSE).memberId = "different-member";
+      if (issue === "request member changed") f.values.get(REQUEST).memberId = "different-member";
+    });
+    await assert.rejects(() => f.save(data)); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+  });
+}
+
+for (const entry of ["generate", "trigger"] as const) {
+  test(`${entry}: health review remains pending without automatic draft or external processing`, async () => {
+    const f = fixture(); f.seedSubmitted({ healthFlags: ["임신·수유"] });
+    f.values.get(RESPONSE).reviewReasons = ["health_safety_review_required"];
+    const response = clone(f.values.get(RESPONSE));
+    assert.deepEqual(plain(await f[entry]()), operatorRequired);
+    assert.equal(f.values.get(REQUEST).recommendationStatus, "review_required");
+    assert.deepEqual(f.values.get(RESPONSE), response);
+    assert.equal(f.values.has(DRAFT), false); assert.equal(f.values.has(REPORT), false); assertNoExternalCalls(f);
+  });
+  test(`${entry}: a report-only legacy record is preserved without marking or creating a draft`, async () => {
+    const f = fixture(); f.seedSubmitted();
+    f.values.set(REPORT, { publicationStatus: "published", publishedSnapshot: { revision: "legacy-keep" } });
+    const before = clone([...f.values]);
+    assert.deepEqual(plain(await f[entry]()), operatorRequired);
+    assert.deepEqual([...f.values], before); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+  });
+  for (const field of ["studioId", "memberId"]) {
+    test(`${entry}: mismatched canonical response ${field} is rejected`, async () => {
+      const f = fixture(); f.seedSubmitted(); f.values.get(RESPONSE)[field] = "different-source";
+      await assert.rejects(() => f[entry]()); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+    });
+  }
+}
+
+for (const existingDraft of [false, true]) {
+  test(`failed commit rolls back ${existingDraft ? "edit and history" : "first draft"} without partial canonical saves`, async () => {
+    const f = fixture(); f.seedSubmitted(); if (existingDraft) seedDraft(f);
+    const before = clone([...f.values]); f.failCommit();
+    await assert.rejects(() => f.save(), /synthetic_commit_failure_rollback/);
+    assert.deepEqual([...f.values], before); assert.equal(f.writes.length, 0); assert.equal(f.commits.length, 0);
+    assertNoExternalCalls(f);
+  });
+}
+
+test("a response changed after transaction reads aborts the complete staged save", async () => {
+  const f = fixture(); f.seedSubmitted(); seedDraft(f); const draft = clone(f.values.get(DRAFT));
+  f.beforeCommit(() => { f.values.get(RESPONSE).answers.primaryGoal = "체지방 감량"; });
+  await assert.rejects(() => f.save(), /synthetic_transaction_conflict_rollback/);
+  assert.deepEqual(f.values.get(DRAFT), draft); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
+});
+
+test("two concurrent first-draft saves admit at most one matching expectedRevision", async () => {
+  const f = fixture(); f.seedSubmitted(); const first = f.saveData(); const second = f.saveData();
+  first.publicContent.summary = "First editor"; second.publicContent.summary = "Second editor";
+  const results = await Promise.allSettled([f.save(first), f.save(second)]);
+  assert.equal(results.filter(r => r.status === "fulfilled").length, 1);
+  assert.equal(results.filter(r => r.status === "rejected").length, 1);
+  const winner = results[0].status === "fulfilled" ? first : second;
+  assert.equal(f.values.get(DRAFT).publicContent.summary, winner.publicContent.summary);
+  assert.equal(f.commits.length, 1); assert.equal(f.writes.length, 3); assertNoExternalCalls(f);
+});
+
+for (const issue of ["missing content", "six days", "missing lunch"]) {
+  test(`invalid first-draft content rejected with no writes: ${issue}`, async () => {
+    const f = fixture(); f.seedSubmitted(); const data = f.saveData();
+    if (issue === "missing content") delete data.publicContent;
+    if (issue === "six days") data.publicContent.days.pop();
+    if (issue === "missing lunch") delete data.publicContent.days[0].lunch;
+    await assert.rejects(() => f.save(data)); assert.equal(f.writes.length, 0); assertNoExternalCalls(f);
   });
 }
 

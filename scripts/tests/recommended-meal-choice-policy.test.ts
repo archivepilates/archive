@@ -32,7 +32,7 @@ test("contract pins exactly 13 fixed-choice questions, consent versions and the 
   assert.deepEqual(MEAL_CHOICES, expected);
   assert.equal(Object.keys(MEAL_CHOICES).length, 13);
   assert.equal(MEAL_CHOICE_SCHEMA, "meal-choice-v2");
-  assert.equal(MEAL_CHOICE_CONSENT, "meal-preferences-gemini-v1-20261029");
+  assert.equal(MEAL_CHOICE_CONSENT, "meal-preferences-operator-v1-20261029");
   assert.equal(MEAL_FREE_MODEL, "gemini-2.5-flash-lite");
   assert.deepEqual(parseMealChoices(valid()), valid());
 });

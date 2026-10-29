@@ -92,12 +92,12 @@
       <div>
         <div class="brand">ARCHIVE PILATES</div>
         <h1>추천식단 설문</h1>
-        <p class="lead">최근 식사와 생활을 알려주세요. 최신 InBody 기록과 함께 식단 준비에 참고합니다.</p>
+        <p class="lead">식사·생활 습관을 선택해 주세요. 응답은 운영자의 추천식단 검토에 참고합니다.</p>
         <div class="meta" id="surveyMeta"><span>설문 정보를 확인하는 중</span><span>약 2~3분 · 13문항</span></div>
       </div>
       <img class="brand-mark" src="/archivein/logo120.png" width="44" height="44" alt="ARCHIVE PILATES">
     </header>
-    <p class="notice">질환 치료나 의학적 영양 처방을 대신하지 않습니다. 알레르기 또는 건강상 주의사항이 있으면 구체적인 음식 자동 추천을 보류하고 전문가 상담 및 운영자 검토를 먼저 안내합니다.</p>
+    <p class="notice">질환 치료나 의학적 영양 처방을 대신하지 않습니다. 알레르기 또는 건강상 주의사항은 내부 검토 대상으로 분리하며, 필요한 경우 전문가 상담을 먼저 안내합니다.</p>
 
     <section id="surveyValidation" class="message bad" role="alert" aria-labelledby="surveyValidationHeading" tabindex="-1" hidden>
       <strong id="surveyValidationHeading">필수 항목과 선택 개수를 확인해 주세요.</strong>
@@ -243,12 +243,12 @@
 
       <section class="consent" aria-labelledby="consentHeading">
         <h2 id="consentHeading">정보 활용 동의</h2>
-        <p id="aiProcessingNotice">AI 정보 활용 동의 안내를 준비 중입니다. 현재는 설문을 제출할 수 없습니다.</p>
-        <p id="healthProcessingNotice">알레르기·건강상 주의사항 선택값과 InBody 기록, 이름·전화번호·회원 ID 등 식별정보는 Gemini에 보내지 않습니다. 알레르기 또는 건강상 주의사항이 있으면 구체적인 음식 자동 추천을 보류하고 전문가 상담 및 운영자 검토를 먼저 안내합니다. 질환명·약물명 등 건강 상세정보나 자유입력 답변은 수집하지 않습니다.</p>
-        <p id="voluntaryConsentNotice">동의 여부는 자율적으로 결정할 수 있습니다. 동의하지 않으면 AI 추천식단을 요청하지 않습니다.</p>
+        <p id="aiProcessingNotice">응답 활용 동의 안내를 준비 중입니다. 현재는 설문을 제출할 수 없습니다.</p>
+        <p id="healthProcessingNotice">알레르기·건강상 주의사항 선택값과 InBody 기록, 이름·전화번호·회원 ID 등 식별정보는 초안 작성 입력에 포함하지 않습니다. 해당 정보는 ARCHIVE PILATES 내부 검토에만 사용하며, 주의사항이 있으면 필요한 경우 전문가 상담을 먼저 안내합니다. 질환명·약물명 등 건강 상세정보나 자유입력 답변은 수집하지 않습니다.</p>
+        <p id="voluntaryConsentNotice">동의 여부는 자율적으로 결정할 수 있습니다. 동의하지 않으면 추천식단 검토를 요청하지 않습니다.</p>
         <label class="option">
           <input type="checkbox" name="consent" value="yes" required disabled aria-describedby="aiProcessingNotice healthProcessingNotice voluntaryConsentNotice">
-          <span>위 안내를 확인했으며, 정보 저장·Gemini 처리 및 ARCHIVE PILATES 운영자 검토에 자발적으로 명시 동의합니다. (추천식단 요청 시 필수)</span>
+          <span>위 안내를 확인했으며, 정보 저장·운영자 검토 및 식사·생활 선택값을 이용한 ChatGPT/Codex 초안 작성 보조에 자발적으로 명시 동의합니다. (추천식단 검토 요청 시 필수)</span>
         </label>
       </section>
       <button class="submit-button" type="submit" disabled>동의 안내 준비 중</button>
@@ -262,10 +262,10 @@
 
   <script>
     // Keep this version aligned with the backend choice/consent contract.
-    const AI_CONSENT = { providerLabel: "Google Gemini API", consentVersion: "meal-preferences-gemini-v1-20261029" };
+    const AI_CONSENT = { providerLabel: "ChatGPT/Codex", consentVersion: "meal-preferences-operator-v1-20261029" };
     const CONSENT_COPY = {
-      pending: "AI 정보 활용 동의 안내를 준비 중입니다. 현재는 설문을 제출할 수 없습니다.",
-      ready: (provider) => `정해진 음식·생활 습관 선택값만 ${provider}에 제공하여 식단 초안을 준비합니다. 무료 등급에서는 입력·출력이 Google 제품 개선에 사용될 수 있습니다. 응답은 ARCHIVE PILATES에 저장되며, 생성된 식단은 운영자 검토가 필요합니다.`
+      pending: "응답 활용 동의 안내를 준비 중입니다. 현재는 설문을 제출할 수 없습니다.",
+      ready: (provider) => `설문 제출만으로 Gemini/OpenAI API를 자동 호출하지 않습니다. 관리자가 필요할 때 정해진 음식·생활 습관 선택값만 ${provider}에 입력하여 식단 초안 작성 보조를 받을 수 있습니다. 응답은 ARCHIVE PILATES에 저장되며, 초안은 운영자가 검토한 뒤 별도 공개 여부를 결정합니다. 제출 즉시 생성되거나 공개되지 않습니다.`
     };
     const params = new URLSearchParams(location.search);
     const requestId = String(params.get("id") || "").trim();
@@ -357,6 +357,7 @@
         schemaVersion: "meal-choice-v2",
         consentVersion: AI_CONSENT.consentVersion,
         consent: consentInput.checked === true,
+        // Retained for wire compatibility with the operator-assisted consent contract.
         aiProcessingConsent: consentInput.checked === true
       };
       for (const group of groups) {
@@ -390,8 +391,8 @@
       const prefix = existing || info.duplicate ? "이미 설문 제출이 완료되었습니다." : "설문 제출이 완료되었습니다.";
       const reportReady = info.reportReady === true;
       showMessage(reportReady
-        ? `${prefix} 추천식단 준비가 완료되었습니다. 아래 버튼에서 확인해 주세요.`
-        : `${prefix} 설문과 최신 InBody를 반영해 추천식단을 준비합니다. 운영자 검토가 끝난 뒤 이 링크에서 확인할 수 있습니다.`, false, reportReady);
+        ? `${prefix} 운영자가 공개한 추천식단 리포트를 아래 버튼에서 확인해 주세요.`
+        : `${prefix} 제출 내용은 운영자 검토를 기다리고 있습니다. 식단 초안은 관리자가 별도로 요청해 작성하고 검토합니다. 리포트가 별도로 공개된 경우에만 이 링크에서 확인할 수 있습니다.`, false, reportReady);
       message.focus();
       message.scrollIntoView({ block: "start" });
     }
@@ -414,7 +415,7 @@
         input.id ||= `meal-field-${name}`;
         input.setAttribute("aria-invalid", "true");
         const group = input.closest("fieldset[data-choice]");
-        const label = name === "consent" ? "정보 저장 및 AI 처리 동의"
+        const label = name === "consent" ? "정보 저장·운영자 검토 및 초안 작성 보조 동의"
           : `${group.querySelector("legend").textContent.trim()}${group.dataset.max ? ` (1~${group.dataset.max}개, 없음 항목은 단독 선택)` : ""}`;
         const item = document.createElement("li");
         const link = document.createElement("a");

@@ -241,7 +241,7 @@ async function handlePost(request: Request, response: Response): Promise<void> {
         memberPhone: member.memberPhone,
         answers,
         inbody,
-        recommendationStatus: reviewReasons.length ? "review_required" : "ready_for_draft",
+        recommendationStatus: reviewReasons.length ? "review_required" : "operator_call_required",
         reviewReasons,
         submittedAt,
         createdAt: submittedAt,
@@ -254,7 +254,7 @@ async function handlePost(request: Request, response: Response): Promise<void> {
       {
         status: "submitted",
         inbody,
-        recommendationStatus: reviewReasons.length ? "review_required" : "ready_for_draft",
+        recommendationStatus: reviewReasons.length ? "review_required" : "operator_call_required",
         reviewReasonCount: reviewReasons.length,
         submittedAt,
         updatedAt: submittedAt,
@@ -266,7 +266,7 @@ async function handlePost(request: Request, response: Response): Promise<void> {
     ok: true,
     duplicate: false,
     status: "submitted",
-    recommendationStatus: reviewReasons.length ? "review_required" : "ready_for_draft",
+    recommendationStatus: reviewReasons.length ? "review_required" : "operator_call_required",
   });
 }
 

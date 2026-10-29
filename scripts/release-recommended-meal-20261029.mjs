@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { makeManifest, assertManifest } from './release-e261017-classroom.mjs';
 
-const BASE = 'ff342109b8abb9e2575afddfd2e3f99f06492ed1';
+const BASE = '4e287d5a1214c6f0b5362e0a81b47829417c4694';
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
 const SURVEY = 'archivein/recommendedMealSurvey/index.html';
 export const MEAL_RELEASE_TARGETS = {
@@ -82,7 +82,7 @@ async function main() {
   const manifest = mealReleaseManifest(files, Object.fromEntries(sources.map(s => [s.resource, s.hash])), target);
   const evidence = { target, site: selected.site, sourceCommit: commit, baselineVersion: baseline.name, fileCount: files.length,
     paths: sources.map(s => ({ resource: s.resource, sourceSha256: s.sourceSha256 })), mode: apply ? 'apply' : 'plan' };
-  const output = path.join(root, 'artifacts/recommended-meal-20261029'); fs.mkdirSync(output, { recursive: true });
+  const output = path.join(root, 'artifacts/recommended-meal-operator-20261029'); fs.mkdirSync(output, { recursive: true });
   const record = path.join(output, `${target}-${apply ? 'release' : 'plan'}.json`);
   if (apply && fs.existsSync(record) && JSON.parse(fs.readFileSync(record)).releaseIntentAt) throw Error('Prior release intent: reconcile, do not replay');
   const save = () => fs.writeFileSync(record, JSON.stringify(evidence, null, 2));
@@ -113,7 +113,7 @@ async function main() {
     await unchanged();
     await request(`${version.name}?updateMask=status`, 'PATCH', { status: 'FINALIZED' });
     await unchanged(); evidence.releaseIntentAt = new Date().toISOString(); save();
-    const release = await request(`sites/${selected.site}/releases?versionName=${version.name}`, 'POST', { message: `Scoped 3-minute meal ${commit.slice(0, 12)}` });
+    const release = await request(`sites/${selected.site}/releases?versionName=${version.name}`, 'POST', { message: `Scoped operator meal ${commit.slice(0, 12)}` });
     evidence.releaseName = release.name; save();
     for (const s of sources) {
       const r = await fetch(s.url, { cache: 'no-store' });

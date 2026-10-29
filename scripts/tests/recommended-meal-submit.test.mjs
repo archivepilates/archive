@@ -47,7 +47,7 @@ async function fixture(t, { post = "success", submitted = false, reportReady = f
       return route.abort();
     }
     if (request.isNavigationRequest() && url.pathname === surveyPath) {
-      const body = pendingConsent ? html.replace('consentVersion: "meal-preferences-gemini-v1-20261029"', 'consentVersion: ""') : html;
+      const body = pendingConsent ? html.replace('consentVersion: "meal-preferences-operator-v1-20261029"', 'consentVersion: ""') : html;
       return route.fulfill({ contentType: "text/html; charset=utf-8", body });
     }
     if (url.pathname === "/archivein/logo120.png") {
@@ -62,7 +62,7 @@ async function fixture(t, { post = "success", submitted = false, reportReady = f
       return route.fulfill({ status: getError ? 403 : 200, json: getError
         ? { ok: false, error: "합성 링크 인증 오류" }
         : { ok: true, status: submitted ? "submitted" : "sent", memberName, inbodyStatus: "missing", reportReady,
-          surveySchemaVersion: "meal-choice-v2", consentVersion: "meal-preferences-gemini-v1-20261029", ...metadata } });
+          surveySchemaVersion: "meal-choice-v2", consentVersion: "meal-preferences-operator-v1-20261029", ...metadata } });
     }
     assert.equal(request.method(), "POST");
     calls.push({ payload: request.postDataJSON(), contentType: request.headers()["content-type"] });
@@ -149,7 +149,7 @@ test("successful submission sends all original choices once with the approved sc
   assert.equal(names.length, 13);
   assert.deepEqual(Object.keys(payload).sort(), [...names, "requestId", "accessToken", "schemaVersion", "consentVersion", "consent", "aiProcessingConsent"].sort());
   assert.equal(payload.schemaVersion, "meal-choice-v2");
-  assert.equal(payload.consentVersion, "meal-preferences-gemini-v1-20261029");
+  assert.equal(payload.consentVersion, "meal-preferences-operator-v1-20261029");
   assert.equal(payload.consent, true);
   assert.equal(payload.aiProcessingConsent, true);
   assert.equal(payload.requestId, requestId);
@@ -162,6 +162,9 @@ test("successful submission sends all original choices once with the approved sc
   assert.deepEqual(await f.snapshot(), before);
   assert.equal(await f.page.locator("form").isVisible(), false);
   assert.match(await f.page.locator("#surveyMessageText").innerText(), /설문 제출이 완료/);
+  assert.match(await f.page.locator("#surveyMessageText").innerText(), /운영자 검토를 기다리고 있습니다/);
+  assert.match(await f.page.locator("#surveyMessageText").innerText(), /관리자가 별도로 요청/);
+  assert.equal(await f.page.locator("#mealReportLink").isVisible(), false);
   await f.page.locator("form").dispatchEvent("submit");
   assert.equal(f.calls.length, 1);
   assert.equal(await f.page.locator("button[type=submit]").isDisabled(), true);
@@ -223,6 +226,20 @@ for (const reportReady of [false, true]) {
   });
 }
 
+test("legacy Gemini-consent submitted links stay read-only without new consent or drafting requests", async t => {
+  for (const reportReady of [false, true]) {
+    const f = await fixture(t, { submitted: true, reportReady,
+      metadata: { consentVersion: "meal-preferences-gemini-v1-20261029" } });
+    assert.equal(await f.page.locator("form").isVisible(), false);
+    assert.equal(await f.field("consent").isDisabled(), true);
+    assert.equal(await f.page.locator("button[type=submit]").isDisabled(), true);
+    assert.match(await f.page.locator("#surveyMessageText").innerText(), /이미 설문 제출이 완료/);
+    assert.equal(await f.page.locator("#mealReportLink").isVisible(), reportReady);
+    await f.page.locator("form").dispatchEvent("submit");
+    assert.equal(f.calls.length, 0);
+  }
+});
+
 test("invalid link, rejected GET and absent consent contract never permit POST", async t => {
   for (const options of [{ search: "?id=bad&token=bad" }, { getError: true }, { pendingConsent: true }]) {
     const f = await fixture(t, options);
@@ -238,7 +255,8 @@ test("missing, malformed or mismatched server contract keeps submission locked w
   for (const metadata of [
     { surveySchemaVersion: undefined }, { surveySchemaVersion: null }, { surveySchemaVersion: 3 },
     { surveySchemaVersion: "meal-choice-v3" }, { consentVersion: undefined },
-    { consentVersion: ["meal-preferences-gemini-v1-20261029"] }, { consentVersion: "old-consent" }
+    { consentVersion: ["meal-preferences-operator-v1-20261029"] }, { consentVersion: "old-consent" },
+    { consentVersion: "meal-preferences-gemini-v1-20261029" }
   ]) {
     const f = await fixture(t, { metadata });
     assert.equal(await f.page.locator("form").isVisible(), false);
@@ -262,7 +280,8 @@ test("native labels, legends, consent descriptions and keyboard navigation are a
   assert.ok(semantics.every(input => input.labelled && input.descriptions));
   assert.equal(await f.field("consent").getAttribute("aria-describedby"), "aiProcessingNotice healthProcessingNotice voluntaryConsentNotice");
   assert.equal(await f.field("consent").isChecked(), false);
-  assert.match(await f.page.locator("#aiProcessingNotice").innerText(), /무료 등급/);
+  assert.match(await f.page.locator("#aiProcessingNotice").innerText(), /Gemini\/OpenAI API를 자동 호출하지 않습니다/);
+  assert.match(await f.page.locator("#aiProcessingNotice").innerText(), /ChatGPT\/Codex/);
   await f.page.keyboard.press("Tab");
   assert.equal(await f.field("primaryGoal").evaluate(input => input === document.activeElement), true);
   const focus = await f.field("primaryGoal").evaluate(input => ({

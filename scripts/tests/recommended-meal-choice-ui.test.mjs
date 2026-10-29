@@ -244,11 +244,11 @@ function fixture({ configured = true, post = "success", info = {}, getError = fa
       };
     }
   });
-  // Provider configuration is replaced only inside this isolated VM, never in the production HTML.
-  const source = script.replace('const AI_CONSENT = { providerLabel: "Google Gemini API", consentVersion: "meal-preferences-gemini-v1-20261029" };',
+  // Consent configuration is replaced only inside this isolated VM, never in the production HTML.
+  const source = script.replace('const AI_CONSENT = { providerLabel: "ChatGPT/Codex", consentVersion: "meal-preferences-operator-v1-20261029" };',
     configured
       ? 'const AI_CONSENT = { providerLabel: "합성 AI 제공자", consentVersion: "synthetic-consent-v1" };'
-      : 'const AI_CONSENT = { providerLabel: "Google Gemini API", consentVersion: "" };');
+      : 'const AI_CONSENT = { providerLabel: "ChatGPT/Codex", consentVersion: "" };');
   vm.runInContext(source, context);
   const inputs = name => form.querySelectorAll(`input[name="${name}"]`);
   return {
@@ -305,26 +305,28 @@ test("missing consent contract still fails closed, even with all answers", async
   assert.equal(f.button.disabled, true);
   assert.equal(f.calls.length, 0);
   assert.match(f.nodes.get("surveyMessageText").textContent, /새로고침/);
-  assert.match(script, /providerLabel: "Google Gemini API", consentVersion: "meal-preferences-gemini-v1-20261029"/);
-  assert.doesNotMatch(html, /OpenAI|openai-meal-v1|testMode|fixture=/);
+  assert.match(script, /providerLabel: "ChatGPT\/Codex", consentVersion: "meal-preferences-operator-v1-20261029"/);
+  assert.doesNotMatch(html, /openai-meal-v1|testMode|fixture=/);
 });
 
-test("localized provider notice excludes health data and identities from AI processing", async () => {
+test("operator-assisted consent excludes sensitive drafting input and promises no automatic API call or publication", async () => {
   const f = fixture(); await f.ready();
   const notice = f.nodes.get("aiProcessingNotice").textContent;
-  for (const text of ["합성 AI 제공자", "정해진 음식·생활 습관 선택값만", "무료 등급", "입력·출력", "Google 제품 개선", "운영자 검토가 필요"]) assert.ok(notice.includes(text));
-  assert.match(html, /알레르기·건강상 주의사항 선택값과 InBody 기록, 이름·전화번호·회원 ID 등 식별정보는 Gemini에 보내지 않습니다/);
+  for (const text of ["합성 AI 제공자", "정해진 음식·생활 습관 선택값만", "Gemini/OpenAI API를 자동 호출하지 않습니다", "관리자가 필요할 때", "별도 공개 여부", "제출 즉시 생성되거나 공개되지 않습니다"]) assert.ok(notice.includes(text));
+  assert.match(html, /알레르기·건강상 주의사항 선택값과 InBody 기록, 이름·전화번호·회원 ID 등 식별정보는 초안 작성 입력에 포함하지 않습니다/);
+  assert.match(html, /ARCHIVE PILATES 내부 검토에만 사용/);
   assert.match(html, /건강 상세정보나 자유입력 답변은 수집하지 않습니다/);
   assert.match(html, /동의 여부는 자율적으로 결정/);
   assert.match(html, /자발적으로 명시 동의/);
-  assert.match(html, /구체적인 음식 자동 추천을 보류/);
+  assert.doesNotMatch(html, /무료 등급|Google 제품 개선|정보 저장·Gemini 처리/);
 });
 
 for (const info of [
   { surveySchemaVersion: undefined }, { surveySchemaVersion: null }, { surveySchemaVersion: 3 },
   { surveySchemaVersion: "meal-choice-v3" }, { surveySchemaVersion: ["meal-choice-v2"] },
   { consentVersion: undefined }, { consentVersion: null }, { consentVersion: true },
-  { consentVersion: "meal-preferences-gemini-v0" }, { consentVersion: ["synthetic-consent-v1"] }
+  { consentVersion: "meal-preferences-gemini-v0" }, { consentVersion: ["synthetic-consent-v1"] },
+  { consentVersion: "meal-preferences-gemini-v1-20261029" }
 ]) {
   test(`GET contract mismatch fails closed: ${JSON.stringify(info)}`, async () => {
     const f = fixture({ info }); await f.ready(); f.fill(); await f.submit();

@@ -236,7 +236,7 @@ const guardGroups = [
           "설문 제출이 완료되었습니다.",
           ".option:has(input:checked)",
           'schemaVersion: "meal-choice-v2"',
-          'consentVersion: "meal-preferences-gemini-v1-20261029"',
+          'consentVersion: "meal-preferences-operator-v1-20261029"',
           "min-height: 48px",
         ],
       },

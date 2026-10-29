@@ -57,8 +57,6 @@ import { instructorLessonParkingPreRegistrationApiHandler } from "../parking/ins
 import {
   callableOptions,
   publicRequestOptions,
-  recommendedMealCallableOptions,
-  recommendedMealEventOptions,
 } from "../runtime/functionOptions";
 import {
   getRefundMemberTicketsHandler,
@@ -312,7 +310,7 @@ export const getRecommendedMealProgramReview = onCall(secretlessCallableOptions,
   }
 });
 
-export const generateRecommendedMealProgramDraft = onCall(recommendedMealCallableOptions, async (request) => {
+export const generateRecommendedMealProgramDraft = onCall(secretlessCallableOptions, async (request) => {
   try {
     const staff = await requireStaff(request);
     requireManager(staff);
@@ -334,7 +332,9 @@ export const saveRecommendedMealProgramDraft = onCall(secretlessCallableOptions,
 
 export const generateRecommendedMealDraftOnSurveySubmitted = onDocumentCreated(
   {
-    ...recommendedMealEventOptions,
+    region: REGION,
+    timeoutSeconds: 60,
+    memory: "256MiB" as const,
     document: "recommendedMealProgramResponses/{responseId}",
   },
   async (event) => {

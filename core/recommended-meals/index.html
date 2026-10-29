@@ -14,33 +14,83 @@
     <link rel="stylesheet" href="../assets/styles.css" />
     <link rel="stylesheet" href="../assets/interface.css" />
     <style>
-      [data-recommended-meals-dashboard] .meal-workspace { grid-template-columns: minmax(0, 1fr); }
-      [data-recommended-meals-dashboard] :is(.top-actions, .title-block, .meal-draft-actions, .meal-form-actions) { min-width: 0; }
-      [data-recommended-meals-dashboard] :is(.panel-header, .top-actions) { flex-wrap: wrap; }
-      [data-recommended-meals-dashboard] :is(h2, .meta-line, .pill, .filter-button, .primary-action, .secondary-action) { overflow-wrap: anywhere; white-space: normal; }
-      [data-recommended-meals-dashboard] :is(.filter-button, .primary-action, .secondary-action, .refresh-button) { min-height: 44px; height: auto; }
+      [data-recommended-meals-dashboard] :is(.top-actions,.title-block,.meal-draft-actions,.meal-form-actions,.meal-section) { min-width: 0; }
+      [data-recommended-meals-dashboard] :is(.panel-header,.top-actions) { flex-wrap: wrap; }
+      [data-recommended-meals-dashboard] :is(h2,h3,.meta-line,.pill,.filter-button,.primary-action,.secondary-action) { overflow-wrap: anywhere; white-space: normal; }
+      [data-recommended-meals-dashboard] :is(button,summary) { min-height: 44px; }
       [data-recommended-meals-dashboard] .refresh-button { width: auto; min-inline-size: 5rem; padding-inline: 12px; flex-shrink: 0; white-space: nowrap; }
-      [data-recommended-meals-dashboard] .meal-queue-button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
-      [data-recommended-meals-dashboard] .meal-queue-button .pill { max-width: 8rem; }
-      [data-recommended-meals-dashboard] .meal-source-card { display: block; }
+      [data-recommended-meals-dashboard] .topbar { padding-bottom: 20px; margin-bottom: 0; }
+      [data-recommended-meals-dashboard] .meal-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); grid-auto-rows: minmax(86px,auto); margin-bottom: 24px; gap: 0; }
+      [data-recommended-meals-dashboard] .meal-kpis .metric { min-height: 86px; padding: 16px 12px; }
+      [data-recommended-meals-dashboard] .meal-kpis .metric-value { font-size: 1.5rem; margin-top: 4px; }
+      [data-recommended-meals-dashboard] .meal-workspace { grid-template-columns: minmax(0,1fr); gap: 28px; }
+      [data-recommended-meals-dashboard] .meal-queue-panel { border-top: 1px solid var(--line); }
+      [data-recommended-meals-dashboard] .meal-queue-panel .panel-header { padding: 16px 0 12px; }
+      [data-recommended-meals-dashboard] .meal-queue-panel .filter-bar { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 0 0 12px; gap: 4px; }
+      [data-recommended-meals-dashboard] .meal-queue-panel .filter-button { padding: 8px 4px; min-width: 0; width: 100%; height: auto; grid-column: auto; }
+      [data-recommended-meals-dashboard] .meal-queue { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; padding: 0; max-height: 22rem; overflow-y: auto; scrollbar-gutter: stable; }
+      [data-recommended-meals-dashboard] .meal-queue-button { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding: 16px 10px; min-height: 82px; border: 0; border-bottom: 1px solid var(--line-soft); border-left: 3px solid transparent; border-radius: 0; box-shadow: none; }
+      [data-recommended-meals-dashboard] .meal-queue-button.is-active { border-left-color: var(--accent); background: var(--surface); }
+      [data-recommended-meals-dashboard] .meal-queue-button strong { overflow-wrap: anywhere; }
+      [data-recommended-meals-dashboard] .meal-queue-button small { font-size: .75rem; }
+      [data-recommended-meals-dashboard] .meal-queue-button .pill { max-width: 7rem; font-size: .6875rem; }
+      [data-recommended-meals-dashboard] .meal-review-panel { border-top: 1px solid var(--line); }
+      [data-recommended-meals-dashboard] .meal-review-panel > .panel-header { padding: 16px 0; gap: 12px; align-items: flex-start; }
+      [data-recommended-meals-dashboard] .meal-review-panel .panel-header > div { flex-basis: 12rem; }
+      [data-recommended-meals-dashboard] #mealReviewMeta { margin-top: 4px; font-size: .75rem; }
+      [data-recommended-meals-dashboard] #mealReviewBody { padding: 0; }
+      [data-recommended-meals-dashboard] .meal-stages { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; list-style: none; margin: 0 0 18px; padding: 0; }
+      [data-recommended-meals-dashboard] .meal-stages li { border-top: 2px solid var(--line); padding-top: 8px; color: var(--soft); font-size: .75rem; min-width: 0; }
+      [data-recommended-meals-dashboard] .meal-stages li span { display: block; font-size: .6875rem; font-variant-numeric: tabular-nums; }
+      [data-recommended-meals-dashboard] .meal-stages li.is-complete { border-color: var(--green); color: var(--green); }
+      [data-recommended-meals-dashboard] .meal-stages li[aria-current="step"] { border-color: var(--accent); color: var(--text); font-weight: 650; }
+      [data-recommended-meals-dashboard] .meal-review-panel > .form-status:not(:empty) { margin: 0 0 12px; padding: 10px 12px; border: 0; border-left: 2px solid var(--line); border-radius: 0; font-size: .8125rem; }
+      [data-recommended-meals-dashboard] #mealUiStatus:not(:empty) { padding: 0 0 12px; color: var(--muted); font-size: .75rem; }
+      [data-recommended-meals-dashboard] .meal-review-panel > .empty-state { margin: 20px 0 36px; }
+      [data-recommended-meals-dashboard] .meal-section { padding: 20px 0; border-top: 1px solid var(--line-soft); }
+      [data-recommended-meals-dashboard] .meal-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+      [data-recommended-meals-dashboard] .meal-section-heading h3 { margin: 0; font-size: .875rem; }
+      [data-recommended-meals-dashboard] .meal-section-meta { color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
+      [data-recommended-meals-dashboard] .meal-source-grid { grid-template-columns: minmax(0,1fr); margin-bottom: 0; gap: 0 20px; }
+      [data-recommended-meals-dashboard] .meal-source-card { display: block; padding: 0; border: 0; border-bottom: 1px solid var(--line-soft); border-radius: 0; background: transparent; }
+      [data-recommended-meals-dashboard] .meal-source-card summary { min-height: 48px; margin: 0; font-size: .8125rem; font-weight: 500; display: list-item; list-style-position: inside; }
+      [data-recommended-meals-dashboard] .meal-source-content { padding: 0 0 16px; }
       [data-recommended-meals-dashboard] .meal-source-card:not([open]) > .meal-source-content { display: none; }
-      [data-recommended-meals-dashboard] .meal-review-check { min-height: 44px; align-items: center; }
+      [data-recommended-meals-dashboard] .meal-draft-actions { margin: 0; justify-content: flex-start; gap: 10px; }
+      [data-recommended-meals-dashboard] #mealGenerateButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+      [data-recommended-meals-dashboard] #mealGenerationStatus { font-size: .8125rem; margin: 12px 0 0; }
+      [data-recommended-meals-dashboard] .meal-record-details { margin-top: 12px; }
+      [data-recommended-meals-dashboard] .meal-record-details > summary { min-height: 44px; color: var(--muted); font-size: .75rem; cursor: pointer; }
+      [data-recommended-meals-dashboard] .meal-record-details .meta-line { font-size: .75rem; margin: 4px 0 12px; }
+      [data-recommended-meals-dashboard] .meal-editor-grid { grid-template-columns: minmax(0,1fr); gap: 16px; }
+      [data-recommended-meals-dashboard] .meal-editor-grid label, [data-recommended-meals-dashboard] .meal-day-editor label { font-size: .8125rem; font-weight: 500; }
+      [data-recommended-meals-dashboard] .meal-editor-grid :is(input,textarea), [data-recommended-meals-dashboard] .meal-day-editor textarea { font-size: .875rem; }
+      [data-recommended-meals-dashboard] .meal-day-tabs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; margin-bottom: 20px; }
+      [data-recommended-meals-dashboard] .meal-day-tabs button { min-width: 0; width: 100%; padding: 8px 4px; color: var(--muted); background: transparent; border: 0; border-bottom: 2px solid var(--line-soft); border-radius: 0; font-size: .8125rem; }
+      [data-recommended-meals-dashboard] .meal-day-tabs button[aria-selected="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+      [data-recommended-meals-dashboard] .meal-days { display: block; margin: 0; }
+      [data-recommended-meals-dashboard] .meal-day-editor { margin: 0; padding: 0; border: 0; border-radius: 0; min-width: 0; }
+      [data-recommended-meals-dashboard] .meal-day-editor h4 { font-size: .8125rem; margin: 0 0 16px; font-weight: 600; }
+      [data-recommended-meals-dashboard] .meal-day-fields { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; }
+      [data-recommended-meals-dashboard] .meal-day-editor label + label { margin-top: 0; }
+      [data-recommended-meals-dashboard] .meal-review-check { min-height: 44px; align-items: center; margin: 0 0 16px; padding: 12px; border-radius: 4px; font-size: .8125rem; font-weight: 500; }
       [data-recommended-meals-dashboard] .meal-review-check input { flex-shrink: 0; }
-      [data-recommended-meals-dashboard] :is(.meal-source-content, .meal-editor-grid, .meal-days) { min-width: 0; }
-      [data-recommended-meals-dashboard] .meal-day-editor { min-inline-size: 0; }
+      [data-recommended-meals-dashboard] .meal-form-actions { margin: 0; padding: 16px 0; border-top: 1px solid var(--line); justify-content: flex-end; align-items: stretch; }
+      [data-recommended-meals-dashboard] .meal-form-actions > button { width: 100%; height: auto; white-space: normal; min-height: 44px; }
+      [data-recommended-meals-dashboard] #mealOperatorRequestText { width: 100%; min-height: 7rem; margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 4px; font: inherit; resize: vertical; }
       [data-recommended-meals-dashboard] [hidden] { display: none !important; }
-      [data-recommended-meals-dashboard] #mealUiStatus:not(:empty) { padding: 12px 0; color: var(--muted); }
       [data-recommended-meals-dashboard] .meal-review-loading #mealReviewBody { visibility: hidden; }
-      [data-recommended-meals-dashboard] :is(button, summary):focus-visible { outline: 2px solid var(--blue, #2563eb); outline-offset: 3px; }
-      @media (min-width: 1280px) {
-        [data-recommended-meals-dashboard] .meal-workspace { grid-template-columns: minmax(16rem, .8fr) minmax(0, 2.2fr); }
+      [data-recommended-meals-dashboard] :is(button,summary):focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+      @media (min-width: 360px) { [data-recommended-meals-dashboard] .meal-day-tabs { grid-template-columns: repeat(7,minmax(0,1fr)); } }
+      @media (min-width: 640px) {
+        [data-recommended-meals-dashboard] .meal-kpis { grid-template-columns: repeat(4,minmax(0,1fr)); }
+        [data-recommended-meals-dashboard] :is(.meal-source-grid,.meal-editor-grid,.meal-day-fields) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+        [data-recommended-meals-dashboard] .meal-form-actions > button { width: auto; }
       }
-      @media (max-width: 640px) {
-        [data-recommended-meals-dashboard] .meal-queue-panel .filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-        [data-recommended-meals-dashboard] .meal-queue-panel .filter-button { padding: 8px 4px; }
-        [data-recommended-meals-dashboard] .meal-queue-panel .filter-button:last-child { grid-column: auto; }
-        [data-recommended-meals-dashboard] .meal-form-actions { align-items: stretch; }
-        [data-recommended-meals-dashboard] :is(.meal-source-card, .meal-day-editor) { padding: 12px; }
+      @media (min-width: 1280px) {
+        [data-recommended-meals-dashboard] .meal-workspace { grid-template-columns: minmax(16rem,.8fr) minmax(0,2.2fr); gap: 32px; }
+        [data-recommended-meals-dashboard] .meal-queue-panel { position: sticky; top: 24px; }
+        [data-recommended-meals-dashboard] .meal-queue { max-height: 65dvh; }
       }
     </style>
     <script src="../firebase-config.js"></script>
@@ -68,7 +118,7 @@
         <header class="topbar">
           <div class="title-block">
             <h1>추천식단 검토</h1>
-            <p>설문 응답 · 식단 초안 · 운영자 검토·공개</p>
+            <p>운영자 검토</p>
           </div>
           <div class="top-actions" aria-label="상태 확인">
             <a class="text-link" href="../#recommendedMealProgram">설문 요청 관리</a>
@@ -79,7 +129,7 @@
 
         <section class="grid kpis meal-kpis" aria-label="추천식단 진행 현황">
           <article class="panel metric"><div class="metric-label">설문 미제출</div><div class="metric-value" id="mealAwaitingCount">-</div></article>
-          <article class="panel metric"><div class="metric-label">설문 제출 · 초안 대기</div><div class="metric-value" id="mealReadyCount">-</div></article>
+          <article class="panel metric"><div class="metric-label">관리자 호출 대기</div><div class="metric-value" id="mealReadyCount">-</div></article>
           <article class="panel metric"><div class="metric-label">검토 필요</div><div class="metric-value" id="mealReviewCount">-</div></article>
           <article class="panel metric"><div class="metric-label">리포트 공개</div><div class="metric-value" id="mealSentCount">-</div></article>
         </section>
@@ -107,6 +157,14 @@
             <div id="mealUiStatus" role="status" aria-live="polite" aria-atomic="true"></div>
             <div id="mealReviewEmpty" class="empty-state">검토할 요청을 선택하세요.</div>
             <div id="mealReviewBody" hidden>
+              <ol id="mealReviewStages" class="meal-stages" aria-label="추천식단 진행 단계">
+                <li data-meal-stage="0"><span>01</span>설문 제출</li>
+                <li data-meal-stage="1"><span>02</span>관리자 작성</li>
+                <li data-meal-stage="2"><span>03</span>초안 검토</li>
+                <li data-meal-stage="3"><span>04</span>공개</li>
+              </ol>
+              <section class="meal-section" aria-labelledby="mealSourceHeading">
+                <div class="meal-section-heading"><h3 id="mealSourceHeading">설문 확인</h3><span class="meal-section-meta" id="mealSurveyState">미제출</span></div>
               <div class="meal-source-grid">
                 <details class="meal-source-card" aria-labelledby="mealInbodyHeading">
                   <summary id="mealInbodyHeading">InBody 참고 · 운영자 전용</summary>
@@ -117,16 +175,25 @@
                   <div id="mealSurveySummary" class="meal-source-content"></div>
                 </details>
               </div>
+              </section>
 
+              <section class="meal-section" aria-labelledby="mealDraftHeading">
+                <div class="meal-section-heading"><h3 id="mealDraftHeading">초안 작성</h3><span class="meal-section-meta" id="mealDraftProviderLabel">초안 없음</span></div>
               <div class="meal-draft-actions">
-                <button class="secondary-action" id="mealGenerateButton" type="button">식단 초안 생성</button>
-                <span class="meta-line" id="mealDraftMeta">초안 없음</span>
+                <button class="secondary-action" id="mealGenerateButton" type="button">작성 요청 복사</button>
               </div>
+              <textarea id="mealOperatorRequestText" rows="5" readonly hidden aria-label="Codex 채팅에 전달할 작성 요청"></textarea>
+              <details class="meal-record-details"><summary>처리 기록</summary>
+              <p id="mealDraftMeta" class="meta-line">초안 없음</p>
               <p id="mealGenerationStatus" class="meta-line" role="status"></p>
               <p id="mealConsentState" class="meta-line"></p>
               <p id="mealPublicationState" class="meta-line"></p>
+              </details>
+              </section>
 
-              <form id="mealDraftForm" class="meal-draft-form" hidden>
+              <form id="mealDraftForm" class="meal-draft-form" novalidate hidden>
+                <section class="meal-section" aria-labelledby="mealOverviewHeading">
+                  <div class="meal-section-heading"><h3 id="mealOverviewHeading">초안 개요</h3><span class="meal-section-meta">회원 공개용</span></div>
                 <div class="meal-editor-grid">
                   <label><span>제목</span><input id="mealTitle" maxlength="120" required /></label>
                   <label><span>목표</span><input id="mealGoal" maxlength="300" required /></label>
@@ -134,13 +201,21 @@
                   <label class="meal-editor-wide"><span>회원 공개용 요약 · 민감정보 제외</span><textarea id="mealMetricsSummary" rows="3" maxlength="800"></textarea></label>
                   <label class="meal-editor-wide"><span>실천 원칙 · 한 줄에 하나</span><textarea id="mealPrinciples" rows="5" maxlength="1800"></textarea></label>
                 </div>
+                </section>
+                <section class="meal-section" aria-labelledby="mealDaysHeading">
+                  <div class="meal-section-heading"><h3 id="mealDaysHeading">7일 식단</h3><span class="meal-section-meta" id="mealDayPosition">1 / 7일</span></div>
+                  <div class="meal-day-tabs" id="mealDayTabs" role="tablist" aria-label="식단 편집 일자"></div>
                 <div class="meal-days" id="mealDaysEditor" aria-label="7일 추천식단"></div>
+                </section>
+                <section class="meal-section" aria-labelledby="mealGuideHeading">
+                  <div class="meal-section-heading"><h3 id="mealGuideHeading">생활 가이드</h3></div>
                 <div class="meal-editor-grid">
                   <label class="meal-editor-wide"><span>수분 섭취</span><textarea id="mealHydration" rows="2" maxlength="600"></textarea></label>
                   <label class="meal-editor-wide"><span>운동 전후 식사</span><textarea id="mealExerciseNutrition" rows="2" maxlength="600"></textarea></label>
                   <label class="meal-editor-wide"><span>주말 전략</span><textarea id="mealWeekendStrategy" rows="2" maxlength="600"></textarea></label>
                   <label class="meal-editor-wide"><span>주의 안내</span><textarea id="mealCaution" rows="3" maxlength="800" required></textarea></label>
                 </div>
+                </section>
                 <label class="meal-review-check" id="mealReviewCheckWrap" hidden>
                   <input id="mealReviewAcknowledged" type="checkbox" />
                   <span>질환·약물·임신·섭식·알레르기 또는 InBody 누락 응답을 확인했습니다.</span>
