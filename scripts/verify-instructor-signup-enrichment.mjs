@@ -30,10 +30,17 @@ try{
     assert(job?.jobId===jobId&&job.profileUpdate?.version===2&&job.status==='done'&&memo?.syncStatus==='synced'&&memo.content===job.content);
     const id=String(job.memberId),progress=job.profileStatus;assert(/^[1-9]\d*$/.test(id)&&progress?.beforeFieldHashes);
     await page.goto('https://arcpilates.studiomate.kr/users/detail?id='+id,{waitUntil:'networkidle',timeout:60000});
-    assert(signupProfileMemoPresent(await page.locator('body').innerText(),job.content));
+    const memoBody=await page.locator('body').innerText();
+    assert(signupProfileMemoPresent(memoBody,job.content));
+    const normalize=s=>s.replace(/\s+/g,' ').trim();
+    assert(normalize(memoBody).split(normalize(job.content)).length-1===1,'Completion note is not uniquely visible');
     await page.getByRole('heading',{name:job.memberName,exact:true}).waitFor({state:'visible'});
     await page.getByRole('button',{name:'회원정보 수정',exact:true}).click();
-    await page.waitForFunction(expected=>[...document.querySelectorAll('input[placeholder="휴대폰 번호"]')].some(n=>n.getClientRects().length&&n.value.replace(/\D/g,'')===expected),phone(job.memberPhone),{timeout:20000});
+    await page.waitForFunction(expected=>{
+      const inputs=[...document.querySelectorAll('input')].filter(n=>n.getClientRects().length);
+      return inputs.some(n=>n.getAttribute('placeholder')==='휴대폰 번호'&&n.value.replace(/\D/g,'')===expected)
+        &&inputs.some(n=>n.value==='강사회원');
+    },phone(job.memberPhone),{timeout:20000});
     const field=p=>page.getByRole('textbox').and(page.getByPlaceholder(p,{exact:true})).filter({visible:true});
     assert(new URL(page.url()).origin==='https://arcpilates.studiomate.kr'&&new URL(page.url()).pathname==='/users/create'
       &&new URL(page.url()).searchParams.get('id')===id&&phone(await field('휴대폰 번호').inputValue())===phone(job.memberPhone)&&name(await field('이름을 입력해주세요').inputValue())===name(job.memberName));

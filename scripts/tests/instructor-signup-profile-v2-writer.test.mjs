@@ -31,26 +31,25 @@ function nativePage(j, options = {}) {
     registrationDate: options.registrationDate ?? '2020-01-02', unrelated: options.unrelated ?? 'preserve-synthetic-value' };
   let draft = clone(stored), url = '', saves = 0, popupClosed = false, closed = false;
   const freshPages = [];
+  const resultChoices=()=>({
+    first:()=>({waitFor:async()=>{if(!optionsPostal().choices.length)throw Error('No visible postcode results');events.push({operation:'postal-results'});}}),
+    evaluateAll:async fn=>fn(optionsPostal().choices.map(t=>({textContent:'도로명 '+t+' 선택 안내',querySelectorAll:()=>[{textContent:t}]}))),
+    nth:index=>({click:async()=>{
+      events.push({operation:'postal-select',index});draft.address=optionsPostal().selected??optionsPostal().choices[index].replace(/^(도로명|지번)\s*/,'');
+      if(optionsPostal().autoClose!==false)popupClosed=true;
+    }}),
+  });
   const postalFrame = {
+    locator:selector=>{assert.equal(selector,'button.link_post:not(.link_btn_map)');return resultChoices();},
     getByRole: (role, options = {}) => {
       if (role === 'textbox') return { fill: async value => { events.push({ operation: 'postal-query', value }); } };
-      if (role === 'heading') {
-        assert.equal(options.name, '검색 결과 보기');
-        return { waitFor: async () => { events.push({ operation: 'postal-results' }); } };
-      }
+      if (role === 'heading') assert.fail('Hidden screen-reader heading must not gate postcode readiness');
       assert.equal(role, 'button');
       if (options.name) {
         assert.equal(options.name, '검색');
         return { click: async () => { events.push({ operation: 'postal-search' }); } };
       }
-      return {
-        allTextContents: async () => optionsPostal().choices,
-        nth: index => ({ click: async () => {
-          events.push({ operation: 'postal-select', index });
-          draft.address = optionsPostal().selected ?? optionsPostal().choices[index];
-          if (optionsPostal().autoClose !== false) popupClosed = true;
-        } }),
-      };
+      assert.fail('Map/other buttons cannot be treated as address choices');
     },
   };
   const optionsPostal = () => options.postal;
@@ -208,6 +207,11 @@ test('a DOB conflict does not trigger address lookup when the existing address a
   assert.equal(result.birthDate.status, 'conflict'); assert.equal(result.address.status, 'already_equal');
   assert.equal(m.saves(), 0); assert(!m.events.some(e => e.operation === 'popup'));
 });
+test('native postcode building suffix does not make an already persisted exact address a conflict',async()=>{
+  const j=job(),m=nativePage(j,{birthDate:'1990-01-02',address:'서울특별시 강남구 테헤란로 123 (합성건물)',detail:'합성빌딩 704호'});
+  const r=await run(m,j,{lookupApproved:true});assert.equal(r.address.status,'already_equal');assert.equal(m.saves(),0);
+  assert(!m.events.some(e=>e.operation==='postal-query'));
+});
 
 for (const [label, options] of Object.entries({ wrongId: { wrongId: true }, wrongOrigin:{wrongOrigin:true}, wrongName: { name: '다른회원' },
   wrongPhone: { phone: '01000000002' }, wrongGrade: { grade: '일반회원' }, badMask: { badMask: true } })) {
@@ -313,6 +317,17 @@ for (const [label, postal] of Object.entries({
 // Extract only the orchestration function, never import the executable queue processor.
 const require = createRequire(new URL('../../firebase/kangsain-functions/functions/package.json', import.meta.url));
 const ts = require('typescript');
+test('actual native readiness predicate waits for member grade after phone has hydrated',()=>{
+  const src=new URL('../lib/instructor-signup-profile-v2-writer.mjs',import.meta.url);
+  const ast=ts.createSourceFile(src.pathname,readFileSync(src,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+  let predicate;
+  const visit=n=>{if(ts.isCallExpression(n)&&n.expression.getText(ast)==='target.waitForFunction')predicate=n.arguments[0].getText(ast);ts.forEachChild(n,visit);};visit(ast);assert(predicate);
+  const phoneInput={value:'01000000001',getClientRects:()=>[1],getAttribute:()=> '휴대폰 번호'};
+  const gradeInput={value:'',getClientRects:()=>[1],getAttribute:()=> '선택'};
+  const check=vm.runInNewContext('('+predicate+')',{document:{querySelectorAll:()=>[phoneInput,gradeInput]}});
+  assert.equal(check('01000000001'),false);gradeInput.value='강사회원';assert.equal(check('01000000001'),true);
+  gradeInput.value='일반회원';assert.equal(check('01000000001'),false);
+});
 const worker = new URL('../process-studiomate-memo-write-jobs.mjs', import.meta.url);
 const tree = ts.createSourceFile(worker.pathname, readFileSync(worker, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
 const writeMemoDeclaration = tree.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'writeMemo');

@@ -21,22 +21,30 @@ export function splitSignupPostalAddress(value) {
   return {base:match[1],detail:match[2]};
 }
 async function choosePostalAddress(page,field,parts) {
-  let popup;
+  let popup,stage='popup';
   try{
     [popup]=await Promise.all([page.waitForEvent('popup',{timeout:15000}),field.click()]);
     const frame=popup.frameLocator('iframe');
+    stage='search_input';
     await frame.getByRole('textbox').fill(parts.base);
+    stage='search_button';
     await frame.getByRole('button',{name:'검색',exact:true}).click();
-    await frame.getByRole('heading',{name:'검색 결과 보기',exact:true}).waitFor({state:'visible',timeout:20000});
-    const choices=frame.getByRole('button'),texts=await choices.allTextContents();
-    const matches=texts.map((text,index)=>({text:clean(text),index})).filter(x=>postalKey(x.text)===postalKey(parts.base));
+    stage='visible_results';
+    const choices=frame.locator('button.link_post:not(.link_btn_map)');
+    await choices.first().waitFor({state:'visible',timeout:20000});
+    const lines=await choices.evaluateAll(nodes=>nodes.map(node=>[node.textContent,...[...node.querySelectorAll('*')].map(child=>child.textContent)]));
+    const matches=lines.map((texts,index)=>({index,exact:texts.some(text=>postalKey(clean(text).replace(/^(?:도로명|지번)\s*/,''))===postalKey(parts.base))})).filter(x=>x.exact);
+    stage='exact_result';
     assert(matches.length===1,'Postal address is not an exact unique match');
+    stage='select_result';
     await choices.nth(matches[0].index).click();
+    stage='native_callback';
     await field.page().waitForFunction(({expected})=>{
       const n=[...document.querySelectorAll('input[placeholder="주소를 입력해 주세요"]')].find(x=>x.getClientRects().length);
       return !!n?.value&&n.value.includes(expected);
     },{expected:parts.base.split(' ').slice(-2).join(' ')},{timeout:10000});
     const selected=await field.inputValue();assert(postalKey(selected)===postalKey(parts.base));return selected;
+  }catch(error){error.postalStage=stage;throw error;
   }finally{if(popup&&!popup.isClosed())await popup.close();}
 }
 export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProgress=async()=>{},lookupApproved=SIGNUP_ADDRESS_LOOKUP_APPROVED}={}) {
@@ -50,8 +58,9 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
     await target.getByRole('heading',{name:job.memberName,exact:true}).waitFor({state:'visible'});
     await target.getByRole('button',{name:'회원정보 수정',exact:true}).click();
     await target.waitForFunction(expected=>{
-      const n=[...document.querySelectorAll('input[placeholder="휴대폰 번호"]')].find(x=>x.getClientRects().length);
-      return String(n?.value||'').replace(/\D/g,'')===expected;
+      const inputs=[...document.querySelectorAll('input')].filter(x=>x.getClientRects().length);
+      const n=inputs.find(x=>x.getAttribute('placeholder')==='휴대폰 번호');
+      return String(n?.value||'').replace(/\D/g,'')===expected&&inputs.some(x=>x.value==='강사회원');
     },phone(job.memberPhone),{timeout:20000});
     assert(new URL(target.url()).origin===new URL(baseUrl).origin&&new URL(target.url()).pathname==='/users/create'
       &&new URL(target.url()).searchParams.get('id')===memberId&&phone(await field('휴대폰 번호').inputValue())===phone(job.memberPhone)
@@ -75,6 +84,7 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
   const combined=clean([before.address,before.detail].filter(Boolean).join(' '));
   let addressDecision=decideSignupProfileFieldV2({field:'address',current:combined,expected:expected.addressRaw});
   const parts=splitSignupPostalAddress(expected.addressRaw);
+  if(parts&&before.address&&postalKey(before.address)===postalKey(parts.base)&&clean(before.detail)===clean(parts.detail))addressDecision='already_equal';
   if(addressDecision==='write'&&(!parts||before.address||before.detail))addressDecision='review';
   if(addressDecision==='write'&&!lookupApproved)addressDecision='awaiting_address_lookup_approval';
   const result={version:2,birthDate:{status:birthDecision},address:{status:addressDecision},checkedAt:new Date().toISOString(),
@@ -85,8 +95,8 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
     try{
       selectedAddress=await choosePostalAddress(page,field('주소를 입력해 주세요'),parts);
       await field('상세 주소를 입력해 주세요').fill(parts.detail);
-    }catch{
-      addressDecision='review';result.address={status:'review',reason:'postal_exact_match_unavailable'};
+    }catch(error){
+      addressDecision='review';result.address={status:'review',reason:'postal_exact_match_unavailable',stage:error.postalStage || 'unknown'};
       assert(sha(await openEditor())===sha(before),'Native profile changed while address selection was pending');
     }
   }

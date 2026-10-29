@@ -168,7 +168,7 @@ try {
             claimToken: null,
             ...(writeResult.studiomateMemberId ? { studiomateMemberId: writeResult.studiomateMemberId } : {}),
             ...(writeResult.profileStatus ? { profileStatus: writeResult.profileStatus } : {}),
-            ...(activeData.profileUpdate?.version === 2 ? { profileSyncStatus: profileNeedsReview ? 'review_required' : 'synced',memoWriteState:'verified' } : {}),
+            ...(activeData.profileUpdate?.version === 2 ? { profileSyncStatus: profileNeedsReview ? 'review_required' : 'synced',memoWriteState:'verified',failureStage:null,failureCode:null } : {}),
             writtenAt: admin.firestore.Timestamp.now(),
             lastError: null,
             updatedAt: admin.firestore.Timestamp.now(),
