@@ -35,7 +35,8 @@ try{
     await page.getByRole('button',{name:'회원정보 수정',exact:true}).click();
     await page.waitForFunction(expected=>[...document.querySelectorAll('input[placeholder="휴대폰 번호"]')].some(n=>n.getClientRects().length&&n.value.replace(/\D/g,'')===expected),phone(job.memberPhone),{timeout:20000});
     const field=p=>page.getByRole('textbox').and(page.getByPlaceholder(p,{exact:true})).filter({visible:true});
-    assert(new URL(page.url()).searchParams.get('id')===id&&phone(await field('휴대폰 번호').inputValue())===phone(job.memberPhone)&&name(await field('이름을 입력해주세요').inputValue())===name(job.memberName));
+    assert(new URL(page.url()).origin==='https://arcpilates.studiomate.kr'&&new URL(page.url()).pathname==='/users/create'
+      &&new URL(page.url()).searchParams.get('id')===id&&phone(await field('휴대폰 번호').inputValue())===phone(job.memberPhone)&&name(await field('이름을 입력해주세요').inputValue())===name(job.memberName));
     const values={birthDate:await field('생년월일 (YYYY-MM-DD)').inputValue(),address:await field('주소를 입력해 주세요').inputValue(),detail:await field('상세 주소를 입력해 주세요').inputValue()};
     const protectedFields=await page.locator('input').evaluateAll(nodes=>nodes.filter(n=>n.getClientRects().length&&['이름을 입력해주세요','휴대폰 번호','등록일을 입력해주세요','선택'].includes(n.getAttribute('placeholder'))).map(n=>({placeholder:n.getAttribute('placeholder'),value:n.value})));
     assert(sha(protectedFields)===progress.beforeFieldHashes.protectedHash);

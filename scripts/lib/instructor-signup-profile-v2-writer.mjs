@@ -53,7 +53,8 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
       const n=[...document.querySelectorAll('input[placeholder="휴대폰 번호"]')].find(x=>x.getClientRects().length);
       return String(n?.value||'').replace(/\D/g,'')===expected;
     },phone(job.memberPhone),{timeout:20000});
-    assert(new URL(target.url()).searchParams.get('id')===memberId&&phone(await field('휴대폰 번호').inputValue())===phone(job.memberPhone)
+    assert(new URL(target.url()).origin===new URL(baseUrl).origin&&new URL(target.url()).pathname==='/users/create'
+      &&new URL(target.url()).searchParams.get('id')===memberId&&phone(await field('휴대폰 번호').inputValue())===phone(job.memberPhone)
       &&name(await field('이름을 입력해주세요').inputValue())===name(job.memberName));
     const protectedFields=await target.locator('input').evaluateAll(nodes=>nodes.filter(n=>n.getClientRects().length
       &&['이름을 입력해주세요','휴대폰 번호','등록일을 입력해주세요','선택'].includes(n.getAttribute('placeholder')))

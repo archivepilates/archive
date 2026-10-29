@@ -71,20 +71,21 @@ function nativePage(j, options = {}) {
     return locator;
   };
   const page = {
-    goto: async target => { events.push({ operation: 'load', target }); url = options.wrongId ? target.replace(MEMBER, '999') : target; draft = clone(stored); },
+    goto: async target => { events.push({ operation: 'load', target }); url = options.wrongId ? target.replace(MEMBER, '999') : target; if(options.wrongOrigin)url=url.replace(BASE,'https://other.studiomate.kr'); draft = clone(stored); },
     url: () => url,
     getByPlaceholder: placeholder => input(placeholder),
     getByRole: (role, { name } = {}) => {
       if (role === 'textbox') return { and: locator => locator };
       if (role === 'heading') return { waitFor: async () => assert.equal(draft.name, name) };
       assert.equal(role, 'button');
-      if (name === '회원정보 수정') return { click: async () => { events.push({ operation: 'open-editor' }); } };
+      if (name === '회원정보 수정') return { click: async () => { events.push({ operation: 'open-editor' }); url=url.replace('/users/detail','/users/create'); } };
       assert.equal(name, '회원 수정 완료');
       return { click: async () => {
         assert(!options.readOnly, 'fresh snapshot page must never save');
         events.push({ operation: 'save' }); saves++;
         if (options.saveThrowsBefore) throw Error('Synthetic save response unknown before persistence');
         if (options.persist !== false) stored = clone(draft);
+        url=url.replace('/users/create','/users/detail');
         if (options.changeProtected) stored.registrationDate = '2099-01-01';
         if (options.changeAddress) stored.address = 'changed unexpectedly';
         if (options.saveThrowsAfter) throw Error('Synthetic save response unknown after persistence');
@@ -201,7 +202,7 @@ test('a DOB conflict does not trigger address lookup when the existing address a
   assert.equal(m.saves(), 0); assert(!m.events.some(e => e.operation === 'popup'));
 });
 
-for (const [label, options] of Object.entries({ wrongId: { wrongId: true }, wrongName: { name: '다른회원' },
+for (const [label, options] of Object.entries({ wrongId: { wrongId: true }, wrongOrigin:{wrongOrigin:true}, wrongName: { name: '다른회원' },
   wrongPhone: { phone: '01000000002' }, wrongGrade: { grade: '일반회원' }, badMask: { badMask: true } })) {
   test('writer rejects ' + label + ' before save', async () => {
     const j = job(), m = nativePage(j, options);
