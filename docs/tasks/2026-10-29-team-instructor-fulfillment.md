@@ -23,3 +23,8 @@
 - Private evidence stays mode 0600 under ArchiveIN/operations/
   team-instructor-fulfillment-20261029 and is never committed.
 - Final deployment and actual stage results: see the matching HTML report.
+- Operator answered call_2e8c4f25a21e4778a93c688d09c6f1e3: use the existing
+  confirmation wording and prepare D-1 separately. Store this review in each
+  canonical registration's d1Followup, explicitly preparation_required and
+  automaticDispatchEnabled=false. This is message-content approval, NOT evidence
+  that D-1 material, scheduling, approval or dispatch has completed.

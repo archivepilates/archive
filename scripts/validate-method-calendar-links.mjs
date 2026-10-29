@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { TEAM_EVENT, renderTeamCalendarHtml, renderTeamCalendarIcs } from './build-team-261121-calendar.mjs';
+import { TEAM_EVENT as TEAM_261120_EVENT, buildTeamCalendar as checkTeam261120Calendar,
+  renderTeamCalendarHtml as renderTeam261120Html, renderTeamCalendarIcs as renderTeam261120Ics } from './build-team-261120-calendar.mjs';
 
 const root = resolve(import.meta.dirname, "..");
 const methodRoot = join(root, "archivein", "method");
@@ -45,10 +47,18 @@ for (const entry of readdirSync(methodRoot)) {
   const ics = icsBuffer.toString("utf8");
   const htmlFile = relative(htmlPath);
   const icsFile = relative(icsPath);
-  const isTeam = entry === 'team-261121';
+  const isTeam261120 = entry === 'team-261120';
+  const isTeam = isTeam261120 || entry === 'team-261121';
+  const teamEvent = isTeam261120 ? TEAM_261120_EVENT : TEAM_EVENT;
+  if (isTeam261120) {
+    try { await checkTeam261120Calendar({ check: true }); }
+    catch { fail(htmlFile, 'November 20 Team calendar failed its approved builder check'); }
+  }
   if (isTeam) {
     const stamp = ics.match(/DTSTAMP:(\d{8}T\d{6}Z)/)?.[1];
-    if (html !== renderTeamCalendarHtml() || !stamp || ics !== renderTeamCalendarIcs(stamp)) {
+    const expectedHtml = isTeam261120 ? renderTeam261120Html() : renderTeamCalendarHtml();
+    const expectedIcs = stamp && (isTeam261120 ? renderTeam261120Ics(stamp) : renderTeamCalendarIcs(stamp));
+    if (html !== expectedHtml || !stamp || ics !== expectedIcs) {
       fail(htmlFile, 'Team calendar must exactly match its independently verified schedule builder');
     }
   }
@@ -59,8 +69,8 @@ for (const entry of readdirSync(methodRoot)) {
   if (!html.includes(`href="./${icsName}"`)) {
     fail(htmlFile, `ICS link must point to ./${icsName}`);
   }
-  const start = isTeam ? TEAM_EVENT.start : `${year}${month}${day}T040000Z`;
-  const end = isTeam ? TEAM_EVENT.end : `${year}${month}${day}T061000Z`;
+  const start = isTeam ? teamEvent.start : `${year}${month}${day}T040000Z`;
+  const end = isTeam ? teamEvent.end : `${year}${month}${day}T061000Z`;
   if (!html.includes(`dates=${start}%2F${end}`)) {
     fail(htmlFile, "Google Calendar dates must match the specific verified course");
   }
@@ -89,10 +99,10 @@ for (const entry of readdirSync(methodRoot)) {
   for (const marker of [
     "BEGIN:VCALENDAR",
     "BEGIN:VEVENT",
-    `UID:${isTeam ? TEAM_EVENT.uid : `archive-method-8-external-feedback-${dateToken}@archivepilates.com`}`,
+    `UID:${isTeam ? teamEvent.uid : `archive-method-8-external-feedback-${dateToken}@archivepilates.com`}`,
     `DTSTART:${start}`,
     `DTEND:${end}`,
-    isTeam ? `SUMMARY:${TEAM_EVENT.title}` : "SUMMARY:ARCHIVE METHOD #8 외부 피드백",
+    isTeam ? `SUMMARY:${teamEvent.title}` : "SUMMARY:ARCHIVE METHOD #8 외부 피드백",
     "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",

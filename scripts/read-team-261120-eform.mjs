@@ -5,6 +5,8 @@ import { acquireEformsignBrowserLock } from './lib/eformsign-browser-lock.mjs';
 import { assertEformEmptySearchResponse } from './lib/instructor-eform-search-evidence.mjs';
 import { readCompletedRecipientEvidence } from './lib/instructor-signup-order-identity.mjs';
 import { readCompletedSignupProfile } from './lib/instructor-signup-profile.mjs';
+import { parseSignupProfile } from './lib/instructor-signup-profile.mjs';
+import { parseInstructorEformProgress } from './lib/instructor-eform-progress-evidence.mjs';
 import {
   INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID, instructorLessonRegistrationId,
   normalizeInstructorLessonName, normalizeInstructorLessonPhone,
@@ -206,10 +208,25 @@ async function inspectCompleted(page, registration, row, proof) {
   proof.recipientVerified = true;
   location.stage = 'completed_profile';
   assert(/^[1-9]\d*$/.test(memberId), 'Canonical native member ID required; never invent one');
-  proof.profile = await readCompletedSignupProfile(page, job, { ...row, found: true, href: documentUrl(row) });
-  assert.equal(proof.profile.memberName, registration.memberName);
-  assert.equal(proof.profile.memberPhone, registration.memberPhone);
-  assert.equal(proof.profile.documentId, row.documentId);
+  const previousJobId = registration.evidence?.eformsignJobId;
+  if (previousJobId && previousJobId !== registration.registrationId) {
+    assert(/^ilr_[a-f0-9]{24}$/.test(previousJobId));
+    const previous = (await app.firestore().doc('eformsignInstructorMemberJobs/' + previousJobId).get()).data();
+    assert(previous?.status === 'done' && previous.documentId === row.documentId
+      && previous.memberName === registration.memberName && previous.memberPhone === registration.memberPhone
+      && previous.studiomateMemberId === memberId);
+    parseSignupProfile(previous.submittedProfile, previous, row.documentId);
+    proof.profileSource = 'existing_canonical_completed_job';
+    proof.profileReference = 'eformsignInstructorMemberJobs/' + previousJobId;
+    proof.answersReReadFromViewer = false;
+  } else {
+    proof.profile = await readCompletedSignupProfile(page, job, { ...row, found: true, href: documentUrl(row) });
+    assert.equal(proof.profile.memberName, registration.memberName);
+    assert.equal(proof.profile.memberPhone, registration.memberPhone);
+    assert.equal(proof.profile.documentId, row.documentId);
+    proof.profileSource = 'live_completed_document_viewer';
+    proof.answersReReadFromViewer = true;
+  }
   proof.profileVerified = true;
   proof.status = 'completed_verified';
   proof.checkedAt = new Date().toISOString();
@@ -247,16 +264,8 @@ async function inspectProgress(page, registration, row, proof) {
   assert.equal(body?.status, '200');
   assert.equal(body?.code, '-1');
   assert.equal(status?.document_title, row.documentName);
-  assert(Array.isArray(status.steps) && Array.isArray(status.current_infos) && status.current_infos.length > 0);
-  assert(!status.steps.some(step => step.action === 'doc_complete' && Number(step.execute_date) > 0));
-  const participants = status.steps.filter(step => step.action === 'doc_accept_participant');
-  assert.equal(participants.length, 1);
-  const owner = participants[0].owner;
-  assert(Array.isArray(owner?.members) && owner.members.length === 1);
-  assert(!owner.groups?.length && !owner.external_creators?.length);
-  const recipient = String(owner.members[0]).match(/^(.+?)\s*\((\+?[\d\s-]+)\)$/);
-  assert(recipient);
-  proof.recipient = { name: normalizeInstructorLessonName(recipient[1]), phone: normalizeInstructorLessonPhone(recipient[2]) };
+  proof.recipient = parseInstructorEformProgress({httpStatus:response.httpStatus,body,documentName:row.documentName,
+    memberName:registration.memberName,memberPhone:registration.memberPhone});
   assert.equal(proof.recipient.name, registration.memberName);
   assert.equal(proof.recipient.phone, registration.memberPhone);
   proof.recipientVerified = true;
@@ -366,7 +375,12 @@ try {
   for (const registration of registrations) await auditRegistration(page, registration);
   location = { stage: 'source_revalidation' };
   const latest = await db.getAll(...IDS.map(id => db.doc(`instructorLessonRegistrations/${id}`)));
-  evidence.sourceUnchanged = latest.every((snapshot, index) => snapshot.exists && snapshot.updateTime.isEqual(snapshots[index].updateTime));
+  evidence.sourceUnchanged = latest.every((snapshot, index) => {
+    const current = snapshot.data(), prior = registrations[index];
+    return snapshot.exists && !current.cancellation && !current.externalOrderReviewRequired
+      && ['memberName','memberPhone','studiomateMemberId','lessonDate','lessonTime','lessonTopic','paymentMethod','paymentAmount','courseKind']
+        .every(key => current[key] === prior[key]);
+  });
   assert(evidence.sourceUnchanged);
   evidence.complete = evidence.rows.length === 6 && evidence.rows.every(row => row.searchComplete);
   evidence.ok = evidence.complete && evidence.errors.length === 0;
