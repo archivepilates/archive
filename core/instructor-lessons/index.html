@@ -81,9 +81,10 @@
               <div class="instructor-registration-fields">
                 <label>
                   <span>수강 구분</span>
-                  <select id="instructorLessonCourseKind" name="courseKind" aria-controls="instructorLessonTeamFields">
+                  <select id="instructorLessonCourseKind" name="courseKind" aria-controls="instructorLessonTeamFields instructorLessonPaymentMethod instructorLessonPaymentConfirmed instructorLessonSeatConfirmed">
                     <option value="standard" selected>일반 (2T)</option>
                     <option value="team">팀레슨</option>
+                    <option value="waitlist">수강대기</option>
                   </select>
                 </label>
                 <label>
@@ -146,6 +147,7 @@
               </ol>
             </div>
             <p id="instructorLessonTeamFlow" class="instructor-registration-note" hidden>팀레슨은 내부 접수만 완료됩니다. 수강권·가입서·안내는 확인 대기이며 StudioMate 작업이나 발송 대기열은 생성되지 않습니다.</p>
+            <p id="instructorLessonWaitlistFlow" class="instructor-registration-note" hidden>수강대기 · 미결제</p>
           </details>
         </section>
 
@@ -154,6 +156,7 @@
             <div><h2>최근 등록</h2></div>
             <div class="segmented-control" id="instructorLessonRegistrationFilters" role="group" aria-label="등록 상태 필터">
               <button type="button" class="active" data-instructor-registration-filter="active">진행중</button>
+              <button type="button" data-instructor-registration-filter="waitlisted">수강대기</button>
               <button type="button" data-instructor-registration-filter="review">확인필요</button>
               <button type="button" data-instructor-registration-filter="completed">완료</button>
               <button type="button" data-instructor-registration-filter="all">전체</button>

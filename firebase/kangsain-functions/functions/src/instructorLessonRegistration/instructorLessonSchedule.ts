@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { teamScheduleMetadata } from "./instructorLessonTeamIntake";
+import { isInstructorLessonWaitlist } from "./instructorLessonWaitlist";
 
 export const INSTRUCTOR_LESSON_DEFAULT_CAPACITY = 10;
 export const INSTRUCTOR_LESSON_SCHEDULE_WINDOW_DAYS = 120;
@@ -32,6 +33,9 @@ export type InstructorLessonScheduleSummary = {
   registrationCount: number;
   confirmedPendingRegistrationCount: number;
   roster?: InstructorLessonScheduleRosterRow[];
+  waitlistCount: number;
+  waitlist: { registrationId: string; memberName: string; memberPhone: string; phoneLast4: string;
+    waitlistedAt: string | null; position: number }[];
   courseKind?: string;
   lessonTime?: string;
   lessonTopic?: string;
@@ -127,6 +131,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
   }
 
   const registrationMembers: ScheduleMembers = new Map();
+  const waitingMembers: ScheduleMembers = new Map();
   const verifiedRegistrationMembers: ScheduleMembers = new Map();
   const confirmedPendingMembers: ScheduleMembers = new Map();
   for (const registration of input.registrations || []) {
@@ -136,6 +141,11 @@ export function buildInstructorLessonScheduleSummaries(input: {
     if (!inRange(date, startDate, endDate) || ["cancelled", "canceled", "rejected"].includes(status)) continue;
     const memberKey = memberIdentity(registration) || cleanText(registration.registrationId || registration.id);
     if (!memberKey) continue;
+    if (isInstructorLessonWaitlist(registration)) {
+      addScheduleMember(waitingMembers, date, memberKey, registration);
+      dates.add(date);
+      continue;
+    }
     addScheduleMember(registrationMembers, date, memberKey, registration);
     if (cleanText(registration.steps?.ticket?.status).toLowerCase() === "verified") {
       addScheduleMember(verifiedRegistrationMembers, date, memberKey, registration);
@@ -175,6 +185,18 @@ export function buildInstructorLessonScheduleSummaries(input: {
       confirmedPendingMembers.get(date),
     );
     const occupiedCount = occupiedMembers?.size || 0;
+    const waitlist = [...(waitingMembers.get(date)?.entries() || [])]
+      .map(([, rows]) => [...rows].sort((a, b) => millis(a.waitlistedAt || a.createdAt) - millis(b.waitlistedAt || b.createdAt)
+        || cleanText(a.registrationId || a.id).localeCompare(cleanText(b.registrationId || b.id)))[0])
+      .sort((a, b) => millis(a.waitlistedAt || a.createdAt) - millis(b.waitlistedAt || b.createdAt)
+        || cleanText(a.registrationId || a.id).localeCompare(cleanText(b.registrationId || b.id)))
+      .map((row, index) => {
+        const phone = normalizePhone(row.memberPhone);
+        const stamp = millis(row.waitlistedAt || row.createdAt);
+        return { registrationId: cleanText(row.registrationId || row.id), memberName: cleanText(row.memberName),
+          memberPhone: phone, phoneLast4: phone.slice(-4), waitlistedAt: stamp ? new Date(stamp).toISOString() : null,
+          position: index + 1 };
+      });
     const roster = [...(occupiedMembers || [])].map(([memberKey, members]) => {
       const sources =
         countSource === "bookings"
@@ -247,6 +269,8 @@ export function buildInstructorLessonScheduleSummaries(input: {
       registrationCount,
       confirmedPendingRegistrationCount,
       roster,
+      waitlistCount: waitlist.length,
+      waitlist,
     } satisfies InstructorLessonScheduleSummary;
   });
 }

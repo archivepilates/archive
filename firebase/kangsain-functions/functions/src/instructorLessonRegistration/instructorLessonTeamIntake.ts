@@ -1,7 +1,7 @@
 import { AppError } from "../utils/errors";
 
 export type InstructorCourseInput = {
-  courseKind: "standard" | "team";
+  courseKind: "standard" | "team" | "waitlist";
   lessonTime?: string;
   lessonTopic?: string;
   paymentAmount?: number;
@@ -9,14 +9,14 @@ export type InstructorCourseInput = {
 
 export function parseInstructorCourseInput(value: Record<string, unknown>): InstructorCourseInput {
   const kind = value.courseKind ?? "standard";
-  if (kind !== "standard" && kind !== "team") {
+  if (kind !== "standard" && kind !== "team" && kind !== "waitlist") {
     throw new AppError("INVALID_ARGUMENT", "강사레슨 과정 구분을 확인하세요.");
   }
-  if (kind === "standard") {
+  if (kind === "standard" || kind === "waitlist") {
     if (["lessonTime", "lessonTopic", "paymentAmount"].some(key => value[key] !== undefined)) {
       throw new AppError("INVALID_ARGUMENT", "팀레슨 세부정보는 팀레슨 과정에서만 입력하세요.");
     }
-    return { courseKind: "standard" };
+    return { courseKind: kind };
   }
   const lessonTime = typeof value.lessonTime === "string" ? value.lessonTime.trim() : "";
   const lessonTopic = typeof value.lessonTopic === "string" ? value.lessonTopic.trim() : "";

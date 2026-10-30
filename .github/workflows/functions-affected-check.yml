@@ -143,6 +143,9 @@ jobs:
       - name: Test private flow state and revision contract
         run: npm run test:private-flow
 
+      - name: Test unpaid instructor waitlist isolation
+        run: firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-waitlist.test.ts scripts/tests/instructor-lesson-team-intake.test.ts scripts/tests/instructor-lesson-schedule-roster.test.ts
+
       - name: Test private Notion member folder creation guards
         run: firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/private-notion-member-parent.test.ts scripts/tests/private-notion-member-parent-runtime.test.ts
 

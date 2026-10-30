@@ -9,6 +9,7 @@ import { parseInstructorCourseInput, sameInstructorCourse, teamIntakeFields,
   type InstructorCourseInput } from "./instructorLessonTeamIntake";
 import { INSTRUCTOR_CANCELLATIONS, assertInstructorCancellationIdle, cancellationBlocksRegistration,
   instructorCancellationId, parseInstructorCancellation } from "./instructorLessonCancellationPolicy";
+import { isInstructorLessonWaitlist, instructorLessonWaitlistFields } from "./instructorLessonWaitlist";
 import {
   buildInstructorLessonRegistrationCounts,
   buildInstructorLessonScheduleSummaries,
@@ -38,6 +39,7 @@ const DASHBOARD_STATUSES = [
   "cancellation_pending",
   "cancellation_review",
   "cancelled",
+  "waitlisted",
 ] as const;
 
 type RegistrationStepStatus =
@@ -62,7 +64,7 @@ type RegistrationInput = InstructorCourseInput & {
   memberName: string;
   memberPhone: string;
   lessonDate: string;
-  paymentMethod: "card" | "cash" | "wiretransfer";
+  paymentMethod: "card" | "cash" | "wiretransfer" | "none";
   paymentConfirmed: boolean;
   seatConfirmed: boolean;
 };
@@ -87,15 +89,38 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
     if (cancellationBlocksRegistration(existing)) {
       throw new AppError("INVALID_ARGUMENT", "취소 요청·이력이 있는 접수입니다. 기존 수강권과 취소 결과를 먼저 확인하세요.");
     }
-    if (registrationSnapshot.exists && existingStatus !== "cancelled") {
+    const promotingWaitlist = registrationSnapshot.exists && isInstructorLessonWaitlist(existing)
+      && input.courseKind !== "waitlist";
+    if (promotingWaitlist && (jobSnapshot.exists || normalizePhone(existing.memberPhone) !== input.memberPhone
+      || cleanText(existing.memberName, 40) !== input.memberName || existing.lessonDate !== input.lessonDate)) {
+      throw new AppError("INVALID_ARGUMENT", "기존 대기자 신원·자동 처리 이력을 먼저 확인하세요.");
+    }
+    if (registrationSnapshot.exists && existingStatus !== "cancelled" && !promotingWaitlist) {
       assertSameRegistration(existing, input);
       return {
         duplicate: true,
         registrationId,
         status: existingStatus || "queued",
         ...(existing.intakeOnly === true ? { intakeOnly: true } : {}),
+        ...(isInstructorLessonWaitlist(existing) ? { waitlistOnly: true } : {}),
       };
     }
+
+    if (input.courseKind === "waitlist") {
+      if (jobSnapshot.exists) throw new AppError("INVALID_ARGUMENT", "기존 발급 작업이 있는 건은 수강대기로 바꾸지 않습니다.");
+      transaction.set(registrationRef, {
+        registrationId, idempotencyKey: registrationId, studioId: staff.studioId,
+        memberName: input.memberName, memberPhone: input.memberPhone, phoneLast4: input.memberPhone.slice(-4),
+        lessonDate: input.lessonDate, ...instructorLessonWaitlistFields(now),
+        source: { type: "archive_core_operator", sourceId: registrationId },
+        createdBy: { staffId: staff.staffId, name: staff.name, email: staff.email || null },
+        createdAt: now, updatedAt: now,
+      });
+      return { duplicate: false, registrationId, status: "waitlisted", waitlistOnly: true };
+    }
+    const waitlistHistory = promotingWaitlist ? { waitlistOnly: false,
+      waitlistHistory: { registeredAt: existing.waitlistedAt || existing.createdAt, convertedAt: now,
+        convertedByStaffId: staff.staffId } } : {};
 
     if (input.courseKind === "team") {
       if (jobSnapshot.exists) throw new AppError("INVALID_ARGUMENT", "기존 발급 작업을 먼저 확인하세요.");
@@ -107,7 +132,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       ]);
       const conflictingIntake = dayRegistrations.docs.some(doc => {
         const row = doc.data();
-        return !["cancelled", "canceled", "rejected"].includes(String(row.status || ""))
+        return !isInstructorLessonWaitlist(row) && !["cancelled", "canceled", "rejected"].includes(String(row.status || ""))
           && !sameInstructorCourse(row, input);
       });
       if (conflictingIntake || dayLectures.docs.some(doc => isInstructorLesson(doc.data()))) {
@@ -118,6 +143,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
         memberName: input.memberName, memberPhone: input.memberPhone,
         phoneLast4: input.memberPhone.slice(-4), lessonDate: input.lessonDate,
         paymentMethod: input.paymentMethod, ...teamIntakeFields(input),
+        ...waitlistHistory,
         operatorChecks: { paymentConfirmed: true, seatConfirmed: true },
         source: { type: "archive_core_operator", sourceId: registrationId },
         createdBy: { staffId: staff.staffId, name: staff.name, email: staff.email || null },
@@ -153,6 +179,8 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       phoneLast4: input.memberPhone.slice(-4),
       lessonDate: input.lessonDate,
       paymentMethod: input.paymentMethod,
+      courseKind: "standard",
+      ...waitlistHistory,
       ticketName: TICKET_NAME,
       mode: "unresolved",
       status: "queued",
@@ -408,13 +436,21 @@ export function parseRegistrationInput(data: unknown): RegistrationInput {
   if (!/^20\d{2}-\d{2}-\d{2}$/.test(lessonDate) || Number.isNaN(Date.parse(`${lessonDate}T00:00:00+09:00`))) {
     throw new AppError("INVALID_ARGUMENT", "강사레슨 수강일을 확인하세요.");
   }
+  const course = parseInstructorCourseInput(value);
+  if (course.courseKind === "waitlist") {
+    if ((paymentMethod && paymentMethod !== "none") || (value.paymentConfirmed !== undefined && value.paymentConfirmed !== false)
+      || (value.seatConfirmed !== undefined && value.seatConfirmed !== false)
+      || new Date(`${lessonDate}T00:00:00Z`).toISOString().slice(0, 10) !== lessonDate || lessonDate < todayKst()) {
+      throw new AppError("INVALID_ARGUMENT", "수강대기는 오늘 이후 일정에 미입금·좌석 미확정으로만 접수합니다.");
+    }
+    return { memberName, memberPhone, lessonDate, paymentMethod: "none", paymentConfirmed: false, seatConfirmed: false, ...course };
+  }
   if (!isPaymentMethod(paymentMethod)) {
     throw new AppError("INVALID_ARGUMENT", "StudioMate에 기록할 결제수단을 선택하세요.");
   }
   if (value.paymentConfirmed !== true || value.seatConfirmed !== true) {
     throw new AppError("INVALID_ARGUMENT", "입금과 수강 접수를 확인한 뒤 등록을 확정하세요.");
   }
-  const course = parseInstructorCourseInput(value);
   if (course.courseKind === "team" && (new Date(`${lessonDate}T00:00:00Z`).toISOString().slice(0, 10) !== lessonDate
     || lessonDate < todayKst())) {
     throw new AppError("INVALID_ARGUMENT", "팀레슨 수강일은 오늘 이후의 유효한 날짜여야 합니다.");
@@ -437,6 +473,8 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
     phoneLast4,
     lessonDate: cleanText(data.lessonDate, 10),
     paymentMethod: cleanText(data.paymentMethod, 20),
+    ...(isInstructorLessonWaitlist(data) ? { courseKind: "waitlist", waitlistOnly: true,
+      waitlistedAt: timestampIso(data.waitlistedAt || data.createdAt) } : {}),
     ticketName: cleanText(data.ticketName, 80),
     ...(data.courseKind === "team" ? { courseKind: "team", intakeOnly: data.intakeOnly === true,
       teamFulfillmentStarted: Boolean(data.teamFulfillment && typeof data.teamFulfillment === "object"

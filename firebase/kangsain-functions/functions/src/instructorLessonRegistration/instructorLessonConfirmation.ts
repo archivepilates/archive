@@ -13,6 +13,7 @@ import { instructorLessonRegistrationId } from "./instructorLessonRegistration";
 import { deriveInstructorLessonRegistrationState } from "./instructorLessonRegistrationState";
 import { resolveNotionLessonSchedule } from "./instructorLessonNotionSchedule";
 import { cancellationBlocksRegistration } from "./instructorLessonCancellationPolicy";
+import { isInstructorLessonWaitlist } from "./instructorLessonWaitlist";
 
 const REGISTRATIONS = "instructorLessonRegistrations";
 const TICKET_NAME = "강사레슨 (2T)";
@@ -81,6 +82,7 @@ export async function queueInstructorLessonConfirmationOnTicketVerifiedHandler(i
   after?: Record<string, any> | null;
 }): Promise<Record<string, unknown>> {
   const registrationId = cleanText(input.registrationId, 80);
+  if (isInstructorLessonWaitlist(input.after)) return { ok: true, skipped: "waitlist_only" };
   if (input.after?.intakeOnly === true) return { ok: true, skipped: "team_intake_only" };
   const beforeTicketStatus = cleanText(input.before?.steps?.ticket?.status, 40);
   const afterTicketStatus = cleanText(input.after?.steps?.ticket?.status, 40);
@@ -436,6 +438,7 @@ export function instructorLessonConfirmationCandidateId(input: {
 }
 
 export function instructorLessonTicketConfirmationIssue(registration: Record<string, any>): string {
+  if (isInstructorLessonWaitlist(registration)) return "수강대기 · 미입금·좌석 미확정 · 발급·발송 대상 아님";
   if (registration.intakeOnly === true) return "팀레슨 접수 전용 · 일정·가입서·발급 확인 대기";
   if (cancellationBlocksRegistration(registration)) return "취소 요청·처리된 강사레슨 등록 건";
   if (registration.externalOrderReviewRequired) return "홈페이지 주문 변경 확인필요";

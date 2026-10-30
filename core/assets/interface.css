@@ -271,7 +271,20 @@ input::placeholder, textarea::placeholder { color: #7a8691; font-weight: 400; op
 .instructor-seat-progress > span { background: var(--green); }
 .instructor-seat-item-head strong { font-weight: 600; }
 .instructor-seat-counts small { font-size: 0.75rem; }
+.instructor-seat-waitlist-count { color: var(--muted); font-size: 0.8125rem; }
+.instructor-waitlist { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.instructor-waitlist h4 { margin: 0 0 12px; font-size: 0.875rem; }
+.instructor-waitlist-list { list-style: none; padding: 0; margin: 0; }
+.instructor-waitlist-row { display: grid; grid-template-columns: minmax(2.5rem, max-content) minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.instructor-waitlist-row > div { display: grid; min-width: 0; gap: 6px; }
+.instructor-waitlist-row :is(strong,span,small) { overflow-wrap: anywhere; }
+.instructor-waitlist-registration { overflow-wrap: anywhere; }
+.instructor-waitlist-row :is(span,small), .instructor-waitlist-empty { color: var(--muted); font-size: 0.8125rem; }
+.instructor-lessons-page #instructorLessonRegistrationFilters { flex-wrap: wrap; max-width: 100%; }
+.instructor-lessons-page #instructorLessonRegistrationFilters button { flex: 1 0 auto; min-height: 44px; }
 .instructor-registration-checks label { background: var(--surface); font-weight: 500; }
+.instructor-registration-form .instructor-registration-checks[hidden],
+.instructor-registration-form label[hidden] { display: none; }
 .instructor-registration-note { margin: 12px 0 0; }
 .instructor-lesson-roster-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .instructor-lesson-roster-row > div:first-child { flex: 1 1 12rem; overflow-wrap: anywhere; }

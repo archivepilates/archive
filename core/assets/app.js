@@ -7579,6 +7579,7 @@ function instructorLessonStatusLabel(value) {
     cancellation_pending: "취소 처리중",
     cancellation_review: "취소 확인필요",
     cancelled: "취소 완료",
+    waitlisted: "수강대기",
   }[String(value || "")] || "확인";
 }
 
@@ -7622,6 +7623,10 @@ function instructorLessonStepStatusLabel(value) {
 
 function instructorLessonRegistrationMatchesFilter(item) {
   const status = String(item?.status || "");
+  if (status === "waitlisted" || item?.waitlistOnly === true || item?.courseKind === "waitlist") {
+    return ["waitlisted", "all"].includes(instructorLessonRegistrationFilter);
+  }
+  if (instructorLessonRegistrationFilter === "waitlisted") return false;
   if (instructorLessonRegistrationFilter === "active") return INSTRUCTOR_LESSON_ACTIVE_STATUSES.has(status);
   if (instructorLessonRegistrationFilter === "review") return INSTRUCTOR_LESSON_REVIEW_STATUSES.has(status);
   if (instructorLessonRegistrationFilter === "completed") return status === "completed";
@@ -7747,6 +7752,7 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
           ${unverifiedTeam ? "" : `<span><small>정원</small><strong>${capacity.toLocaleString("ko-KR")}</strong></span>
           <span><small>남은 좌석</small><strong>${remaining.toLocaleString("ko-KR")}</strong></span>`}
         </div>
+        <small class="instructor-seat-waitlist-count">대기 ${Math.max(0, toNumber(item.waitlistCount)).toLocaleString("ko-KR")}명</small>
         ${unverifiedTeam ? "" : `<div class="instructor-seat-progress" role="img" aria-label="${occupied}명 접수, 정원 ${capacity}명">
           <span style="width:${percentage}%"></span>
         </div>`}
@@ -7762,12 +7768,11 @@ function renderInstructorLessonRoster(schedule) {
   const container = qs("instructorLessonScheduleDetail");
   if (!container) return;
   if (!schedule) { container.innerHTML = ""; return; }
-  const roster = schedule.roster;
   const registrations = state.instructorLessonRegistrationDashboard?.items || [];
-  if (!Array.isArray(roster)) {
-    container.innerHTML = '<div class="empty-state">명단 연결 확인이 필요합니다. 접수 건수와 수강권 보유 인원은 다를 수 있습니다.</div>';
-    return;
-  }
+  const roster = Array.isArray(schedule.roster) ? schedule.roster.filter((member) => {
+    const registration = registrations.find((item) => member.registrationId && item.registrationId === member.registrationId);
+    return ![member, registration].some((item) => item?.courseKind === "waitlist" || item?.waitlistOnly === true || item?.status === "waitlisted");
+  }) : [];
   const methodTitle = instructorLessonMethodTitle(schedule);
   const metadataConflict = schedule.metadataSource === "conflict";
   const presentation = instructorLessonSchedulePresentation(schedule);
@@ -7792,6 +7797,16 @@ function renderInstructorLessonRoster(schedule) {
       : "";
     return `<div class="status-row instructor-lesson-roster-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p><p id="${statusId}" class="instructor-lesson-cancellation-status" role="status" aria-label="${escapeHtml(member.memberName)} 취소 상태">${escapeHtml(cancellationLabel)}${cancellation?.lastError ? ` · ${escapeHtml(cancellation.lastError)}` : ""}</p></div><div class="instructor-lesson-roster-actions"><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource, schedule.confirmedPendingRegistrationCount))}</span>${action}</div></div>`;
   }).join("");
+  if (!Array.isArray(schedule.roster)) {
+    container.innerHTML += '<div class="empty-state">명단 연결 확인이 필요합니다. 접수 건수와 수강권 보유 인원은 다를 수 있습니다.</div>';
+  }
+  const waitlist = Array.isArray(schedule.waitlist) ? [...schedule.waitlist].sort((a, b) => Number(a.position) - Number(b.position)) : [];
+  container.innerHTML += `<section class="instructor-waitlist" aria-label="수강대기"><h4>수강대기 · ${Math.max(0, Number(schedule.waitlistCount) || 0).toLocaleString("ko-KR")}명</h4>`
+    + (waitlist.length ? `<ol class="instructor-waitlist-list">${waitlist.map((member) => {
+      const phone = document.documentElement.dataset.coreAccess === "manager" && member.memberPhone
+        ? member.memberPhone : `***-****-${member.phoneLast4 || "----"}`;
+      return `<li class="instructor-waitlist-row"><span>${escapeHtml(member.position)}번</span><div><strong>${escapeHtml(member.memberName || "이름 확인 필요")}</strong><span>${escapeHtml(phone)}</span><small>접수 ${escapeHtml(compactDateTime(member.waitlistedAt))}</small></div></li>`;
+    }).join("")}</ol>` : '<p class="instructor-waitlist-empty">대기자 없음</p>') + "</section>";
 }
 
 function instructorLessonCancellationKey(lessonDate, member) {
@@ -7807,6 +7822,7 @@ function instructorLessonCancellationStatusLabel(status) {
 
 function canCancelInstructorLesson(lessonDate, member) {
   return document.documentElement.dataset.coreAccess === "manager"
+    && member?.courseKind !== "waitlist" && member?.waitlistOnly !== true && member?.status !== "waitlisted"
     && !readUnavailable("instructorLessonRegistrations")
     && member?.canCancel === true && Boolean(member.memberId) && Boolean(member.memberKey)
     && !member.cancellation
@@ -8444,6 +8460,12 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
   }
   container.innerHTML = visibleItems.map((item) => {
     const status = String(item.status || "");
+    if (status === "waitlisted" || item.waitlistOnly === true || item.courseKind === "waitlist") {
+      return `<article class="instructor-registration-item instructor-waitlist-registration">
+        <div class="instructor-registration-item-head"><div><strong>${escapeHtml(item.memberName || "이름 확인 필요")}</strong><span>${escapeHtml(item.lessonDate || "수강일 확인 필요")} · ***-****-${escapeHtml(item.phoneLast4 || "----")}</span></div><span class="pill">수강대기</span></div>
+        <div class="instructor-registration-meta"><span>미결제</span><span>접수 ${escapeHtml(compactDateTime(item.waitlistedAt))}</span></div>
+      </article>`;
+    }
     const steps = item.steps && typeof item.steps === "object" ? item.steps : {};
     const intakeOnly = item.courseKind === "team" || item.intakeOnly === true;
     const teamFulfillment = intakeOnly && item.teamFulfillmentStarted === true;
@@ -8489,6 +8511,7 @@ function renderInstructorLessonRegistrationDashboard(data = state.instructorLess
 }
 
 function instructorLessonConfirmationAction(item) {
+  if (item?.courseKind === "waitlist" || item?.waitlistOnly === true || item?.status === "waitlisted") return "";
   if (item?.courseKind === "team" || item?.intakeOnly === true) return "";
   if (INSTRUCTOR_LESSON_CANCELLATION_STATUSES.has(String(item?.status || ""))) return "";
   const steps = item?.steps && typeof item.steps === "object" ? item.steps : {};
@@ -8523,6 +8546,21 @@ function setInstructorLessonRegistrationStatus(message, tone = "") {
 
 function handleInstructorLessonCourseKindChange() {
   const isTeam = qs("instructorLessonCourseKind")?.value === "team";
+  const isWaitlist = qs("instructorLessonCourseKind")?.value === "waitlist";
+  ["instructorLessonPaymentMethod", "instructorLessonPaymentConfirmed", "instructorLessonSeatConfirmed"].forEach((id) => {
+    const input = qs(id);
+    if (!input) return;
+    input.disabled = isWaitlist;
+    input.required = !isWaitlist;
+  });
+  const paymentLabel = qs("instructorLessonPaymentMethod")?.closest?.("label");
+  const paymentChecks = qs("instructorLessonPaymentConfirmed")?.closest?.(".instructor-registration-checks");
+  if (paymentLabel) paymentLabel.hidden = isWaitlist;
+  if (paymentChecks) paymentChecks.hidden = isWaitlist;
+  if (isWaitlist) {
+    qs("instructorLessonPaymentConfirmed").checked = false;
+    qs("instructorLessonSeatConfirmed").checked = false;
+  }
   const fields = qs("instructorLessonTeamFields");
   if (fields) fields.hidden = !isTeam;
   ["instructorLessonTime", "instructorLessonTopic", "instructorLessonPaymentAmount"].forEach((id) => {
@@ -8533,13 +8571,15 @@ function handleInstructorLessonCourseKindChange() {
   });
   const regularFlow = qs("instructorLessonRegularFlow");
   const teamFlow = qs("instructorLessonTeamFlow");
-  if (regularFlow) regularFlow.hidden = isTeam;
+  if (regularFlow) regularFlow.hidden = isTeam || isWaitlist;
   if (teamFlow) teamFlow.hidden = !isTeam;
-  setText("instructorLessonFlowSummary", isTeam ? "내부 접수 · 수강권/가입서/안내 확인 대기" : "자동 안내·가입서, 직접 반배정·예약");
-  setText("instructorLessonRegistrationNote", isTeam
+  const waitlistFlow = qs("instructorLessonWaitlistFlow");
+  if (waitlistFlow) waitlistFlow.hidden = !isWaitlist;
+  setText("instructorLessonFlowSummary", isWaitlist ? "수강대기 · 미결제" : isTeam ? "내부 접수 · 수강권/가입서/안내 확인 대기" : "자동 안내·가입서, 직접 반배정·예약");
+  setText("instructorLessonRegistrationNote", isWaitlist ? "수강대기 · 미결제" : isTeam
     ? "팀레슨은 내부 접수만 완료됩니다. 수강권/가입서/안내 확인 대기이며 자동 발급·발송은 진행하지 않습니다."
     : "수업 생성 전에도 접수할 수 있습니다. 수강권 발급 뒤 안내는 자동 발송되며, 반배정·예약은 직접 처리합니다.");
-  setText("instructorLessonRegistrationSubmit", isTeam ? "팀레슨 접수 확정" : "등록 확정");
+  setText("instructorLessonRegistrationSubmit", isWaitlist ? "수강대기 등록" : isTeam ? "팀레슨 접수 확정" : "등록 확정");
 }
 
 async function handleInstructorLessonRegistrationSubmit(event) {
@@ -8549,12 +8589,18 @@ async function handleInstructorLessonRegistrationSubmit(event) {
   if (submit?.disabled) return;
   const courseKindInput = qs("instructorLessonCourseKind");
   const isTeam = courseKindInput?.value === "team";
+  const isWaitlist = courseKindInput?.value === "waitlist";
   const memberName = String(qs("instructorLessonMemberName")?.value || "").replace(/\s+/g, " ").trim();
   const memberPhone = normalizePhone(qs("instructorLessonMemberPhone")?.value || "");
   const lessonDate = String(qs("instructorLessonDate")?.value || "").trim();
-  const paymentMethod = String(qs("instructorLessonPaymentMethod")?.value || "").trim();
-  const paymentConfirmed = Boolean(qs("instructorLessonPaymentConfirmed")?.checked);
-  const seatConfirmed = Boolean(qs("instructorLessonSeatConfirmed")?.checked);
+  const paymentMethod = isWaitlist ? "none" : String(qs("instructorLessonPaymentMethod")?.value || "").trim();
+  const paymentConfirmed = !isWaitlist && Boolean(qs("instructorLessonPaymentConfirmed")?.checked);
+  const seatConfirmed = !isWaitlist && Boolean(qs("instructorLessonSeatConfirmed")?.checked);
+  const waitlistKey = JSON.stringify([memberPhone, lessonDate]);
+  if (isWaitlist && submit?.instructorWaitlistBlockedKeys?.has(waitlistKey)) {
+    setInstructorLessonRegistrationStatus("이미 요청한 수강대기입니다. 중복 등록하지 말고 새로고침해 등록 내역을 확인하세요.", "warn");
+    return;
+  }
   const teamParams = {};
   if (!form.reportValidity()) return;
   if (!/^010\d{8}$/.test(memberPhone)) {
@@ -8588,23 +8634,35 @@ async function handleInstructorLessonRegistrationSubmit(event) {
 
   if (submit) submit.disabled = true;
   if (courseKindInput) courseKindInput.disabled = true;
-  setInstructorLessonRegistrationStatus(isTeam ? "팀레슨 접수를 저장하고 있습니다." : "등록 작업을 만들고 있습니다.");
+  let waitlistAttempted = false;
+  setInstructorLessonRegistrationStatus(isWaitlist ? "수강대기를 저장하고 있습니다." : isTeam ? "팀레슨 접수를 저장하고 있습니다." : "등록 작업을 만들고 있습니다.");
   try {
     const runtime = await initFirebase();
     const callable = runtime.httpsCallable(runtime.functionsClient, "operatorCreateInstructorLessonRegistration");
-    const result = await callable({ memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed, seatConfirmed, ...teamParams });
+    if (isWaitlist) {
+      // Retain an attempted key even if the transport loses its response. Paid conversion is a separate action.
+      if (submit) (submit.instructorWaitlistBlockedKeys ||= new Set()).add(waitlistKey);
+      waitlistAttempted = true;
+    }
+    const result = await callable({ memberName, memberPhone, lessonDate, paymentMethod, paymentConfirmed, seatConfirmed, ...teamParams, ...(isWaitlist ? { courseKind: "waitlist" } : {}) });
     const duplicate = Boolean(result?.data?.duplicate);
     const teamIntakeConfirmed = result?.data?.intakeOnly === true;
+    const waitlistConfirmed = result?.data?.waitlistOnly === true && result?.data?.status === "waitlisted";
+    if (isWaitlist) instructorLessonRegistrationFilter = "waitlisted";
     if (isTeam) instructorLessonRegistrationFilter = "review";
     setInstructorLessonRegistrationStatus(
-      isTeam
+      isWaitlist
+        ? waitlistConfirmed
+          ? duplicate ? "기존 수강대기를 확인했습니다." : "수강대기를 등록했습니다."
+          : "수강대기 접수 상태 확인필요 · 중복 등록하지 말고 등록 내역을 확인하세요."
+        : isTeam
         ? teamIntakeConfirmed
           ? `${duplicate ? "기존 팀레슨 접수 확인 · " : ""}팀레슨 접수 완료 · 수강권/가입서/안내 확인 대기`
           : "팀레슨 접수 상태 확인필요 · 중복 등록하지 말고 등록 내역을 확인하세요."
         : duplicate ? "같은 강사·수강일의 기존 등록 건을 열었습니다." : "등록했습니다. StudioMate 자동 처리를 시작합니다.",
-      isTeam ? "warn" : "good",
+      isWaitlist ? waitlistConfirmed ? "good" : "warn" : isTeam ? "warn" : "good",
     );
-    if (!duplicate) {
+    if (!duplicate && (!isWaitlist || waitlistConfirmed)) {
       qs("instructorLessonMemberName").value = "";
       qs("instructorLessonMemberPhone").value = "";
       qs("instructorLessonPaymentConfirmed").checked = false;
@@ -8623,13 +8681,17 @@ async function handleInstructorLessonRegistrationSubmit(event) {
         message: refreshError?.message || String(refreshError),
       });
       renderInstructorLessonRegistrationDashboard(null);
-      setInstructorLessonRegistrationStatus(isTeam
+      setInstructorLessonRegistrationStatus(isWaitlist
+        ? `${waitlistConfirmed ? "수강대기 등록 확인" : "수강대기 접수 상태 확인필요"} · 목록 새로고침에 실패했습니다. 중복 등록하지 말고 연결 상태를 확인하세요.`
+        : isTeam
         ? `${teamIntakeConfirmed ? "팀레슨 접수 완료 · 수강권/가입서/안내 확인 대기" : "팀레슨 접수 상태 확인필요"} · 목록 새로고침에 실패했습니다. 중복 등록하지 말고 연결 상태를 확인하세요.`
         : "등록은 완료됐지만 목록 새로고침에 실패했습니다. 중복 등록하지 말고 연결 상태를 확인하세요.", "warn");
     }
   } catch (error) {
     if (isPermissionDenied(error)) showLoginGate("강사레슨 등록 권한을 확인해 주세요.");
-    setInstructorLessonRegistrationStatus(error?.message || "강사레슨 등록에 실패했습니다.", "danger");
+    setInstructorLessonRegistrationStatus(isWaitlist && waitlistAttempted
+      ? "수강대기 요청 결과를 확인하지 못했습니다. 중복 등록하지 말고 새로고침해 접수 상태를 확인하세요."
+      : error?.message || "강사레슨 등록에 실패했습니다.", isWaitlist && waitlistAttempted ? "warn" : "danger");
   } finally {
     if (submit) submit.disabled = false;
     if (courseKindInput) courseKindInput.disabled = false;
@@ -8650,6 +8712,7 @@ async function handleInstructorLessonConfirmation(event) {
   if (!registrationId) return;
   const registration = state.instructorLessonRegistrationDashboard?.items?.find((item) => item.registrationId === registrationId);
   if (!registration || registration.courseKind === "team" || registration.intakeOnly === true
+    || registration.courseKind === "waitlist" || registration.waitlistOnly === true || registration.status === "waitlisted"
     || INSTRUCTOR_LESSON_CANCELLATION_STATUSES.has(String(registration.status || ""))) return;
   button.disabled = true;
   setInstructorLessonRegistrationStatus("수강권 발급 증거와 캘린더 설정을 확인하고 있습니다.");

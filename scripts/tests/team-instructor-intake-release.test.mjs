@@ -2,6 +2,17 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MEAL_RELEASE_TARGETS, mealReleaseManifest } from '../release-team-instructor-intake-20261029.mjs';
 const hash = 'a'.repeat(64), old = 'b'.repeat(64);
+test('waitlist release preserves every unrelated resource and requires exactly its four assets',()=>{
+  const expected = {'/instructor-lessons/index.html':'core/instructor-lessons/index.html',
+    '/assets/app.js':'core/assets/app.js','/assets/interface.css':'core/assets/interface.css','/rules/index.html':'core/rules/index.html'};
+  assert.deepEqual(MEAL_RELEASE_TARGETS.instructorWaitlist.files,expected);
+  const files=[...Object.keys(expected).map(path=>({path,hash:old})),{path:'/climate/index.html',hash:old}];
+  const replacements=Object.fromEntries(Object.keys(expected).map(path=>[path,hash]));
+  const manifest=mealReleaseManifest(files,replacements,'instructorWaitlist');
+  assert.equal(manifest['/climate/index.html'],old);assert.equal(Object.keys(manifest).length,files.length);
+  assert.throws(()=>mealReleaseManifest(files,{'/rules/index.html':hash},'instructorWaitlist'));
+  assert.throws(()=>mealReleaseManifest(files,{...replacements,'/climate/index.html':hash},'instructorWaitlist'));
+});
 test('capacity repair rule release preserves every non-rule asset',()=>{
   const files=[{path:'/rules/index.html',hash:old},{path:'/assets/app.js',hash:old}];
   assert.deepEqual(MEAL_RELEASE_TARGETS.capacityRepairVerification.files,{'/rules/index.html':'core/rules/index.html'});
@@ -20,7 +31,7 @@ test('schedule display replaces exactly app, interface CSS and rules', () => {
   assert.throws(() => mealReleaseManifest(files.slice(1),replacements,'scheduleDisplay'));
 });
 test('Team release replaces only four CORE assets and preserves all other paths', () => {
-  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent']);
+  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent', 'instructorWaitlist']);
   const expected = ['/instructor-lessons/index.html', '/assets/app.js', '/rules/index.html', '/assets/alimtalk-catalog.json'];
   assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS.core.files), expected);
   const replacements = Object.fromEntries(expected.map(f => [f, hash]));

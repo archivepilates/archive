@@ -19,6 +19,7 @@ import {
   INSTRUCTOR_LESSON_TICKET_NAME,
   INSTRUCTOR_LESSON_TICKET_PRICE,
   deriveInstructorLessonRegistrationState,
+  isInstructorLessonWaitlist,
   exactMemberCandidates,
   isInstructorMemberGrade,
   isInstructorLessonNewMemberTestRecipient,
@@ -540,6 +541,7 @@ async function preparePostTicketSteps(ref, claimToken, job) {
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registrationData = registrationSnapshot.data() || {};
+    if (isInstructorLessonWaitlist(registrationData)) throw new Error("수강대기는 가입서·안내 자동 처리 대상이 아닙니다.");
     if (registrationData.externalOrderReviewRequired) throw new Error("홈페이지 주문 변경 확인필요: 후속 처리 중단");
     const currentSteps = registrationData.steps || {};
     const now = FieldValue.serverTimestamp();
@@ -606,6 +608,7 @@ async function completeStudioMateRegistration(ref, claimToken, { mode, memberId,
     }
     if (!registrationSnapshot.exists) throw new Error("강사레슨 등록 원본을 찾지 못했습니다.");
     const registrationData = registrationSnapshot.data() || {};
+    if (isInstructorLessonWaitlist(registrationData)) throw new Error("수강대기는 발급 완료 처리 대상이 아닙니다.");
     if (registrationData.cancellation?.jobId || registrationData.externalOrderReviewRequired) {
       throw new Error("홈페이지 주문 변경·취소 확인필요: 등록 완료 중단");
     }
@@ -683,6 +686,15 @@ async function claimJob(ref) {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const source = await transaction.get(registration(ref.id));
+    if (isInstructorLessonWaitlist(source.data())) {
+      // An orphan must leave the runnable queue or it can starve later paid jobs.
+      if (snapshot.exists && ["pending", "retry"].includes(String(snapshot.data()?.status || ""))) {
+        transaction.set(ref, { status: "review_required", nextRunAt: null,
+          lastError: "수강대기 원본에 발급 작업이 연결돼 자동 처리를 차단했습니다.",
+          updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+      return null;
+    }
     if (source.data()?.cancellation?.jobId) return null;
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data();
@@ -841,6 +853,7 @@ async function commitClaimedState(ref, claimToken, jobPatch, registrationPatch) 
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const registrationSnapshot = await transaction.get(registration(ref.id));
+    if (isInstructorLessonWaitlist(registrationSnapshot.data())) throw new Error("수강대기는 자동 발급·발송 대상이 아닙니다.");
     if (registrationSnapshot.data()?.cancellation?.jobId) throw new Error("강사레슨 취소 요청으로 등록 후속 처리를 중단합니다.");
     if (registrationSnapshot.data()?.externalOrderReviewRequired) throw new Error("홈페이지 주문 변경으로 자동 처리 중단: 운영자 확인필요");
     const current = snapshot.data() || {};

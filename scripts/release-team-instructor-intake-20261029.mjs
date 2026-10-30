@@ -30,6 +30,11 @@ export const MEAL_RELEASE_TARGETS = {
   instructorSignatureReminder: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
   coreMcpFastDiscovery: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
   privateNotionMemberParent: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
+  instructorWaitlist: { site: 'archive-pilates-core', files: {
+    '/instructor-lessons/index.html': 'core/instructor-lessons/index.html',
+    '/assets/app.js': 'core/assets/app.js', '/assets/interface.css': 'core/assets/interface.css',
+    '/rules/index.html': 'core/rules/index.html',
+  } },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
 
@@ -83,7 +88,8 @@ async function main() {
   if (!baseline.config || baseline.name !== baselineRelease.version.name) throw Error('Missing baseline config');
   const sources = [];
   for (const [resource, file] of Object.entries(selected.files)) {
-    const sourceBase = target === 'privateNotionMemberParent' ? '08b3a8d6'
+    const sourceBase = target === 'instructorWaitlist' ? '319a904f186e92bc872fd3ff13d4dc258f9dcc02'
+      : target === 'privateNotionMemberParent' ? '08b3a8d6'
       : target === 'coreMcpFastDiscovery' ? 'ad47ab5a'
       : target === 'instructorSignatureReminder' ? '608a40a982710f6a6667bbff42f73ce3f31ce6d2'
       : target === 'signupProfileV2Verification' ? '1b87cd4be97148abbd3ef06d344e2b86faf8d653'

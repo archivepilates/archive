@@ -5,6 +5,7 @@ export function deriveInstructorLessonRegistrationState(input: {
   steps?: Record<string, StepValue> | null;
 }): { status: string; nextAction: string } {
   const mode = String(input.mode || "");
+  if (mode === "waitlist") return { status: "waitlisted", nextAction: "결원 확인 후 운영자 확정 접수" };
   const requiresSignup = ["new_member", "team_intake"].includes(mode);
   const steps = input.steps || {};
   const status = (key: string) => String(steps[key]?.status || "pending");

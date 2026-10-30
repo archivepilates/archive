@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { IMWEB_LESSON_POLICY as policy, assessInstructorOrder, assertSamePaidOrder, orderFingerprint, orderLedgerId, needsPaymentMethodReassessment } from './imweb-instructor-order-policy.mjs';
-import { normalizeInstructorLessonPhone } from './instructor-lesson-registration-contract.mjs';
+import { normalizeInstructorLessonPhone, isInstructorLessonWaitlist } from './instructor-lesson-registration-contract.mjs';
 import { recordAutomationStatus } from './archive-core-ops-logging.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { imwebRequestFailure, isTransientReadFailure, sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
@@ -116,6 +116,7 @@ export function activeIdentities(registrations, holders, date, bookings, lecture
     if (!cancelledPhones.has(phone)) members.add(phone || `id:${id}`); };
   for (const doc of registrations.docs) {
     const d = doc.data();
+    if (isInstructorLessonWaitlist(d)) continue;
     if (d.studioId === policy.studioId && !['cancelled', 'canceled', 'rejected'].includes(d.status)
       && !d.newMemberSimulation && d.source?.type !== 'imweb_order_review') add(d, doc.id);
   }

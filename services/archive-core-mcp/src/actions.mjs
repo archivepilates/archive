@@ -171,7 +171,7 @@ export const ACTIONS = [
   {
     name: 'operatorCreateInstructorLessonRegistration', mode: 'write', label: '강사레슨 등록 확정 접수', memberFacing: true,
     required: ['memberName', 'memberPhone', 'lessonDate', 'paymentMethod', 'paymentConfirmed', 'seatConfirmed'], sources: [],
-    notes: 'paymentConfirmed=true와 seatConfirmed=true가 필요합니다. 서버가 지점·정규화 전화번호·수강일로 registrationId를 계산하고 StudioMate 수강권·예약·가입서 후속 작업을 생성합니다. 접수는 결제·예약·전자서명 요청 완료가 아니며 취소 및 기존 접수 가드를 유지합니다.',
+    notes: '일반·팀 확정 접수는 paymentConfirmed=true와 seatConfirmed=true가 필요합니다. courseKind=waitlist는 paymentMethod=none, paymentConfirmed=false, seatConfirmed=false로 내부 대기만 등록하며 정원 점유·수강권·가입서·안내 작업을 만들지 않습니다. 같은 연락처·수강일의 대기를 이후 확정 접수하면 기존 중복키와 대기 이력을 보존하고 결제·접수 확인 후 기존 정규 처리로 전환합니다. 서버가 registrationId를 계산하며 취소·기존 접수 가드는 유지합니다. 접수는 결제·예약·전자서명 요청 완료가 아닙니다.',
   },
   {
     name: 'operatorQueueInstructorLessonCancellation', mode: 'write', label: '강사레슨 취소 작업 접수', memberFacing: false,

@@ -20,6 +20,11 @@ export function normalizeInstructorLessonPhone(value) {
   return /^8210\d{8}$/.test(digits) ? `0${digits.slice(2)}` : digits;
 }
 
+export function isInstructorLessonWaitlist(value) {
+  return value?.waitlistOnly === true || value?.courseKind === "waitlist"
+    || value?.mode === "waitlist" || value?.status === "waitlisted";
+}
+
 export function normalizeInstructorLessonName(value) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, 40);
 }
@@ -99,6 +104,7 @@ export function selectExactInstructorLessonTicket(tickets, ticketName = INSTRUCT
 }
 
 export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
+  if (mode === "waitlist") return { status: "waitlisted", nextAction: "결원 확인 후 운영자 확정 접수" };
   const status = (key) => String(steps?.[key]?.status || "pending");
   const normalizedMode = String(mode || "");
   const requiresSignup = ["new_member", "team_intake"].includes(normalizedMode);
