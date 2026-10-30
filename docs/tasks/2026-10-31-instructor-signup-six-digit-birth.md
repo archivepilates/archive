@@ -32,3 +32,16 @@
 - Additional browser-lock/predeploy regression: 37/37 passed (608 scoped tests total).
 - Independent final review: no actionable findings; 223 timezone-specific policy/writer/verifier tests passed.
 - Direct CORE Hosting UI guard passed. Broad validate:archive-core-hosting wrapper fails in its catalog precheck on both clean unchanged main 98596f87 and feature worktree: preexisting catalog fingerprint drift. Catalog/app/Functions are outside this rules-only release and preserved byte-for-byte; no full Hosting bundle deployment is attempted.
+
+## Release evidence
+- Implementation ca070e52cc9488472fb376962245621b880b7050 promoted and pushed to origin/main; active runtime fast-forwarded without touching preexisting scripts/__pycache__/.
+- Rules-only target instructorSignupBirthDate deployed from clean synchronized main using archive-codex-operator in archive-pilates.
+- Hosting baseline 7ce075cbdbfe6fba -> version 41ce5b9f50c9a529, release 1793384261684000; release intent 2026-10-30T18:17:41.650Z (2026-10-31 03:17:41 KST).
+- Independent verification 2026-10-30T18:18:03.643Z: exact 63 paths, only /rules/index.html changed, other 62 hashes and full Hosting config preserved.
+- core.archivepilates.com/rules/ and archive-pilates-core.web.app/rules/ both HTTP 200, exact source SHA256 8e470ea109071e12dc2c3c9c8ce162491a8a3eb3c44066e16b788158718d288b.
+- Private generated release/independent verification JSON: main worktree artifacts/team-instructor-intake-20261029/instructorSignupBirthDate-*.json; not committed.
+- Four runtime MJS source hashes match committed feature source. Existing memo LaunchAgent interval 300 seconds and config hash unchanged. No kickstart or manual queue run.
+- Runtime policy/verifier synthetic checks rerun: 127/127 passed.
+- GitHub runs: Functions Affected Check 41105654626 success; CORE MCP Check 41105654585 success (rules-ui + security).
+- No Functions deployment, IAM changes, member messages, native profile test writes or historical replay. No browser opened; no task-owned browser state or lock remains.
+- This verifies rollout, not a new real member enrichment event. Such events remain subject to existing periodic source/identity/duplicate guards.
