@@ -19,3 +19,13 @@
 - Review found and fixed claim-wait staleness, missing ticket/order/payment fingerprint fields, expiry at dispatch, and lost monitoring warnings for unresolved attempts. Added fault-injection tests for each. The source timestamp is checked again inside the transaction, after acknowledgement and at the actual HTTP transport gate.
 - Affected Functions detector: zero codebases. Rules-only Hosting baseline sites/archive-pilates-core/versions/5325e7fdd0a1b441, 63 files; release preserves all other hashes/config.
 - Report: docs/reports/2026-10-30-instructor-signature-reminder.html. Release outcome, test totals and source alignment will be appended after verification; no runtime/Hosting completion is inferred from this preparation note.
+
+## Release verification
+
+- Code commit fe771ccf2836fa44d69bc9b22e84571432fe4e9a promoted/pushed to main; active runtime fast-forwarded to that code. Functions detector returned no affected codebases; no Functions/rules/indexes/IAM/LaunchAgent configuration changed.
+- 783 focused and regression tests passed. Source-reader native proof passed for the remaining pending document; browser SMS tests use synthetic fixtures only. Report checks at 320/390/768/1440px showed no overflow. No actual SMS test was sent.
+- CORE Hosting release: sites/archive-pilates-core/versions/a6eee4f1ade2cb16, release 1793337526674000 at 2026-10-30T05:18:46.576Z. Preserved all 63 manifest paths and config; changed only /rules/index.html. Both core.archivepilates.com/rules/ and archive-pilates-core.web.app/rules/ returned HTTP 200 and the source SHA-256 ab533ed7c48cd864dc920c9c618d0c9f31e0a33848859f2c84f41c8db08d7d89.
+- First natural scheduled run after rollout: 2026-10-30T05:19:51.028Z through 05:20:04.920Z; ok true, waiting 1, sent 0, signatureReminders skipped/under_24_hours. This is execution evidence, not just a prepared queue. Remaining native dispatch/delivery is intentionally pending until eligible.
+- Existing source documents show two completed signups and one waiting signup. One completed signup has a separate memo review_required; no memo fields were reset or marked complete by this task.
+- main/feature worktrees clean after scoped commits. Runtime retains only the unrelated pre-existing scripts/__pycache__/ directory. Task-owned browser contexts were closed and locks released; a regular eformsign worker's own lock was preserved.
+- CI: CORE MCP Check 41007704431 and ARCHIVE IN Functions Affected Check 41007704383 both completed successfully for code commit fe771ccf. The following evidence-only documentation commit does not change deployed rule bytes or runtime code.
