@@ -193,7 +193,7 @@ test('actual CORE MCP rules remain readable with real styles at 320/390/768/1440
           await page.screenshot({ path: new URL(`viewport-${width}.png`, output).pathname });
           await section.screenshot({ path: new URL(`section-${width}.png`, output).pathname });
           assert.match(report.heading, /CORE MCP 업무 연결/);
-          assert.deepEqual(report.labels, ['목적·범위', '수정 원칙', '차단·개인정보', '원천·반영 상태']);
+          assert.deepEqual(report.labels, ['목적·범위', '수정 원칙', '조회 경량화 · 2026.10.30', '차단·개인정보', '원천·반영 상태']);
           assert.ok(report.stylesheetRules.every(count => count > 100), 'both real stylesheets must be parsed');
           assert.ok(report.bounds.width > 0 && report.bounds.height > 100);
           assert.ok(report.textLines >= 9, 'all heading, label and body text must render');

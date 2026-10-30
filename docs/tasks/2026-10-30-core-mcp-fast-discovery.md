@@ -13,3 +13,11 @@
 - Release in progress: implementation and isolated live read verified; current chat remains on its existing MCP process. Do not label the current connected server updated without a new-response marker. Final rollout evidence is appended below after readback.
 - Working method can change immediately: reuse already-discovered capability context and summarize bounded results, avoid duplicate UI/database reads. This does not reset this chat or erase its history.
 - Main runtime unrelated untracked scripts/__pycache__/ remains untouched. No related memory edits.
+
+## Approved rollout
+
+- Source commit 7116defc94d9afac5259b56629db24ddd4911880 pushed to origin/main and codex/mini/core-mcp-fast-discovery-20261030. Runtime fast-forwarded to that source, preserving the unrelated pycache directory.
+- Runtime-path new MCP process: startup 1203ms; full 412ms/31,109B; summary 415ms/10,750B; operation 422ms/3,539B; area 409ms/2,926B; stored read 531ms. Writes 0. Client/transport closed in finally.
+- Rules-only release: sites/archive-pilates-core/versions/4c237fed08d311fe, release 1793341681120000 at 2026-10-30T06:28:01.076Z (15:28 KST). Existing 63 paths/config retained; only /rules/index.html replaced. Source hash 9dabeb70fa6f051caf9cfce1f3ac0343be70cae742c4dac16dde64271b4d29ad. Custom CORE and Firebase rules endpoints independently HTTP 200, source match and new marker confirmed.
+- Connected current-chat MCP returned legacy-full after disk rollout. No reconnect/refresh tool is exposed in this session. Do not kill existing processes or restart the app without the user's restart handoff. App/session reconnection remains pending; newly spawned runtime MCP is verified separately.
+- Initial CI CORE MCP Check 41014212262 failed because the rules UI test's exact label list omitted the new note. Corrected that expected list without relaxing layout/security assertions. Local 320/390/768/1440 test and subsequent CI are recorded below.
