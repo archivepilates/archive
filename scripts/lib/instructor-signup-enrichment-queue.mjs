@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { signupV2Projection, parseSignupProfileV2, signupProfileV2Id,completionOnlySignupProfileV2 } from './instructor-signup-profile-v2.mjs';
 import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID as TEMPLATE,
   normalizeInstructorLessonPhone as phone, normalizeInstructorLessonName as name } from './instructor-lesson-registration-contract.mjs';
-import { normalizeSignupBirthDateV2, normalizeSignupAddressV2 } from './instructor-signup-profile-v2-policy.mjs';
+import { resolveSignupBirthDateV2, normalizeSignupAddressV2 } from './instructor-signup-profile-v2-policy.mjs';
 
 const TWO_HOURS = 2 * 3600000;
 const BASELINE = 'completed_signup_profile_baseline_v2';
@@ -178,7 +178,7 @@ export async function applySignupEnrichmentPlan({ db, plan, stamp, apply = false
   const result = status => ({ status, sourceId: source.jobId, jobId: p.memoId, documentId: source.documentId,
     memberId: source.studiomateMemberId,
     profileMode:source.submittedProfile.mode || 'verified_fields',
-    birthDateSource: source.submittedProfile.mode==='completion_only'?'review':normalizeSignupBirthDateV2(source.submittedProfile.birthDateRaw).status,
+    birthDateSource: source.submittedProfile.mode==='completion_only'?'review':resolveSignupBirthDateV2({expected:source.submittedProfile.birthDateRaw}).status,
     addressSource: source.submittedProfile.mode==='completion_only'?'review':normalizeSignupAddressV2(source.submittedProfile.addressRaw).status });
   return db.runTransaction(async tx => {
     validatePlan(copy, new Date());

@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 import { normalizeInstructorLessonPhone as phone,normalizeInstructorLessonName as name } from './lib/instructor-lesson-registration-contract.mjs';
 import { signupProfileMemoPresent } from './lib/instructor-signup-profile.mjs';
-import { normalizeSignupBirthDateV2 } from './lib/instructor-signup-profile-v2-policy.mjs';
+import { normalizeSignupBirthDateV2,resolveSignupBirthDateV2,SIGNUP_SIX_DIGIT_BIRTH_POLICY } from './lib/instructor-signup-profile-v2-policy.mjs';
 import { splitSignupPostalAddress,signupPostalAddressKey } from './lib/instructor-signup-profile-v2-writer.mjs';
 
 const args=process.argv.slice(2),file=args.find(x=>x.startsWith('--queue='))?.slice(8);
@@ -47,7 +47,18 @@ try{
     const values={birthDate:await field('생년월일 (YYYY-MM-DD)').inputValue(),address:await field('주소를 입력해 주세요').inputValue(),detail:await field('상세 주소를 입력해 주세요').inputValue()};
     const protectedFields=await page.locator('input').evaluateAll(nodes=>nodes.filter(n=>n.getClientRects().length&&['이름을 입력해주세요','휴대폰 번호','등록일을 입력해주세요','선택'].includes(n.getAttribute('placeholder'))).map(n=>({placeholder:n.getAttribute('placeholder'),value:n.value})));
     assert(sha(protectedFields)===progress.beforeFieldHashes.protectedHash);
-    if(['verified','already_equal'].includes(progress.birthDate.status))assert(values.birthDate===normalizeSignupBirthDateV2(job.profileUpdate.birthDateRaw).value);
+    if(['verified','already_equal'].includes(progress.birthDate.status)){
+      const resolution=progress.birthDate.resolution;
+      if(resolution){
+        assert(resolution.policy===SIGNUP_SIX_DIGIT_BIRTH_POLICY&&['native_full_match','current_year_rule'].includes(resolution.source));
+        const reference=new Date(resolution.referenceAt);
+        assert(Number.isFinite(reference.getTime())&&reference.getTime()<=Date.now());
+        const expected=resolveSignupBirthDateV2({expected:job.profileUpdate.birthDateRaw,
+          current:resolution.source==='native_full_match'?values.birthDate:'',now:reference});
+        assert(expected.status==='verified'&&expected.resolution?.source===resolution.source
+          &&values.birthDate===expected.value&&sha(values.birthDate)===progress.birthDate.expectedHash);
+      }else assert(values.birthDate===normalizeSignupBirthDateV2(job.profileUpdate.birthDateRaw).value);
+    }
     else assert(sha(values.birthDate)===progress.beforeFieldHashes.birthDate);
     if(progress.address.status==='verified'){
       const parts=splitSignupPostalAddress(job.profileUpdate.addressRaw);assert(parts&&values.address&&values.detail===parts.detail);

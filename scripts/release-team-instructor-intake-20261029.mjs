@@ -36,6 +36,7 @@ export const MEAL_RELEASE_TARGETS = {
     '/rules/index.html': 'core/rules/index.html',
   } },
   instructorWaitlistVerification: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
+  instructorSignupBirthDate: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
 
@@ -89,7 +90,8 @@ async function main() {
   if (!baseline.config || baseline.name !== baselineRelease.version.name) throw Error('Missing baseline config');
   const sources = [];
   for (const [resource, file] of Object.entries(selected.files)) {
-    const sourceBase = target === 'instructorWaitlistVerification' ? 'ce024116a636fce08ab12b605d42a7ea6b825a61'
+    const sourceBase = target === 'instructorSignupBirthDate' ? '98596f872dd7039cf1358e2cae0ec1ec9cdf2527'
+      : target === 'instructorWaitlistVerification' ? 'ce024116a636fce08ab12b605d42a7ea6b825a61'
       : target === 'instructorWaitlist' ? '319a904f186e92bc872fd3ff13d4dc258f9dcc02'
       : target === 'privateNotionMemberParent' ? '08b3a8d6'
       : target === 'coreMcpFastDiscovery' ? 'ad47ab5a'

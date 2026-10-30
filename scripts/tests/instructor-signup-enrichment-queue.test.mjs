@@ -107,7 +107,7 @@ test('two-hour boundary is inclusive and default apply is read-only planned', as
   const value = row(); value.nativeCheckedAt = '2026-10-30T02:00:00.000Z';
   const plan = buildSignupEnrichmentPlan(value, { now: NOW }), db = memoryDb();
   const result = await applySignupEnrichmentPlan({ db, plan });
-  assert.equal(result.status, 'planned'); assert.equal(result.birthDateSource, 'review');
+  assert.equal(result.status, 'planned'); assert.equal(result.birthDateSource, 'verified');
   assert.equal(db.docs.size, 0); assert.deepEqual(db.committed, []);
   assert.equal(db.events.filter(([type]) => type === 'get').length, 3);
 });

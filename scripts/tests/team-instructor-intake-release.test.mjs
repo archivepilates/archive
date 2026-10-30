@@ -2,6 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MEAL_RELEASE_TARGETS, mealReleaseManifest } from '../release-team-instructor-intake-20261029.mjs';
 const hash = 'a'.repeat(64), old = 'b'.repeat(64);
+test('six-digit birth date release preserves all non-rule resources',()=>{
+  assert.deepEqual(MEAL_RELEASE_TARGETS.instructorSignupBirthDate.files,{'/rules/index.html':'core/rules/index.html'});
+  const files=[{path:'/rules/index.html',hash:old},{path:'/assets/app.js',hash:old},{path:'/climate/index.html',hash:old}];
+  const manifest=mealReleaseManifest(files,{'/rules/index.html':hash},'instructorSignupBirthDate');
+  assert.equal(manifest['/assets/app.js'],old);
+  assert.equal(manifest['/climate/index.html'],old);
+  assert.equal(Object.keys(manifest).length,files.length);
+  assert.throws(()=>mealReleaseManifest(files,{'/rules/index.html':hash,'/assets/app.js':hash},'instructorSignupBirthDate'));
+});
 test('waitlist verification remains rules-only',()=>{
   assert.deepEqual(MEAL_RELEASE_TARGETS.instructorWaitlistVerification.files,{'/rules/index.html':'core/rules/index.html'});
   const files=[{path:'/rules/index.html',hash:old},{path:'/assets/app.js',hash:old}];
@@ -37,7 +46,7 @@ test('schedule display replaces exactly app, interface CSS and rules', () => {
   assert.throws(() => mealReleaseManifest(files.slice(1),replacements,'scheduleDisplay'));
 });
 test('Team release replaces only four CORE assets and preserves all other paths', () => {
-  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent', 'instructorWaitlist', 'instructorWaitlistVerification']);
+  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent', 'instructorWaitlist', 'instructorWaitlistVerification', 'instructorSignupBirthDate']);
   const expected = ['/instructor-lessons/index.html', '/assets/app.js', '/rules/index.html', '/assets/alimtalk-catalog.json'];
   assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS.core.files), expected);
   const replacements = Object.fromEntries(expected.map(f => [f, hash]));

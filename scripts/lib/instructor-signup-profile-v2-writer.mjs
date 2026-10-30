@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { normalizeInstructorLessonName as name,normalizeInstructorLessonPhone as phone } from './instructor-lesson-registration-contract.mjs';
-import { normalizeSignupBirthDateV2,normalizeSignupAddressV2,decideSignupProfileFieldV2 } from './instructor-signup-profile-v2-policy.mjs';
+import { resolveSignupBirthDateV2,normalizeSignupAddressV2,decideSignupProfileFieldV2 } from './instructor-signup-profile-v2-policy.mjs';
 
 // Operator approved only base road/lot lookup on 2026-10-30; unit details stay local.
 export const SIGNUP_ADDRESS_LOOKUP_APPROVED = true;
@@ -79,15 +79,17 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
       checkedAt:new Date().toISOString(),beforeFieldHashes:{birthDate:sha(before.birthDate),address:sha(before.address),detail:sha(before.detail),protectedHash:before.protectedHash}};
     await recordProgress(result);return result;
   }
-  const birthDate=normalizeSignupBirthDateV2(expected.birthDateRaw);
-  const birthDecision=decideSignupProfileFieldV2({field:'birthDate',current:before.birthDate,expected:expected.birthDateRaw});
+  const now=new Date();
+  const birthDate=resolveSignupBirthDateV2({expected:expected.birthDateRaw,current:before.birthDate,now});
+  const birthDecision=decideSignupProfileFieldV2({field:'birthDate',current:before.birthDate,expected:expected.birthDateRaw,now});
   const combined=clean([before.address,before.detail].filter(Boolean).join(' '));
   let addressDecision=decideSignupProfileFieldV2({field:'address',current:combined,expected:expected.addressRaw});
   const parts=splitSignupPostalAddress(expected.addressRaw);
   if(parts&&before.address&&postalKey(before.address)===postalKey(parts.base)&&clean(before.detail)===clean(parts.detail))addressDecision='already_equal';
   if(addressDecision==='write'&&(!parts||before.address||before.detail))addressDecision='review';
   if(addressDecision==='write'&&!lookupApproved)addressDecision='awaiting_address_lookup_approval';
-  const result={version:2,birthDate:{status:birthDecision},address:{status:addressDecision},checkedAt:new Date().toISOString(),
+  const result={version:2,birthDate:{status:birthDecision,...(birthDate.resolution
+    ? {resolution:birthDate.resolution,expectedHash:sha(birthDate.value)} : {})},address:{status:addressDecision},checkedAt:now.toISOString(),
     beforeFieldHashes:{birthDate:sha(before.birthDate),address:sha(before.address),detail:sha(before.detail),protectedHash:before.protectedHash}};
   await recordProgress(result);
   let selectedAddress;

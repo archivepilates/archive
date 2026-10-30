@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCHIVE PILATES OPS · 가입서 생년월일 변환</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f4f6f7;color:#20262b;font:16px/1.7 system-ui,sans-serif}main{max-width:900px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-top:32px}p,li{overflow-wrap:anywhere}section{border-top:1px solid #cfd7dd;padding:12px 0}code{font-size:14px}a{color:#226851}.state{color:#27694d;font-weight:600}</style>
+<main><h1>강사회원 가입서 6자리 생년월일</h1><p>ARCHIVE PILATES OPS · 2026-10-31</p>
+<section><h2>승인 범위</h2><p>서명 완료 가입서의 6자리 생년월일을 기존 정기 처리에서 해석하도록 보완합니다. 기존 응답과 회원정보를 보존하며, 완료 작업 재실행·과거분 일괄 수정·회원 발송은 하지 않습니다.</p></section>
+<section><h2>적용 기준</h2><ol><li>StudioMate에 유효한 전체 날짜가 있으면 가입서 뒤 6자리와 대조하여 기존 연도를 보존합니다.</li><li>빈칸에 한해서 처리 당시 한국 연도의 끝 두 자리 이하이면 2000년대, 초과이면 1900년대로 변환합니다. 2026년에는 00~26 / 27~99로 나뉩니다.</li><li>잘못된 날짜, 오늘·미래 날짜, 기존 값 충돌은 확인필요입니다. 기존 값은 덮어쓰지 않습니다.</li><li>정책·기준시각·결과 해시를 남겨 연도 변경 뒤에도 당시 변환을 검증합니다. 가입서 원문 및 큐의 원본 결속 해시는 바꾸지 않습니다.</li></ol></section>
+<section><h2>검증</h2><p class="state">합성 회귀검증 608건 통과</p><p>가입서·규칙 전용 배포 571건, 브라우저 잠금·predeploy 37건입니다. 연도 경계, 한국시간 새해 전환, 윤년, 기존 연도 우선, 빈칸 전용 저장, 충돌 차단, 저장 전후 독립 재조회, 결과불명 재시도 차단, 메모 중복 방지, 완료 작업 제외, 검증 기준시각 고정을 확인했습니다. 별도 검토자의 다른 시간대 검증 223건도 통과했습니다. 실제 운영 브라우저·회원정보·알림톡은 테스트하지 않았습니다.</p><p>강사레슨 릴리스 검증·정본 데이터 정책 검증·CORE Hosting UI 검사·구문 검사·diff 검사를 통과했습니다. Functions 영향 코드베이스는 0개입니다.</p><p>별도 기존 문제: 전체 Hosting 검사 묶음은 수정 전 main과 이번 브랜치 모두에서 알림톡 카탈로그의 기존 해시 불일치로 중단됩니다. 이번 규칙 전용 배포는 카탈로그·앱·Functions를 바꾸지 않으며 전체 Hosting 배포를 하지 않습니다.</p></section>
+<section><h2>운영 반영 상태</h2><p id="release-state">구현·무발송 검증 완료. 운영 반영과 CORE 운영규칙 배포는 아직 진행 전이며, 아래 최종 증거를 추가한 뒤 완료로 판정합니다.</p><p>기존 300초 메모 실행기의 경로와 주기를 유지합니다. 별도 실행기나 스케줄러는 추가하지 않으며 다음 자연 실행에서 새 코드를 읽습니다. 실제 신규 회원 적용 성공은 이번 합성 검증과 별개입니다.</p></section>
+<section><h2>변경 경계</h2><p>런타임 정책·writer·읽기 전용 검증기·큐 진단·관련 테스트, CORE 운영규칙과 규칙 전용 배포 대상만 변경합니다. 회원·수강권·예약·계약서·가입서 원문·IAM·알림톡·다른 CORE 화면과 Hosting 설정은 변경하지 않습니다.</p><p>보호 대상 LaunchAgent 파일 SHA-256: <code>042ab40364cd6fbcf1b2074f602a72e8922f742c880c415dcb2667d652f08c76</code></p></section>
+</main></html>

@@ -29,6 +29,23 @@ export function normalizeSignupBirthDateV2(value, now = new Date()) {
   return result('verified', date);
 }
 
+export const SIGNUP_SIX_DIGIT_BIRTH_POLICY = 'yy_kst_current_year_v1';
+
+export function resolveSignupBirthDateV2({ expected, current = '', now = new Date() } = {}) {
+  if (empty(expected) || typeof expected !== 'string' || !validClock(now)) return normalizeSignupBirthDateV2(expected, now);
+  const raw = compact(expected);
+  if (!/^\d{6}$/.test(raw)) return normalizeSignupBirthDateV2(expected, now);
+  const existing = normalizeSignupBirthDateV2(current, now);
+  const nativeMatch = existing.status === 'verified' && existing.value.replace(/-/g, '').slice(-6) === raw;
+  const kstYear = new Date(now.getTime() + 9 * 3600000).getUTCFullYear();
+  const year = Number(raw.slice(0, 2));
+  const resolved = nativeMatch ? existing : normalizeSignupBirthDateV2(
+    `${year <= kstYear % 100 ? 2000 + year : 1900 + year}${raw.slice(2)}`, now);
+  if (resolved.status !== 'verified') return resolved;
+  return { ...resolved, resolution: { policy: SIGNUP_SIX_DIGIT_BIRTH_POLICY,
+    referenceAt: now.toISOString(), source: nativeMatch ? 'native_full_match' : 'current_year_rule' } };
+}
+
 const REGION = /^(?:대한민국\s+)?(?:서울(?:특별시|시)?|부산(?:광역시|시)?|대구(?:광역시|시)?|인천(?:광역시|시)?|광주(?:광역시|시)?|대전(?:광역시|시)?|울산(?:광역시|시)?|세종(?:특별자치시|시)?|경기(?:도)?|강원(?:특별자치도|도)?|충청북도|충청남도|충북|충남|전북(?:특별자치도)?|전라북도|전라남도|전남|경상북도|경상남도|경북|경남|제주(?:특별자치도|도)?)\s+/u;
 const ADDRESS_PART = /[가-힣\d]+(?:대로|번길|길|로|동|리|가)\s+\d+(?:-\d+)?(?:\s|$|[,()])/u;
 const PLACEHOLDER = /^(?:없음|미기재|미입력|미제공|미정|모름|비공개|해당없음|주소없음|주소미정|주소|상세주소|n\/?a|none|null|undefined|unknown|[-_.?,~…]+)$/i;
@@ -50,7 +67,7 @@ export function decideSignupProfileFieldV2({ field, current, expected, now = new
     : field === 'address' ? normalizeSignupAddressV2 : null;
   if (!normalize) return 'review';
   if (empty(expected)) return 'not_provided';
-  const wanted = normalize(expected);
+  const wanted = field === 'birthDate' ? resolveSignupBirthDateV2({ expected, current, now }) : normalize(expected);
   if (wanted.status !== 'verified') return 'review';
   if (empty(current)) return 'write';
   const existing = normalize(current);

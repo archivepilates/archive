@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import tls from 'node:tls';
 import vm from 'node:vm';
 import { beforeEach, test } from 'node:test';
 import { applySignupProfileV2, splitSignupPostalAddress, SIGNUP_ADDRESS_LOOKUP_APPROVED } from '../lib/instructor-signup-profile-v2-writer.mjs';
@@ -16,6 +20,10 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 beforeEach(t => {
   t.mock.timers.enable({ apis: ['Date'], now: NOW });
   t.mock.method(globalThis, 'fetch', () => assert.fail('Real network/browser/production writes forbidden'));
+  for (const [target, methods] of [[http, ['request', 'get']], [https, ['request', 'get']],
+    [net, ['connect', 'createConnection']], [tls, ['connect']]]) {
+    for (const method of methods) t.mock.method(target, method, () => assert.fail('Real sockets forbidden in synthetic writer tests'));
+  }
 });
 function job() {
   return { jobId: 'instructor_member_completion_' + DOC, registrationId: REG, profileSourceJobId: REG,
@@ -127,7 +135,7 @@ function nativePage(j, options = {}) {
   return { page, events, progress, stored: () => clone(stored), saves: () => saves,
     popupClosed: () => popupClosed,
     freshPages, isClosed: () => closed,
-    recordProgress: async value => { progress.push(clone(value)); } };
+    recordProgress: async value => { progress.push(clone(value)); events.push({ operation: 'progress', value: clone(value) }); } };
 }
 const run = (m, j, options = {}) => applySignupProfileV2(m.page, j, MEMBER, BASE, { recordProgress: m.recordProgress, lookupApproved: false, ...options });
 
@@ -178,10 +186,130 @@ test('address clash never blocks independent DOB completion or alters the existi
   assert.equal(m.stored().address, before.address); assert.equal(m.stored().detail, before.detail);
   assert.equal(m.saves(), 1); assert(!m.events.some(e => e.operation === 'popup'));
 });
-test('six-digit DOB review leaves native DOB empty and independently defers a valid address', async () => {
+test('prospective six-digit DOB fills a blank native date and independently defers a valid address', async () => {
   const j = job(); j.profileUpdate.birthDateRaw = '900102'; const m = nativePage(j), result = await run(m, j);
-  assert.equal(result.birthDate.status, 'review'); assert.equal(result.address.status, 'awaiting_address_lookup_approval');
-  assert.equal(m.stored().birthDate, ''); assert.equal(m.saves(), 0);
+  assert.equal(result.birthDate.status, 'verified'); assert.equal(result.address.status, 'awaiting_address_lookup_approval');
+  assert.equal(m.stored().birthDate, '1990-01-02'); assert.equal(m.saves(), 1);
+});
+
+function assertBirthProof(birthDate, { status = 'verified', value, source = 'current_year_rule', now = NOW }) {
+  assert.equal(birthDate.status, status);
+  assert.equal(birthDate.expectedHash, hash(value), 'Hash must bind the resolved full date, not the raw six digits');
+  assert.deepEqual(birthDate.resolution, {
+    policy: 'yy_kst_current_year_v1', referenceAt: now.toISOString(), source,
+  });
+}
+
+for (const [raw, value] of [['000102', '2000-01-02'], ['260102', '2026-01-02'],
+  ['270102', '1927-01-02'], ['990102', '1999-01-02'], ['000229', '2000-02-29']]) {
+  test('six-digit writer uses eight native keypresses and independent save proof: ' + raw, async () => {
+    const j = job(); j.profileUpdate.birthDateRaw = raw; j.profileUpdate.addressRaw = '';
+    const originalJob = clone(j), m = nativePage(j), before = m.stored();
+    const result = await run(m, j);
+    assertBirthProof(result.birthDate, { value });
+    assert.equal(result.checkedAt, NOW.toISOString());
+    assert.equal(result.address.status, 'not_provided');
+    assert.deepEqual(m.stored(), { ...before, birthDate: value }, 'Every other native field is protected');
+    assert.deepEqual(j, originalJob, 'Raw signed source must remain immutable');
+    assert.deepEqual(m.events.filter(e => e.operation === 'fill'), [{ operation: 'fill', field: 'birthDate', value: '' }]);
+    assert.deepEqual(m.events.filter(e => e.operation === 'type'), [{ operation: 'type', field: 'birthDate', value: value.replace(/-/g, '') }]);
+    assert.deepEqual(m.events.filter(e => e.operation === 'key'), [{ operation: 'key', key: 'Tab' }]);
+    assert.equal(m.freshPages.length, 1);
+    assert.deepEqual(m.freshPages[0].stored(), before, 'Fresh page reads persistence, not the edited draft');
+    assert.equal(m.freshPages[0].saves(), 0); assert.equal(m.freshPages[0].isClosed(), true);
+    assert(m.freshPages[0].events.some(e => e.operation === 'load'));
+    const saveIndex = m.events.findIndex(e => e.operation === 'save');
+    assert(m.events.findIndex(e => e.operation === 'fresh-page-close') < saveIndex);
+    assert(m.events.some((e, i) => i > saveIndex && e.operation === 'load'), 'Persisted profile must be reopened after save');
+    const intent = m.events.findIndex(e => e.operation === 'progress' && e.value.saveIntentAt);
+    assert(intent > m.events.findIndex(e => e.operation === 'fresh-page-close') && intent < saveIndex);
+    assert(m.progress.length >= 3);
+    for (const progress of m.progress) {
+      assertBirthProof(progress.birthDate, { status: progress.birthDate.status, value });
+      assert(['write', 'verified'].includes(progress.birthDate.status));
+    }
+    assert.equal(m.progress.at(-1).birthDate.status, 'verified');
+    assert.equal(m.saves(), 1);
+    const repeat = await run(m, j);
+    assertBirthProof(repeat.birthDate, { status: 'already_equal', value, source: 'native_full_match' });
+    assert.equal(m.saves(), 1);
+  });
+}
+
+for (const native of ['1920-01-02', '2020-01-02']) {
+  test('writer preserves matching native century without typing or saving: ' + native, async () => {
+    const j = job(); j.profileUpdate.birthDateRaw = '200102'; j.profileUpdate.addressRaw = '';
+    const m = nativePage(j, { birthDate: native }), before = m.stored(), result = await run(m, j);
+    assertBirthProof(result.birthDate, { status: 'already_equal', value: native, source: 'native_full_match' });
+    assert.deepEqual(m.stored(), before); assert.equal(m.saves(), 0);
+    assert(!m.events.some(e => ['fill', 'type', 'save', 'popup', 'fresh-page-open'].includes(e.operation)));
+    for (const p of m.progress) assertBirthProof(p.birthDate, { status: 'already_equal', value: native, source: 'native_full_match' });
+  });
+}
+
+for (const [native, status] of [['1920-01-03', 'conflict'], ['2020-01-03', 'conflict'],
+  ['1990-01-02', 'conflict'], ['200102', 'review'], ['1900-02-29', 'review'],
+  ['2026-10-30', 'review'], ['not a date', 'review']]) {
+  test('six-digit writer never overwrites nonempty differing or unverified native DOB: ' + native, async () => {
+    const j = job(); j.profileUpdate.birthDateRaw = '200102'; j.profileUpdate.addressRaw = '';
+    const m = nativePage(j, { birthDate: native }), before = m.stored(), result = await run(m, j);
+    assert.equal(result.birthDate.status, status); assert.equal(m.saves(), 0);
+    assert.deepEqual(m.stored(), before);
+    assert(!m.events.some(e => ['fill', 'type', 'save', 'popup'].includes(e.operation)));
+    assert(!m.progress.some(p => p.saveIntentAt));
+  });
+}
+
+for (const raw of ['261030', '261031', '260229', '990229', '000230', '000000', '90010',
+  '90-01-02', '900102 extra', '９００１０２', 900102, 102, 229, 0]) {
+  test('invalid/today/future/numeric six-digit writer input stays review with zero writes: ' + JSON.stringify(raw), async () => {
+    const j = job(); j.profileUpdate.birthDateRaw = raw; j.profileUpdate.addressRaw = '';
+    const m = nativePage(j), before = m.stored(), result = await run(m, j);
+    assert.equal(result.birthDate.status, 'review'); assert.deepEqual(m.stored(), before); assert.equal(m.saves(), 0);
+    assert(!m.events.some(e => ['fill', 'type', 'save', 'popup'].includes(e.operation)));
+    assert(!m.progress.some(p => p.saveIntentAt));
+  });
+}
+
+test('one captured resolution clock survives progress awaits crossing KST New Year', async t => {
+  const captured = new Date('2026-12-31T14:59:59.999Z');
+  t.mock.timers.setTime(captured.getTime());
+  const j = job(); j.profileUpdate.birthDateRaw = '270101'; j.profileUpdate.addressRaw = '';
+  const m = nativePage(j), result = await run(m, j, { recordProgress: async progress => {
+    await m.recordProgress(progress);
+    t.mock.timers.setTime(Date.parse('2026-12-31T15:00:00.001Z'));
+  } });
+  assertBirthProof(result.birthDate, { value: '1927-01-01', now: captured });
+  assert.equal(result.checkedAt, captured.toISOString());
+  assert.equal(m.stored().birthDate, '1927-01-01'); assert.equal(m.saves(), 1);
+  for (const p of m.progress) assertBirthProof(p.birthDate, { status: p.birthDate.status, value: '1927-01-01', now: captured });
+});
+
+test('six-digit writer applies the new KST year at midnight, but refuses today and future dates', async t => {
+  t.mock.timers.setTime(Date.parse('2026-12-31T15:00:00.000Z'));
+  for (const raw of ['270101', '271231']) {
+    const j = job(); j.profileUpdate.birthDateRaw = raw; j.profileUpdate.addressRaw = '';
+    const m = nativePage(j), result = await run(m, j);
+    assert.equal(result.birthDate.status, 'review'); assert.equal(m.saves(), 0);
+  }
+  t.mock.timers.setTime(Date.parse('2027-01-01T15:00:00.000Z'));
+  const j = job(); j.profileUpdate.birthDateRaw = '270101'; j.profileUpdate.addressRaw = '';
+  const m = nativePage(j), result = await run(m, j);
+  assertBirthProof(result.birthDate, { value: '2027-01-01', now: new Date() });
+  assert.equal(m.stored().birthDate, '2027-01-01'); assert.equal(m.saves(), 1);
+});
+
+test('six-digit completion-only job ignores historical resolution metadata and never writes DOB', async () => {
+  const j = job();
+  j.profileUpdate = { version: 2, mode: 'completion_only', documentId: DOC, fieldReviewReason: 'signed_fields_unverified' };
+  j.profileStatus = { birthDate: { status: 'review', expectedHash: hash('1990-01-02'),
+    resolution: { policy: 'yy_kst_current_year_v1', referenceAt: NOW.toISOString(), source: 'current_year_rule' } } };
+  const m = nativePage(j), before = m.stored(), q = memoOrchestrator(j, m), result = await q.run();
+  assert.equal(result.profileStatus.birthDate.status, 'review');
+  assert.equal(result.profileStatus.birthDate.reason, 'signed_fields_unverified');
+  assert.equal(m.saves(), 0); assert.deepEqual(m.stored(), before);
+  assert(!m.events.some(e => ['fill', 'type', 'popup', 'save'].includes(e.operation)));
+  assert.equal(q.events.filter(e => e[0] === 'memo-write').length, 1);
 });
 test('missing fields are not_provided and never clear existing native values', async () => {
   const j = job(); j.profileUpdate.birthDateRaw = ''; j.profileUpdate.addressRaw = '';
@@ -390,6 +518,48 @@ test('regular registration orchestration must read a DocumentSnapshot before dat
   assert.equal(result.profileStatus.birthDate.status, 'conflict'); assert(q.memos.has(j.content));
   assert(q.events.some(e => e[0] === 'read-reference' && e[1] === 'instructorLessonRegistrations'));
 });
+test('six-digit orchestration retains birth proof in profileStatus and progress without duplicate completion notes', async () => {
+  const j = job(); j.profileUpdate.birthDateRaw = '000229'; j.profileUpdate.addressRaw = '';
+  const original = clone(j), m = nativePage(j), before = m.stored(), q = memoOrchestrator(j, m);
+  const result = await q.run();
+  assertBirthProof(result.profileStatus.birthDate, { value: '2000-02-29' });
+  const progress = q.events.filter(e => e[0] === 'progress' && e[1].profileStatus).map(e => e[1].profileStatus);
+  assert(progress.length >= 3);
+  for (const p of progress) assertBirthProof(p.birthDate, { status: p.birthDate.status, value: '2000-02-29' });
+  assert.equal(progress.at(-1).birthDate.status, 'verified');
+  assert.deepEqual(m.stored(), { ...before, birthDate: '2000-02-29' });
+  assert.equal(m.saves(), 1); assert.deepEqual([...q.memos], [j.content]);
+  const repeat = await q.run();
+  assert.equal(repeat.alreadyExists, true);
+  assertBirthProof(repeat.profileStatus.birthDate, { status: 'already_equal', value: '2000-02-29', source: 'native_full_match' });
+  assert.equal(m.saves(), 1); assert.equal(q.events.filter(e => e[0] === 'memo-write').length, 1);
+  assert.deepEqual(j, original);
+});
+
+for (const [label, options, saves] of [
+  ['bad native date mask', { badMask: true }, 0],
+  ['concurrent native edit', { changeLiveBeforeSave: { birthDate: '1988-03-04' } }, 0],
+  ['no persisted save', { persist: false }, 1],
+  ['protected field changed', { changeProtected: true }, 1],
+  ['unknown before persistence', { saveThrowsBefore: true }, 1],
+]) test('six-digit orchestration rejects ' + label + ' without a completion note or retry', async () => {
+  const j = job(); j.profileUpdate.birthDateRaw = '900102'; j.profileUpdate.addressRaw = '';
+  const m = nativePage(j, options), q = memoOrchestrator(j, m);
+  await assert.rejects(q.run(), error => error.nonRetryable === true);
+  assert.equal(m.saves(), saves); assert.equal(q.memos.size, 0);
+  assert.equal(q.events.filter(e => e[0] === 'memo-write').length, 0);
+  assert(m.freshPages.every(fresh => fresh.isClosed()), 'Fresh-read pages close on every failure');
+});
+
+test('six-digit unknown save response with proved persistence is accepted once, not retried', async () => {
+  const j = job(); j.profileUpdate.birthDateRaw = '900102'; j.profileUpdate.addressRaw = '';
+  const m = nativePage(j, { saveThrowsAfter: true }), q = memoOrchestrator(j, m);
+  const result = await q.run();
+  assertBirthProof(result.profileStatus.birthDate, { value: '1990-01-02' });
+  assert.equal(result.profileStatus.saveResponse, 'unknown'); assert.equal(m.saves(), 1);
+  assert.equal((await q.run()).alreadyExists, true);
+  assert.equal(m.saves(), 1); assert.equal(q.events.filter(e => e[0] === 'memo-write').length, 1);
+});
 test('v2 records native memo intent before its single save and never replays an unresolved intent',async()=>{
   const j=job(),m=nativePage(j,{birthDate:'1989-01-02'}),q=memoOrchestrator(j,m);
   await q.run();
@@ -465,6 +635,26 @@ test('bounded loader fetches only exact requested documents, skips terminal stat
   const result = await f.load(1);
   assert.deepEqual(Array.from(result, row => row.data.jobId), ids.slice(0, 2));
   assert.deepEqual(f.calls, [ids.map(id => 'studiomateMemoWriteJobs/' + id)]);
+});
+test('prospective six-digit policy does not requeue or mutate historical completed jobs', async () => {
+  const ids = [signupId(1), signupId(2)];
+  let rows, before;
+  const f = boundedLoader(ids, seeded => {
+    rows = seeded;
+    for (const row of rows) Object.assign(row.data, {
+      status: 'done', attempts: 2, profileSyncStatus: 'review_required',
+      profileUpdate: { version: 2, birthDateRaw: '900102', addressRaw: '' },
+      profileStatus: { birthDate: { status: 'review', reason: 'birth_date_century_unverified' } },
+    });
+    rows[1].data.profileStatus.birthDate = { status: 'already_equal', expectedHash: hash('1990-01-02'),
+      resolution: { policy: 'yy_kst_current_year_v1', referenceAt: NOW.toISOString(), source: 'native_full_match' } };
+    before = clone(rows);
+  });
+  for (let repeat = 0; repeat < 2; repeat++) {
+    assert.equal((await f.load(10)).length, 0);
+    assert.deepEqual(rows, before, 'Historical review/result/attempts must remain untouched');
+  }
+  assert.deepEqual(f.calls, [ids.map(id => 'studiomateMemoWriteJobs/' + id), ids.map(id => 'studiomateMemoWriteJobs/' + id)]);
 });
 for (const [label, change] of Object.entries({
   missingDocument: rows => { rows[0].exists = false; }, foreignSource: rows => { rows[0].data.source = 'holding_notice_delivery'; },
