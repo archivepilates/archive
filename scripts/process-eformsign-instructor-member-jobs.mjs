@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import os from "node:os";
@@ -15,6 +17,7 @@ import { readCompletedSignupProfile, signupProfileMemo, SIGNUP_PROFILE_VERSION, 
 import { readCompletedSignupProfileV2, parseSignupProfileV2, signupV2Projection,completionOnlySignupProfileV2 } from "./lib/instructor-signup-profile-v2.mjs";
 import { buildOrderContactBinding, canRecheckCompletedSignup, readCompletedRecipientEvidence, readSignupMemberIdentity } from "./lib/instructor-signup-order-identity.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
+import { instructorReminderScheduled, runInstructorSignatureReminder } from "./lib/instructor-signature-reminder-runtime.mjs";
 import {
   EFORMSIGN_COMPLETED_DOCUMENTS_URL,
   EFORMSIGN_PROGRESS_DOCUMENTS_URL,
@@ -33,6 +36,7 @@ import {
 } from "./lib/instructor-lesson-registration-contract.mjs";
 
 const args = parseArgs(process.argv.slice(2));
+const reminderReportScript = fileURLToPath(new URL("../firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs", import.meta.url));
 const apply = Boolean(args.apply);
 const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
@@ -71,6 +75,7 @@ const summary = {
   retried: 0,
   reviewRequired: 0,
   failed: 0,
+  signatureReminders: [],
   jobs: [],
 };
 
@@ -133,7 +138,8 @@ try {
     summary.authenticated = true;
   } else {
     for (const candidate of candidates) await processCandidate(page, candidate);
-    summary.ok = summary.failed === 0 && summary.reviewRequired === 0;
+    summary.ok = summary.failed === 0 && summary.reviewRequired === 0
+      && summary.signatureReminders.every(row => row.status !== "review");
   }
 } catch (error) {
   summary.ok = false;
@@ -801,6 +807,30 @@ async function inspectCompletion(page, ref, job) {
     lastError: null,
     updatedAt: FieldValue.serverTimestamp(),
   });
+  if (instructorReminderScheduled({ apply, ...config })) {
+    const reminder = await runInstructorSignatureReminder({ db, id: ref.id, eformPage: page, apply, scheduled: true });
+    summary.signatureReminders.push(reminder);
+    if (reminder.status === "review") {
+      const report = spawnSync(process.execPath, [reminderReportScript], {
+        encoding: "utf8", timeout: 45000, maxBuffer: 1024 * 1024, env: { ...process.env,
+          AUTOMATION_REPORT_FROM: "home@archivepilates.com", AUTOMATION_REPORT_TO: "home@archivepilates.com",
+          AUTOMATION_REPORT_EVENT_ID: createHash("sha256").update(`instructor_signature_reminder_review:${reminder.stage}:${ref.id}`).digest("hex"),
+          AUTOMATION_REPORT_SUBJECT: "[강사회원 가입서][확인필요] 24시간 미작성 문자 확인",
+          AUTOMATION_REPORT_LABEL: "자동화 확인필요",
+          AUTOMATION_REPORT_BODY: ["주체: ARCHIVE PILATES OPS / 강사회원 가입서 24시간 미작성 안내",
+            "결론: 가입서 미작성 안내 문자를 안전하게 완료 확인하지 못했습니다.",
+            `원인: ${reminder.reason}`, `검증 코드: ${reminder.sourceCode || "unverified"}`,
+            `원천: eformsignInstructorMemberJobs/${ref.id}`, `문서 ID: ${reminder.documentId || job.documentId}`,
+            "현재 가입서 작성 대기는 유지합니다. 문자 접수·최종 전달·가입서 완료는 각각 별도입니다.",
+            reminder.stage === "postclaim" ? "발송 선점이 있어 자동 재발송하지 않습니다. StudioMate 보낸 메시지와 원장을 대조하세요."
+              : "최종 발송 전 보류했습니다. 원본 가입서·회원·수강권과 로그인 상태를 확인하세요.",
+            "상세: https://core.archivepilates.com/instructor-lessons/",
+            "다음: 현재 서명·취소·환불과 문자 전체 이력을 확인한 뒤 운영자가 판단하세요. 계약서를 재발송하지 마세요."].join("\n"),
+        },
+      });
+      if (report.status !== 0) reminder.emailUnconfirmed = true;
+    }
+  }
   return { status: "waiting_completion", detail: "가입서 작성 대기" };
 }
 
@@ -1247,10 +1277,12 @@ async function persistSummary() {
     automationId: "eformsign-instructor-member-queue",
     title: "이폼싸인 강사회원 가입서 큐",
     ownerArea: "instructor-lessons",
-    status: summary.failed || summary.error ? "failed" : summary.retried || summary.reviewRequired ? "warning" : "healthy",
+    status: summary.failed || summary.error ? "failed" : summary.retried || summary.reviewRequired
+      || summary.signatureReminders.some(row => row.status === "review") ? "warning" : "healthy",
     lastRunAt: summary.finishedAt || new Date().toISOString(),
-    lastResult: `처리 ${summary.processed}건 · 발송 ${summary.sent}건 · 완료 ${summary.completed}건 · 대기 ${summary.waiting}건`,
-    warnings: [summary.error, ...summary.jobs.filter((job) => job.error).map((job) => `${job.jobId}: ${job.error}`)].filter(Boolean),
+    lastResult: `처리 ${summary.processed}건 · 발송 ${summary.sent}건 · 완료 ${summary.completed}건 · 대기 ${summary.waiting}건 · 미작성 문자 접수 ${summary.signatureReminders.filter(row => row.status === "accepted").length}건`,
+    warnings: [summary.error, ...summary.jobs.filter((job) => job.error).map((job) => `${job.jobId}: ${job.error}`),
+      ...summary.signatureReminders.filter(row => row.status === "review").map(row => `${row.jobId}: ${row.reason}`)].filter(Boolean),
   }).catch(() => {});
   console.log(JSON.stringify(summary, null, 2));
 }

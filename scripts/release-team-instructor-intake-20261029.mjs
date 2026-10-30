@@ -27,6 +27,7 @@ export const MEAL_RELEASE_TARGETS = {
   capacityRepairVerification: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
   signupProfileV2: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
   signupProfileV2Verification: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
+  instructorSignatureReminder: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
 };
 const sha = value => createHash('sha256').update(value).digest('hex');
 
@@ -80,7 +81,8 @@ async function main() {
   if (!baseline.config || baseline.name !== baselineRelease.version.name) throw Error('Missing baseline config');
   const sources = [];
   for (const [resource, file] of Object.entries(selected.files)) {
-    const sourceBase = target === 'signupProfileV2Verification' ? '1b87cd4be97148abbd3ef06d344e2b86faf8d653'
+    const sourceBase = target === 'instructorSignatureReminder' ? '608a40a982710f6a6667bbff42f73ce3f31ce6d2'
+      : target === 'signupProfileV2Verification' ? '1b87cd4be97148abbd3ef06d344e2b86faf8d653'
       : target === 'signupProfileV2' ? 'd50c6830e7ca3fd0a60e8e49f91efd5966113bc5'
       : target === 'capacityRepairVerification' ? '2a88328c68a580b79ad9a5cd593112cdafe35e11'
       : target === 'scheduleDisplay' ? 'f356b2dcc3c303c9ea4aabe87a8d29f82aae59fc'
