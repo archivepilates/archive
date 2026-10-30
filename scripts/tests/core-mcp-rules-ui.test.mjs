@@ -200,7 +200,7 @@ test('actual CORE MCP rules remain readable with real styles at 320/390/768/1440
           assert.ok(report.bounds.left >= -1 && report.bounds.right <= width + 1, 'section fits viewport');
           assert.ok(report.sectionScrollWidth <= report.sectionClientWidth + 1, 'no horizontal overflow inside MCP section');
           assert.deepEqual(report.issues, [], 'no hidden, overlapping or clipped MCP text/blocks');
-          for (const policyId of ['instructor-new-ticket-recovery-policy', 'instructor-ticket-intake-coverage-policy']) {
+          for (const policyId of ['instructor-new-ticket-recovery-policy', 'instructor-ticket-intake-coverage-policy', 'private-notion-member-parent-policy']) {
           const recovery = page.locator('#' + policyId);
           await recovery.scrollIntoViewIfNeeded();
           const recoveryLayout = await recovery.evaluate(node => {

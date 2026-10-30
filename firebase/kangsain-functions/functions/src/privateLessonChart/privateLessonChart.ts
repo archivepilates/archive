@@ -35,6 +35,8 @@ import {
 import { completePrivateLessonMediaUpload, initPrivateLessonMediaUpload, uploadPrivateLessonMediaChunk } from "./privateLessonMedia";
 import { invalidatePendingPrivateLessonReportCandidates } from "./privateLessonReportCandidates";
 import { compactPrivateNotionBlocks } from "./privateLessonNotionPresentation";
+import { ensurePrivateNotionMemberPage, privateNotionMemberIdentity,
+  type PrivateNotionMemberPageState } from "./privateLessonNotionMemberPage";
 import {
   PRIVATE_NOTION_DEBOUNCE_MS,
   assertPrivateNotionPageOwner,
@@ -2090,7 +2092,7 @@ async function syncInstructorMemberChartPage(
   }
   const memberPageId = (record as any).notionProjectionControl?.memberPageId ||
     await findSourceLinkedNotionMemberPage(record) ||
-    await findInstructorMemberPageId(record.staffName, record.memberName);
+    await ensureInstructorMemberPage(record, chartRequest);
   if (!memberPageId) return null;
   const creationTitle = (record.notionSync as PrivateNotionState | undefined)?.creationTitle;
   const existingPageId = await findChildPageByExactTitle(memberPageId, creationTitle || title);
@@ -2124,6 +2126,76 @@ async function syncInstructorMemberChartPage(
     pageId: String(page.id || ""),
     pageUrl: String(page.url || notionPageUrl(String(page.id || ""))),
   };
+}
+
+async function ensureInstructorMemberPage(record: PrivateLessonChartRecordDoc, chartRequest: PrivateLessonChartRequestDoc): Promise<string> {
+  const rootPageId = NOTION_INSTRUCTOR_CHART_PAGE_IDS[record.staffName];
+  if (!rootPageId) return "";
+  if (!record.staffId || !record.memberId || !record.recordId || !chartRequest.requestId) {
+    throw new Error("Notion 회원 폴더 원본 식별자 확인 필요");
+  }
+  const loadIdentity = async () => {
+    const [recordSnap, requestSnap, profileSnap, staffSnap] = await db.getAll(
+      refs.privateLessonChartRecord(record.recordId), refs.privateLessonChartRequest(chartRequest.requestId),
+      refs.memberProfile(record.memberId), refs.staff(record.staffId || ""));
+    const current = recordSnap.data() as PrivateLessonChartRecordDoc | undefined;
+    const staff = staffSnap.data() as any;
+    return privateNotionMemberIdentity(current, requestSnap.data(), profileSnap.data(), staff,
+      rootPageId, NOTION_INSTRUCTOR_CHART_PAGE_IDS[String(staff?.name || "")]);
+  };
+  const identity = await loadIdentity();
+  const bindingRef = refs.syncState(`privateNotionMember_${stableHash({ root: identity.rootPageId, memberId: identity.memberId })}`);
+  const titleRef = refs.syncState(`privateNotionMemberTitle_${stableHash({ root: identity.rootPageId,
+    title: identity.title.replace(/\s+/g, "") })}`);
+  const validate = async () => {
+    if ((await loadIdentity()).sourceHash !== identity.sourceHash) throw new Error("Notion 회원 폴더 생성 전 원본이 변경됐습니다.");
+  };
+  return ensurePrivateNotionMemberPage(identity, {
+    transact: (update) => db.runTransaction(async (tx) => {
+      const [bindingSnap, titleSnap] = await tx.getAll(bindingRef, titleRef);
+      const current = bindingSnap.data() as PrivateNotionMemberPageState | undefined;
+      const titleOwner = titleSnap.data() as PrivateNotionMemberPageState | undefined;
+      // The member key serializes lessons; the title key prevents two namesakes
+      // racing through the same empty-parent lookup under one instructor.
+      const titleRejected = titleOwner?.status === "rejected" && !titleOwner.pageId;
+      if ((!current || current.status === "rejected") && titleOwner && titleOwner.memberId !== identity.memberId && !titleRejected) {
+        throw new Error("Notion 동명이인 폴더 연결 확인 필요: 다른 회원의 이름 선점이 있습니다.");
+      }
+      if (!current && titleOwner && !titleRejected) throw new Error("Notion 회원 폴더의 기존 생성 기록 확인 필요");
+      const result = update(current);
+      if (result.next) {
+        const state = { ...result.next, purpose: "private_notion_member_parent", updatedAt: nowTimestamp() };
+        tx.set(bindingRef, state);
+        tx.set(titleRef, state);
+      }
+      return result.result;
+    }),
+    validate,
+    assertAbsent: async () => {
+      if (await findInstructorMemberPageId(record.staffName, identity.title)) {
+        throw new Error("Notion 기존 동명 회원 폴더 연결 확인 필요: 확인되지 않은 폴더는 자동 연결·재생성하지 않습니다.");
+      }
+    },
+    create: async () => {
+      const page = await notionRequest("pages", "POST", {
+        parent: { page_id: identity.rootPageId }, properties: notionTitle(identity.title),
+        children: [{ object: "block", type: "paragraph", paragraph: {
+          rich_text: [{ type: "text", text: { content: "ARCHIVE PILATES · 개인레슨 기록" } }], color: "gray" } }],
+      }, async () => {
+        try { await validate(); }
+        catch { throw Object.assign(new Error("Notion 회원 폴더 전송 직전 원본 확인 실패"), { privateNotionNoTransport: true }); }
+      });
+      return String(page.id || "");
+    },
+    verify: async (pageId) => {
+      const page = await notionRequest(`pages/${pageId}`, "GET");
+      if (page.archived || page.in_trash || String(page.parent?.page_id || "").replaceAll("-", "").toLowerCase() !== identity.rootPageId) {
+        throw new Error("Notion 회원 폴더의 담당 강사·보관 상태 확인 필요");
+      }
+    },
+    rejected: (error) => (error as any)?.privateNotionNoTransport === true
+      || /Notion API pages failed (400|401|403|404|429):/.test(errorMessage(error)),
+  });
 }
 
 async function findSourceLinkedNotionMemberPage(record: PrivateLessonChartRecordDoc): Promise<string> {
@@ -2369,11 +2441,14 @@ async function notionRequest(
   path: string,
   method: "GET" | "POST" | "PATCH" | "DELETE",
   body?: Record<string, unknown>,
+  beforeDispatch?: () => Promise<void>,
 ): Promise<any> {
   for (let attempt = 0; ; attempt += 1) {
     const wait = Math.max(0, notionNextRequestAt - Date.now());
     notionNextRequestAt = Date.now() + wait + 400;
     if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    // Parent creation must revalidate after throttling and every 429 backoff.
+    if (beforeDispatch) await beforeDispatch();
     const response = await fetch(`https://api.notion.com/v1/${path}`, {
       method,
       signal: AbortSignal.timeout(20_000),

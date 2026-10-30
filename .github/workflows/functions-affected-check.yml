@@ -143,6 +143,9 @@ jobs:
       - name: Test private flow state and revision contract
         run: npm run test:private-flow
 
+      - name: Test private Notion member folder creation guards
+        run: firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/private-notion-member-parent.test.ts scripts/tests/private-notion-member-parent-runtime.test.ts
+
       - name: Validate live rollback guards
         run: npm run validate:live-release-rollback-guards
 
