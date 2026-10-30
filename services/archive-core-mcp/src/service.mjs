@@ -1,5 +1,5 @@
 import { assert, bounded, hash, memberWindow, publicResult, rejectSecrets } from './safety.mjs';
-import { ACTIONS, UNSUPPORTED } from './catalog.mjs';
+import { ACTIONS, catalog } from './catalog.mjs';
 import { mealReview } from './meal-review.mjs';
 
 const object = { type: 'object', additionalProperties: true };
@@ -7,7 +7,7 @@ const text = { type: 'string', minLength: 1, maxLength: 160 };
 const schema = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const immediateDispatch = new Set(['operatorSendPricingInquiryAlimtalk', 'operatorSendRecommendedMealProgramAlimtalk']);
 const definitions = [
-  ['core_catalog', 'CORE 조회 영역과 지원 업무·필수 입력·지원하지 않는 작업을 확인합니다.', schema({})],
+  ['core_catalog', 'CORE 업무 요약. operation 또는 area로 필요한 상세만 조회하며 view=detail은 전체 목록입니다. 이미 확인한 지원 업무는 바로 조회하세요.', schema({ view: { type: 'string', enum: ['summary', 'detail'] }, operation: text, area: text })],
   ['core_records_list', 'CORE 저장 원장을 제한 조회합니다. StudioMate 실시간 원본이 아니며 부분 목록을 전체로 해석하지 마세요.', schema({ area: text, filters: object, limit: { type: 'integer', minimum: 1, maximum: 50 }, afterId: text }, ['area'])],
   ['core_records_get', 'CORE 저장 원장 한 건과 현재 원본 해시를 조회합니다. 비밀·건강정보는 제외합니다.', schema({ area: text, id: text }, ['area', 'id'])],
   ['core_query', '등록된 CORE 조회 처리기를 호출합니다. 수정 업무는 허용하지 않습니다.', schema({ operation: text, params: object }, ['operation', 'params'])],
@@ -43,7 +43,7 @@ export function createService({ access, store, plans, invoke, validate, now = Da
       validate(name, args); rejectSecrets(args); bounded(args);
       const current = await access.owner();
       let output;
-      if (name === 'core_catalog') output = { actions: ACTIONS, areas: store.areas(), unsupported: UNSUPPORTED };
+      if (name === 'core_catalog') output = catalog(store.areas(), args);
       else if (name === 'core_records_get') output = await store.get(args.area, args.id);
       else if (name === 'core_records_list') output = await store.list(args.area, args.filters, args.limit, args.afterId);
       else if (name === 'core_query') {
@@ -60,6 +60,7 @@ export function createService({ access, store, plans, invoke, validate, now = Da
           expiresAt: new Date(plan.expiresAt).toISOString(), intentId: plans.intentId(plan),
           params: publicResult(plan.params), sources: plan.sources,
           requiredConfirmation: `${spec.name}:${plan.planHash}`, memberFacing: spec.memberFacing,
+          operationNotes: spec.notes,
           note: '준비만 완료. 사용자 승인 후 core_action_execute가 필요합니다.' };
       } else if (name === 'core_action_status') output = await plans.receipt(args.intentId);
       else {

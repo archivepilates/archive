@@ -38,9 +38,17 @@ test('catalog has unique actions and valid strict tool schemas', async t => {
   await assert.rejects(service.callTool('core_query', { operation: 'arbitraryURL', params: {} }), { code: 'UNKNOWN_ACTION' });
   await assert.rejects(service.callTool('core_catalog', { extra: true }), { code: 'INVALID_ARGUMENT' });
 });
+test('catalog supports bounded detail discovery with validated options', async t => {
+  const { service } = await fixture(t);
+  const result = await service.callTool('core_catalog', { operation: 'submitMemberMemo' });
+  assert.equal(result.result.actions.length, 1);
+  assert.ok(result.result.actions[0].notes.includes('writeQueue'));
+  await assert.rejects(service.callTool('core_catalog', { view: 'invalid' }), { code: 'INVALID_ARGUMENT' });
+});
 test('prepare does not call handler; execute once and return receipt on repetition', async t => {
   const f = await fixture(t); const plan = await f.prepare();
   assert.equal(f.calls(), 0);
+  assert.equal(plan.result.operationNotes, ACTIONS.find(a => a.name === plan.result.operation).notes);
   assert.equal((await f.execute(plan)).result.requestCompleted, true);
   assert.equal((await f.execute(plan)).result.replayed, false);
   assert.equal(f.calls(), 1);

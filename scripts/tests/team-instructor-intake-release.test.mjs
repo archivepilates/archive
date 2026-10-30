@@ -20,7 +20,7 @@ test('schedule display replaces exactly app, interface CSS and rules', () => {
   assert.throws(() => mealReleaseManifest(files.slice(1),replacements,'scheduleDisplay'));
 });
 test('Team release replaces only four CORE assets and preserves all other paths', () => {
-  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder']);
+  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery']);
   const expected = ['/instructor-lessons/index.html', '/assets/app.js', '/rules/index.html', '/assets/alimtalk-catalog.json'];
   assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS.core.files), expected);
   const replacements = Object.fromEntries(expected.map(f => [f, hash]));
@@ -52,6 +52,15 @@ test('instructor reminder release cannot replace app assets or configuration',()
   assert.equal(manifest['/climate/index.html'],old);
   assert.equal(Object.keys(manifest).length,files.length);
   assert.throws(()=>mealReleaseManifest(files,{'/rules/index.html':hash,'/assets/app.js':hash},'instructorSignatureReminder'));
+});
+test('MCP fast discovery release preserves every non-rules path', () => {
+  assert.deepEqual(MEAL_RELEASE_TARGETS.coreMcpFastDiscovery.files, {'/rules/index.html':'core/rules/index.html'});
+  const files = [{path:'/rules/index.html',hash:old},{path:'/assets/app.js',hash:old},{path:'/climate/index.html',hash:old}];
+  const manifest = mealReleaseManifest(files, {'/rules/index.html':hash}, 'coreMcpFastDiscovery');
+  assert.equal(manifest['/assets/app.js'], old);
+  assert.equal(manifest['/climate/index.html'], old);
+  assert.equal(Object.keys(manifest).length, files.length);
+  assert.throws(() => mealReleaseManifest(files, {'/rules/index.html':hash,'/assets/app.js':hash}, 'coreMcpFastDiscovery'));
 });
 test('Team fulfillment replaces only app and rules without changing other assets', () => {
   assert.deepEqual(MEAL_RELEASE_TARGETS.fulfillment.files, {'/assets/app.js':'core/assets/app.js','/rules/index.html':'core/rules/index.html'});

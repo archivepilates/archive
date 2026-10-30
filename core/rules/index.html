@@ -57,6 +57,7 @@
           <div class="panel-header"><div><h2>CORE MCP 업무 연결 · 2026.10.29</h2></div></div>
           <div class="rule-note"><strong>목적·범위</strong><span>Codex에서 CORE의 저장 원장 조회와 기존 업무 처리기를 직접 호출합니다. 기존 StudioMate 실시간 조회 전용 archivepilates-mcp는 별도로 유지합니다. 저장 자료의 조회시각을 StudioMate 실시간 확인시각으로 표시하지 않습니다.</span></div>
           <div class="rule-note"><strong>수정 원칙</strong><span>현재 활성 소유자와 인증 세션을 매 호출 확인합니다. 수정은 정확한 입력·현재 원본·고정 업무 키를 묶은 10분 계획을 준비한 뒤 사용자 승인과 실행 확인을 거칩니다. 연결 권한은 개별 발송·공개·취소·삭제 승인이 아닙니다. 기존 원본 검증·중복방지·회원 발송시간 규칙을 유지합니다.</span></div>
+          <div class="rule-note"><strong>조회 경량화 · 2026.10.30</strong><span>지원 범위가 미확인일 때 업무 요약을 한 번 확인하고 필요한 업무·원장만 선택 조회합니다. 이미 확인한 CORE 저장 업무는 정확한 ID·필터로 직접 조회하며 전체 목록·브라우저·직접 DB 조회를 반복하지 않습니다. StudioMate 실시간 원본이 필요한 작업은 별도 조회 경로로 구분합니다. 수정 준비에는 업무별 주의사항을 함께 표시하며 권한·원본 최신성·중복 검증은 생략하지 않습니다. 회귀 테스트 250건과 별도 실제 읽기 연결을 검증했습니다. 운영 소스 반영 뒤 새 MCP 프로세스에서 적용되며, 기존 채팅 연결은 재연결 전까지 이전 코드를 사용할 수 있습니다. 이 Hosting 안내 게시와 현재 채팅 재연결 완료는 구분합니다.</span></div>
           <div class="rule-note"><strong>차단·개인정보</strong><span>결과가 불명확한 요청은 자동 반복하지 않고 원본 업무 원장과 실행 접수 기록을 대조합니다. 임의 DB·쉘·비밀번호·시크릿·IAM 수정 도구는 제공하지 않습니다. 건강 답변·InBody 원문·전체 연락처는 일반 조회에서 제외합니다. 새 공개 서버·AI API·주기 실행은 추가하지 않습니다.</span></div>
           <div class="rule-note"><strong>원천·반영 상태</strong><span>원천은 CORE의 기존 canonical 원장, staffs와 Firebase Auth이며 실행은 기존 승인 처리기와 권한 규칙을 사용합니다. 대상은 맥미니 archive-core-mcp 연결과 이 운영규칙입니다. 구현·가짜 데이터 검증 후 실제 조회·기존 초안 보존 저장·등록 연결을 독립 확인하며, 최종 결과와 제한은 2026-10-29-core-ops-mcp 보고서를 따릅니다. 이 문구가 포함된 Hosting 릴리스부터 안내가 반영됩니다.</span></div>
         </section>

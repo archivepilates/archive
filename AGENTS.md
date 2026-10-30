@@ -83,6 +83,12 @@
 - Use worktrees when a change is non-trivial, experimental, or should be isolated from the current branch.
 - Start live checks with read-only verification of the deployed OPS/member surfaces, Firebase/Hosting configuration, and visible browser errors before proposing fixes.
 
+## Bounded CORE Investigation
+
+- For supported CORE stored-record work, use the CORE MCP first with an exact ID or bounded filter. Discover unknown support once, then select only the required `operation` or `area`; do not dump the full catalog every turn.
+- Keep StudioMate live source checks separate. Use them when current native evidence is required or the CORE connector does not support the action; do not duplicate the same saved-record read through the browser and direct database.
+- Return short evidence summaries to the command chat. Do not load entire unrelated chat histories or logs for a narrow task. Never trade authorization, source freshness, duplicate guards, or independent completion proof for speed.
+
 ## Browser Cleanup Rules
 
 - Treat Chrome tabs, windows, Playwright pages, contexts, temporary profiles, and browser processes opened by Codex for debugging or verification as task-owned state.
