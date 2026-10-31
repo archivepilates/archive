@@ -11,6 +11,13 @@
 
 ## Working Guidelines
 
+### Direct Text Transport Standard
+
+- Effective 2026-10-31, ARCHIVE-authored SMS/LMS/MMS uses SOLAPI only. Direct StudioMate general-message UI/API dispatch is retired; do not use it as a fallback on SOLAPI failure.
+- Keep the existing canonical job, approval, source/identity/ticket/cancellation/refund checks, document-scoped deduplication and time windows. Existing provider-managed StudioMate/eformsign contract invitations remain native; never replace their secure invitation with a guessed signing link.
+- General text uses scripts/lib/member-sms-solapi.mjs. Registered sender is bound in the private local config, not selected arbitrarily from available numbers. Native source browsers remain read-only for text delivery.
+- Preserve legacy StudioMate receipts and attempts. Store SOLAPI provider/message/group IDs on the same canonical job, separate acceptance from final delivery, and never retry accepted, failed-after-transport or unknown requests or reset jobs merely to change provider. No new scheduler or historical bulk send is authorized by transport migration.
+
 ### Highest-Priority Member Communication Window
 
 - All member-facing Alimtalk, SMS/LMS, email and electronic-contract signature requests are forbidden daily from 23:00 KST through 08:59:59 KST. Dispatch is allowed only in [09:00, 23:00), including manual, MCP/Codex, recovery and real-phone test sends.

@@ -4,6 +4,7 @@ import { contractReminderDispatchWindow, assertContractReminderDispatchAllowed }
 import { membershipContractObservationHistory } from "./studiomate-membership-contract-completion-state.mjs";
 import { membershipContractJobKey,normalizeMembershipPhone } from "./studiomate-membership-contract-policy.mjs";
 import { membershipContractMemberGradeDecision } from "./studiomate-membership-contract-native-selection.mjs";
+import { memberSmsReceiptFields } from "./member-sms-solapi.mjs";
 
 export const CONTRACT_REMINDER_POLICY = "contract_signature_reminder_24h_v1";
 const digest = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -20,11 +21,20 @@ function safeReminderDeferral(row, id) {
   const proof = Array.isArray(row?.deferrals) ? row.deferrals.at(-1) : null;
   return row?.policy === CONTRACT_REMINDER_POLICY && row.key === `contract_signature_reminder_${id}`
     && typeof row.dispatchToken === "string" && row.dispatchToken.length > 0 && proof != null
-    && row.status === "deferred" && row.attempts === 0 && row.deferredBeforeTransport === true && !row.smsId
+    && row.status === "deferred" && row.attempts === 0 && row.deferredBeforeTransport === true
+    && !['smsId', 'providerMessageId', 'providerGroupId', 'providerReceipt', 'providerRequestId']
+      .some(key => row[key] != null)
     && proof?.dispatchToken === row.dispatchToken && proof.attemptedAt === row.attemptedAt
     && proof.fingerprint === row.fingerprint && proof.providerPostCount === 0;
 }
 const preclaimDiagnostics = Object.freeze({
+  member_sms_provider_configuration_unverified: "SOLAPI 발신번호 설정 또는 기존 인증값을 확인하지 못했습니다.",
+  member_sms_provider_preflight_unverified: "SOLAPI 등록 발신번호·기존 발송 이력을 확인하지 못했습니다.",
+  member_sms_sender_inactive: "설정된 SOLAPI 발신번호의 등록 상태를 확인하지 못했습니다.",
+  member_sms_prior_provider_message: "기존 제공자 발송 기록이 있어 중복 여부를 확인해야 합니다.",
+  member_sms_history_unverified: "SOLAPI 발송 이력 형식을 확인하지 못했습니다.",
+  member_sms_history_incomplete: "SOLAPI 발송 이력 조회가 불완전해 보류했습니다.",
+  member_sms_input_unverified: "문자 수신자·본문·제목 또는 제공자 입력 한도를 확인하지 못했습니다.",
   native_contract_signature_images_unavailable: "전자계약 직인·서명 이미지 로딩을 확인하지 못했습니다.",
   native_contract_center_signature_unverified: "전자계약 화면에서 센터 직인을 확인하지 못했습니다.",
   contract_reminder_member_page_not_ready: "문자 작성 전 회원 상세의 이름·전체 연락처 로딩을 확인하지 못했습니다.",
@@ -148,7 +158,7 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
         assertContractReminderDispatchAllowed(now());
         attemptedAt = now().toISOString();
         tx.update(ref,{signatureReminder:{policy:CONTRACT_REMINDER_POLICY,key:plan.key,fingerprint:plan.fingerprint,
-          status:"attempting",attempts:1,firstConfirmedAt:plan.firstConfirmedAt,timingBasis:plan.timingBasis,
+          status:"attempting",attempts:1,transportProvider:'solapi',firstConfirmedAt:plan.firstConfirmedAt,timingBasis:plan.timingBasis,
           dispatchToken,deferrals:latest.signatureReminder?.deferrals || [],
           attemptedAt,memberId:plan.memberId,updatedAt:now().toISOString()}});
       });
@@ -156,11 +166,12 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
       assertContractReminderDispatchAllowed(now());
       return () => { dispatchStarted = true; };
     });
-    if (!claimed || !Number.isSafeInteger(receipt?.smsId) || receipt.smsId <= 0) fail();
-    const settled = await settle({status:"accepted",smsId:receipt.smsId,acceptedAt:now().toISOString(),deliveryStatus:"not_verified"});
-    return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
+    if (!claimed || !dispatchStarted) fail();
+    const fields = memberSmsReceiptFields(receipt,plan,{subject:'ARCHIVE PILATES 서명 안내'});
+    const settled = await settle({status:"accepted",...fields,acceptedAt:now().toISOString(),deliveryStatus:"not_verified"});
+    return {status:"accepted",contractId:id,stage:"postclaim",...memberSmsReceiptFields(settled,plan,{subject:'ARCHIVE PILATES 서명 안내'})};
   } catch (error) {
-    if (isMemberDispatchDeferred(error) && !dispatchStarted) {
+    if (isMemberDispatchDeferred(error) && (!dispatchStarted || error.providerPostCount === 0)) {
       if (claimed) {
         const settled = await db.runTransaction(async tx=>{
           const row = (await tx.get(ref)).data()?.signatureReminder;
@@ -173,7 +184,7 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
             deferrals:[...(row.deferrals || []),{dispatchToken,attemptedAt,fingerprint:plan.fingerprint,deferredAt:at,providerPostCount:0}],updatedAt:at}});
           return null;
         });
-        if (settled?.status === "accepted") return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
+        if (settled?.status === "accepted") return {status:"accepted",contractId:id,stage:"postclaim",...memberSmsReceiptFields(settled,plan,{subject:'ARCHIVE PILATES 서명 안내'})};
       }
       return deferred();
     }
@@ -181,7 +192,7 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
     if (claimed) {
       try {
         const settled = await settle({status:"review",reason});
-        if (settled.status === "accepted") return {status:"accepted",contractId:id,stage:"postclaim",smsId:settled.smsId};
+        if (settled.status === "accepted") return {status:"accepted",contractId:id,stage:"postclaim",...memberSmsReceiptFields(settled,plan,{subject:'ARCHIVE PILATES 서명 안내'})};
       } catch { reason = "send_outcome_unknown_journal_unavailable"; }
     }
     const errorCode = error?.code || error?.message;

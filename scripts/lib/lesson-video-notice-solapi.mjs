@@ -2,8 +2,8 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
 const ACCOUNT = 'archive-codex-operator@archive-pilates.iam.gserviceaccount.com';
-export function makeLessonVideoSolapiRequest() {
-  const secret = name => execFileSync('gcloud', ['secrets', 'versions', 'access', 'latest', `--secret=${name}`,
+export function makeLessonVideoSolapiRequest({ gcloudPath = 'gcloud' } = {}) {
+  const secret = name => execFileSync(gcloudPath, ['secrets', 'versions', 'access', 'latest', `--secret=${name}`,
     '--project=archive-pilates', `--account=${ACCOUNT}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim();
   const key = secret('SOLAPI_API_KEY'), apiSecret = secret('SOLAPI_API_SECRET');
   return createLessonVideoSolapiTransport({ key, apiSecret });

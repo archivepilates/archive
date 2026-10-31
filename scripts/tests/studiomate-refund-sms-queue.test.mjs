@@ -162,7 +162,7 @@ test("환불 문자도 만료와 현재 회원·수강권 상태 검증을 유�
   }
 });
 
-test("메시지 API 성공과 모달 종료가 함께 확인될 때만 발송 완료로 본다", () => {
+test("legacy StudioMate UI evidence classification remains available for historical receipts", () => {
   assert.equal(
     classifyStudioMateSmsSendEvidence({
       responseUrl: "https://api.studiomate.kr/v2/staff/messages/send",

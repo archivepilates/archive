@@ -61,7 +61,7 @@ function safeDeferral(row, plan) {
     || row.fingerprint !== plan.fingerprint || row.status !== "deferred" || row.attempts !== 0
     || row.deferredBeforeTransport !== true || row.dispatchStarted === true || row.externalEffectStarted === true
     || row.sendOutcomeUnknown === true
-    || ["smsId", "acceptedAt", "sentAt", "deliveredAt", "providerRequestId", "providerReceipt", "receipt",
+    || ["smsId", "acceptedAt", "sentAt", "deliveredAt", "providerMessageId", "providerGroupId", "providerRequestId", "providerReceipt", "receipt",
       "transportStartedAt", "sendStartedAt", "sendClickedAt", "providerPostStartedAt"]
       .some(key => row[key] != null)) return false;
   if (row.providerPostCount != null && row.providerPostCount !== 0) return false;

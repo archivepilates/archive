@@ -30,6 +30,17 @@
           <h1>운영 규칙</h1>
         </header>
 
+        <section class="panel" id="member-sms-solapi-20261031">
+          <div class="panel-header"><h2>일반 문자 발송 · SOLAPI</h2><span class="pill">2026.10.31</span></div>
+          <ul>
+            <li>ARCHIVE PILATES가 직접 보내는 SMS·LMS·MMS는 SOLAPI로 통일합니다. 가입서 미작성·일반회원 서명 재안내·환불 안내의 StudioMate 문자 작성창 경로는 중단하며 SOLAPI 장애 때 우회하지 않습니다. 기존 영상 안내 LMS와 알림톡의 SOLAPI 경로는 유지합니다.</li>
+            <li>대상 선정은 기존 이폼싸인·StudioMate 원본과 업무 정본에서 합니다. 회원·수강권·서명·취소·환불·승인·현재 발송시간과 중복을 그대로 검증합니다. 계약서비스 자체에서 발행하는 StudioMate·이폼싸인 서명 초대 문자는 이번 전환 대상이 아닙니다. 문서 발행·보안 링크·본인 서명 절차를 우회하지 않습니다.</li>
+            <li>기존에 승인된 등록 발신번호를 전용 비공개 설정으로 고정하고 SOLAPI 등록 상태·수신자별 이력을 확인합니다. 원본 재검증과 정본 선점 후 실제 요청 직전 시간을 다시 확인합니다. 기존 업무 키와 과거 StudioMate 접수·결과불명 기록을 보존하며 새 채널이라는 이유로 다시 보내지 않습니다.</li>
+            <li>일반 문자는 매일 09:00~22:59, 서명 미작성 안내는 더 엄격한 09:00~19:59를 유지합니다. SOLAPI 접수 ID·그룹 ID와 실제 전달 결과는 구분해 기존 작업 원장에 남깁니다. 입력 한도·원본·이력·응답이 불명확하면 보류하고 내용을 임의로 자르거나 재발송하지 않습니다.</li>
+            <li>구현은 기존 맥미니 가입서·서명·환불 처리기와 공통 member-sms-solapi 모듈입니다. 실행 주기·기존 큐·문자 내용·완료 건은 유지하며 새 발송기·과거분 일괄 발송은 만들지 않습니다. 구현·무발송 검증·운영 반영·규칙 배포와 실제 접수 여부는 2026-10-31-solapi-sms-unification 보고서에서 구분합니다. 이전 항목의 StudioMate 일반 문자 화면 설명은 이 기준으로 대체합니다.
+            </li>
+          </ul>
+        </section>
         <section class="panel" id="member-dispatch-window">
           <div class="panel-header"><h2>최우선 · 회원 발송시간</h2><span class="pill warn">23:00~09:00 금지</span></div>
           <ul>

@@ -13,6 +13,7 @@ import { dispatchVerifiedOperatorHolding, verifiedOperatorHoldingPlan } from "..
 import { HOLDING_SOURCE, holdingFingerprint, normalizeHoldingObservation } from "../lib/studiomate-holding-source.mjs";
 import { dispatchHoldingNoticeSample } from "../lib/holding-notice-test-dispatch.mjs";
 import { HOLDING_NOTICE_TEMPLATE, HOLDING_NOTICE_TEMPLATE_ID } from "../lib/holding-allowance-notice.mjs";
+import { createMemberSmsSender, memberSmsReceiptFields } from "../lib/member-sms-solapi.mjs";
 
 const require = createRequire(new URL("../../firebase/kangsain-functions/functions/package.json", import.meta.url));
 const ts = require("typescript");
@@ -218,9 +219,38 @@ test("queue quiet defer restores attempts and removes pre-click send markers wit
   });
 });
 
-test("queue last-mile clock crossing skips the irreversible click",async t=>{
+test("queue last-mile clock crossing skips irreversible transport",async t=>{
   for(const worker of workers)await t.test(worker,async()=>{
     const tree=await parsed(worker),sms=worker.includes("sms");
+    if (sms) {
+      for (const initial of [NIGHT, DAY]) {
+        let clock=initial, marked=0, claims=0;
+        const requests=[];
+        const {sendRefundSms}=functions(tree,["sendRefundSms"],{
+          memberSmsReceiptFields,
+          assertMemberDispatchAllowed:()=>assertMemberDispatchAllowed(clock),
+          sendMemberSms:(plan,beforeFinalSend,{assertAllowed})=>createMemberSmsSender({
+            senderNumber:"0200000000",assertAllowed,
+            request:async(url,method)=>{
+              requests.push({url,method});
+              assert.equal(method,"GET","quiet crossing must prevent provider POST");
+              if(url==="/senderid/v1/numbers/active")return ["0200000000"];
+              assert.ok(url.startsWith("/messages/v4/list?"));
+              return {messageList:{}};
+            },
+          })(plan,beforeFinalSend),
+        });
+        await assert.rejects(sendRefundSms(new Proxy({},{get:fail}),{
+          jobId:"refund_quiet_fixture",memberPhone:"01000000000",smsTitle:"Synthetic",smsMessage:"Synthetic refund",
+        },"1001",async()=>{
+          claims++;clock=NIGHT;return ()=>marked++;
+        }),isMemberDispatchDeferred);
+        assert.equal(marked,0);
+        assert.equal(claims,initial===NIGHT?0:1);
+        assert.equal(requests.length,initial===NIGHT?0:2);
+      }
+      return;
+    }
     const name=sms?"sendRefundSms":worker.includes("instructor")?"sendInstructorMemberForm":"sendRefundAgreement";
     const fn=tree.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name);
     const statements=fn.body.statements;
@@ -237,6 +267,30 @@ test("queue last-mile clock crossing skips the irreversible click",async t=>{
     await assert.rejects(run(),isMemberDispatchDeferred);
     assert.equal(clicked,0);assert.equal(marked,0);
   });
+});
+
+test("refund final send transaction rejects changed claims or prior transport markers without writes",async()=>{
+  const tree=await parsed("process-studiomate-refund-sms-jobs.mjs");
+  for(const patch of [{dispatchToken:"other"},{status:"sent"},{sendClickedAt:"prior"},
+    {externalEffectStarted:true},{providerMessageId:`M${"1".repeat(24)}`}]){
+    const job={caseId:"one",dispatchToken:"claim"};
+    const rows={"studiomateRefundSmsJobs/one":{status:"processing",dispatchToken:"claim",...patch},
+      "refundCases/one":{smsNotice:{status:"pending"}}};
+    const db=store(rows);
+    const {markSending}=functions(tree,["markSending"],{db,FieldValue:db.fieldValue,
+      assertMemberDispatchAllowed:()=>assertMemberDispatchAllowed(DAY)});
+    await assert.rejects(markSending(db.doc("studiomateRefundSmsJobs/one"),job),/member_sms_refund_claim_changed/);
+    assert.deepEqual(Object.fromEntries(db.rows),rows);
+    assert.equal(db.commits.length,0);
+  }
+  const rows={"studiomateRefundSmsJobs/one":{status:"processing",dispatchToken:"claim"},
+    "refundCases/one":{smsNotice:{status:"pending"}}};
+  const db=store(rows);
+  const {markSending}=functions(tree,["markSending"],{db,FieldValue:db.fieldValue,
+    assertMemberDispatchAllowed:()=>assertMemberDispatchAllowed(NIGHT)});
+  await assert.rejects(markSending(db.doc("studiomateRefundSmsJobs/one"),{caseId:"one",dispatchToken:"claim"}),isMemberDispatchDeferred);
+  assert.deepEqual(Object.fromEntries(db.rows),rows);
+  assert.equal(db.commits.length,0);
 });
 
 test("sample claimed at 22:59 defers without failed ledger or consumed test attempt",async()=>{

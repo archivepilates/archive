@@ -35,7 +35,8 @@ import {
   membershipContractFallbackAliasIds,
 } from "./lib/studiomate-membership-contract-member-profile.mjs";
 import { processContractSignatureReminder,planContractSignatureReminder,assertContractReminderLive,contractReminderDiagnosticText } from "./lib/contract-signature-reminder.mjs";
-import { sendContractReminderSms } from "./lib/contract-signature-reminder-browser.mjs";
+import { sendMemberSms } from "./lib/member-sms-solapi.mjs";
+import { assertContractReminderDispatchAllowed } from "./lib/contract-signature-reminder-window.mjs";
 
 const args = process.argv.slice(2);
 let requestedContractId = "";
@@ -340,16 +341,17 @@ try {
             return {dom,contract,memberResult,ticketRead,checkedAt:new Date().toISOString()};
           } finally { await verificationPage.close(); }
         },
-        sendSms:(plan,beforeFinalSend)=>sendContractReminderSms(page,plan,beforeFinalSend),
+        sendSms:(plan,beforeFinalSend)=>sendMemberSms(plan,beforeFinalSend,{subject:'ARCHIVE PILATES 서명 안내',
+          assertAllowed:()=>assertContractReminderDispatchAllowed(new Date())}),
       });
       result.records.at(-1).signatureReminder = reminder;
-      if (reminder.status === "accepted") { result.signatureReminderAccepted++; result.studioMateWrites++; }
+      if (reminder.status === "accepted") { result.signatureReminderAccepted++; }
       if (reminder.status === "review") {
         result.signatureReminderReview++;
         const report = spawnSync(process.execPath,[fileURLToPath(new URL("../firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs",import.meta.url))],{
           encoding:"utf8",timeout:45000,maxBuffer:1024*1024,env:{...process.env,
             AUTOMATION_REPORT_FROM:"home@archivepilates.com",AUTOMATION_REPORT_TO:"home@archivepilates.com",
-            AUTOMATION_REPORT_EVENT_ID:createHash("sha256").update(`contract_signature_reminder_review:${reminder.stage}:${doc.id}`).digest("hex"),
+            AUTOMATION_REPORT_EVENT_ID:createHash("sha256").update(`contract_signature_reminder_review:${reminder.stage}:${reminder.reason}:${reminder.diagnostic || 'unverified'}:${doc.id}`).digest("hex"),
             AUTOMATION_REPORT_SUBJECT:"[전자계약][확인필요] 서명 요청 문자 결과 확인",
             AUTOMATION_REPORT_LABEL:"자동화 확인필요",
             AUTOMATION_REPORT_BODY:["주체: ARCHIVE CORE / 전자계약 24시간 서명 요청",
@@ -359,10 +361,10 @@ try {
               `원천: studiomateMembershipContracts/${doc.id}`,
               reminder.stage === "postclaim"
                 ? "현재: 발송 시도 기록은 보존되며 자동 재발송하지 않습니다. 문자 접수와 전달은 별도입니다."
-                : "현재: 원본 검증 또는 문자 작성 화면 확인 단계에서 보류했습니다. 최종 발송 시도는 없으며 다음 정기 실행에서 다시 확인합니다.",
+                : "현재: 원본 검증 또는 SOLAPI 발송 사전 확인에서 보류했습니다. 최종 발송 시도는 없으며 다음 정기 실행에서 다시 확인합니다.",
               `상세: https://arcpilates.studiomate.kr/users/contract/detail?id=${doc.id}`,
               reminder.stage === "postclaim"
-                ? "다음: StudioMate 문자 발송 내역과 서명 상태를 확인한 뒤 운영자가 판단하세요."
+                ? "다음: SOLAPI·기존 StudioMate 문자 이력과 현재 서명 상태를 확인한 뒤 운영자가 판단하세요."
                 : "다음: 원본 계약·수강권 변경 여부를 확인하세요. 원본 검증 전 문자를 보내지 않습니다."].join("\n")}});
         if (report.status !== 0) result.records.at(-1).signatureReminderEmailUnconfirmed=true;
       }

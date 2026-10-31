@@ -814,7 +814,7 @@ async function inspectCompletion(page, ref, job) {
       const report = spawnSync(process.execPath, [reminderReportScript], {
         encoding: "utf8", timeout: 45000, maxBuffer: 1024 * 1024, env: { ...process.env,
           AUTOMATION_REPORT_FROM: "home@archivepilates.com", AUTOMATION_REPORT_TO: "home@archivepilates.com",
-          AUTOMATION_REPORT_EVENT_ID: createHash("sha256").update(`instructor_signature_reminder_review:${reminder.stage}:${ref.id}`).digest("hex"),
+          AUTOMATION_REPORT_EVENT_ID: createHash("sha256").update(`instructor_signature_reminder_review:${reminder.stage}:${reminder.reason}:${reminder.sourceCode || 'unverified'}:${ref.id}`).digest("hex"),
           AUTOMATION_REPORT_SUBJECT: "[강사회원 가입서][확인필요] 24시간 미작성 문자 확인",
           AUTOMATION_REPORT_LABEL: "자동화 확인필요",
           AUTOMATION_REPORT_BODY: ["주체: ARCHIVE PILATES OPS / 강사회원 가입서 24시간 미작성 안내",
@@ -822,7 +822,7 @@ async function inspectCompletion(page, ref, job) {
             `원인: ${reminder.reason}`, `검증 코드: ${reminder.sourceCode || "unverified"}`,
             `원천: eformsignInstructorMemberJobs/${ref.id}`, `문서 ID: ${reminder.documentId || job.documentId}`,
             "현재 가입서 작성 대기는 유지합니다. 문자 접수·최종 전달·가입서 완료는 각각 별도입니다.",
-            reminder.stage === "postclaim" ? "발송 선점이 있어 자동 재발송하지 않습니다. StudioMate 보낸 메시지와 원장을 대조하세요."
+            reminder.stage === "postclaim" ? "발송 선점이 있어 자동 재발송하지 않습니다. 정본·SOLAPI와 기존 StudioMate 문자 이력을 대조하세요."
               : "최종 발송 전 보류했습니다. 원본 가입서·회원·수강권과 로그인 상태를 확인하세요.",
             "상세: https://core.archivepilates.com/instructor-lessons/",
             "다음: 현재 서명·취소·환불과 문자 전체 이력을 확인한 뒤 운영자가 판단하세요. 계약서를 재발송하지 마세요."].join("\n"),

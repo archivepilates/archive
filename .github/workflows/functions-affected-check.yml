@@ -122,6 +122,9 @@ jobs:
       - name: Test instructor signup identity and profile guards
         run: node --test scripts/tests/instructor-signup*.test.mjs
 
+      - name: Test SOLAPI direct text transport and canonical receipt guards
+        run: node --test scripts/tests/member-sms-solapi.test.mjs scripts/tests/solapi-sms-routing.test.mjs scripts/tests/instructor-signature-reminder*.test.mjs scripts/tests/contract-signature-reminder.test.mjs scripts/tests/contract-signature-reminder-browser.test.mjs scripts/tests/studiomate-refund-sms-queue.test.mjs scripts/tests/refund-live-ui-contract.test.mjs
+
       - name: Test staff and member contact precedence
         run: npm run test:contact-staff-precedence
 

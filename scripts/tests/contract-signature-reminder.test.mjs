@@ -10,9 +10,12 @@ import {
   contractReminderDiagnosticText,
 } from "../lib/contract-signature-reminder.mjs";
 import { assertContractReminderSmsResponse } from "../lib/contract-signature-reminder-browser.mjs";
+import { MEMBER_SMS_PROVIDER_POLICY, memberSmsReceiptFields, acceptedMemberSmsMarker } from "../lib/member-sms-solapi.mjs";
+import { MemberDispatchDeferredError } from "../lib/member-dispatch-window.mjs";
 
 const ID = "a".repeat(64);
 const NOW = "2026-10-20T01:00:00.000Z";
+const SOLAPI_SUBJECT = "ARCHIVE PILATES 서명 안내";
 const SENT = "2026-10-19T01:00:00.000Z";
 const SETTINGS = "systemSettings/membershipContractAutomation";
 const CONTRACT = `studiomateMembershipContracts/${ID}`;
@@ -162,19 +165,37 @@ function responseFixture(plan) {
   };
 }
 
-function fakeBrowserAdapter({ beforeConfirm, afterClaim, responseMutation, responseError } = {}) {
+function solapiReceipt(plan, statusCode = "2000") {
+  const providerMessageId = `M${"1".repeat(25)}`, providerGroupId = `G${"2".repeat(25)}`;
+  const hash = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return {
+    provider: "solapi", providerMessageId, providerGroupId,
+    providerReceipt: {
+      policy: MEMBER_SMS_PROVIDER_POLICY, actionKey: plan.key,
+      messageId: providerMessageId, groupId: providerGroupId,
+      recipientHash: hash(plan.memberPhone), contentHash: hash([SOLAPI_SUBJECT, plan.smsMessage, plan.imageId || ""]),
+      statusCode, acceptedAt: NOW,
+    },
+  };
+}
+
+function fakeBrowserAdapter({ beforeConfirm, afterClaim, afterStart, responseMutation, responseError, receiptFor } = {}) {
   const state = { prepared: 0, sends: 0, plans: [], events: [] };
   state.sendSms = async (plan, beforeFinalSend) => {
     state.prepared++;
     state.plans.push(clone(plan));
     state.events.push("compose");
     await beforeConfirm?.(plan);
-    await beforeFinalSend();
+    const markStarted = await beforeFinalSend();
+    assert.equal(typeof markStarted, "function");
     state.events.push("claim_committed");
     await afterClaim?.(plan);
+    markStarted();
+    await afterStart?.(plan);
     state.sends++;
     state.events.push("final_confirm");
     if (responseError) throw responseError;
+    if (receiptFor) return receiptFor(plan);
     const response = responseFixture(plan);
     responseMutation?.(response);
     assertContractReminderSmsResponse(response, plan);
@@ -430,6 +451,182 @@ test("fresh and stale reruns of the same contract cannot replace an accepted cla
   const saved = h.db.read(CONTRACT);
   assert.equal((await h.run({ source: saved })).reason, "reminder_already_recorded");
   assert.equal((await h.run()).reason, "source_or_claim_unverified");
+  assert.equal(h.browser.sends, 1);
+  assert.deepEqual(h.db.read(CONTRACT), saved);
+});
+
+for (const statusCode of ["2000", "4000"]) test(`SOLAPI ${statusCode} receipt preserves the contract claim and hashes without replay`, async () => {
+  const h = harness({ browserOptions: { receiptFor: plan => solapiReceipt(plan, statusCode) } });
+  const plan = planContractSignatureReminder(h.source, ID, new Date(NOW));
+  const receipt = solapiReceipt(plan, statusCode);
+  assert.deepEqual(await h.run(), {
+    status: "accepted", contractId: ID, stage: "postclaim", ...receipt,
+  });
+  const saved = h.db.read(CONTRACT), marker = saved.signatureReminder;
+  const claim = h.db.commits[0][0].patch.signatureReminder;
+  assert.equal(marker.key, `contract_signature_reminder_${ID}`);
+  assert.equal(marker.key, claim.key);
+  assert.equal(marker.fingerprint, claim.fingerprint);
+  assert.equal(marker.attempts, 1);
+  assert.equal(marker.deliveryStatus, "not_verified");
+  assert.equal(marker.smsId, undefined);
+  assert.deepEqual(memberSmsReceiptFields(marker, plan, { subject: SOLAPI_SUBJECT }), receipt);
+  assert.throws(() => memberSmsReceiptFields(marker, plan), /member_sms_receipt_unverified/);
+  assert.deepEqual(marker.providerReceipt, receipt.providerReceipt);
+  assert.equal(acceptedMemberSmsMarker(marker), true);
+  const commits = clone(h.db.commits), reads = h.state.reads;
+  assert.equal((await h.run({ source: saved })).reason, "reminder_already_recorded");
+  assert.equal(h.state.reads, reads);
+  assert.equal((await h.run()).reason, "source_or_claim_unverified");
+  assert.equal(h.browser.sends, 1);
+  assert.deepEqual(h.db.read(CONTRACT), saved);
+  assert.deepEqual(h.db.commits, commits);
+});
+
+for (const [label, mutate] of [
+  ["invalid message ID", r => { r.providerMessageId = "Mbad"; r.providerReceipt.messageId = "Mbad"; }],
+  ["invalid group ID", r => { r.providerGroupId = "Gbad"; r.providerReceipt.groupId = "Gbad"; }],
+  ["message ID mismatch", r => { r.providerReceipt.messageId = `M${"3".repeat(25)}`; }],
+  ["group ID mismatch", r => { r.providerReceipt.groupId = `G${"3".repeat(25)}`; }],
+  ["wrong canonical key", r => { r.providerReceipt.actionKey = "different_action"; }],
+  ["wrong recipient hash", r => { r.providerReceipt.recipientHash = "a".repeat(64); }],
+  ["wrong content hash", r => { r.providerReceipt.contentHash = "b".repeat(64); }],
+  ["wrong policy", r => { r.providerReceipt.policy = "other_policy"; }],
+  ["rejected status", r => { r.providerReceipt.statusCode = "5000"; }],
+  ["numeric status", r => { r.providerReceipt.statusCode = 2000; }],
+  ["missing proof", r => { delete r.providerReceipt; }],
+  ["unsupported provider with legacy ID", r => { r.provider = "other"; r.smsId = 404; }],
+]) test(`SOLAPI ${label} leaves the contract in review and is never replayed`, async () => {
+  const h = harness({ browserOptions: { receiptFor: plan => {
+    const receipt = solapiReceipt(plan);
+    mutate(receipt);
+    return receipt;
+  } } });
+  assert.deepEqual(await h.run(), {
+    status: "review", contractId: ID, stage: "postclaim", reason: "send_outcome_unknown",
+  });
+  const saved = h.db.read(CONTRACT), marker = saved.signatureReminder;
+  assert.equal(marker.status, "review");
+  assert.equal(marker.attempts, 1);
+  for (const key of ["acceptedAt", "smsId", "providerMessageId", "providerGroupId", "providerReceipt"])
+    assert.equal(marker[key], undefined);
+  assert.equal((await h.run({ source: saved })).reason, "prior_attempt_requires_reconciliation");
+  assert.equal((await h.run()).reason, "source_or_claim_unverified");
+  assert.equal(h.browser.sends, 1);
+  assert.deepEqual(h.db.read(CONTRACT), saved);
+});
+
+test("historical numeric accepted contract receipt is skipped without source reads or sends", async () => {
+  const source = sourceFixture();
+  source.signatureReminder = {
+    key: `contract_signature_reminder_${ID}`, status: "accepted", smsId: 404,
+  };
+  const h = harness({ source });
+  assert.equal(acceptedMemberSmsMarker(source.signatureReminder), true);
+  assert.equal((await h.run()).reason, "reminder_already_recorded");
+  assert.equal(h.state.reads, 0);
+  assert.equal(h.browser.prepared, 0);
+  assert.equal(h.browser.sends, 0);
+  assert.equal(h.db.commits.length, 0);
+  assert.deepEqual(h.db.read(CONTRACT), source);
+});
+
+function deferredReminderSource() {
+  const source = sourceFixture();
+  const plan = planContractSignatureReminder(source, ID, new Date(NOW));
+  source.signatureReminder = {
+    policy: CONTRACT_REMINDER_POLICY, key: plan.key, fingerprint: plan.fingerprint,
+    status: "deferred", attempts: 0, deferredBeforeTransport: true,
+    dispatchToken: "synthetic-zero-post-claim", attemptedAt: NOW,
+    deferrals: [{ dispatchToken: "synthetic-zero-post-claim", attemptedAt: NOW,
+      fingerprint: plan.fingerprint, deferredAt: NOW, providerPostCount: 0 }],
+  };
+  return source;
+}
+
+const deferredProviderFields = ["smsId", "providerMessageId", "providerGroupId", "providerReceipt", "providerRequestId"];
+for (const [field, value] of [
+  ["providerGroupId", `G${"2".repeat(25)}`],
+  ["providerRequestId", "synthetic-provider-request"],
+  ...deferredProviderFields.flatMap(field => ["", 0, false, "invalid", {}].map(value => [field, value])),
+]) test(`deferred contract with only ${field}=${JSON.stringify(value)} cannot resume or replay`, async () => {
+  const source = deferredReminderSource();
+  source.signatureReminder[field] = value;
+  const before = clone(source);
+  assert.deepEqual(planContractSignatureReminder(source, ID, new Date(NOW)), {
+    status: "skipped", reason: "reminder_already_recorded",
+  });
+  const h = harness({ source });
+  for (let run = 0; run < 2; run++) assert.deepEqual(await h.run(), {
+    status: "skipped", reason: "reminder_already_recorded",
+  });
+  assert.equal(h.state.reads, 0);
+  assert.equal(h.browser.prepared, 0);
+  assert.equal(h.browser.sends, 0);
+  assert.equal(h.db.commits.length, 0);
+  assert.deepEqual(h.db.read(CONTRACT), before);
+  assert.deepEqual(source, before);
+});
+
+for (const value of [null, undefined]) test(`zero-POST contract deferral with ${value} provider fields remains eligible`, () => {
+  const source = deferredReminderSource();
+  for (const field of deferredProviderFields) source.signatureReminder[field] = value;
+  const before = clone(source);
+  assert.equal(planContractSignatureReminder(source, ID, new Date(NOW)).status, "ready");
+  assert.deepEqual(source, before);
+});
+
+test("post-mark quiet error with proven zero POSTs defers the contract without consuming its attempt", async () => {
+  let clock = NOW, crossed = false;
+  const night = "2026-10-20T23:00:00+09:00";
+  const h = harness({ browserOptions: { afterStart: () => {
+    if (crossed) return;
+    crossed = true;
+    clock = night;
+    throw Object.assign(new MemberDispatchDeferredError(Date.parse(night)), { providerPostCount: 0 });
+  } } });
+  const run = () => h.run({ source: h.db.read(CONTRACT), now: () => new Date(clock),
+    readLive: async () => liveFixture(h.source, new Date(clock).toISOString()) });
+  const result = await run();
+  assert.equal(crossed, true);
+  assert.equal(result.status, "deferred");
+  assert.equal(result.nextAllowedAt, "2026-10-21T00:00:00.000Z");
+  const deferred = h.db.read(CONTRACT).signatureReminder;
+  assert.equal(deferred.status, "deferred");
+  assert.equal(deferred.attempts, 0);
+  assert.equal(deferred.deferredBeforeTransport, true);
+  assert.equal(deferred.deferrals.at(-1).providerPostCount, 0);
+  for (const key of ["smsId", "acceptedAt", "providerMessageId", "providerGroupId", "providerReceipt", "sendClickedAt"])
+    assert.equal(deferred[key], undefined);
+  assert.equal(h.browser.sends, 0);
+  const commits = clone(h.db.commits);
+  assert.equal((await run()).status, "deferred");
+  assert.deepEqual(h.db.commits, commits);
+  assert.deepEqual(h.db.read(CONTRACT).signatureReminder, deferred);
+  clock = "2026-10-21T09:00:00+09:00";
+  assert.equal((await run()).status, "accepted");
+  const accepted = h.db.read(CONTRACT).signatureReminder;
+  assert.equal(accepted.key, deferred.key);
+  assert.equal(accepted.fingerprint, deferred.fingerprint);
+  assert.notEqual(accepted.dispatchToken, deferred.dispatchToken);
+  assert.equal(accepted.attempts, 1);
+  assert.deepEqual(accepted.deferrals, deferred.deferrals);
+  assert.equal((await run()).reason, "reminder_already_recorded");
+  assert.equal(h.browser.sends, 1);
+});
+
+for (const providerPostCount of [undefined, 1]) test(`post-mark contract quiet error with POST count ${providerPostCount} stays review without replay`, async () => {
+  const error = new MemberDispatchDeferredError(Date.parse("2026-10-20T23:00:00+09:00"));
+  if (providerPostCount !== undefined) error.providerPostCount = providerPostCount;
+  const h = harness({ browserOptions: { responseError: error } });
+  const result = await h.run();
+  assert.equal(result.status, "review");
+  assert.equal(result.reason, "send_outcome_unknown");
+  const saved = h.db.read(CONTRACT);
+  assert.equal(saved.signatureReminder.status, "review");
+  assert.equal(saved.signatureReminder.attempts, 1);
+  assert.equal(saved.signatureReminder.deferrals.length, 0);
+  assert.equal((await h.run({ source: saved })).reason, "prior_attempt_requires_reconciliation");
   assert.equal(h.browser.sends, 1);
   assert.deepEqual(h.db.read(CONTRACT), saved);
 });

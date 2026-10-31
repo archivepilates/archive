@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { isMemberDispatchDeferred } from './member-dispatch-window.mjs';
 import { contractReminderDispatchWindow, assertContractReminderDispatchAllowed } from './contract-signature-reminder-window.mjs';
 import { INSTRUCTOR_SIGNATURE_REMINDER_POLICY, planInstructorSignatureReminder, assertInstructorSignatureReminderLive } from './instructor-signature-reminder.mjs';
+import { memberSmsReceiptFields, acceptedMemberSmsMarker } from './member-sms-solapi.mjs';
 
 const JOBS = 'eformsignInstructorMemberJobs';
 const REGISTRATIONS = 'instructorLessonRegistrations';
@@ -10,7 +11,7 @@ const stop = reason => { throw Object.assign(new Error(reason), { reminderSkip: 
 export function instructorReminderSelectionResult(id, job, plan) {
   const row = job?.signatureReminder;
   if (plan.reason === 'reminder_already_recorded' && !(row?.status === 'accepted'
-    && row.key === `instructor_signature_reminder_${job.documentId}` && Number.isSafeInteger(row.smsId) && row.smsId > 0))
+    && row.key === `instructor_signature_reminder_${job.documentId}` && acceptedMemberSmsMarker(row)))
     return { status: 'review', stage: 'postclaim', reason: plan.reason, jobId: id, documentId: job.documentId };
   return { status: plan.status, reason: plan.reason, jobId: id };
 }
@@ -75,7 +76,7 @@ export async function processInstructorSignatureReminder({ db, id, readLive, sen
         attemptedAt = now().toISOString();
         tx.update(ref, { signatureReminder: {
           policy: INSTRUCTOR_SIGNATURE_REMINDER_POLICY, key: plan.key, documentId: plan.documentId,
-          fingerprint: plan.fingerprint, status: 'attempting', attempts: 1,
+          fingerprint: plan.fingerprint, status: 'attempting', attempts: 1, transportProvider: 'solapi',
           dispatchToken, attemptedAt, originalSentAt: plan.sentAt, dueAt: plan.dueAt,
           memberId: plan.memberId, deferrals: job.signatureReminder?.deferrals || [], updatedAt: attemptedAt,
         } });
@@ -89,12 +90,14 @@ export async function processInstructorSignatureReminder({ db, id, readLive, sen
         dispatchStarted = true;
       };
     });
-    if (!claimed || !dispatchStarted || !Number.isSafeInteger(receipt?.smsId) || receipt.smsId <= 0)
+    if (!claimed || !dispatchStarted)
       throw new Error('instructor_reminder_sms_receipt_unverified');
-    const accepted = await settle({ status: 'accepted', smsId: receipt.smsId, acceptedAt: now().toISOString(), deliveryStatus: 'not_verified' });
-    return { status: 'accepted', jobId: id, documentId: plan.documentId, smsId: accepted.smsId, deliveryStatus: 'not_verified' };
+    const fields = memberSmsReceiptFields(receipt, plan, { subject: 'ARCHIVE PILATES 가입서 안내' });
+    const accepted = await settle({ status: 'accepted', ...fields, acceptedAt: now().toISOString(), deliveryStatus: 'not_verified' });
+    return { status: 'accepted', jobId: id, documentId: plan.documentId,
+      ...memberSmsReceiptFields(accepted, plan, { subject: 'ARCHIVE PILATES 가입서 안내' }), deliveryStatus: 'not_verified' };
   } catch (error) {
-    if (isMemberDispatchDeferred(error) && !dispatchStarted) {
+    if (isMemberDispatchDeferred(error) && (!dispatchStarted || error.providerPostCount === 0)) {
       if (claimed) {
         const window = contractReminderDispatchWindow(now());
         const marker = (await ref.get()).data()?.signatureReminder;
@@ -111,11 +114,11 @@ export async function processInstructorSignatureReminder({ db, id, readLive, sen
       try {
         const row = await settle({ status: 'review', reason });
         if (row.status === 'accepted') return { status: 'accepted', jobId: id, documentId: plan.documentId,
-          smsId: row.smsId, deliveryStatus: 'not_verified' };
+          ...memberSmsReceiptFields(row, plan, { subject: 'ARCHIVE PILATES 가입서 안내' }), deliveryStatus: 'not_verified' };
       } catch { reason = 'send_outcome_unknown_journal_unavailable'; }
     }
     const code = error.code || error.message;
-    const sourceCode = /^(?:instructor_(?:signature_reminder|reminder)_[a-z_]+|contract_reminder_[a-z_]+|INSTRUCTOR_ORDER_[A-Z_]+)$/.test(code)
+    const sourceCode = /^(?:instructor_(?:signature_reminder|reminder)_[a-z_]+|contract_reminder_[a-z_]+|member_sms_[a-z_]+|INSTRUCTOR_ORDER_[A-Z_]+)$/.test(code)
       ? code : 'unverified';
     return { status: 'review', stage: claimed ? 'postclaim' : 'preclaim', reason, sourceCode, jobId: id, documentId: plan.documentId };
   }

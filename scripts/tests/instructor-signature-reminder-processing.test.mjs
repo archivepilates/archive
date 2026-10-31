@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { createHash } from "node:crypto";
+import { after, before, test } from "node:test";
 import { processInstructorSignatureReminder } from "../lib/instructor-signature-reminder-processing.mjs";
 import { INSTRUCTOR_SIGNATURE_REMINDER_POLICY } from "../lib/instructor-signature-reminder.mjs";
 import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID as TEMPLATE } from "../lib/instructor-lesson-registration-contract.mjs";
 import { assertContractReminderDispatchAllowed } from "../lib/contract-signature-reminder-window.mjs";
+import { MEMBER_SMS_PROVIDER_POLICY, memberSmsReceiptFields, acceptedMemberSmsMarker } from "../lib/member-sms-solapi.mjs";
+import { MemberDispatchDeferredError } from "../lib/member-dispatch-window.mjs";
 
 const JOBS = "eformsignInstructorMemberJobs";
 const REGISTRATIONS = "instructorLessonRegistrations";
@@ -11,8 +14,29 @@ const ID = `ilr_${"a".repeat(24)}`;
 const PEER = `ilr_${"c".repeat(24)}`;
 const DOCUMENT = "b".repeat(32);
 const NOW = "2026-10-30T00:00:00.000Z";
+const SOLAPI_SUBJECT = "ARCHIVE PILATES 가입서 안내";
 const SENT = "2026-10-29T00:00:00.000Z";
 const copy = value => structuredClone(value);
+let originalFetch;
+before(() => {
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error("External network is forbidden in reminder unit tests"); };
+});
+after(() => { globalThis.fetch = originalFetch; });
+
+function solapiReceipt(plan, statusCode = "2000") {
+  const providerMessageId = `M${"1".repeat(25)}`, providerGroupId = `G${"2".repeat(25)}`;
+  const hash = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return {
+    provider: "solapi", providerMessageId, providerGroupId,
+    providerReceipt: {
+      policy: MEMBER_SMS_PROVIDER_POLICY, actionKey: plan.key,
+      messageId: providerMessageId, groupId: providerGroupId,
+      recipientHash: hash(plan.memberPhone), contentHash: hash([SOLAPI_SUBJECT, plan.smsMessage, plan.imageId || ""]),
+      statusCode, acceptedAt: NOW,
+    },
+  };
+}
 
 function fixture(id = ID) {
   return {
@@ -151,6 +175,7 @@ function harness({ fixtures = [fixture()], clock = NOW, afterCommit } = {}) {
     assertContractReminderDispatchAllowed(now());
     await hooks.beforeTransport?.(plan);
     markStarted();
+    await hooks.afterStarted?.(plan);
     stats.providerPostCount += 1;
     const receipt = hooks.transport ? await hooks.transport(plan) : { smsId: 101 };
     stats.receipts.push(copy(receipt));
@@ -249,6 +274,156 @@ test("an accepted receipt is recorded once and the same job cannot be replayed",
   assert.equal(h.stats.providerPostCount, 1);
   assert.equal(h.stats.receipts.length, 1);
   assert.equal(h.stats.liveReads, 2);
+});
+
+for (const statusCode of ["2000", "4000"]) test(`SOLAPI ${statusCode} receipt preserves the instructor claim and hashes without replay`, async () => {
+  const h = harness();
+  let plan, receipt;
+  h.hooks.transport = current => {
+    plan = copy(current);
+    receipt = solapiReceipt(plan, statusCode);
+    return receipt;
+  };
+  assert.deepEqual(await h.run(), {
+    status: "accepted", jobId: ID, documentId: DOCUMENT,
+    ...receipt, deliveryStatus: "not_verified",
+  });
+  const marker = h.marker(), claim = h.db.metrics.commits[0][0].value.signatureReminder;
+  assert.equal(marker.key, `instructor_signature_reminder_${DOCUMENT}`);
+  assert.equal(marker.key, claim.key);
+  assert.equal(marker.fingerprint, claim.fingerprint);
+  assert.equal(marker.attempts, 1);
+  assert.equal(marker.deliveryStatus, "not_verified");
+  assert.equal(marker.smsId, undefined);
+  assert.deepEqual(memberSmsReceiptFields(marker, plan, { subject: SOLAPI_SUBJECT }), receipt);
+  assert.throws(() => memberSmsReceiptFields(marker, plan), /member_sms_receipt_unverified/);
+  assert.deepEqual(marker.providerReceipt, receipt.providerReceipt);
+  assert.equal(acceptedMemberSmsMarker(marker), true);
+  const before = copy(h.stats), commits = copy(h.db.metrics.commits);
+  assert.deepEqual(await h.run(), { status: "skipped", reason: "reminder_already_recorded", jobId: ID });
+  assert.deepEqual(h.stats, before);
+  assert.deepEqual(h.db.metrics.commits, commits);
+  assert.deepEqual(h.marker(), marker);
+  assert.equal(h.stats.providerPostCount, 1);
+});
+
+for (const [label, mutate] of [
+  ["invalid message ID", r => { r.providerMessageId = "Mbad"; r.providerReceipt.messageId = "Mbad"; }],
+  ["invalid group ID", r => { r.providerGroupId = "Gbad"; r.providerReceipt.groupId = "Gbad"; }],
+  ["message ID mismatch", r => { r.providerReceipt.messageId = `M${"3".repeat(25)}`; }],
+  ["group ID mismatch", r => { r.providerReceipt.groupId = `G${"3".repeat(25)}`; }],
+  ["wrong canonical key", r => { r.providerReceipt.actionKey = "different_action"; }],
+  ["wrong recipient hash", r => { r.providerReceipt.recipientHash = "a".repeat(64); }],
+  ["wrong content hash", r => { r.providerReceipt.contentHash = "b".repeat(64); }],
+  ["wrong policy", r => { r.providerReceipt.policy = "other_policy"; }],
+  ["rejected status", r => { r.providerReceipt.statusCode = "5000"; }],
+  ["numeric status", r => { r.providerReceipt.statusCode = 2000; }],
+  ["missing proof", r => { delete r.providerReceipt; }],
+  ["unsupported provider with legacy ID", r => { r.provider = "other"; r.smsId = 101; }],
+]) test(`SOLAPI ${label} leaves the instructor job in review and is never replayed`, async () => {
+  const h = harness();
+  h.hooks.transport = plan => {
+    const receipt = solapiReceipt(plan);
+    mutate(receipt);
+    return receipt;
+  };
+  const result = await h.run();
+  assert.equal(result.status, "review");
+  assert.equal(result.stage, "postclaim");
+  assert.equal(result.reason, "send_outcome_unknown");
+  const marker = h.marker();
+  assert.equal(marker.status, "review");
+  assert.equal(marker.attempts, 1);
+  for (const key of ["acceptedAt", "smsId", "providerMessageId", "providerGroupId", "providerReceipt"])
+    assert.equal(marker[key], undefined);
+  const before = copy(h.stats), commits = copy(h.db.metrics.commits);
+  const rerun = await h.run();
+  assert.equal(rerun.status, "review");
+  assert.equal(rerun.reason, "reminder_already_recorded");
+  assert.deepEqual(h.stats, before);
+  assert.deepEqual(h.db.metrics.commits, commits);
+  assert.deepEqual(h.marker(), marker);
+  assert.equal(h.stats.providerPostCount, 1);
+});
+
+test("historical numeric accepted instructor receipt is skipped without live reads or sends", async () => {
+  const f = fixture();
+  f.job.signatureReminder = {
+    key: `instructor_signature_reminder_${DOCUMENT}`, status: "accepted", smsId: 101,
+  };
+  const h = harness({ fixtures: [f] });
+  assert.equal(acceptedMemberSmsMarker(h.marker()), true);
+  assert.deepEqual(await h.run(), { status: "skipped", reason: "reminder_already_recorded", jobId: ID });
+  assert.equal(h.stats.liveReads, 0);
+  assert.equal(h.stats.sendCalls, 0);
+  assert.equal(h.stats.providerPostCount, 0);
+  assert.equal(h.db.metrics.transactions, 0);
+  assert.deepEqual(h.marker(), f.job.signatureReminder);
+});
+
+test("post-mark quiet error with proven zero POSTs defers the instructor job without consuming its attempt", async () => {
+  const h = harness();
+  let marked = false;
+  h.hooks.afterStarted = () => {
+    marked = true;
+    const night = "2026-10-30T23:00:00+09:00";
+    h.setClock(night);
+    throw Object.assign(new MemberDispatchDeferredError(Date.parse(night)), { providerPostCount: 0 });
+  };
+  const result = await h.run();
+  assert.equal(marked, true);
+  assert.equal(result.status, "deferred");
+  assert.equal(result.nextAllowedAt, "2026-10-31T00:00:00.000Z");
+  const deferred = h.marker();
+  assert.equal(deferred.status, "deferred");
+  assert.equal(deferred.attempts, 0);
+  assert.equal(deferred.deferredBeforeTransport, true);
+  assert.equal(deferred.providerPostCount, 0);
+  assert.equal(deferred.deferrals.at(-1).providerPostCount, 0);
+  for (const key of ["smsId", "acceptedAt", "providerMessageId", "providerGroupId", "providerReceipt", "sendClickedAt"])
+    assert.equal(deferred[key], undefined);
+  assert.equal(h.stats.providerPostCount, 0);
+  assert.equal(h.stats.receipts.length, 0);
+  const before = copy(h.stats), commits = copy(h.db.metrics.commits);
+  await h.run();
+  assert.deepEqual(h.stats, before);
+  assert.deepEqual(h.db.metrics.commits, commits);
+  assert.deepEqual(h.marker(), deferred);
+  delete h.hooks.afterStarted;
+  h.setClock("2026-10-31T09:00:00+09:00");
+  assert.equal((await h.run()).status, "accepted");
+  const accepted = h.marker();
+  assert.equal(accepted.key, deferred.key);
+  assert.equal(accepted.fingerprint, deferred.fingerprint);
+  assert.notEqual(accepted.dispatchToken, deferred.dispatchToken);
+  assert.equal(accepted.attempts, 1);
+  assert.deepEqual(accepted.deferrals, deferred.deferrals);
+  assert.equal((await h.run()).reason, "reminder_already_recorded");
+  assert.equal(h.stats.providerPostCount, 1);
+});
+
+for (const providerPostCount of [undefined, 1]) test(`post-mark instructor quiet error with POST count ${providerPostCount} stays review without replay`, async () => {
+  const h = harness();
+  h.hooks.transport = () => {
+    const night = "2026-10-30T23:00:00+09:00";
+    h.setClock(night);
+    const error = new MemberDispatchDeferredError(Date.parse(night));
+    if (providerPostCount !== undefined) error.providerPostCount = providerPostCount;
+    throw error;
+  };
+  const result = await h.run();
+  assert.equal(result.status, "review");
+  assert.equal(result.reason, "send_outcome_unknown");
+  const marker = h.marker();
+  assert.equal(marker.status, "review");
+  assert.equal(marker.attempts, 1);
+  assert.equal(marker.deferrals.length, 0);
+  const before = copy(h.stats);
+  h.setClock("2026-10-31T09:00:00+09:00");
+  assert.equal((await h.run()).reason, "reminder_already_recorded");
+  assert.deepEqual(h.stats, before);
+  assert.equal(h.stats.providerPostCount, 1);
+  assert.deepEqual(h.marker(), marker);
 });
 
 for (const [label, patch] of [

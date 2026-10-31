@@ -4,9 +4,8 @@ import { readPendingInstructorSignupEvidence } from './instructor-signature-remi
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { captureStudioMateNativeApiClient, readExactStudioMateMember, readStudioMateUserTickets } from './studiomate-native-contract-source.mjs';
 import { readSignupMemberIdentity } from './instructor-signup-order-identity.mjs';
-import { sendContractReminderSms } from './contract-signature-reminder-browser.mjs';
+import { sendMemberSms } from './member-sms-solapi.mjs';
 import { contractReminderDispatchWindow, assertContractReminderDispatchAllowed } from './contract-signature-reminder-window.mjs';
-import { MemberDispatchDeferredError } from './member-dispatch-window.mjs';
 import { verifyInstructorPaidOrder } from './imweb-instructor-order-source.mjs';
 
 export function instructorReminderScheduled({ apply, jobId, loginOnly, refreshCompletedFields, recheckCompletedDocument }) {
@@ -47,18 +46,16 @@ export async function runInstructorSignatureReminder({ db, id, eformPage, apply,
     return plan.status === 'ready' ? { status: 'dry_run', reason: plan.reason, jobId: id }
       : instructorReminderSelectionResult(id, initial.job, plan);
   let context, release, documentPage;
-  const transport = createInstructorReminderTransportGuard({ now });
   try {
     release = await acquireStudioMateBrowserLock({ owner: 'instructor-signature-reminder', waitMs: 10000 });
     const { chromium } = await import('playwright');
     context = await chromium.launchPersistentContext(`${process.env.HOME}/ArchiveIN/automation/browser-profile`, {
       headless: true, serviceWorkers: 'block', acceptDownloads: false,
     });
-    await context.route('**/*', route => transport.allows(route.request()) ? route.continue() : route.abort());
+    await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort());
     const bootstrap = await context.newPage();
     const api = await captureStudioMateNativeApiClient(bootstrap);
     documentPage = await eformPage.context().newPage();
-    const smsPage = await context.newPage();
     return await processInstructorSignatureReminder({
       db, id, apply, scheduled, now,
       readLive: async ({ job, registration }) => {
@@ -95,17 +92,8 @@ export async function runInstructorSignatureReminder({ db, id, eformPage, apply,
         } finally { await identityPage.close(); }
       },
       sendSms: async (currentPlan, beforeFinalSend) => {
-        try {
-          return await sendContractReminderSms(smsPage, currentPlan, async () => {
-            const markTransportStarted = await beforeFinalSend();
-            assertContractReminderDispatchAllowed(now());
-            return () => transport.arm(currentPlan, markTransportStarted);
-          }, { now: () => now().getTime() });
-        } catch (error) {
-          if (transport.error) throw transport.error;
-          if (transport.windowDenied && transport.postCount === 0) throw new MemberDispatchDeferredError(now());
-          throw error;
-        } finally { transport.disarm(); }
+        return sendMemberSms(currentPlan, beforeFinalSend, { subject: 'ARCHIVE PILATES 가입서 안내',
+          assertAllowed: () => assertContractReminderDispatchAllowed(now()) });
       },
     });
   } catch (error) {

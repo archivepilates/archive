@@ -6,6 +6,7 @@ on:
       - 'services/archive-core-mcp/**'
       - 'scripts/release-core-mcp-rules.mjs'
       - 'scripts/tests/core-mcp-rules-ui.test.mjs'
+      - 'scripts/tests/solapi-sms-rules-ui.test.mjs'
       - 'scripts/test-core-meal-mcp.mjs'
       - 'scripts/tests/core-meal-mcp.test.mjs'
       - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
@@ -32,6 +33,7 @@ on:
       - 'services/archive-core-mcp/**'
       - 'scripts/release-core-mcp-rules.mjs'
       - 'scripts/tests/core-mcp-rules-ui.test.mjs'
+      - 'scripts/tests/solapi-sms-rules-ui.test.mjs'
       - 'scripts/test-core-meal-mcp.mjs'
       - 'scripts/tests/core-meal-mcp.test.mjs'
       - 'scripts/tests/new-instructor-ticket-rules-release.test.mjs'
@@ -87,6 +89,7 @@ jobs:
       - run: node --test scripts/tests/core-meal-mcp.test.mjs scripts/tests/new-instructor-ticket-rules-release.test.mjs scripts/tests/instructor-intake-rules-release.test.mjs scripts/tests/lesson-identity-rules-release.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: node --test scripts/tests/core-mcp-rules-ui.test.mjs
+      - run: node --test scripts/tests/solapi-sms-rules-ui.test.mjs
       - run: node --test scripts/tests/core-instructor-waitlist-ui.test.mjs scripts/tests/core-team-instructor-intake-ui.test.mjs scripts/tests/core-team-instructor-fulfillment-ui.test.mjs
       - run: node --test scripts/tests/core-instructor-method-titles.test.mjs scripts/tests/instructor-lesson-cancellation-ui.test.mjs scripts/tests/instructor-method-title-release.test.mjs
       - run: node scripts/build-team-261121-calendar.mjs --check && node --test scripts/tests/team-261121-calendar.test.mjs scripts/tests/team-calendar-release.test.mjs

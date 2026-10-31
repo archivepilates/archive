@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
-import { classifyStudioMateSmsSendEvidence } from "../lib/studiomate-refund-sms-contract.mjs";
-import { assertMemberDispatchAllowed } from "../lib/member-dispatch-window.mjs";
+import { assertMemberDispatchAllowed, isMemberDispatchDeferred } from "../lib/member-dispatch-window.mjs";
+import { createMemberSmsSender, memberSmsReceiptFields } from "../lib/member-sms-solapi.mjs";
 
 const eformSource = await readFile(new URL("../process-eformsign-refund-jobs.mjs", import.meta.url), "utf8");
 const smsSource = await readFile(new URL("../process-studiomate-refund-sms-jobs.mjs", import.meta.url), "utf8");
@@ -103,7 +103,7 @@ test("agreement flow waits for optional signature OK and requires 8/8 without an
   assert.ok(flow.indexOf("await beforeFinalSend()") < flow.indexOf("await finalSendButton.click()"));
 });
 
-const job = { studioId: "5330", memberName: "테스트회원", memberPhone: "01000000000", smsTitle: "ARCHIVE PILATES 환불 안내", smsMessage: "승인된 이전 견적 292,500원. 실제 지급 전." };
+const job = { jobId: "refund_sms_fixture", caseId: "refund_case_fixture", studioId: "5330", memberName: "테스트회원", memberPhone: "01000000000", smsTitle: "ARCHIVE PILATES 환불 안내", smsMessage: "승인된 이전 견적 292,500원. 실제 지급 전." };
 const nativeId = "1001";
 const confirmationText = "메시지 보내기1건을 즉시 발송합니다! LMS 총1건\n유형 LMS 총1건\n메시지를 보내시겠습니까? 취소 확인";
 const smsFunctions = ["assertRefundSmsRecipient", "textboxWithPlaceholder", "refundSmsConfirmation", "assertRefundSmsResponse"];
@@ -165,76 +165,201 @@ test("SMS acceptance binds native target, request/response content, and positive
   }
 });
 
-test("SMS composer opens confirmation before final source check, then awaits exact POST JSON before accepting", async () => {
+test("refund wrapper uses the canonical SOLAPI sender after source/claim checks without touching SMS UI", async () => {
   const events = [];
-  const result = receipt();
-  let respond;
-  const response = {
-    url: () => result.url, status: () => result.status,
-    request: () => ({ method: () => "POST", postDataJSON: () => result.requestPayload }),
-    json: async () => { await Promise.resolve(); events.push("json-read"); return result.body; },
+  const page = new Proxy({}, { get: () => assert.fail("SMS wrapper must not access the browser") });
+  const providerMessageId = `M${"1".repeat(24)}`, providerGroupId = `G${"2".repeat(24)}`;
+  let posts = 0, invalidReceipt = false;
+  const sendMemberSms = (plan, beforeFinalSend, { assertAllowed }) => {
+    assert.equal(plan.key, job.jobId);
+    assert.deepEqual(JSON.parse(JSON.stringify(plan)), { ...job, key: job.jobId });
+    return createMemberSmsSender({
+      senderNumber: "0200000000", now: () => new Date("2026-10-22T03:00:00Z"), assertAllowed,
+      request: async (url, method, body) => {
+        if (method === "GET" && url === "/senderid/v1/numbers/active") return ["0200000000"];
+        if (method === "GET" && url.startsWith("/messages/v4/list?")) return { messageList: {} };
+        assert.equal(method, "POST");
+        assert.equal(url, "/messages/v4/send-many/detail");
+        assert.equal(events.at(-1), "dispatch-window-check");
+        assert.ok(events.lastIndexOf("transport-start") < events.lastIndexOf("dispatch-window-check"));
+        assert.equal(body.messages.length, 1);
+        assert.equal(body.messages[0].to, job.memberPhone);
+        assert.equal(body.messages[0].subject, job.smsTitle);
+        assert.equal(body.messages[0].text, job.smsMessage);
+        assert.equal(body.messages[0].customFields.archiveActionKey, job.jobId);
+        assert.equal(body.allowDuplicates, false);
+        posts++; events.push("provider-post");
+        return { messageList: [{ messageId: invalidReceipt ? "bad" : providerMessageId, statusCode: "2000" }],
+          failedMessageList: [], groupInfo: { groupId: providerGroupId } };
+      },
+    })(plan, beforeFinalSend);
   };
-  const boxes = [
-    { placeholder: "받는 사람을 선택해주세요.", value: job.memberName },
-    { placeholder: "제목을 입력해주세요." }, { placeholder: "메시지를 입력해주세요." },
-  ].map((box) => ({
-    getAttribute: async (name) => name === "placeholder" ? box.placeholder : "",
-    inputValue: async () => box.value,
-    fill: async (value) => { events.push(box.placeholder); box.value = value; },
-  }));
-  const dialog = {
-    waitFor: async ({ state }) => { events.push(`composer-${state}`); },
-    isVisible: async () => false,
-    getByRole: (role, options) => {
-      if (role === "textbox") return { count: async () => boxes.length, nth: (index) => boxes[index] };
-      if (options.name === "SMS 보내기") return { isVisible: async () => false };
-      assert.equal(options.name, "보내기");
-      return { click: async () => events.push("composer-send") };
-    },
-  };
-  const confirmation = {
-    filter: () => confirmation, waitFor: async () => events.push("confirmation-visible"),
-    count: async () => 1, innerText: async () => confirmationText,
-    getByRole: (role, options) => {
-      assert.equal(options.name, "확인");
-      return { click: async () => { events.push("confirm"); respond(response); } };
-    },
-  };
-  const page = {
-    goto: async () => {},
-    getByRole: (role) => {
-      if (role === "main") return { innerText: async () => `${job.memberName} ${job.memberPhone}` };
-      if (role === "button") return { click: async () => {} };
-      return { last: () => dialog, filter: () => confirmation };
-    },
-    waitForResponse: (predicate) => {
-      events.push("response-waiter");
-      assert.equal(predicate(response), true);
-      assert.equal(predicate({ ...response, url: () => "https://api.studiomate.kr/v2/staff/notification" }), false);
-      assert.equal(predicate({ ...response, request: () => ({ method: () => "GET" }) }), false);
-      return new Promise((resolve) => { respond = resolve; });
-    },
-  };
-  const { sendRefundSms } = declarations(smsSource, ["sendRefundSms", ...smsFunctions, "digitsOnly"], {
-    URL,
+  const { sendRefundSms, markSent } = declarations(smsSource, ["sendRefundSms", "markSent"], {
+    sendMemberSms, memberSmsReceiptFields,
     assertMemberDispatchAllowed: () => { assertMemberDispatchAllowed("2026-10-22T03:00:00Z"); events.push("dispatch-window-check"); },
-    config: { baseUrl: "https://fixture.invalid", headless: true, waitForLogin: false },
-    ensureStudioMateLoggedIn: async () => {}, classifyStudioMateSmsSendEvidence,
+    FieldValue: { serverTimestamp: () => "synthetic-stamp" },
+    db: {
+      collection: name => ({ doc: id => ({ path: `${name}/${id}` }) }),
+      batch: () => ({
+        set: (ref, patch, options) => writes.push({ path: ref.path, patch, options }),
+        update: (ref, patch) => writes.push({ path: ref.path, patch }),
+        commit: async () => events.push("receipt-persisted"),
+      }),
+    },
   });
-  const sent = await sendRefundSms(page, job, nativeId, async () => {
+  const writes = [];
+  const beforeFinalSend = async () => {
     events.push("source-check-and-intent");
     return () => events.push("transport-start");
-  });
-  for (const [before, after] of [["composer-send", "confirmation-visible"], ["confirmation-visible", "source-check-and-intent"], ["source-check-and-intent", "response-waiter"], ["response-waiter", "confirm"], ["confirm", "json-read"], ["json-read", "composer-hidden"]]) {
-    assert.ok(events.indexOf(before) < events.indexOf(after), `${before} before ${after}`);
+  };
+  const sent = await sendRefundSms(page, job, nativeId, beforeFinalSend);
+  assert.equal(posts, 1);
+  const sourceChecked = events.indexOf("source-check-and-intent");
+  const transportStarted = events.indexOf("transport-start");
+  const finalClockChecked = events.lastIndexOf("dispatch-window-check");
+  assert.ok(sourceChecked < events.indexOf("dispatch-window-check", sourceChecked + 1));
+  assert.ok(events.indexOf("dispatch-window-check", sourceChecked + 1) < transportStarted);
+  assert.ok(transportStarted < finalClockChecked);
+  assert.ok(finalClockChecked < events.indexOf("provider-post"));
+  assert.equal(sent.studiomateMemberId, nativeId);
+  assert.equal(sent.provider, "solapi");
+  assert.equal(sent.providerMessageId, providerMessageId);
+  assert.equal(sent.providerGroupId, providerGroupId);
+  assert.equal(sent.providerReceipt.actionKey, job.jobId);
+  assert.equal(Object.hasOwn(sent, "smsId"), false);
+  assert.equal(sent.deliveryStatus, "not_verified");
+  assert.match(sent.evidence, /SOLAPI accepted; final delivery not verified/);
+  await markSent({ path: `studiomateRefundSmsJobs/${job.jobId}` }, job, sent);
+  assert.equal(writes.length, 2);
+  assert.equal(writes[0].path, `studiomateRefundSmsJobs/${job.jobId}`);
+  assert.equal(writes[0].patch.status, "sent");
+  for (const field of ["provider", "providerMessageId", "providerGroupId", "providerReceipt", "deliveryStatus"])
+    assert.deepEqual(writes[0].patch[field], sent[field]);
+  assert.equal(Object.hasOwn(writes[0].patch, "smsId"), false);
+  assert.equal(writes[1].path, `refundCases/${job.caseId}`);
+  assert.equal(writes[1].patch["smsNotice.provider"], "solapi");
+  assert.equal(writes[1].patch["smsNotice.providerMessageId"], providerMessageId);
+  assert.equal(writes[1].patch["smsNotice.deliveryStatus"], "not_verified");
+  assert.ok(events.indexOf("provider-post") < events.indexOf("receipt-persisted"));
+
+  for (const id of ["", "0", "excel_1001", "1001x"]) {
+    await assert.rejects(sendRefundSms(page, job, id, beforeFinalSend), /StudioMate/);
+    assert.equal(posts, 1);
   }
-  assert.ok(events.indexOf("response-waiter") < events.lastIndexOf("dispatch-window-check"));
-  assert.ok(events.lastIndexOf("dispatch-window-check") < events.indexOf("transport-start"));
-  assert.ok(events.indexOf("transport-start") < events.indexOf("confirm"));
-  assert.equal(sent.smsId, 90001);
-  assert.equal(sent.providerMessageId, "90001");
-  assert.equal(sent.deliveryStatus, "processing");
-  assert.match(sent.evidence, /title\/message=matched/);
+  const changedSource = new Error("synthetic source changed");
+  await assert.rejects(sendRefundSms(page, job, nativeId, async () => { throw changedSource; }), error => error === changedSource);
+  assert.equal(posts, 1);
+  invalidReceipt = true;
+  await assert.rejects(sendRefundSms(page, job, nativeId, beforeFinalSend), /member_sms_receipt_unverified/);
+  assert.equal(posts, 2);
+  assert.equal(writes.length, 2, "invalid receipt must not reach persistence");
+});
+
+function refundSendingTransaction({ current = { status: "processing", dispatchToken: "fixture-claim", unrelated: "keep" },
+  dispatchToken = "fixture-claim", now = "2026-10-22T03:00:00Z" } = {}) {
+  const ref = { path: `studiomateRefundSmsJobs/${job.jobId}` };
+  const casePath = `refundCases/${job.caseId}`;
+  const rows = {
+    ...(current === null ? {} : { [ref.path]: structuredClone(current) }),
+    [casePath]: { smsNotice: { status: "processing", unrelated: "keep" }, unrelated: "keep" },
+  };
+  const initial = structuredClone(rows), writes = [], events = [];
+  let commits = 0;
+  const { markSending } = declarations(smsSource, ["markSending"], {
+    FieldValue: { serverTimestamp: () => "synthetic-stamp" },
+    assertMemberDispatchAllowed: () => { events.push("clock"); assertMemberDispatchAllowed(now); },
+    db: {
+      collection: name => ({ doc: id => ({ path: `${name}/${id}` }) }),
+      async runTransaction(callback) {
+        events.push("transaction");
+        await callback({
+          get: async target => { events.push("read"); return { data: () => structuredClone(rows[target.path]) }; },
+          set: (target, patch, options) => { events.push("set"); writes.push({ path: target.path, patch, options }); },
+          update: (target, patch) => { events.push("update"); writes.push({ path: target.path, patch }); },
+        });
+        for (const { path, patch } of writes) {
+          for (const [field, value] of Object.entries(patch)) {
+            const parts = field.split("."), key = parts.pop();
+            let row = rows[path];
+            for (const part of parts) row = row[part];
+            row[key] = value;
+          }
+        }
+        commits++; events.push("commit");
+      },
+    },
+  });
+  return { rows, initial, writes, events, ref, casePath, commits: () => commits,
+    run: () => markSending(ref, { ...job, dispatchToken }) };
+}
+
+test("refund markSending atomically marks the matching processing claim and case as sending", async () => {
+  const h = refundSendingTransaction();
+  await h.run();
+  assert.equal(h.commits(), 1);
+  assert.deepEqual(h.events, ["transaction", "read", "clock", "set", "update", "commit"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.writes)), [
+    { path: h.ref.path, patch: { status: "sending", transportProvider: "solapi", sendClickedAt: "synthetic-stamp", updatedAt: "synthetic-stamp" }, options: { merge: true } },
+    { path: h.casePath, patch: { "smsNotice.status": "sending", "smsNotice.sendClickedAt": "synthetic-stamp",
+      "smsNotice.updatedAt": "synthetic-stamp", updatedAt: "synthetic-stamp" } },
+  ]);
+  assert.deepEqual(h.rows[h.ref.path], { ...h.initial[h.ref.path],
+    status: "sending", transportProvider: "solapi", sendClickedAt: "synthetic-stamp", updatedAt: "synthetic-stamp" });
+  assert.deepEqual(h.rows[h.casePath], { unrelated: "keep", updatedAt: "synthetic-stamp",
+    smsNotice: { status: "sending", unrelated: "keep", sendClickedAt: "synthetic-stamp", updatedAt: "synthetic-stamp" } });
+});
+
+test("refund markSending rejects missing or changed claims, statuses and prior-send markers before updates", async () => {
+  const current = { status: "processing", dispatchToken: "fixture-claim", unrelated: "keep" };
+  for (const options of [
+    { dispatchToken: "" }, { current: null }, { current: { ...current, dispatchToken: "changed" } },
+    ...["pending", "retry", "sending", "sent", "failed"].map(status => ({ current: { ...current, status } })),
+    ...[{ sendClickedAt: "prior" }, { externalEffectStarted: true }, { providerMessageId: `M${"1".repeat(24)}` }]
+      .map(patch => ({ current: { ...current, ...patch } })),
+  ]) {
+    const h = refundSendingTransaction(options);
+    await assert.rejects(h.run(), /member_sms_refund_claim_changed/);
+    assert.deepEqual(h.writes, []);
+    assert.equal(h.commits(), 0);
+    assert.deepEqual(h.rows, h.initial);
+    assert.deepEqual(h.events, ["transaction", "read"]);
+  }
+});
+
+test("refund markSending clock failure prevents both queue and case updates", async () => {
+  const h = refundSendingTransaction({ now: "2026-10-22T14:00:00Z" });
+  await assert.rejects(h.run(), isMemberDispatchDeferred);
+  assert.deepEqual(h.events, ["transaction", "read", "clock"]);
+  assert.deepEqual(h.writes, []);
+  assert.equal(h.commits(), 0);
+  assert.deepEqual(h.rows, h.initial);
+});
+
+test("refund post-mark quiet crossing retains explicit zero-POST proof", async () => {
+  const h = refundSendingTransaction(), requests = [];
+  let clock = "2026-10-22T03:00:00Z", marked = false;
+  const { sendRefundSms } = declarations(smsSource, ["sendRefundSms"], {
+    memberSmsReceiptFields,
+    assertMemberDispatchAllowed: () => assertMemberDispatchAllowed(clock),
+    sendMemberSms: (plan, beforeFinalSend, { assertAllowed }) => createMemberSmsSender({
+      senderNumber: "0200000000", assertAllowed,
+      request: async (url, method) => {
+        requests.push({ url, method });
+        assert.equal(method, "GET", "post-mark quiet crossing must not POST");
+        if (url === "/senderid/v1/numbers/active") return ["0200000000"];
+        assert.ok(url.startsWith("/messages/v4/list?"));
+        return { messageList: {} };
+      },
+    })(plan, beforeFinalSend),
+  });
+  await assert.rejects(sendRefundSms(new Proxy({}, { get: () => assert.fail("No SMS UI") }), job, nativeId, async () => {
+    await h.run();
+    return () => { marked = true; clock = "2026-10-22T14:00:00Z"; };
+  }), error => isMemberDispatchDeferred(error) && error.providerPostCount === 0);
+  assert.equal(marked, true);
+  assert.equal(h.commits(), 1);
+  assert.equal(h.rows[h.ref.path].status, "sending");
+  assert.equal(requests.length, 2);
 });
 
 test("SMS stores provider identity and retains native/approval boundaries without broad POST fallback", () => {
@@ -244,5 +369,9 @@ test("SMS stores provider identity and retains native/approval boundaries withou
   assert.doesNotMatch(smsSource, /responses\.at\(-1\)|dialogText\.includes/);
   assert.match(smsSource, /fresh\.nativeSource\.studiomateMemberId !== live\.nativeSource\.studiomateMemberId/);
   assert.match(smsSource, /assertMemberDispatchAllowed\(\);\s*await markSending[\s\S]*?return \(\) => \{ finalSendClicked = true; \}/);
-  assert.match(smsSource, /assertMemberDispatchAllowed\(\);\s*if \(typeof onClick === "function"\) onClick\(\);\s*await confirmation/);
+  assert.match(smsSource, /const plan = \{ \.\.\.job, key: job\.jobId \}/);
+  assert.match(smsSource, /sendMemberSms\(plan, beforeFinalSend, \{ assertAllowed: \(\) => assertMemberDispatchAllowed\(\) \}\)/);
+  assert.match(smsSource, /\.\.\.memberSmsReceiptFields\(receipt, plan\)/);
+  const wrapper = declarations(smsSource, ["sendRefundSms"], {}).sendRefundSms.toString();
+  assert.doesNotMatch(wrapper, /page\.|confirmation|assertRefundSmsResponse|classifyStudioMateSmsSendEvidence/);
 });

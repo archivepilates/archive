@@ -28,6 +28,19 @@ test('normal worker integrates reminders only after exact pending readback and o
   assert.doesNotMatch(body, /signatureReminder.*status.*done/);
 });
 
+test('runtime uses SOLAPI for dispatch and keeps the native verification browser read-only', () => {
+  const source = readFileSync(new URL('../lib/instructor-signature-reminder-runtime.mjs', import.meta.url), 'utf8');
+  assert.match(source, /import \{ sendMemberSms \} from '\.\/member-sms-solapi\.mjs'/);
+  const runtime = source.slice(source.indexOf('export async function runInstructorSignatureReminder('));
+  assert.match(runtime, /sendSms: async \(currentPlan, beforeFinalSend\) => \{\s*return sendMemberSms\(currentPlan, beforeFinalSend,/);
+  assert.match(runtime, /assertAllowed: \(\) => assertContractReminderDispatchAllowed\(now\(\)\)/);
+  assert.match(runtime, /await context\.route\('\*\*\/\*', route => \['GET', 'HEAD', 'OPTIONS'\]\.includes\(route\.request\(\)\.method\(\)\) \? route\.continue\(\) : route\.abort\(\)\)/);
+  assert.doesNotMatch(runtime, /createInstructorReminderTransportGuard|sendContractReminderViaBrowser|assertContractReminderSmsResponse|\.arm\(/);
+  assert.match(runtime, /serviceWorkers: 'block', acceptDownloads: false/);
+  assert.match(runtime, /finally \{ await identityPage\.close\(\); \}/);
+  assert.match(runtime, /finally \{\s*try \{ await documentPage\?\.close\(\); \} finally \{\s*try \{ await context\?\.close\(\); \} finally \{ await release\?\.\(\); \}/);
+});
+
 test('transport denies all writes until final confirmation arms exact one-recipient SMS', () => {
   const guard = createInstructorReminderTransportGuard({ now: () => new Date('2026-10-31T09:00:00+09:00') });
   let marks = 0;

@@ -10,6 +10,7 @@ import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs"
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 import { appendIdleHeartbeatIfDue } from "./lib/idle-heartbeat.mjs";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
+import { sendMemberSms, memberSmsReceiptFields } from "./lib/member-sms-solapi.mjs";
 import {
   assertRefundSmsSourceUnchanged,
   classifyStudioMateSmsSendEvidence,
@@ -37,7 +38,7 @@ const config = {
 const summary = {
   ok: false,
   mode: apply ? "apply" : "dry-run",
-  source: "studiomate_refund_sms_playwright_queue",
+  source: "solapi_refund_sms_queue",
   startedAt: new Date().toISOString(),
   processed: 0,
   sent: 0,
@@ -92,6 +93,7 @@ try {
     headless: config.headless,
     viewport: { width: 1280, height: 900 },
   });
+  await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort());
   const page = context.pages()[0] || await context.newPage();
   await page.goto(new URL("/users", config.baseUrl).toString(), { waitUntil: "domcontentloaded", timeout: 60000 });
   await ensureStudioMateLoggedIn(page, { headless: config.headless, waitForLogin: config.waitForLogin });
@@ -110,7 +112,7 @@ try {
         const fresh = await assertLiveRefundSource(job, page);
         if (fresh.nativeSource.studiomateMemberId !== live.nativeSource.studiomateMemberId) throw new Error("발송 직전 회원 원본 ID가 변경되어 문자를 중단했습니다.");
         assertMemberDispatchAllowed();
-        await markSending(candidate.ref, job);
+        await markSending(candidate.ref, { ...job, dispatchToken: claimed.dispatchToken });
         return () => { finalSendClicked = true; };
       });
       await markSent(candidate.ref, job, sendResult);
@@ -118,7 +120,7 @@ try {
       item.evidence = sendResult.evidence;
       summary.sent += 1;
     } catch (error) {
-      if (isMemberDispatchDeferred(error) && !finalSendClicked) {
+      if (isMemberDispatchDeferred(error) && (!finalSendClicked || error.providerPostCount === 0)) {
         await deferClaim(candidate.ref, claimed);
         summary.processed -= 1;
         summary.deferred = (summary.deferred || 0) + 1;
@@ -179,7 +181,7 @@ async function recoverStaleJobs() {
       if (!leaseAt || nowMs - leaseAt < config.staleLeaseMs) continue;
       const status = staleRefundSmsJobRecoveryStatus(data);
       const message = status === "send_review_required"
-        ? "이전 실행이 최종 문자 발송 단계에서 중단되었습니다. StudioMate 발송 이력을 확인하세요."
+        ? "이전 실행이 최종 문자 발송 단계에서 중단되었습니다. 정본·SOLAPI 및 기존 StudioMate 발송 이력을 확인하세요."
         : status === "retry"
           ? "이전 실행이 발송 버튼 클릭 전에 중단되어 안전하게 재시도합니다."
           : "이전 실행이 반복 중단되어 자동 재시도를 종료했습니다.";
@@ -214,7 +216,7 @@ async function claimJob(ref) {
       updatedAt: FieldValue.serverTimestamp(),
     });
     return { ...data, attempts, dispatchToken, dispatchUndo: {
-      job: restoreFields(data, ["status", "attempts", "dispatchToken", "claimedBy", "claimedAt", "updatedAt", "lastError", "sendClickedAt"]),
+      job: restoreFields(data, ["status", "attempts", "dispatchToken", "claimedBy", "claimedAt", "updatedAt", "lastError", "sendClickedAt", "transportProvider"]),
       case: restoreFields(caseData, ["smsNotice.status", "smsNotice.sendClickedAt", "smsNotice.updatedAt", "updatedAt"]),
     } };
   });
@@ -235,61 +237,13 @@ async function assertLiveRefundSource(job, page) {
 
 async function sendRefundSms(page, job, studiomateMemberId, beforeFinalSend) {
   if (!/^[1-9]\d*$/.test(studiomateMemberId)) throw new Error("검증된 StudioMate 회원 ID가 없어 문자를 중단했습니다.");
-  await page.goto(new URL(`/users/detail?id=${encodeURIComponent(studiomateMemberId)}`, config.baseUrl).toString(), {
-    waitUntil: "domcontentloaded",
-    timeout: 60000,
-  });
-  await ensureStudioMateLoggedIn(page, { headless: config.headless, waitForLogin: config.waitForLogin });
-  const bodyText = await page.getByRole("main").innerText().catch(() => page.locator("body").innerText());
-  if (!bodyText.includes(job.memberName) || !digitsOnly(bodyText).includes(job.memberPhone.slice(-4))) {
-    throw new Error("StudioMate 회원 상세 화면이 환불 대상 회원과 일치하지 않습니다.");
-  }
-
-  await page.getByRole("button", { name: "메시지 보내기", exact: true }).click({ timeout: 15000 });
-  const dialog = page.getByRole("dialog").last();
-  await dialog.waitFor({ state: "visible", timeout: 15000 });
-  const smsTab = dialog.getByRole("button", { name: "SMS 보내기", exact: true });
-  if (await smsTab.isVisible().catch(() => false)) await smsTab.click();
-  await assertRefundSmsRecipient(dialog, job.memberName);
-
-  const titleBox = await textboxWithPlaceholder(dialog, "제목을 입력해주세요.");
-  const messageBox = await textboxWithPlaceholder(dialog, "메시지를 입력해주세요.");
-  await titleBox.fill(job.smsTitle);
-  await messageBox.fill(job.smsMessage);
-
-  await dialog.getByRole("button", { name: "보내기", exact: true }).click();
-  const confirmation = await refundSmsConfirmation(page);
-  const onClick = await beforeFinalSend();
-  assertMemberDispatchAllowed();
-  const responsePromise = page.waitForResponse((response) => (
-    response.request().method() === "POST"
-    && response.url() === "https://api.studiomate.kr/v2/staff/sms"
-  ), { timeout: 20000 });
-  // Attach rejection handling before clicking; a failed click must not leave a rejected waiter unhandled.
-  const resultPromise = responsePromise.then(async (response) => ({
-    url: response.url(), status: response.status(), body: await response.json(),
-    requestPayload: response.request().postDataJSON(),
-  })).then((result) => ({ result }), (error) => ({ error }));
-  assertMemberDispatchAllowed();
-  if (typeof onClick === "function") onClick();
-  await confirmation.getByRole("button", { name: "확인", exact: true }).click();
-  const { result: relevant, error } = await resultPromise;
-  if (error) throw error;
-  assertRefundSmsResponse(relevant, job, studiomateMemberId);
-  await dialog.waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
-  const dialogClosed = !(await dialog.isVisible().catch(() => false));
-  const status = classifyStudioMateSmsSendEvidence({
-    responseUrl: relevant.url,
-    responseStatus: relevant.status,
-    dialogClosed,
-  });
-  if (status !== "sent") throw new Error("최종 문자 발송 후 성공 여부를 명확히 확인하지 못했습니다.");
+  const plan = { ...job, key: job.jobId };
+  const receipt = await sendMemberSms(plan, beforeFinalSend, { assertAllowed: () => assertMemberDispatchAllowed() });
   return {
     studiomateMemberId,
-    evidence: `${relevant.status} ${relevant.url} id=${relevant.body.id} type=send title/message=matched`,
-    smsId: relevant.body.id,
-    providerMessageId: String(relevant.body.id),
-    deliveryStatus: relevant.body.status ?? "processing",
+    ...memberSmsReceiptFields(receipt, plan),
+    evidence: 'SOLAPI accepted; final delivery not verified',
+    deliveryStatus: 'not_verified',
   };
 }
 
@@ -340,15 +294,17 @@ async function textboxWithPlaceholder(container, expected) {
 
 async function markSending(ref, job) {
   const now = FieldValue.serverTimestamp();
-  const batch = db.batch();
-  batch.set(ref, { status: "sending", sendClickedAt: now, updatedAt: now }, { merge: true });
-  batch.update(db.collection("refundCases").doc(job.caseId), {
-    "smsNotice.status": "sending",
-    "smsNotice.sendClickedAt": now,
-    "smsNotice.updatedAt": now,
-    updatedAt: now,
+  await db.runTransaction(async tx => {
+    const current = (await tx.get(ref)).data();
+    if (!job.dispatchToken || current?.dispatchToken !== job.dispatchToken || current.status !== 'processing'
+      || current.sendClickedAt || current.externalEffectStarted || current.providerMessageId)
+      throw new Error('member_sms_refund_claim_changed');
+    assertMemberDispatchAllowed();
+    tx.set(ref, { status: 'sending', transportProvider: 'solapi', sendClickedAt: now, updatedAt: now }, { merge: true });
+    tx.update(db.collection('refundCases').doc(job.caseId), {
+      'smsNotice.status': 'sending', 'smsNotice.sendClickedAt': now, 'smsNotice.updatedAt': now, updatedAt: now,
+    });
   });
-  await batch.commit();
 }
 
 function restoreFields(data, fields) {
@@ -378,8 +334,11 @@ async function markSent(ref, job, result) {
     status: "sent",
     studiomateMemberId: result.studiomateMemberId,
     sendEvidence: result.evidence,
-    smsId: result.smsId,
+    ...(result.smsId ? { smsId: result.smsId } : {}),
+    provider: result.provider,
     providerMessageId: result.providerMessageId,
+    providerGroupId: result.providerGroupId,
+    providerReceipt: result.providerReceipt,
     deliveryStatus: result.deliveryStatus,
     sentAt: now,
     completedAt: now,
@@ -388,6 +347,7 @@ async function markSent(ref, job, result) {
   }, { merge: true });
   batch.update(db.collection("refundCases").doc(job.caseId), {
     "smsNotice.status": "sent",
+    "smsNotice.provider": result.provider,
     "smsNotice.sentAt": now,
     "smsNotice.providerMessageId": result.providerMessageId,
     "smsNotice.deliveryStatus": result.deliveryStatus,
@@ -423,7 +383,7 @@ async function persistSummary() {
   await appendFile(config.runLogPath, `${JSON.stringify(summary)}\n`);
   await recordAutomationStatus(db, {
     automationId: "studiomate-refund-sms-queue",
-    title: "StudioMate 환불계산 문자 발송 큐",
+    title: "SOLAPI 환불계산 문자 발송 큐",
     ownerArea: "refunds",
     status: summary.ok ? "healthy" : summary.reviewRequired ? "warning" : "failed",
     lastRunAt: summary.finishedAt || new Date().toISOString(),
