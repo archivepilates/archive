@@ -20,7 +20,7 @@
 - Existing SOLAPI account has two active numbers. Selected sender matches the previous approved instructor-video sender, independently present exactly once in current active list, last4 4425; no arbitrary first-number selection.
 - Private local config /Users/archivepilates/ArchiveIN/automation/config/member-sms-solapi.json, mode 0600, contains policy/sender/approval metadata only, no API secrets. Existing Secret Manager SOLAPI_API_KEY and SOLAPI_API_SECRET are read under archive-codex-operator@archive-pilates.iam.gserviceaccount.com in archive-pilates.
 - Reuse HMAC transport, add optional gcloudPath. New factory uses /opt/homebrew/bin/gcloud so the existing restricted LaunchAgent PATH works without changing agents or credentials.
-- Live read-only provider preflight for exact current pending job reached the deliberately stopping callback at 2026-10-31T01:36:36.267Z: 2 provider GETs, 0 provider POSTs, 0 canonical writes, 0 messages.
+- Live read-only provider preflight for exact current pending job reached the deliberately stopping callback at 2026-10-31T01:47:51.185Z: 2 provider GETs, 0 provider POSTs, 0 canonical writes, 0 messages.
 - Restricted PATH configuration/credential probe passed with intentionally invalid recipient, stopping before provider reads/claims/POST.
 
 ## Validation and release evidence
@@ -40,3 +40,11 @@
 - Source sender readiness and private configuration were checked without dispatch. Restricted LaunchAgent PATH successfully loads configured credentials and stops at the intentional invalid-input guard before provider transport.
 - Existing instructor worker plist SHA256 15e80206ea574d396a4ee660b3a8ad99d7b951cca11ba846d3209beaa5cacdd5; refund worker plist SHA256 0a48a6652d63b601c8e270d45616e913d03bcab8e1cc7ee73437046cfa4da308. No LaunchAgent edits; membership reminder remains integrated with existing Excel/admin processing.
 - Failure emails now name SOLAPI/legacy histories correctly and dedupe by cause/code as well as source/stage so one materially new block is not hidden by an old UI-error report.
+
+## Actual rollout
+- Implementation commit 41943bd3b2548da20e572809d7ec8811238f00ad was promoted/pushed to origin/main and fast-forward adopted by archive-runtime-main. Eleven changed runtime MJS files independently matched committed hashes.
+- Rules-only release at 2026-10-31T01:48:43.664Z: sites/archive-pilates-core/versions/094582bfbc5d0249, release 1793411323706000. Independent verification at 01:49:34.738Z found only /rules/index.html changed among 63 paths; all other hashes and Hosting config were identical.
+- Custom and Firebase rules URLs both returned HTTP 200 and exact source SHA256 5eef77f02c710087b42fdb9c82ae22f754fe59e669860c76574707a8edb14014. No Functions deployment or scheduler change.
+- Functions Affected Check succeeded: https://github.com/archivepilates/archive/actions/runs/41157080274 . CORE MCP Check 41157080196 passed rules UI and functional checks but failed dependency audit on six moderate transitive findings.
+- Minimum security follow-up pins glob 14.0.2 and minimatch 11.0.1; direct SDK/firebase-admin/ajv versions remain unchanged. Local MCP tests 252/252 and npm audit --omit=dev (zero findings) passed. The existing rimraf glob cleanup path has a synthetic compatibility regression; the override exceeds its declared glob range and is not an exhaustive compatibility proof. Independent three-file review found no actionable issue. Fresh authenticated stdio/runtime checks and follow-up CI remain separate evidence below.
+- No real-phone tests, manual queue runs, historical replays, member data writes, app restart, or provider POST occurred during this rollout.
