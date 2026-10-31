@@ -167,13 +167,12 @@ export function reconcile(state, { now = Date.now(), apply = false, adopt = fals
   return outcomes;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
+export async function runStudentShareAccess({ args = [], onResult = () => {} } = {}) {
   if (args.some(arg => !['--apply', '--adopt-verified-grants'].includes(arg))) throw Error('Unsupported argument; time override is forbidden');
   const release = await acquireStudioMateBrowserLock({ lockPath: MEMBER_GROUP_LOCK,
     owner: 'imweb-student-share-access', waitMs: 0, staleMs: 600000 });
   try {
-    // Reuse the existing expiry runner; no additional polling schedule is created.
+    const results = [];
     for (const source of STUDENT_SHARE_SOURCES) {
       const directory = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES', source.lane);
       const file = path.join(directory, 'state.json');
@@ -197,15 +196,19 @@ async function main() {
           const parent = fs.openSync(directory, 'r');
           try { fs.fsyncSync(parent); } finally { fs.closeSync(parent); }
         };
-        console.log(JSON.stringify({ ok: true, source: source.policyId, mode: args.includes('--apply') ? 'apply' : 'read_only',
-          outcomes: reconcile(state, { apply: args.includes('--apply'), adopt: args.includes('--adopt-verified-grants'), save, source }) }, null, 2));
+        const result = { ok: true, source: source.policyId, mode: args.includes('--apply') ? 'apply' : 'read_only',
+          outcomes: reconcile(state, { apply: args.includes('--apply'), adopt: args.includes('--adopt-verified-grants'), save, source }) };
+        results.push(result);
+        onResult(result);
       } finally {
         if (fd !== undefined) { fs.closeSync(fd); fs.unlinkSync(lock); }
       }
     }
+    return results;
   } finally { await release(); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { await main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
+  try { await runStudentShareAccess({ args: process.argv.slice(2), onResult: result => console.log(JSON.stringify(result, null, 2)) }); }
+  catch (error) { console.error(error.message); process.exitCode = 1; }
 }

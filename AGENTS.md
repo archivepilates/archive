@@ -16,6 +16,12 @@
 - Effective 2026-10-31, ARCHIVE-authored SMS/LMS/MMS uses SOLAPI only. Direct StudioMate general-message UI/API dispatch is retired; do not use it as a fallback on SOLAPI failure.
 - Keep the existing canonical job, approval, source/identity/ticket/cancellation/refund checks, document-scoped deduplication and time windows. Existing provider-managed StudioMate/eformsign contract invitations remain native; never replace their secure invitation with a guessed signing link.
 - General text uses scripts/lib/member-sms-solapi.mjs. Registered sender is bound in the private local config, not selected arbitrarily from available numbers. Native source browsers remain read-only for text delivery.
+
+### Student Share Expiry Worker
+
+- Operator-approved migration 2026-11-01 replaces Codex automation e-2 with com.archive.student-share-expiry on the Mac mini after signup/approved-notice handoff verification. Install disabled, stop the legacy schedule, then activate; do not run both mutation schedulers.
+- The worker checks existing canonical E/A/B/C/D share ledgers locally every 60 seconds and calls the existing e261017-access expiry-only path only when due. Preserve first verified grant plus 960 hours, source locks, fresh purchase/staff protection and independent readbacks. Do not add new grants, adopt uncertain grants, send member messages or replay unknown removals.
+- Unchanged non-actionable state remains silent. Missing evidence, unknown transport or source mismatch is operator review, not a successful revocation. Mac mini downtime or unavailable provider can delay execution; do not promise an exact-time revocation merely from the schedule.
 - Preserve legacy StudioMate receipts and attempts. Store SOLAPI provider/message/group IDs on the same canonical job, separate acceptance from final delivery, and never retry accepted, failed-after-transport or unknown requests or reset jobs merely to change provider. No new scheduler or historical bulk send is authorized by transport migration.
 
 ### Highest-Priority Member Communication Window

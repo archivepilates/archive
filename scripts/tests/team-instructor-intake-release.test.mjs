@@ -52,7 +52,7 @@ test('schedule display replaces exactly app, interface CSS and rules', () => {
   assert.throws(() => mealReleaseManifest(files.slice(1),replacements,'scheduleDisplay'));
 });
 test('Team release replaces only four CORE assets and preserves all other paths', () => {
-  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent', 'instructorWaitlist', 'instructorWaitlistVerification', 'instructorSignupBirthDate', 'solapiSms']);
+  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent', 'instructorWaitlist', 'instructorWaitlistVerification', 'instructorSignupBirthDate', 'solapiSms', 'studentShareExpiry']);
   const expected = ['/instructor-lessons/index.html', '/assets/app.js', '/rules/index.html', '/assets/alimtalk-catalog.json'];
   assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS.core.files), expected);
   const replacements = Object.fromEntries(expected.map(f => [f, hash]));
