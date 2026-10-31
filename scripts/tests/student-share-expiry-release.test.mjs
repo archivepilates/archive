@@ -56,3 +56,11 @@ test('LaunchAgent uses existing runtime and no member message, credential or bro
   assert.match(plist,/dev\/archive-in-runtime\/scripts\/run-student-share-expiry.mjs/);
   assert.doesNotMatch(plist,/send-|SOLAPI|token|browser-profile|secret/i);
 });
+test('CI runs synthetic expiry tests without a browser and UI only after Chromium setup',()=>{
+  const functions=fs.readFileSync(new URL('../../.github/workflows/functions-affected-check.yml',import.meta.url),'utf8');
+  const core=fs.readFileSync(new URL('../../.github/workflows/core-mcp-check.yml',import.meta.url),'utf8');
+  assert.match(functions,/scripts\/tests\/student-share-expiry-worker\.test\.mjs scripts\/tests\/student-share-expiry-release\.test\.mjs/);
+  assert.doesNotMatch(functions,/student-share-expiry\*|student-share-expiry-ui\.test\.mjs/);
+  assert(core.indexOf('- run: npx playwright install')<core.indexOf('- run: node --test scripts/tests/student-share-expiry-ui.test.mjs'));
+  assert.equal(core.split("- 'scripts/tests/student-share-expiry-ui.test.mjs'").length-1,2);
+});

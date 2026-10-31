@@ -25,3 +25,10 @@
 ## Remaining release steps
 - Independent new-worker review; final combined tests; source commit/main promotion; rules-only deploy and independent live hash verification; runtime fast-forward and disabled service installation; verify all pending ownership; delete e-2 using automation tool; activate worker; verify natural background no-op with all permission clocks unchanged; CI, final docs/status.
 - Do not retire e-2 based only on a prepared file or installed-disabled status. Do not call this operationally complete until the replacement is active and separately verified.
+
+## Actual cutover and independent evidence
+- Source0da35046bd9cf11c38f95740c4078b84165d0a22 promoted/pushedmain, runtime fast-forward adopted. Installed com.archive.student-share-expiry disabled; first natural launch exited0 with remoteCalls0 before legacy deletion.
+- Official Codex MCP automation_update deleted e-2. Old prompt retained owner-only under worker directory for audit, not as an active scheduler. Activation gate verified the old automation file absent; enabled at2026-10-31T23:46:46.740Z (2026-11-01 08:46KST).
+- Natural background execution at23:47:15.419Z: not_due,active25,due0,zero provider calls,exit0. Independent verification at23:47:35.993Z confirmed oldscheduleabsent,allfivecanonicalledgerhashesunchanged,workerlockreleased,installed60sinterval. No member send or permission removal.
+- CORE rules-only release version80dde81bc85e5907 / release1793490385468000. Independent GET verification at23:47:18.480Z:63paths,only/rules/index.htmlchanged,62unchanged,configpreserved,bothcustom/FirebaseURLsHTTP200 andSHA256e5e4f7a40adff03229b741324a2edb4125c5cbe34f9b296a2de173e175f9071d.
+- Runtime wrapper/install tests59/59passed. Implementation CI CORE MCP Check41253895016 passed. Initial Functions Check41253895174 failed only because the new UI test was included before any Chromium install;545otherchecks inthatstagepassed. Moved UI to the existing CORE browser-equipped job, retained worker/release tests in Functions, added CI-order regression. No runtime behavior changed for that correction; follow-up CI recorded below.
