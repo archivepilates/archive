@@ -22,8 +22,24 @@
 - Verification: Swift guard tests, hardened binary signature/dependency review,
   dedicated Keychain ACL/read check, already-unlocked no-op, then live locked
   invocation. No wrong-password tests or repeated authentication attempts.
-- Current state: 18 guard tests pass; final build/install/enrollment/live
-  readback pending. No claim of installed operation yet.
+- Verified installation: `~/.local/bin/archive-mac-unlock` resolves to the
+  private signed binary. Source commit `97eb8844`; binary SHA-256
+  `aa3a4d59cc84492cb4e5698b449265b7678ab4e38e2230cc1112b80e66b5260e`.
+- Enrollment completed through hidden TTY into the dedicated local Keychain item.
+  Sensitive-operation ACL identity audit and trusted-binary read passed. An
+  independent Swift reader was denied (`errSecAuthFailed`); no credential output.
+- Final release build, 18 Swift Testing tests, Node installer syntax, signature,
+  system-only library dependencies, private permissions and exclusive-lock
+  contention checks passed. Initial XCTest-based invocation was unavailable in
+  the installed Command Line Tools; tests were migrated to provided Swift Testing.
+- Live verification: positively observed locked console; installed binary
+  retrieved the Keychain item and submitted once; same-session unlocked readback
+  succeeded about 0.79 seconds after submission. Independent status confirmed
+  unlocked. A second unlock invocation returned `already_unlocked` without input.
+- Final state: installed and usable on demand. No resident process, scheduler,
+  network listener, plaintext credential file or test browser session remains.
+- File-based Keychain API deprecation warnings are documented; they are not
+  suppressed by disabling any system security setting.
 - CORE rules: no member/staff workflow or existing automation is changed. This
   local owner-tool rule and operating instructions are in the included README;
   no unrelated CORE web release is authorized or needed for the local install.
