@@ -62,6 +62,31 @@
 - Three rule tests, exact before/after text-preservation comparisons and
   whitespace checks passed. No executable, credential, worker or business data
   was changed. No browser was opened for these text-only source changes.
-- Status: global local instructions active now; CORE web notice is prepared in
-  source, not published. A scoped Hosting release is separate and was not part
-  of this local common-instruction request. Do not call the live CORE page updated.
+- At the common-instruction stage, global local instructions were active while
+  the CORE web notice was prepared but not published. The later explicit release
+  request below authorizes and completes that previously separate publication.
+
+## CORE Rules Release
+
+- User explicitly requested deployment to CORE operating rules. Target only
+  `archive-pilates-core` Hosting `/rules/index.html`; service account
+  `archive-codex-operator@archive-pilates.iam.gserviceaccount.com`.
+- Source `506c653445f26f56359d22bdcd65975083fee6fa` was reviewed and promoted
+  fast-forward to clean local main before release. No unrelated commits mixed in.
+- Scope guard pins the prior HTML and exact added section. A fresh live version,
+  shared site deployment lock and durable write intents protect against drift,
+  concurrent releases and replay of uncertain operations.
+- Baseline version `f4af03d66d447274`; published version `b54c0046d841ff02`;
+  release `1793544111878000`. Independently verified at
+  `2026-11-01T14:41:54.371Z` (2026-11-01 23:41 KST).
+- Both custom CORE and Firebase-site rules URLs matched source SHA-256
+  `cdb22d9d737f13f076354c3fc2511766562cc348fb8e1f36044ee278bf7f3e8b`.
+- Hosting has 63 files; only rules HTML changed, all other 62 hashes and the
+  Hosting configuration remained equal to the baseline. Functions affected: none.
+- Eight common-rule/release tests passed. Isolated existing-CSS rendering at
+  320/390/768/1440 passed text, overflow, clipping and overlap checks; live HTML
+  verification is separate. No member data or authenticated user sessions used.
+- Private release receipt:
+  `/Users/archivepilates/ArchiveIN/operations/mac-unlock-rules-release-20261101/hosting-release.json`.
+- No unlock executable, Keychain item, login setting, member communication,
+  existing worker or official sales-site resource was changed by this release.
