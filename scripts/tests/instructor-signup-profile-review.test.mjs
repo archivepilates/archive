@@ -225,6 +225,7 @@ function blocked(label, mutate, expected, options) {
     assert.equal(planSignupProfileReviewResolution(f).jobPatch.profileSyncStatus, 'synced');
     mutate(f);
     const before = clone(f);
+    const invalidClock=f.now instanceof Date&&!Number.isFinite(f.now.getTime()),clock=f.now;
     assert.throws(() => planSignupProfileReviewResolution(deepFreeze(f)), error => {
       assert.equal(error.code, 'ERR_ASSERTION');
       if (expected) assert.match(error.message, expected);
@@ -233,7 +234,12 @@ function blocked(label, mutate, expected, options) {
       }
       return true;
     });
-    assert.deepEqual(f, before);
+    // Node 22 does not consider two distinct invalid Date objects equal.
+    if(invalidClock){
+      assert.equal(f.now,clock);
+      assert(Number.isNaN(f.now.getTime()));
+      assert.deepEqual({...f,now:null},{...before,now:null});
+    }else assert.deepEqual(f, before);
   });
 }
 
