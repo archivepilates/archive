@@ -43,7 +43,9 @@
 - CORE rules: no member/staff workflow or existing automation is changed. This
   local owner-tool rule and operating instructions are in the included README;
   no unrelated CORE web release is authorized or needed for the local install.
-- GitHub: no push or cloud deployment requested for this local-only tool.
+- At the initial local-tool stage, no push or cloud deployment was requested.
+  The subsequent explicit CORE release approval includes scoped source promotion,
+  Hosting publication, live verification and GitHub push under the standard rule.
 
 ## Common-Rule Adoption
 
