@@ -1,0 +1,38 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const args = process.argv.slice(2);
+if (process.platform !== 'darwin' || args.length !== 1 || !['--plan', '--install'].includes(args[0])) throw Error('Use --plan or --install on macOS');
+const directory = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES OPS/MacUnlock');
+const destination = path.join(directory, 'archive-mac-unlock');
+const packageDirectory = path.join(root, 'tools/mac-unlock');
+const products = execFileSync('/usr/bin/swift', ['build','-c','release','--show-bin-path'], { cwd:packageDirectory,encoding:'utf8' }).trim();
+const source = path.join(products, 'archive-mac-unlock');
+const launcher = path.join(os.homedir(), '.local/bin/archive-mac-unlock');
+const git = values => execFileSync('git', values, { cwd: root, encoding:'utf8' }).trim();
+const result = { scope:'local-on-demand-only', destination, launcher, schedulerInstalled:false, networkListener:false, credentialStored:false, sourceCommit:git(['rev-parse','HEAD']) };
+if (args[0] === '--plan') { console.log(JSON.stringify(result)); process.exit(0); }
+if (!git(['branch','--show-current']).startsWith('codex/mini/mac-unlock-')) throw Error('Dedicated local tool branch required');
+if (!fs.existsSync(source)) throw Error('Build and tests must finish before install');
+if (fs.existsSync(destination) || fs.existsSync(launcher)) throw Error('Existing tool must be reconciled; never overwrite a Keychain-trusted binary');
+fs.mkdirSync(directory, { recursive:true, mode:0o700 });
+const stat = fs.lstatSync(directory);
+if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || stat.mode & 0o077) throw Error('Unsafe private tool directory');
+const bin = path.dirname(launcher);
+fs.mkdirSync(bin, { recursive:true, mode:0o700 });
+const binStat = fs.lstatSync(bin);
+if (!binStat.isDirectory() || binStat.isSymbolicLink() || binStat.uid !== process.getuid() || binStat.mode & 0o022) throw Error('Unsafe launcher directory');
+fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
+fs.chmodSync(destination, 0o700);
+execFileSync('/usr/bin/codesign', ['--force','--sign','-','--options','runtime','--identifier','com.archivepilates.ops.mac-unlock',destination], { stdio:'pipe' });
+execFileSync('/usr/bin/codesign', ['--verify','--strict',destination], { stdio:'pipe' });
+fs.chmodSync(destination, 0o500);
+fs.symlinkSync(destination, launcher);
+result.sha256 = createHash('sha256').update(fs.readFileSync(destination)).digest('hex');
+fs.writeFileSync(path.join(directory,'installation.json'), JSON.stringify(result,null,2)+'\n', { mode:0o600,flag:'wx' });
+console.log(JSON.stringify({ ...result, installed:true }));
