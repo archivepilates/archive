@@ -7,7 +7,7 @@ import { resolveSignupBirthDateV2, normalizeSignupBirthDateV2, SIGNUP_SIX_DIGIT_
 
 const source = readFileSync(new URL('../verify-instructor-signup-enrichment.mjs', import.meta.url), 'utf8');
 const start = source.indexOf("if(['verified','already_equal'].includes(progress.birthDate.status))");
-const end = source.indexOf("if(progress.address.status==='verified')", start);
+const end = source.indexOf("if(['verified','already_equal'].includes(progress.address.status))", start);
 assert(start > 0 && end > start);
 const check = new vm.Script(source.slice(start, end));
 const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');

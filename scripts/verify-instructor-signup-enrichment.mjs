@@ -6,7 +6,7 @@ import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs'
 import { normalizeInstructorLessonPhone as phone,normalizeInstructorLessonName as name } from './lib/instructor-lesson-registration-contract.mjs';
 import { signupProfileMemoPresent } from './lib/instructor-signup-profile.mjs';
 import { normalizeSignupBirthDateV2,resolveSignupBirthDateV2,SIGNUP_SIX_DIGIT_BIRTH_POLICY } from './lib/instructor-signup-profile-v2-policy.mjs';
-import { splitSignupPostalAddress,signupPostalAddressKey } from './lib/instructor-signup-profile-v2-writer.mjs';
+import { splitSignupPostalAddress,signupPostalAddressKey,signupPostalSelectionMatches } from './lib/instructor-signup-profile-v2-writer.mjs';
 
 const args=process.argv.slice(2),file=args.find(x=>x.startsWith('--queue='))?.slice(8);
 const dir='/Users/archivepilates/ArchiveIN/operations/instructor-signup-enrichment-20261030';
@@ -60,9 +60,12 @@ try{
       }else assert(values.birthDate===normalizeSignupBirthDateV2(job.profileUpdate.birthDateRaw).value);
     }
     else assert(sha(values.birthDate)===progress.beforeFieldHashes.birthDate);
-    if(progress.address.status==='verified'){
-      const parts=splitSignupPostalAddress(job.profileUpdate.addressRaw);assert(parts&&values.address&&values.detail===parts.detail);
-      assert(signupPostalAddressKey(values.address)===signupPostalAddressKey(parts.base));
+    if(['verified','already_equal'].includes(progress.address.status)){
+      const parts=splitSignupPostalAddress(job.profileUpdate.addressRaw);
+      const detailKey=value=>String(value||'').normalize('NFC').replace(/\s+/g,' ').trim();
+      assert(parts&&values.address&&detailKey(values.detail)===detailKey(parts.detail));
+      assert(signupPostalAddressKey(values.address)===signupPostalAddressKey(parts.base)
+        ||signupPostalSelectionMatches(progress.address,parts,values));
     }else assert(sha(values.address)===progress.beforeFieldHashes.address&&sha(values.detail)===progress.beforeFieldHashes.detail);
     report.rows.push({jobId,memberId:id,status:'verified',birthDate:progress.birthDate.status,address:progress.address.status,memo:'synced',checkedAt:new Date().toISOString()});
   }

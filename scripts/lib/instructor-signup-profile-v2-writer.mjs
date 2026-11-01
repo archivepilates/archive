@@ -83,6 +83,13 @@ export async function choosePostalAddress(page,field,parts) {
   }catch(error){error.postalStage=stage;throw error;
   }finally{if(popup&&!popup.isClosed())try{await popup.close();}catch(error){if(!popup.isClosed())throw error;}}
 }
+export function signupPostalSelectionMatches(prior,parts,native) {
+  return !!(parts&&native.address&&['verified','already_equal'].includes(prior?.status)
+    &&prior.lookupEvidence?.kind==='native_exact_result_same_row_v1'
+    &&prior.lookupEvidence.sourceBaseHash===sha(postalKey(parts.base))
+    &&prior.lookupEvidence.selectedValueHash===sha(postalKey(native.address))
+    &&prior.lookupEvidence.detailHash===sha(clean(parts.detail))&&clean(native.detail)===clean(parts.detail));
+}
 export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProgress=async()=>{},lookupApproved=SIGNUP_ADDRESS_LOOKUP_APPROVED}={}) {
   assert(job.source==='instructor_member_eformsign'&&job.profileUpdate?.version===2&&job.studioId==='5330'
     &&/^[1-9]\d*$/.test(memberId)&&memberId===String(job.studiomateMemberId)&&new URL(baseUrl).origin==='https://arcpilates.studiomate.kr');
@@ -123,11 +130,7 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
   const parts=splitSignupPostalAddress(expected.addressRaw);
   if(parts&&before.address&&postalKey(before.address)===postalKey(parts.base)&&clean(before.detail)===clean(parts.detail))addressDecision='already_equal';
   const prior=job.profileStatus?.address;
-  const sameVerifiedSelection=parts&&before.address&&['verified','already_equal'].includes(prior?.status)
-    &&prior.lookupEvidence?.kind==='native_exact_result_same_row_v1'
-    &&prior.lookupEvidence.sourceBaseHash===sha(postalKey(parts.base))
-    &&prior.lookupEvidence.selectedValueHash===sha(postalKey(before.address))
-    &&prior.lookupEvidence.detailHash===sha(clean(parts.detail))&&clean(before.detail)===clean(parts.detail);
+  const sameVerifiedSelection=signupPostalSelectionMatches(prior,parts,before);
   if(sameVerifiedSelection)addressDecision='already_equal';
   if(addressDecision==='write'&&(!parts||before.address||before.detail))addressDecision='review';
   if(addressDecision==='write'&&!lookupApproved)addressDecision='awaiting_address_lookup_approval';
