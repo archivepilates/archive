@@ -73,6 +73,14 @@
           <div class="rule-note"><strong>원천·반영 상태</strong><span>원천은 CORE의 기존 canonical 원장, staffs와 Firebase Auth이며 실행은 기존 승인 처리기와 권한 규칙을 사용합니다. 대상은 맥미니 archive-core-mcp 연결과 이 운영규칙입니다. 구현·가짜 데이터 검증 후 실제 조회·기존 초안 보존 저장·등록 연결을 독립 확인하며, 최종 결과와 제한은 2026-10-29-core-ops-mcp 보고서를 따릅니다. 이 문구가 포함된 Hosting 릴리스부터 안내가 반영됩니다.</span></div>
         </section>
 
+        <section class="panel rule-section" id="mac-mini-on-demand-unlock">
+          <div class="panel-header"><div><h2>맥미니 작업 중 잠금 해제 · 2026.11.01</h2></div></div>
+          <div class="rule-note"><strong>목적·적용</strong><span>승인된 Codex 화면 작업이 맥미니의 일반 화면 잠금 때문에 막히면, 설치된 로컬 잠금 해제 도구를 먼저 사용합니다. API·파일 작업은 화면 잠금과 무관하게 진행하며 불필요하게 화면을 해제하지 않습니다. 기존 자동화에 상시 해제를 추가하지 않습니다.</span></div>
+          <div class="rule-note"><strong>진행 순서</strong><span>archive-mac-unlock status로 상태를 확인하고 키체인 접근 권한·손쉬운 사용·로그인 세션·재시도 안전장치가 준비된 경우에만 unlock을 1회 호출합니다. 해제 상태를 다시 조회한 뒤 원래 승인된 작업을 이어갑니다. 이미 해제돼 있으면 암호 입력을 생략합니다.</span></div>
+          <div class="rule-note"><strong>차단·보안</strong><span>암호는 도구의 전용 로컬 macOS 키체인에서만 사용하며 직접 조회·출력하거나 코드·로그·채팅에 넣지 않습니다. 실패·결과 불명확·안전장치 차단은 반복하지 않고 운영자에게 보고합니다. 시도 기록 초기화·우회 입력·권한 확대·보안 설정 완화는 하지 않습니다. 재부팅 직후 최초 로그인·FileVault 부팅 전·사용자 전환은 운영자 조치가 필요합니다.</span></div>
+          <div class="rule-note"><strong>원천·검증·다음 조치</strong><span>원천은 맥미니 시스템 잠금 상태, 도구의 전용 키체인과 로컬 시도 기록입니다. 로컬 도구 설치·키체인 접근 제한·18개 테스트·실제 잠금 해제를 검증했고 공통 AGENTS 지침에 적용했습니다. 기존 회원 발송시간·승인·중복방지·브라우저 잠금은 유지합니다. 이 웹 안내는 본 문구를 포함한 Hosting 릴리스부터 게시되며, 로컬 공통규칙 적용과 웹 게시 완료는 구분합니다. 유지보수는 전용 잠금 해제 도구 작업 기록을 따릅니다.</span></div>
+        </section>
+
         <section class="panel rule-section" id="ops-resource-naming">
           <div class="panel-header"><div><h2>OPS 프로젝트·데이터 명칭 · 2026.10.28</h2></div></div>
           <div class="rule-note"><strong>목적·현재 표시</strong><span>프로젝트·등록 웹앱의 표시 이름은 ARCHIVE PILATES OPS로 통일합니다. 같은 이름에 한글 접미사를 섞지 않습니다. ARCHIVE IN은 과거 명칭이며, 기존 경로·식별자·승인된 역사 기록을 제외한 새 표시 이름으로 사용하지 않습니다. 관리 화면은 기존 ARCHIVE CORE 주소를 유지합니다.</span></div>

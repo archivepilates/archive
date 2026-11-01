@@ -44,3 +44,24 @@
   local owner-tool rule and operating instructions are in the included README;
   no unrelated CORE web release is authorized or needed for the local install.
 - GitHub: no push or cloud deployment requested for this local-only tool.
+
+## Common-Rule Adoption
+
+- Subsequent user request: use this installed helper whenever an authorized GUI
+  task is blocked by ordinary screen lock; record it as a cross-project rule.
+- Applied immediately to `/Users/archivepilates/.codex/AGENTS.md` and
+  `/Users/archivepilates/dev/AGENTS.md`; original files backed up under
+  `/Users/archivepilates/project-backups/mac-unlock-common-rule-20261101`.
+- Matching project `AGENTS.md` and CORE rules HTML source updated in this lane.
+  CORE MCP discovery confirmed no supported generic operating-rule save action.
+  No endpoint was invented and no direct database rule mutation was substituted.
+- Procedure: status, one guarded unlock only when ready, independent status
+  verification, continue only the originally authorized task. Password export,
+  fallback injection, retries/reset, new permissions and background unlocks stay
+  forbidden. First login/FileVault preboot/user switching remain operator-only.
+- Three rule tests, exact before/after text-preservation comparisons and
+  whitespace checks passed. No executable, credential, worker or business data
+  was changed. No browser was opened for these text-only source changes.
+- Status: global local instructions active now; CORE web notice is prepared in
+  source, not published. A scoped Hosting release is separate and was not part
+  of this local common-instruction request. Do not call the live CORE page updated.

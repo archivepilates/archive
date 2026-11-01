@@ -11,6 +11,12 @@
 
 ## Working Guidelines
 
+### On-Demand Mac Mini Unlock
+
+- For an already authorized GUI task blocked by ordinary screen lock on the configured Mac mini, use `/Users/archivepilates/.local/bin/archive-mac-unlock status`, then `unlock` once only when credential ACL, Accessibility, session and retry guards are ready. Verify a fresh unlocked status before proceeding; skip input when already unlocked. Do not ask for manual unlock before checking this approved local path.
+- The helper alone reads its dedicated local Keychain item. Do not export or print the password, inject it through a fallback script, reset consumed/unknown attempts, widen access, change security settings, or create scheduled/background unlocks. Failure or unsupported first login after reboot, FileVault preboot, user switching or changed permissions requires operator action. All existing approval, browser-lock, duplicate and member communication window rules remain in force.
+- The cross-project authority is `~/.codex/AGENTS.md` > `On-Demand Mac Mini Unlock`; maintenance and verified installation are documented in `tools/mac-unlock/README.md` and `docs/tasks/2026-11-01-mac-unlock-on-demand.md`.
+
 ### Direct Text Transport Standard
 
 - Effective 2026-10-31, ARCHIVE-authored SMS/LMS/MMS uses SOLAPI only. Direct StudioMate general-message UI/API dispatch is retired; do not use it as a fallback on SOLAPI failure.
