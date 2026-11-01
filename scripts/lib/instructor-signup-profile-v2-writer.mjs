@@ -20,7 +20,36 @@ export function splitSignupPostalAddress(value) {
   if(/\d{6}|\d{4}[./-]\d{1,2}[./-]\d{1,2}|(?:\+?82[\s().-]*)?0?1[016789][\s().-]*\d{3,4}[\s().-]*\d{4}|생년|전화|연락|이름|회원|건강|상세|\d+\s*(?:동|호|층)(?:\s|$)/u.test(match[1]))return null;
   return {base:match[1],detail:match[2]};
 }
-async function choosePostalAddress(page,field,parts) {
+export function postalReadbackKeys(base,relatedTexts=[]) {
+  const source=splitSignupPostalAddress(base);
+  assert(source&&!source.detail,'Exact base address required');
+  assert(Array.isArray(relatedTexts)&&relatedTexts.length<=4096,'Bounded selected postal row required');
+  const keys=[postalKey(base)];
+  if(/(?:대로|번길|길|로)\s+\d/u.test(base))return keys;
+  const roads=new Set();
+  for(const text of relatedTexts){
+    if(typeof text!=='string'||text.length>500)continue;
+    const value=clean(text).replace(/^(?:도로명|지번)\s*/,'');
+    const parts=splitSignupPostalAddress(value);
+    if(!parts||parts.detail&&!/^\([^()]*\)$/.test(clean(parts.detail))
+      ||!/(?:대로|번길|길|로)\s+\d/u.test(parts.base))continue;
+    roads.add(postalKey(value));
+  }
+  // A native jibun selection may return its road address, but never borrow a
+  // neighboring result or guess among multiple road addresses for the same lot.
+  if(roads.size===1)keys.push(...roads);
+  return [...new Set(keys)];
+}
+export async function waitForNativePostalAddress(field,keys) {
+  assert(Array.isArray(keys)&&keys.length>=1&&keys.length<=2&&keys.every(x=>typeof x==='string'&&x),'Exact postal keys required');
+  for(let attempt=0;attempt<100;attempt++){
+    const value=await field.inputValue({timeout:1000});
+    if(value&&keys.includes(postalKey(value)))return value;
+    if(attempt<99)await field.page().waitForTimeout(100);
+  }
+  throw Error('Native postcode callback did not match the selected result');
+}
+export async function choosePostalAddress(page,field,parts) {
   let popup,stage='popup';
   try{
     [popup]=await Promise.all([page.waitForEvent('popup',{timeout:15000}),field.click()]);
@@ -32,20 +61,27 @@ async function choosePostalAddress(page,field,parts) {
     stage='visible_results';
     const choices=frame.locator('button.link_post:not(.link_btn_map)');
     await choices.first().waitFor({state:'visible',timeout:20000});
-    const lines=await choices.evaluateAll(nodes=>nodes.map(node=>[node.textContent,...[...node.querySelectorAll('*')].map(child=>child.textContent)]));
-    const matches=lines.map((texts,index)=>({index,exact:texts.some(text=>postalKey(clean(text).replace(/^(?:도로명|지번)\s*/,''))===postalKey(parts.base))})).filter(x=>x.exact);
+    const lines=await choices.evaluateAll(nodes=>nodes.map(node=>({
+      texts:[node.textContent,...[...node.querySelectorAll('*')].map(child=>child.textContent)],
+      related:[...(node.closest?.('dl.list_address')?.querySelectorAll('*')||[])].map(child=>child.textContent),
+    })));
+    const matches=lines.map((row,index)=>({index,exact:row.texts.some(text=>postalKey(clean(text).replace(/^(?:도로명|지번)\s*/,''))===postalKey(parts.base))})).filter(x=>x.exact);
     stage='exact_result';
     assert(matches.length===1,'Postal address is not an exact unique match');
     stage='select_result';
-    await choices.nth(matches[0].index).click();
+    const keys=postalReadbackKeys(parts.base,lines[matches[0].index].related);
+    try{await choices.nth(matches[0].index).click();}
+    catch(error){
+      if(!popup.isClosed()||page.isClosed()||!(/Target page, context or browser has been closed/.test(error.message||'')
+        ||error.name==='TargetClosedError'))throw error;
+    }
     stage='native_callback';
-    await field.page().waitForFunction(({expected})=>{
-      const n=[...document.querySelectorAll('input[placeholder="주소를 입력해 주세요"]')].find(x=>x.getClientRects().length);
-      return !!n?.value&&n.value.includes(expected);
-    },{expected:parts.base.split(' ').slice(-2).join(' ')},{timeout:10000});
-    const selected=await field.inputValue();assert(postalKey(selected)===postalKey(parts.base));return selected;
+    const selected=await waitForNativePostalAddress(field,keys);
+    return {value:selected,lookupEvidence:{kind:'native_exact_result_same_row_v1',sourceBaseHash:sha(postalKey(parts.base)),
+      selectedValueHash:sha(postalKey(selected)),detailHash:sha(clean(parts.detail)),
+      match:postalKey(selected)===postalKey(parts.base)?'signed_base':'same_row_road'}};
   }catch(error){error.postalStage=stage;throw error;
-  }finally{if(popup&&!popup.isClosed())await popup.close();}
+  }finally{if(popup&&!popup.isClosed())try{await popup.close();}catch(error){if(!popup.isClosed())throw error;}}
 }
 export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProgress=async()=>{},lookupApproved=SIGNUP_ADDRESS_LOOKUP_APPROVED}={}) {
   assert(job.source==='instructor_member_eformsign'&&job.profileUpdate?.version===2&&job.studioId==='5330'
@@ -86,16 +122,25 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
   let addressDecision=decideSignupProfileFieldV2({field:'address',current:combined,expected:expected.addressRaw});
   const parts=splitSignupPostalAddress(expected.addressRaw);
   if(parts&&before.address&&postalKey(before.address)===postalKey(parts.base)&&clean(before.detail)===clean(parts.detail))addressDecision='already_equal';
+  const prior=job.profileStatus?.address;
+  const sameVerifiedSelection=parts&&before.address&&['verified','already_equal'].includes(prior?.status)
+    &&prior.lookupEvidence?.kind==='native_exact_result_same_row_v1'
+    &&prior.lookupEvidence.sourceBaseHash===sha(postalKey(parts.base))
+    &&prior.lookupEvidence.selectedValueHash===sha(postalKey(before.address))
+    &&prior.lookupEvidence.detailHash===sha(clean(parts.detail))&&clean(before.detail)===clean(parts.detail);
+  if(sameVerifiedSelection)addressDecision='already_equal';
   if(addressDecision==='write'&&(!parts||before.address||before.detail))addressDecision='review';
   if(addressDecision==='write'&&!lookupApproved)addressDecision='awaiting_address_lookup_approval';
   const result={version:2,birthDate:{status:birthDecision,...(birthDate.resolution
-    ? {resolution:birthDate.resolution,expectedHash:sha(birthDate.value)} : {})},address:{status:addressDecision},checkedAt:now.toISOString(),
+    ? {resolution:birthDate.resolution,expectedHash:sha(birthDate.value)} : {})},address:{status:addressDecision,
+      ...(sameVerifiedSelection?{lookupEvidence:prior.lookupEvidence}:{})},checkedAt:now.toISOString(),
     beforeFieldHashes:{birthDate:sha(before.birthDate),address:sha(before.address),detail:sha(before.detail),protectedHash:before.protectedHash}};
   await recordProgress(result);
   let selectedAddress;
   if(addressDecision==='write'){
     try{
-      selectedAddress=await choosePostalAddress(page,field('주소를 입력해 주세요'),parts);
+      const selected=await choosePostalAddress(page,field('주소를 입력해 주세요'),parts);
+      selectedAddress=selected.value;result.address.lookupEvidence=selected.lookupEvidence;
       await field('상세 주소를 입력해 주세요').fill(parts.detail);
     }catch(error){
       addressDecision='review';result.address={status:'review',reason:'postal_exact_match_unavailable',stage:error.postalStage || 'unknown'};
@@ -112,7 +157,16 @@ export async function applySignupProfileV2(page,job,memberId,baseUrl,{recordProg
     const fresh=await page.context().newPage();
     try{assert(sha(await openEditor(fresh))===sha(before),'Native profile changed while this draft was open');}
     finally{await fresh.close();}
+    const assertDraft=async()=>{
+      assert(await field('주소를 입력해 주세요').inputValue()===(addressDecision==='write'?selectedAddress:before.address)
+        &&await field('상세 주소를 입력해 주세요').inputValue()===(addressDecision==='write'?parts.detail:before.detail),
+      'Unexpected address draft; no member save');
+      assert(await field('생년월일 (YYYY-MM-DD)').inputValue()===(birthDecision==='write'?birthDate.value:before.birthDate),
+        'Unexpected birth-date draft; no member save');
+    };
+    await assertDraft();
     await recordProgress({...result,saveIntentAt:new Date().toISOString(),beforeHash:sha(before),expectedHash:sha({birthDate:birthDate.value,address:selectedAddress,detail:parts?.detail})});
+    await assertDraft();
     try{await page.getByRole('button',{name:'회원 수정 완료',exact:true}).click();await page.waitForURL(detailUrl,{timeout:30000});}
     catch{result.saveResponse='unknown';}
     const after=await openEditor();assert(after.protectedHash===before.protectedHash,'Unrelated member fields changed during verification');

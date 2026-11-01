@@ -8,13 +8,17 @@ import net from 'node:net';
 import tls from 'node:tls';
 import vm from 'node:vm';
 import { beforeEach, test } from 'node:test';
-import { applySignupProfileV2, splitSignupPostalAddress, SIGNUP_ADDRESS_LOOKUP_APPROVED } from '../lib/instructor-signup-profile-v2-writer.mjs';
+import { applySignupProfileV2, splitSignupPostalAddress, SIGNUP_ADDRESS_LOOKUP_APPROVED,
+  signupPostalAddressKey, postalReadbackKeys, waitForNativePostalAddress } from '../lib/instructor-signup-profile-v2-writer.mjs';
 import { signupProfileMemoPresent } from '../lib/instructor-signup-profile.mjs';
 
 const NOW = new Date('2026-10-30T03:00:00Z');
 const MEMBER = '9000001', DOC = 'a'.repeat(32), REG = 'ilr_' + 'b'.repeat(24);
 const BASE = 'https://arcpilates.studiomate.kr';
 const ADDRESS = '서울특별시 강남구 테헤란로 123 합성빌딩 704호';
+const JIBUN = '서울특별시 강남구 역삼동 123-4';
+const ROAD = '서울특별시 강남구 테헤란로 123';
+const DETAIL = '합성빌딩 704호';
 const clone = structuredClone;
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 beforeEach(t => {
@@ -38,14 +42,43 @@ function nativePage(j, options = {}) {
     phone: options.phone ?? j.memberPhone, name: options.name ?? j.memberName, grade: options.grade ?? '강사회원',
     registrationDate: options.registrationDate ?? '2020-01-02', unrelated: options.unrelated ?? 'preserve-synthetic-value' };
   let draft = clone(stored), url = '', saves = 0, popupClosed = false, closed = false;
+  let postalSelected = false, postalWaits = 0, pendingPostal;
   const freshPages = [];
+  const optionsPostal = () => options.postal;
+  const settlePostal = () => {
+    draft.address = pendingPostal;
+    pendingPostal = undefined;
+    events.push({ operation: 'postal-settle', popupClosed });
+  };
+  const choiceNode = (text, index) => {
+    const leaf = value => ({ textContent: value, querySelectorAll: () => [] });
+    const related = optionsPostal().rowTexts?.[index] ?? [text];
+    const row = { textContent: related.join(' '), querySelectorAll: selector => {
+      assert.equal(selector, '*');
+      return related.map(leaf);
+    } };
+    const label = /(?:동|리|가)\s+\d/u.test(text) ? '지번' : '도로명';
+    return { textContent: label + ' ' + text + ' 선택 안내', querySelectorAll: selector => {
+      assert.equal(selector, '*');
+      return [leaf(text)];
+    }, closest: selector => {
+      assert.equal(selector, 'dl.list_address');
+      events.push({ operation: 'postal-row-read', index });
+      return optionsPostal().missingRow ? null : row;
+    } };
+  };
   const resultChoices=()=>({
     first:()=>({waitFor:async()=>{if(!optionsPostal().choices.length)throw Error('No visible postcode results');events.push({operation:'postal-results'});}}),
-    evaluateAll:async fn=>fn(optionsPostal().choices.map(t=>({textContent:'도로명 '+t+' 선택 안내',querySelectorAll:()=>[{textContent:t}]}))),
-    nth:index=>({click:async()=>{
-      events.push({operation:'postal-select',index});draft.address=optionsPostal().selected??optionsPostal().choices[index].replace(/^(도로명|지번)\s*/,'');
-      if(optionsPostal().autoClose!==false)popupClosed=true;
-    }}),
+    evaluateAll:async fn=>fn(optionsPostal().choices.map(choiceNode)),
+    nth:index=>({ evaluate: async fn => fn(choiceNode(optionsPostal().choices[index], index)),
+      click:async()=>{
+        events.push({operation:'postal-select',index});
+        postalSelected = true;
+        pendingPostal = optionsPostal().selected ?? optionsPostal().choices[index].replace(/^(도로명|지번)\s*/,'');
+        if(optionsPostal().autoClose!==false){popupClosed=true;events.push({operation:'postal-auto-close'});}
+        if (!optionsPostal().settleAfterWaits) settlePostal();
+        if (optionsPostal().clickError) throw Error(optionsPostal().clickError);
+      }}),
   });
   const postalFrame = {
     locator:selector=>{assert.equal(selector,'button.link_post:not(.link_btn_map)');return resultChoices();},
@@ -60,7 +93,6 @@ function nativePage(j, options = {}) {
       assert.fail('Map/other buttons cannot be treated as address choices');
     },
   };
-  const optionsPostal = () => options.postal;
   const popup = { frameLocator: selector => { assert.equal(selector, 'iframe'); return postalFrame; },
     isClosed: () => popupClosed, close: async () => { popupClosed = true; events.push({ operation: 'popup-close' }); } };
   const keyFor = { '생년월일 (YYYY-MM-DD)': 'birthDate', '주소를 입력해 주세요': 'address',
@@ -68,7 +100,10 @@ function nativePage(j, options = {}) {
   const input = placeholder => {
     const key = keyFor[placeholder]; assert(key, placeholder);
     const locator = { filter: opts => { assert.deepEqual(opts, { visible: true }); return locator; },
-      inputValue: async () => draft[key], waitFor: async () => {}, page: () => page,
+      inputValue: async () => {
+        options.onInputValue?.({ key, draft, events, postalSelected, postalWaits });
+        return draft[key];
+      }, waitFor: async () => {}, page: () => page,
       click: async () => { events.push({ operation: 'field-click', field: key }); },
       fill: async value => { assert(!options.readOnly); events.push({ operation: 'fill', field: key, value }); assert(['birthDate', 'detail'].includes(key)); draft[key] = value; },
       pressSequentially: async value => {
@@ -108,15 +143,17 @@ function nativePage(j, options = {}) {
       } }))) };
     },
     waitForFunction: async (_fn, expected) => {
-      if (expected && typeof expected === 'object') {
-        assert.equal(typeof expected.expected, 'string');
-        assert(draft.address.includes(expected.expected));
-        return;
-      }
-      assert.equal(typeof expected, 'string');
+      assert.equal(typeof expected, 'string', 'Postcode callbacks must poll the same locator with the real canonical helper');
       assert.equal(draft.phone.replace(/\D/g, ''), expected);
     },
     waitForURL: async expected => assert.equal(url, expected),
+    waitForTimeout: async milliseconds => {
+      assert.equal(milliseconds, 100);
+      postalWaits++;
+      events.push({ operation: 'postal-wait', popupClosed });
+      if (pendingPostal !== undefined && postalWaits >= optionsPostal().settleAfterWaits) settlePostal();
+    },
+    isClosed: () => closed,
     waitForEvent: async event => {
       events.push({ operation: 'popup', event }); assert.equal(event, 'popup');
       if (options.postal) return popup;
@@ -126,6 +163,10 @@ function nativePage(j, options = {}) {
     context: () => ({ newPage: async () => {
       events.push({ operation: 'fresh-page-open' });
       Object.assign(stored, options.changeLiveBeforeSave || {});
+      if (options.latePostalBeforeSave) {
+        draft.address = options.latePostalBeforeSave;
+        events.push({ operation: 'late-postal-callback' });
+      }
       const fresh = nativePage(j, { ...clone(stored), readOnly: true });
       freshPages.push(fresh);
       return { ...fresh.page, close: async () => { await fresh.page.close(); events.push({ operation: 'fresh-page-close' }); } };
@@ -135,7 +176,10 @@ function nativePage(j, options = {}) {
   return { page, events, progress, stored: () => clone(stored), saves: () => saves,
     popupClosed: () => popupClosed,
     freshPages, isClosed: () => closed,
-    recordProgress: async value => { progress.push(clone(value)); events.push({ operation: 'progress', value: clone(value) }); } };
+    recordProgress: async value => {
+      progress.push(clone(value)); events.push({ operation: 'progress', value: clone(value) });
+      if (value.saveIntentAt) options.onSaveIntent?.({ draft, events });
+    } };
 }
 const run = (m, j, options = {}) => applySignupProfileV2(m.page, j, MEMBER, BASE, { recordProgress: m.recordProgress, lookupApproved: false, ...options });
 
@@ -440,6 +484,226 @@ for (const [label, postal] of Object.entries({
   assert(!m.events.some(e => e.operation === 'fill' && e.field === 'detail'));
   if (label !== 'selectedReadbackMismatch') assert(!m.events.some(e => e.operation === 'postal-select'));
   assert.equal(m.popupClosed(), true);
+});
+
+test('postal readback keys admit only the sole full same-row road alias for a jibun source', () => {
+  assert.deepEqual(postalReadbackKeys(JIBUN, ['도로명', ROAD, '지번', JIBUN]),
+    [signupPostalAddressKey(JIBUN), signupPostalAddressKey(ROAD)]);
+  assert.deepEqual(postalReadbackKeys(JIBUN, [ROAD, '서울 강남구 테헤란로  123 (합성건물)']),
+    [signupPostalAddressKey(JIBUN), signupPostalAddressKey(ROAD)]);
+  assert.deepEqual(postalReadbackKeys(JIBUN, [ROAD, '서울특별시 강남구 테헤란로 124']),
+    [signupPostalAddressKey(JIBUN)]);
+  assert.deepEqual(postalReadbackKeys(ROAD, [JIBUN, '서울특별시 강남구 테헤란로 124']),
+    [signupPostalAddressKey(ROAD)]);
+});
+
+for (const [label, text] of [
+  ['unit detail', ROAD + ' 704호'],
+  ['building and unit detail', ROAD + ' ' + DETAIL],
+  ['instruction suffix', ROAD + ' 선택 안내'],
+  ['incomplete region', '테헤란로 123'],
+  ['foreign address', '123 Main Street'],
+]) test('postal readback keys exclude ' + label + ' rather than guessing an alias', () => {
+  assert.deepEqual(postalReadbackKeys(JIBUN, [text]), [signupPostalAddressKey(JIBUN)]);
+});
+
+test('native postal helper polls the same locator, normalizes readback and returns the actual native value', async () => {
+  const actual = '서울 강남구 테헤란로\u00a0 123 (합성건물)';
+  const values = ['', '서울특별시 강남구 테헤란로 124', actual];
+  let reads = 0, waits = 0;
+  const field = { inputValue: async options => {
+    assert.equal(options.timeout, 1000);
+    return values[reads++];
+  }, page: () => ({ waitForTimeout: async milliseconds => { assert.equal(milliseconds, 100); waits++; } }) };
+  assert.equal(await waitForNativePostalAddress(field, postalReadbackKeys(JIBUN, [ROAD])), actual);
+  assert.equal(reads, 3); assert.equal(waits, 2);
+});
+
+for (const [label, value] of [['blank', ''], ['unrelated', '서울특별시 강남구 테헤란로 1234']]) {
+  test('native postal helper bounds ' + label + ' callback to 100 reads without clicking or mutating', async () => {
+    let reads = 0, waits = 0;
+    const field = { inputValue: async () => { reads++; return value; },
+      page: () => ({ waitForTimeout: async milliseconds => { assert.equal(milliseconds, 100); waits++; } }) };
+    await assert.rejects(waitForNativePostalAddress(field, postalReadbackKeys(JIBUN, [ROAD])), /callback/i);
+    assert.equal(reads, 100); assert.equal(waits, 99);
+  });
+}
+
+function signedJibunJob() {
+  const j = job();
+  j.profileUpdate.addressRaw = JIBUN + ' ' + DETAIL;
+  return j;
+}
+const sameRowPostal = overrides => ({ choices: [JIBUN], rowTexts: [[ROAD, JIBUN]], selected: ROAD, ...overrides });
+
+test('exact jibun selection accepts only its same-row native road, preserves source and replays persisted proof without clicking', async () => {
+  const j = signedJibunJob(), original = clone(j);
+  const actual = ROAD + ' (합성건물)';
+  const m = nativePage(j, { postal: sameRowPostal({ selected: actual }) }), before = m.stored();
+  const result = await run(m, j, { lookupApproved: true });
+  assert.equal(result.address.status, 'verified'); assert.equal(result.birthDate.status, 'verified');
+  assert.deepEqual(result.address.lookupEvidence, {
+    kind: 'native_exact_result_same_row_v1', sourceBaseHash: hash(signupPostalAddressKey(JIBUN)),
+    selectedValueHash: hash(signupPostalAddressKey(actual)), detailHash: hash(DETAIL), match: 'same_row_road',
+  });
+  assert.deepEqual(m.stored(), { ...before, birthDate: '1990-01-02', address: actual, detail: DETAIL });
+  assert.deepEqual(j, original);
+  assert.equal(m.saves(), 1);
+  assert.equal(m.events.filter(e => e.operation === 'postal-select').length, 1);
+  assert.deepEqual(m.events.filter(e => e.operation === 'postal-query'), [{ operation: 'postal-query', value: JIBUN }]);
+  assert(!m.events.some(e => ['fill', 'type'].includes(e.operation) && !['birthDate', 'detail'].includes(e.field)));
+  assert(!JSON.stringify(result.address.lookupEvidence).includes(ROAD));
+  assert(m.progress.some(p => p.saveIntentAt && p.address.lookupEvidence?.match === 'same_row_road'));
+  const replayJob = { ...clone(j), profileStatus: clone(result) };
+  const replayBefore = clone(replayJob);
+  for (let repeat = 0; repeat < 2; repeat++) {
+    const replay = await run(m, replayJob, { lookupApproved: true });
+    assert.equal(replay.address.status, 'already_equal');
+    assert.deepEqual(replay.address.lookupEvidence, result.address.lookupEvidence);
+    replayJob.profileStatus = clone(replay);
+  }
+  assert.deepEqual(replayJob.profileUpdate, replayBefore.profileUpdate);
+  assert.equal(m.saves(), 1); assert.equal(m.events.filter(e => e.operation === 'postal-select').length, 1);
+});
+
+for (const [label, change] of [
+  ['unverified state', j => { j.profileStatus.address.status = 'write'; }],
+  ['wrong proof kind', j => { j.profileStatus.address.lookupEvidence.kind = 'other'; }],
+  ['different signed source hash', j => { j.profileStatus.address.lookupEvidence.sourceBaseHash = hash('other'); }],
+  ['different signed source', j => { j.profileUpdate.addressRaw = JIBUN.replace('123-4', '123-5') + ' ' + DETAIL; }],
+  ['different selected value hash', j => { j.profileStatus.address.lookupEvidence.selectedValueHash = hash('other'); }],
+  ['different detail hash', j => { j.profileStatus.address.lookupEvidence.detailHash = hash('other'); }],
+  ['different signed detail', j => { j.profileUpdate.addressRaw = JIBUN + ' 705호'; }],
+]) test('same-row alias replay rejects ' + label + ' and preserves a populated native address', async () => {
+  const j = signedJibunJob();
+  j.profileStatus = { address: { status: 'verified', lookupEvidence: {
+    kind: 'native_exact_result_same_row_v1', sourceBaseHash: hash(signupPostalAddressKey(JIBUN)),
+    selectedValueHash: hash(signupPostalAddressKey(ROAD)), detailHash: hash(DETAIL), match: 'same_row_road',
+  } } };
+  change(j);
+  const m = nativePage(j, { birthDate: '1990-01-02', address: ROAD, detail: DETAIL }), before = m.stored();
+  const result = await run(m, j, { lookupApproved: true });
+  assert.notEqual(result.address.status, 'already_equal');
+  assert.equal(result.address.lookupEvidence, undefined);
+  assert.deepEqual(m.stored(), before); assert.equal(m.saves(), 0);
+  assert(!m.events.some(e => ['popup', 'postal-select', 'fill', 'type'].includes(e.operation)));
+});
+
+test('an unrelated manually populated native address stays authoritative pending operator decision', async () => {
+  const j = signedJibunJob(), original = clone(j);
+  const m = nativePage(j, { birthDate: '1990-01-02', address: '서울특별시 강남구 다른로 987', detail: '' });
+  const before = m.stored(), result = await run(m, j, { lookupApproved: true });
+  assert.equal(result.address.status, 'conflict'); assert.equal(result.address.lookupEvidence, undefined);
+  assert.deepEqual(m.stored(), before); assert.deepEqual(j, original); assert.equal(m.saves(), 0);
+  assert(!m.events.some(e => ['popup', 'postal-select', 'fill', 'type'].includes(e.operation)));
+});
+
+test('a signed jibun appearing only in related row text is not an exact selectable result', async () => {
+  const j = signedJibunJob();
+  const m = nativePage(j, { postal: sameRowPostal({ choices: [ROAD] }) });
+  const result = await run(m, j, { lookupApproved: true });
+  assert.equal(result.address.status, 'review'); assert.equal(result.address.stage, 'exact_result');
+  assert.equal(result.address.lookupEvidence, undefined);
+  assert(!m.events.some(e => e.operation === 'postal-select'));
+  assert.equal(m.stored().address, ''); assert.equal(m.stored().detail, '');
+  assert.equal(result.birthDate.status, 'verified'); assert.equal(m.saves(), 1);
+});
+
+for (const [label, postal] of [
+  ['multiple same-row road aliases', sameRowPostal({ rowTexts: [[JIBUN, ROAD, '서울특별시 강남구 테헤란로 124']] })],
+  ['road appearing only in neighboring row', sameRowPostal({ choices: [JIBUN, ROAD], rowTexts: [[JIBUN], [ROAD]] })],
+  ['no selected provider row', sameRowPostal({ missingRow: true })],
+  ['blank callback', sameRowPostal({ selected: '' })],
+  ['road with unapproved detail', sameRowPostal({ rowTexts: [[JIBUN, ROAD + ' 704호']] })],
+]) test('exact jibun selection rejects ' + label + ' without attaching proof or saving address', async () => {
+  const j = signedJibunJob(), original = clone(j), m = nativePage(j, { postal });
+  const result = await run(m, j, { lookupApproved: true });
+  assert.equal(result.address.status, 'review'); assert.equal(result.address.lookupEvidence, undefined);
+  assert.equal(result.birthDate.status, 'verified'); assert.equal(m.saves(), 1);
+  assert.equal(m.stored().address, ''); assert.equal(m.stored().detail, ''); assert.deepEqual(j, original);
+  assert.equal(m.events.filter(e => e.operation === 'postal-select').length, 1);
+  assert(!m.events.some(e => e.operation === 'fill' && e.field === 'detail'));
+  assert.equal(m.popupClosed(), true);
+});
+
+for (const autoClose of [true, false]) test('delayed same-row callback settles after popup auto-close=' + autoClose, async () => {
+  const j = signedJibunJob(), m = nativePage(j, { postal: sameRowPostal({ autoClose, settleAfterWaits: 3 }) });
+  const result = await run(m, j, { lookupApproved: true });
+  assert.equal(result.address.status, 'verified'); assert.equal(m.saves(), 1);
+  const waits = m.events.filter(e => e.operation === 'postal-wait');
+  assert.equal(waits.length, 3); assert(waits.every(e => e.popupClosed === autoClose));
+  assert.equal(m.events.find(e => e.operation === 'postal-settle').popupClosed, autoClose);
+  assert.equal(m.events.filter(e => e.operation === 'postal-select').length, 1);
+  assert.equal(m.popupClosed(), true);
+});
+
+test('native signed-base callback with raw spacing is verified without rewriting the base', async () => {
+  const j = signedJibunJob(), actual = '서울 강남구 역삼동\u00a0 123-4';
+  const m = nativePage(j, { postal: sameRowPostal({ selected: actual }) });
+  const result = await run(m, j, { lookupApproved: true });
+  assert.equal(result.address.status, 'verified'); assert.equal(m.stored().address, actual);
+  assert.equal(result.address.lookupEvidence.match, 'signed_base');
+  assert.equal(m.stored().detail, DETAIL); assert.equal(m.saves(), 1);
+});
+
+for (const [label, postal, status] of [
+  ['closed popup target error', sameRowPostal({ clickError: 'Target page, context or browser has been closed' }), 'verified'],
+  ['open popup target error', sameRowPostal({ autoClose: false, clickError: 'Target page, context or browser has been closed' }), 'review'],
+  ['unrelated click error', sameRowPostal({ clickError: 'Synthetic permission denied' }), 'review'],
+]) test('native selection handles ' + label + ' without a second click', async () => {
+  const j = signedJibunJob(), m = nativePage(j, { postal });
+  const result = await run(m, j, { lookupApproved: true });
+  assert.equal(result.address.status, status); assert.equal(m.saves(), 1);
+  assert.equal(m.events.filter(e => e.operation === 'postal-select').length, 1);
+  assert.equal(m.stored().address, status === 'verified' ? ROAD : '');
+  assert.equal(Boolean(result.address.lookupEvidence), status === 'verified');
+});
+
+test('late callback after postal timeout is rejected before the independent DOB save', async () => {
+  const j = signedJibunJob(), original = clone(j);
+  const m = nativePage(j, { postal: sameRowPostal({ settleAfterWaits: 101 }), latePostalBeforeSave: ROAD });
+  const before = m.stored();
+  await assert.rejects(run(m, j, { lookupApproved: true }), /Unexpected address draft/);
+  assert(m.events.some(e => e.operation === 'late-postal-callback'));
+  assert.equal(m.saves(), 0); assert.deepEqual(m.stored(), before); assert.deepEqual(j, original);
+  assert(!m.progress.some(p => p.saveIntentAt));
+  assert(m.freshPages.every(fresh => fresh.isClosed()));
+});
+
+test('late callback during save-intent recording cannot be persisted by a DOB-only fallback', async () => {
+  const j = signedJibunJob();
+  const m = nativePage(j, { postal: sameRowPostal({ selected: '' }), onSaveIntent: ({ draft, events }) => {
+    draft.address = ROAD; events.push({ operation: 'late-postal-callback' });
+  } });
+  const before = m.stored();
+  let failure;
+  try { await run(m, j, { lookupApproved: true }); } catch (error) { failure = error; }
+  assert(m.events.some(e => e.operation === 'late-postal-callback'));
+  assert.equal(m.saves(), 0, 'Late callback must be caught before the native save, not by persisted readback');
+  assert.deepEqual(m.stored(), before);
+  assert.match(failure?.message || '', /Unexpected address draft/);
+});
+
+for (const [label, options, patch, message] of [
+  ['selected base changed', { postal: sameRowPostal() }, { address: ROAD + '4' }, /Unexpected address draft/],
+  ['signed detail changed', { postal: sameRowPostal() }, { detail: '705호' }, /Unexpected address draft/],
+  ['written DOB changed', { postal: sameRowPostal() }, { birthDate: '1988-03-04' }, /Unexpected birth-date draft/],
+  ['preserved DOB changed', { birthDate: '1989-01-02', postal: sameRowPostal() },
+    { birthDate: '1988-03-04' }, /Unexpected birth-date draft/],
+  ['fallback detail changed', { postal: sameRowPostal({ selected: '' }) }, { detail: '705호' }, /Unexpected address draft/],
+  ['fallback DOB changed', { postal: sameRowPostal({ selected: '' }) },
+    { birthDate: '1988-03-04' }, /Unexpected birth-date draft/],
+]) test('post-intent guard blocks ' + label + ' before any native save', async () => {
+  const j = signedJibunJob(), original = clone(j);
+  const m = nativePage(j, { ...options, onSaveIntent: ({ draft, events }) => {
+    Object.assign(draft, patch); events.push({ operation: 'late-draft-change' });
+  } });
+  const before = m.stored();
+  await assert.rejects(run(m, j, { lookupApproved: true }), message);
+  assert(m.progress.some(p => p.saveIntentAt));
+  assert(m.events.some(e => e.operation === 'late-draft-change'));
+  assert.equal(m.saves(), 0); assert.deepEqual(m.stored(), before); assert.deepEqual(j, original);
+  assert(m.freshPages.every(fresh => fresh.isClosed()));
 });
 
 // Extract only the orchestration function, never import the executable queue processor.
