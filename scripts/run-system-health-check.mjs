@@ -7,6 +7,7 @@ import path from "node:path";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { ALERT_STATE_FILE, deferReferralHealthFinding, deferInstructorOrderHealthFinding } from "./lib/automation-failure-notifications.mjs";
 import { HEALTH_WEB_SURFACES, probeWebSurface } from "./lib/system-health-web-surfaces.mjs";
+import { inspectHealthWorktrees } from "./lib/system-health-worktrees.mjs";
 import { systemHealthEmail } from "./lib/system-health-email.mjs";
 import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
@@ -1090,11 +1091,16 @@ async function checkDataSourceAndReports() {
 
 async function checkGitAndCi() {
   const worktrees = gitWorktrees();
-  const dirty = worktrees.filter((wt) => wt.path && gitDirty(wt.path));
+  const inventory = inspectHealthWorktrees(worktrees);
+  const dirty = inventory.filter((wt) => wt.state === "dirty");
+  const unavailable = inventory.filter((wt) => wt.state === "unavailable");
   checked.push({
     id: "git-worktrees",
     dirtyCount: dirty.length,
     dirtyPaths: dirty.map((wt) => wt.path).slice(0, 12),
+    coverageComplete: !unavailable.length,
+    unavailableCount: unavailable.length,
+    unavailablePaths: unavailable.map((wt) => ({ path: wt.path, reason: wt.reason })).slice(0, 12),
     operationalFinding: false,
   });
   const gh = spawnSync(GH, ["run", "list", "--branch", "main", "--limit", "50", "--json", "databaseId,workflowDatabaseId,conclusion,status,workflowName,headBranch,headSha,createdAt"], {

@@ -12,6 +12,7 @@ import {
 } from "../lib/system-health-current-state.mjs";
 import { canAutoRetryQueueDocument, classifyNotionDocument, classifyQueueDocument, queryCoverage } from "../lib/system-health-queue-policy.mjs";
 import { classifyCloudReadError, readSystemHealthCloudState } from "../lib/system-health-cloud-state.mjs";
+import { inspectHealthWorktrees } from "../lib/system-health-worktrees.mjs";
 
 const now = new Date("2026-09-05T02:00:00Z");
 const step = (name) => ({ name, exitCode: 0, stdout: { ok: true,
@@ -546,7 +547,7 @@ test("unavailable or capped evidence produces an actionable finding even with ze
 test("GitHub query failure cannot overwrite prior workflow failure identity", async () => {
   const emitted = [];
   await runnerFunction("checkGitAndCi", baseGlobals({
-    gitWorktrees: () => [], gitDirty: () => false, GH: "gh", ROOT: "/unused", process: { env: {} },
+    gitWorktrees: () => [], inspectHealthWorktrees, GH: "gh", ROOT: "/unused", process: { env: {} },
     spawnSync: () => ({ status: 1, stderr: "query failed" }), addFinding: (finding) => emitted.push(finding),
   }))();
   assert.equal(emitted.length, 1);

@@ -29,3 +29,7 @@ Worktree: `/Users/archivepilates/codex-worktrees/ops-health-errors-20261102`; br
 Focused no-network tests; Functions build/boundaries/affected detection; main-thread diff review; clean main equal to fresh origin/main; only affected Functions deployment; current-live CORE manifest clone replacing rules HTML only; independent live readback; runtime fast-forward; CI and final Git status. Do not claim October final settlement or contract reviews complete.
 
 Release and live results are recorded in `docs/reports/2026-11-02-ops-health-errors.html`.
+
+## Follow-Up Verification Blocker
+
+The read-only full health check stalled inside `git status --porcelain` for a historical non-runtime worktree. The task-owned diagnostic and child were interrupted and their PIDs verified absent. Auxiliary worktree inventory now has a 750ms per-command timeout and 5-second total budget; unavailable worktrees are explicitly counted, never reported clean. The operational runtime dirty-source guard is unchanged. A live isolated read returned timeout for that historical checkout and clean for runtime in 819ms. No historical worktree was altered. This is a diagnostic implementation repair, not a change to staff or member rules.
