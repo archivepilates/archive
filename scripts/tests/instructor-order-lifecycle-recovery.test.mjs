@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { serialize } from 'node:v8';
 import { beforeEach, test } from 'node:test';
 import { planInstructorOrderLifecycleRecovery } from '../lib/instructor-order-lifecycle-recovery.mjs';
 import { createInstructorOrderAttendeeResolution, orderFingerprint,
@@ -316,7 +317,7 @@ for (const [name, mutate] of negatives) {
     const input = fixture(); mutate(input);
     const before = clone(input);
     assert.throws(() => planInstructorOrderLifecycleRecovery(freeze(input)), Error);
-    assert.deepEqual(input, before);
+    assert.deepEqual(serialize(input), serialize(before));
   });
 }
 
