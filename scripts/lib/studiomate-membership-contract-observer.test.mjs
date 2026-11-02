@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { selectNativeMembershipContractCandidate } from "./studiomate-membership-contract-native-selection.mjs";
+import { createHash } from "node:crypto";
+import { contractHintRowCounts } from "./studiomate-contract-coverage-reconciliation.mjs";
 import {
   CONTRACT_LANE,
   contractObservationGroups,
@@ -68,6 +70,265 @@ function memberRows(count = 100) {
     전화번호: `010${String(index).padStart(8, "0")}`,
   }));
 }
+
+const digest = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const rowMultiset = (rows) => contractHintRowCounts(contractObservationGroups(rows)[0]?.hints || []);
+
+function reconcileFixture(db, oldRows, currentRows) {
+  const [original] = contractObservationGroups(oldRows);
+  const current = contractObservationGroups(currentRows)[0];
+  const baseline = db.records.get(stateKey);
+  baseline.coverageReconciliations ||= {};
+  baseline.coverageReconciliations[original.id] = {
+    schemaVersion: 1, reviewId: digest([original.id, current?.fingerprint]), reviewedAt: now,
+    originalObservedAt: baseline.observedAtByMember[original.id],
+    historicalRows: Object.fromEntries([...new Set([
+      ...Object.keys(rowMultiset(oldRows)), ...Object.keys(rowMultiset(currentRows)),
+    ])].map((key) => [key, Math.max(rowMultiset(oldRows)[key] || 0, rowMultiset(currentRows)[key] || 0)])),
+    minimumRows: rowMultiset(currentRows), lastRows: rowMultiset(currentRows),
+  };
+  if (current) {
+    baseline.fingerprints[original.id] = current.fingerprint;
+    baseline.rowCounts[original.id] = current.hints.length;
+  } else {
+    delete baseline.fingerprints[original.id];
+    delete baseline.rowCounts[original.id];
+    delete baseline.observedAtByMember[original.id];
+  }
+  baseline.coverageLossIds = (baseline.coverageLossIds || []).filter((id) => id !== original.id);
+  return original.id;
+}
+
+test("exact targeted reconciliations persist without historical hints and retain old bounds", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  const old = { ...rows[0], 수강권명: "Old refunded payment" };
+  const excluded = { ...rows[0], 수강권명: "Synthetic single-use" };
+  const expired = { ...rows[2], 수강권명: "Old expired payment" };
+  await observeMembershipContractHints({ db, rows: [...rows, old, old, expired, expired], source, now });
+  const id = reconcileFixture(db, [rows[0], old, old], [rows[0], excluded]);
+  const absent = reconcileFixture(db, [rows[1]], []);
+  const reduced = reconcileFixture(db, [rows[2], expired, expired], [rows[2]]);
+  const before = structuredClone(db.records.get(stateKey));
+  const currentRows = [...rows.filter((_, index) => index !== 1), excluded];
+  const accepted = await observeMembershipContractHints({ db, rows: currentRows, source: nextSource, now });
+  assert.equal(accepted.candidates, 0);
+  assert.deepEqual(accepted.coverageLossIds, []);
+  const state = db.records.get(stateKey);
+  assert.equal(state.observedAtByMember[id], source.downloadedAt);
+  assert.equal(state.rowCounts[id], 2);
+  assert.equal(state.rowCounts[reduced], 1);
+  assert.equal(state.observedAtByMember[reduced], source.downloadedAt);
+  assert.equal(state.fingerprints[absent], undefined);
+  assert.deepEqual(state.coverageReconciliations, before.coverageReconciliations);
+  assert.equal(state.fingerprints[contractObservationGroups([rows[3]])[0].id],
+    before.fingerprints[contractObservationGroups([rows[3]])[0].id]);
+  assert.equal(db.records.size, 1);
+});
+
+test("partial/full restoration and subsequent historical declines never emit hints", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  const historical = { ...rows[0], 수강권명: "Historical duplicate payment" };
+  await observeMembershipContractHints({ db, rows: [...rows, historical, historical], source, now });
+  const id = reconcileFixture(db, [rows[0], historical, historical], [rows[0]]);
+  for (const [index, count] of [1, 2, 1, 0].entries()) {
+    const current = [...rows, ...Array(count).fill(historical)];
+    const result = await observeMembershipContractHints({ db, rows: current,
+      source: { ...nextSource, downloadedAt: `2026-09-14T06:58:${String(index).padStart(2, "0")}Z` }, now });
+    assert.equal(result.candidates, 0);
+    assert.deepEqual(result.coverageLossIds, []);
+    const state = db.records.get(stateKey);
+    assert.equal(state.rowCounts[id], 1 + count);
+    assert.equal(state.observedAtByMember[id], source.downloadedAt);
+    assert.deepEqual(state.coverageReconciliations[id].lastRows, rowMultiset([rows[0], ...Array(count).fill(historical)]));
+  }
+  assert.equal(db.records.size, 1);
+});
+
+test("novel issuance below original count uses old bound and mixed restorations stay deduped", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  const old = { ...rows[0], 수강권명: "Historical" };
+  const novel = { ...rows[0], 수강권명: "Novel regular" };
+  await observeMembershipContractHints({ db, rows: [...rows, old, old, old], source, now });
+  const id = reconcileFixture(db, [rows[0], old, old, old], [rows[0]]);
+  const result = await observeMembershipContractHints({ db, rows: [...rows, novel], source: nextSource, now });
+  assert.equal(result.candidates, 1);
+  assert.equal(result.candidateHints[0].previousDownloadedAt, source.downloadedAt);
+  assert.equal(db.records.get(stateKey).rowCounts[id], 2);
+  assert.equal(db.records.get(stateKey).observedAtByMember[id], nextSource.downloadedAt);
+  const restored = await observeMembershipContractHints({ db, rows: [...rows, novel, old], source: restoredSource, now });
+  assert.equal(restored.candidates, 0);
+  const next = await observeMembershipContractHints({ db, rows: [...rows, novel, old, { ...novel, 수강권명: "Second novel" }],
+    source: { ...restoredSource, downloadedAt: now }, now });
+  assert.equal(next.candidates, 1);
+  assert.equal(next.candidateHints[0].previousDownloadedAt, nextSource.downloadedAt);
+  assert.equal(db.records.size, 3);
+});
+
+test("empty reviewed member restores/disappears hintlessly and novel return uses original bound", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  await observeMembershipContractHints({ db, rows, source, now });
+  const id = reconcileFixture(db, [rows[0]], []);
+  await observeMembershipContractHints({ db, rows, source: nextSource, now });
+  const absent = await observeMembershipContractHints({ db, rows: rows.slice(1), source: restoredSource, now });
+  assert.equal(absent.candidates, 0);
+  assert.deepEqual(absent.coverageLossIds, []);
+  assert.equal(db.records.get(stateKey).fingerprints[id], undefined);
+  assert.deepEqual(db.records.get(stateKey).coverageReconciliations[id].lastRows, {});
+  const returned = await observeMembershipContractHints({ db, rows: [...rows.slice(1), { ...rows[0], 수강권명: "Novel return" }],
+    source: { ...restoredSource, downloadedAt: now }, now });
+  assert.equal(returned.candidates, 1);
+  assert.equal(returned.candidateHints[0].previousDownloadedAt, source.downloadedAt);
+});
+
+test("minimum loss and loss of previously novel rows remain held, including equal-count swaps", async () => {
+  for (const kind of ["minimum", "novel", "swap", "duplicate"]) {
+    const db = fakeDb();
+    const rows = memberRows();
+    const old = { ...rows[0], 수강권명: "Historical" };
+    const novel = kind === "duplicate" ? old : { ...rows[0], 수강권명: "Novel" };
+    await observeMembershipContractHints({ db, rows: [...rows, old], source, now });
+    const id = reconcileFixture(db, [rows[0], old], [rows[0]]);
+    const additions = kind === "duplicate" ? [novel, novel] : [novel];
+    if (kind !== "minimum") await observeMembershipContractHints({ db, rows: [...rows, ...additions], source: nextSource, now });
+    const before = structuredClone(db.records.get(stateKey));
+    const current = kind === "minimum" ? rows.slice(1) : kind === "swap" || kind === "duplicate" ? [...rows, old] : rows;
+    const result = await observeMembershipContractHints({ db, rows: current, source: restoredSource, now });
+    assert.deepEqual(result.coverageLossIds, [id], kind);
+    assert.equal(result.candidates, 0, kind);
+    const state = db.records.get(stateKey);
+    assert.equal(state.fingerprints[id], before.fingerprints[id]);
+    assert.equal(state.observedAtByMember[id], before.observedAtByMember[id]);
+    assert.deepEqual(state.coverageReconciliations[id].lastRows, before.coverageReconciliations[id].lastRows);
+  }
+});
+
+test("same and older download replays retain coverage exclusions without writes", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  await observeMembershipContractHints({ db, rows, source, now });
+  const held = await observeMembershipContractHints({ db, rows: rows.slice(1), source: nextSource, now });
+  const before = structuredClone([...db.records]);
+  for (const replaySource of [nextSource, source]) {
+    const result = await observeMembershipContractHints({ db, rows, source: replaySource, now });
+    assert.deepEqual(result.coverageLossIds, held.coverageLossIds);
+    assert.equal(result.coverageReviewCount, 1);
+    assert.equal(result.candidates, 0);
+    assert.deepEqual([...db.records], before);
+  }
+});
+
+test("ambiguous reconciled phone groups stay held at equal counts, restorations, declines and novel additions", async (t) => {
+  for (const kind of ["same", "restore", "decline", "novel", "absent"]) {
+    await t.test(kind, async () => {
+      const db = fakeDb();
+      const rows = memberRows();
+      const old = { ...rows[0], 수강권명: "Historical" };
+      await observeMembershipContractHints({ db, rows: [...rows, old, old], source, now });
+      const minimum = kind === "same" ? [rows[0], old] : kind === "absent" ? [] : [rows[0]];
+      const id = reconcileFixture(db, [rows[0], old, old], minimum);
+      if (kind === "decline") {
+        await observeMembershipContractHints({ db, rows: [...rows, old, old], source: nextSource, now });
+      }
+      const before = structuredClone(db.records.get(stateKey));
+      const otherName = { ...old, 이름: "Different synthetic name" };
+      const result = await observeMembershipContractHints({ db,
+        rows: [...rows, kind === "novel" ? { ...otherName, 수강권명: "Novel" } : otherName],
+        source: restoredSource, now });
+      assert.equal(result.ok, true);
+      assert.deepEqual(result.coverageLossIds, [id]);
+      assert.equal(result.coverageReviewCount, 1);
+      assert.equal(result.candidates, 0);
+      assert.equal(result.sends, 0);
+      const state = db.records.get(stateKey);
+      assert.equal(state.fingerprints[id], before.fingerprints[id]);
+      assert.equal(state.rowCounts[id], before.rowCounts[id]);
+      assert.equal(state.observedAtByMember[id], before.observedAtByMember[id]);
+      assert.deepEqual(state.coverageReconciliations[id], before.coverageReconciliations[id]);
+      assert.equal(Object.values(state).includes(undefined), false);
+      assert.equal(db.records.size, 1);
+      const replay = await observeMembershipContractHints({ db, rows, source: restoredSource, now });
+      assert.deepEqual(replay.coverageLossIds, [id]);
+      const recovered = await observeMembershipContractHints({ db,
+        rows: kind === "absent" ? rows.slice(1) : kind === "same" ? [...rows, old] : rows,
+        source: { ...restoredSource, downloadedAt: now }, now });
+      assert.equal(recovered.ok, true);
+      assert.equal(recovered.candidates, 0);
+      assert.deepEqual(recovered.coverageLossIds, []);
+    });
+  }
+});
+
+test("malformed or inconsistent reconciliation metadata fails closed before any write", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  await observeMembershipContractHints({ db, rows, source, now });
+  const id = reconcileFixture(db, [rows[0]], [rows[0]]);
+  const valid = structuredClone(db.records.get(stateKey));
+  for (const change of [
+    (state) => { state.coverageReconciliations = null; },
+    (state) => { state.coverageReconciliations[id].reviewId = "invalid"; },
+    (state) => { state.coverageReconciliations[id].lastRows = {}; },
+    (state) => { state.coverageReconciliations[id].originalObservedAt = "2026-09-14T06:56:00Z"; },
+  ]) {
+    const state = structuredClone(valid);
+    change(state);
+    db.records.set(stateKey, state);
+    const before = structuredClone([...db.records]);
+    const result = await observeMembershipContractHints({ db, rows, source: nextSource, now });
+    assert.equal(result.reason, "invalid_baseline_explicit_recovery_required");
+    assert.deepEqual([...db.records], before);
+  }
+});
+
+test("reconciliation metadata participates in the 700K safety limit", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  await observeMembershipContractHints({ db, rows, source, now });
+  const id = reconcileFixture(db, [rows[0]], [rows[0]]);
+  const entry = db.records.get(stateKey).coverageReconciliations[id];
+  for (let index = 0; index < 10000; index++) entry.historicalRows[digest(index)] = 1;
+  const before = structuredClone([...db.records]);
+  await assert.rejects(observeMembershipContractHints({ db, rows, source: nextSource, now }), /safe document size/);
+  assert.deepEqual([...db.records], before);
+});
+
+test("concurrent reconciliation change fails CAS without losing audit metadata or creating hints", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  await observeMembershipContractHints({ db, rows, source, now });
+  const id = reconcileFixture(db, [rows[0]], [rows[0]]);
+  const transact = db.runTransaction;
+  db.runTransaction = (fn) => {
+    const state = structuredClone(db.records.get(stateKey));
+    state.coverageReconciliations[id].reviewId = digest("concurrent-review");
+    db.records.set(stateKey, state);
+    return transact(fn);
+  };
+  await assert.rejects(observeMembershipContractHints({ db, rows: [...rows, { ...rows[0], 수강권명: "Novel" }],
+    source: nextSource, now }), /Concurrent membership contract discovery/);
+  assert.equal(db.records.size, 1);
+  assert.equal(db.records.get(stateKey).coverageReconciliations[id].reviewId, digest("concurrent-review"));
+});
+
+test("transaction abort after staging hints cannot advance baseline or reconciliation metadata", async () => {
+  const db = fakeDb();
+  const rows = memberRows();
+  await observeMembershipContractHints({ db, rows, source, now });
+  reconcileFixture(db, [rows[0]], [rows[0]]);
+  const before = structuredClone([...db.records]);
+  const transact = db.runTransaction;
+  db.runTransaction = (fn) => transact(async (tx) => {
+    await fn(tx);
+    throw new Error("synthetic transaction abort");
+  });
+  await assert.rejects(observeMembershipContractHints({ db, rows: [...rows, { ...rows[0], 수강권명: "Novel" }],
+    source: nextSource, now }), /synthetic transaction abort/);
+  assert.deepEqual([...db.records], before);
+});
 
 test("one missing member out of 100 does not block an unrelated new candidate", async () => {
   const db = fakeDb();

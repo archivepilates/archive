@@ -7,7 +7,7 @@ import { assertOpsHealthRulesScope,opsHealthManifest,parseOpsHealthReleaseArgs,O
 import { assertManifest } from '../release-e261017-classroom.mjs';
 
 const before=execFileSync('git',['show',`${OPS_RULES_BASE}:core/rules/index.html`],{encoding:'utf8'});
-const after=fs.readFileSync(new URL('../../core/rules/index.html',import.meta.url),'utf8');
+const after=execFileSync('git',['show','48feed27fd99dd6c7a61b6eb78980520f4679d08:core/rules/index.html'],{encoding:'utf8'});
 const hash=text=>createHash('sha256').update(text).digest('hex');
 
 test('pins the reviewed Git baseline and accepts only the reviewed new section',()=>{

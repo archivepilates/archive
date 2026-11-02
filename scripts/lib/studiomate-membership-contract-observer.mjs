@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  classifyCoverageReconciliationTransition,
+  contractHintRowCounts,
+  validateCoverageReconciliations,
+} from "./studiomate-contract-coverage-reconciliation.mjs";
 
 export const CONTRACT_LANE = "studiomate-membership-contract-automation";
 const BASELINE_VERSION = 1;
@@ -34,10 +39,17 @@ function validBaseline(value) {
     typeof value.sourceImportId !== "string" ||
     !value.sourceImportId.trim() ||
     !isRecord(value.fingerprints) ||
-    !isRecord(value.rowCounts)
+    !isRecord(value.rowCounts) ||
+    !validateCoverageReconciliations(value.coverageReconciliations)
   )
     return false;
   const ids = Object.keys(value.fingerprints);
+  if (Object.entries(value.coverageReconciliations || {}).some(([id, entry]) => {
+    const count = Object.values(entry.lastRows).reduce((sum, n) => sum + n, 0);
+    return !Number.isSafeInteger(count) || count !== (value.rowCounts[id] || 0) ||
+      (count === 0 && Object.hasOwn(value.fingerprints, id)) ||
+      Date.parse(entry.originalObservedAt) > Date.parse(value.downloadedAt);
+  })) return false;
   if (value.observedAtByMember !== undefined && (!isRecord(value.observedAtByMember) || Object.keys(value.observedAtByMember).length !== ids.length ||
     Object.entries(value.observedAtByMember).some(([id, at]) => !ids.includes(id) || !isUtcTime(at) ||
       Date.parse(at) > Date.parse(value.downloadedAt)))) return false;
@@ -147,6 +159,8 @@ export async function observeMembershipContractHints({
       mode: "shadow",
       reason: "already_observed_or_older_download",
       candidates: 0,
+      coverageLossIds: previous.coverageLossIds || [],
+      coverageReviewCount: previous.coverageLossIds?.length || 0,
       sends: 0,
     };
   }
@@ -157,27 +171,53 @@ export async function observeMembershipContractHints({
   const rowCounts = Object.fromEntries(
     groups.map((group) => [group.id, group.hints.length]),
   );
+  const coverageReconciliations = previous?.coverageReconciliations === undefined
+    ? undefined : structuredClone(previous.coverageReconciliations);
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
+  const reconciledRows = new Map();
+  const transitions = new Map(Object.entries(coverageReconciliations || {}).map(([id, entry]) => {
+    const current = contractHintRowCounts(groupsById.get(id)?.hints || []);
+    reconciledRows.set(id, current);
+    return [id, classifyCoverageReconciliationTransition(entry, current)];
+  }));
   // Quarantine small coverage losses without blocking unrelated new members.
   // Keep affected baselines intact so a restored row never looks like a purchase.
-  const coverageLossIds = previous ? Object.keys(previous.fingerprints).filter(
+  const rawCoverageLossIds = previous ? Object.keys(previous.fingerprints).filter(
     (id) => !fingerprints[id] || rowCounts[id] < previous.rowCounts[id],
   ) : [];
+  const coverageLossIds = [...new Set([
+    ...rawCoverageLossIds.filter((id) => !transitions.get(id)?.waiveCoverageLoss),
+    ...[...transitions].filter(([id, transition]) =>
+      groupsById.get(id)?.ambiguousNames || !transition.minimumPresent ||
+      !transition.lossIsHistorical).map(([id]) => id),
+  ])];
   const priorRows = previous ? Object.values(previous.rowCounts).reduce((a, b) => a + b, 0) : 0;
   const lostRows = coverageLossIds.reduce((sum, id) =>
-    sum + previous.rowCounts[id] - (rowCounts[id] || 0), 0);
+    sum + Math.max(0, (previous.rowCounts[id] || 0) - (rowCounts[id] || 0)), 0);
   if (previous && (coverageLossIds.length / Object.keys(previous.fingerprints).length > 0.05 ||
     lostRows / priorRows > 0.05)) {
     return review("export_coverage_loss_explicit_review_required");
   }
   for (const id of coverageLossIds) {
-    fingerprints[id] = previous.fingerprints[id];
-    rowCounts[id] = previous.rowCounts[id];
+    if (Object.hasOwn(previous.fingerprints, id)) {
+      fingerprints[id] = previous.fingerprints[id];
+      rowCounts[id] = previous.rowCounts[id];
+    } else {
+      delete fingerprints[id];
+      delete rowCounts[id];
+    }
   }
+  for (const [id, entry] of Object.entries(coverageReconciliations || {})) {
+    if (!coverageLossIds.includes(id)) entry.lastRows = reconciledRows.get(id);
+  }
+  const previousObservedAt = (id) => previous?.observedAtByMember?.[id] ||
+    coverageReconciliations?.[id]?.originalObservedAt || previous?.downloadedAt;
   const observedAtByMember = Object.fromEntries(Object.keys(fingerprints).map((id) => [id,
-    coverageLossIds.includes(id) ? previous.observedAtByMember?.[id] || previous.downloadedAt : source.downloadedAt,
+    coverageLossIds.includes(id) || transitions.get(id)?.suppressHint
+      ? previousObservedAt(id) : source.downloadedAt,
   ]));
   if (
-    Buffer.byteLength(JSON.stringify({ fingerprints, rowCounts, observedAtByMember })) > 700_000
+    Buffer.byteLength(JSON.stringify({ fingerprints, rowCounts, observedAtByMember, coverageReconciliations })) > 700_000
   ) {
     throw new Error(
       "Contract discovery baseline exceeds safe document size; no writes performed",
@@ -186,6 +226,7 @@ export async function observeMembershipContractHints({
   const changes = previous
     ? groups.filter(
         (group) => !coverageLossIds.includes(group.id) &&
+          !transitions.get(group.id)?.suppressHint &&
           previous.fingerprints?.[group.id] !== group.fingerprint,
       )
     : [];
@@ -218,7 +259,7 @@ export async function observeMembershipContractHints({
         ambiguousNames: group.ambiguousNames,
         hints: group.hints,
         sourceImportId: source.sourceImportId,
-        previousDownloadedAt: previous.observedAtByMember?.[group.id] || previous.downloadedAt,
+        previousDownloadedAt: previousObservedAt(group.id),
         sourceDownloadedAt: source.downloadedAt,
         discoveredAt: now,
         status: "native_verification_required",
@@ -239,6 +280,7 @@ export async function observeMembershipContractHints({
       fingerprints,
       rowCounts,
       observedAtByMember,
+      ...(coverageReconciliations === undefined ? {} : { coverageReconciliations }),
       downloadedAt: source.downloadedAt,
       sourceImportId: source.sourceImportId,
       initializedAt: previous?.initializedAt || now,
@@ -249,7 +291,7 @@ export async function observeMembershipContractHints({
     return unseen.map(({ group, ref }) => ({
       phoneFingerprint: group.id,
       hintId: ref.id,
-      previousDownloadedAt: previous.observedAtByMember?.[group.id] || previous.downloadedAt,
+      previousDownloadedAt: previousObservedAt(group.id),
     }));
   });
   return {
