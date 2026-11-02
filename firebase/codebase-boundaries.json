@@ -94,6 +94,8 @@
         "operatorReconcileCoreAirConditioner",
         "getInstructorHome",
         "getCoreAccessSession",
+        "operatorCaptureStudioMateReferral",
+        "getStudioMateReferralDashboard",
         "completeCoreFirstLogin",
         "getCoreInstructorWorkspace",
         "loginStaffWithPin",

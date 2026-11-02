@@ -8834,6 +8834,11 @@ async function refresh() {
       return;
     }
     if (access.role === "instructor" && await renderInstructorCore(runtime, access, { onReady: publishNavigation })) return;
+    const referralHost = document.querySelector("[data-studiomate-referral-intake]");
+    if (referralHost) {
+      const { mountStudioMateReferralIntake } = await import("./studiomate-referral-intake.js");
+      await mountStudioMateReferralIntake(runtime, referralHost);
+    }
     const climateRoot = document.querySelector("[data-climate-dashboard]");
     if (climateRoot) {
       const { mountClimate } = await import("./climate.js");

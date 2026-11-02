@@ -1197,6 +1197,18 @@
           <div class="rule-note"><strong>현재 확인 위치</strong><span>StudioMate 회원·수강권·자체 계약서 / 과거 가입서 원본: Firestore onsiteWelcomeRequests, memberSignupContracts, studiomateMemberProfileWriteJobs / Google Drive 가입서 PDF 폴더 / CORE 강사레슨 / Firestore lectures, bookings, memberProfiles.activeTickets, instructorLessonRegistrations, studiomateInstructorLessonJobs, studiomateInstructorLessonCancellations, eformsignInstructorMemberJobs, instructorMemberConsents / 이폼싸인 강사회원가입서</span></div>
         </section>
 
+        <section class="panel rule-section" id="studiomate-referral-points">
+          <div class="panel-header"><div><h2>명지점 추천 포인트 · 2026.11.02</h2><p>StudioMate 포인트 · 온라인 영상 친구초대와 별도</p></div><span class="pill">원본 검증 후 적립</span></div>
+          <ul>
+            <li><strong>지급 기준</strong>: 신규회원이 30만 원 이상 결제한 대상 구매를 원본에서 확인하면 추천회원에게 20,000P를 최초 1회 적립합니다. 1P는 1원이며, 기존 잔액은 보존합니다. 체험·야외·무료·강사레슨 등 제외권, 미결제·취소·환불·불명확 신원은 지급하지 않습니다.</li>
+            <li><strong>접수</strong>: CORE 회원등록의 명지점 추천 포인트에 신규회원과 추천인의 이름·전체 연락처를 입력합니다. 접수 저장은 지급 완료가 아닙니다. StudioMate 회원등록·수강권 발급·전자계약과 아임웹 영상 친구초대는 변경하지 않습니다.</li>
+            <li><strong>정기 처리</strong>: 기존 시간당 Excel 수집에서 최신 원본을 확인합니다. 이름·전체 연락처·실제 회원 ID·결제·취소·환불을 대조하고 StudioMate 포인트의 추가 적립으로 처리합니다. 설정의 적용 시작 이후 신규등록만 대상이며 과거 추천은 소급하지 않습니다. 새 예약작업이나 회원 알림톡은 추가하지 않습니다.</li>
+            <li><strong>중복·변경 보호</strong>: 신규회원의 실제 ID별 영구 선점을 먼저 저장합니다. 추천인·수강권·정책 변경으로 다시 지급하지 않습니다. 취소된 접수는 선점할 수 없고, 최종 확인 전에 원본과 별도 새 화면의 잔액을 다시 읽습니다. 접수·전송불명·확인필요 건은 자동 재지급하지 않습니다.</li>
+            <li><strong>정본·권한</strong>: 추천 접수 studiomateReferralRequests, 지급 선점 studiomateReferralPointClaims, 실제 포인트는 StudioMate입니다. CORE는 별도 지갑이 아닙니다. 운영자만 접수하며 화면 연락처는 마스킹합니다. 잔액·누적적립·사용·정확한 사유 1건을 원본에서 대조한 뒤 적립 확인으로 표시합니다.</li>
+            <li><strong>검증·배포 상태</strong>: 김기효 계정 100P →20,100P, 재실행 추가 지급 0건, 시험분 차감 후 100P와 두 사유 이력을 확인했습니다. 최초 두 단계 확인창·로딩·사용 포인트의 음수 표기 문제는 수정했고 기존 선점은 보존했습니다. 화면·원본·지급·원복 검증은 분리합니다. 운영 반영과 설정 활성화 시각은 릴리스 보고서에 기록하며, 실제 활성 여부는 현재 설정과 정기 실행 결과로 확인합니다. 첫 실제 신규 추천의 전체 흐름은 자연 정기 실행에서 별도 확인합니다.</li>
+          </ul>
+        </section>
+
         <section class="panel rule-section" id="imweb-referral-rewards">
           <div class="panel-header"><div><h2>아임웹 친구 초대 · 2026.09.16</h2><p>친구가 처음 가입하면 초대자와 친구에게 각각 적립하는 혜택입니다.</p></div><span class="pill good">운영 중</span></div>
           <div class="rule-grid">

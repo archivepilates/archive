@@ -10,6 +10,7 @@ import { observeMembershipContractHints } from "./lib/studiomate-membership-cont
 import { loadPendingContractDiscovery } from "./lib/studiomate-membership-contract-pending.mjs";
 import { runStudioMateMembershipContractCandidates } from "./lib/studiomate-membership-contract-processor.mjs";
 import { observeHoldingRoster } from "./lib/studiomate-holding-roster.mjs";
+import { runStudioMateReferralPoints } from "./lib/studiomate-referral-worker.mjs";
 import { preserveNotificationContactPlans } from "./lib/studiomate-notification-ingress.mjs";
 import {
   buildInstructorLessonContactGroupNames,
@@ -194,6 +195,16 @@ if (
   }
 }
 // Reuse parsed raw rows before retention cleanup; paused-only members may not have a profile.
+if (apply && valueArg("--contract-source-downloaded-at")) {
+  try {
+    summary.referralPoints = await runStudioMateReferralPoints({ db, rows, source: {
+      sourceImportId: importId, downloadedAt: valueArg("--contract-source-downloaded-at"), applied: true,
+      complete: rows.length > 0 && rows.every(row => ["이름", "전화번호", "수강권명"].every(key => Object.hasOwn(row, key))),
+    } });
+  } catch {
+    summary.referralPoints = { status: "review", reason: "referral_processing_unverified", memberMessages: 0 };
+  }
+}
 if (apply && process.env.STUDIOMATE_HOLDING_ROSTER_OBSERVER === "shadow" && valueArg("--holding-source-downloaded-at")) {
   try {
     summary.holdingRosterDiscovery = await observeHoldingRoster({ db, rows,

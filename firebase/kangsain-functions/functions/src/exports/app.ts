@@ -1,4 +1,5 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
+import { operatorCaptureStudioMateReferralHandler, getStudioMateReferralDashboardHandler } from "../callable/studiomateReferral";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { climateHandler, lgThinQConnection } from "../climate/climateCallables";
 import { getInstructorHomeHandler } from "../callable/getInstructorHome";
@@ -86,6 +87,12 @@ export const operatorReconcileCoreAirConditioner = onCall(climateOptions, reques
 
 export const getCoreAccessSession = onCall(secretlessCallableOptions, async request => {
   try { return await getCoreAccessSessionHandler(request); } catch (err) { throw toHttpsError(err); }
+});
+export const operatorCaptureStudioMateReferral = onCall(secretlessCallableOptions, async request => {
+  try { return await operatorCaptureStudioMateReferralHandler(request); } catch (err) { throw toHttpsError(err); }
+});
+export const getStudioMateReferralDashboard = onCall(secretlessCallableOptions, async request => {
+  try { return await getStudioMateReferralDashboardHandler(request); } catch (err) { throw toHttpsError(err); }
 });
 export const completeCoreFirstLogin = onCall({
   ...secretlessCallableOptions,
