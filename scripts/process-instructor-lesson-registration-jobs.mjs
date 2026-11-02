@@ -13,6 +13,7 @@ import { syncImwebInstructorOrders } from "./lib/imweb-instructor-orders.mjs";
 import { sanitizeImwebFailureDetails } from "./lib/imweb-read-failure.mjs";
 import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.mjs";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
+import { assertNewMemberForm, assertStudioMateRegistrationAvailable, observeMemberSave } from "./lib/studiomate-registration-flow.mjs";
 import { processInstructorLessonCancellations } from "./lib/instructor-lesson-cancellation-worker.mjs";
 import { issuedInstructorTicketId, instructorTicketReceipt, assertExistingInstructorTicketBinding, instructorTicketResponseDiagnostics } from "./lib/instructor-ticket-issue-evidence.mjs";
 import {
@@ -189,11 +190,13 @@ async function runCandidate(candidate, page) {
     if (processed.status === "completed") summary.completed += 1;
     else summary.waiting += 1;
   } catch (error) {
-    if (isMemberDispatchDeferred(error) && !nativeDispatch.attempted) {
-      await deferClaim(candidate.ref, claimed, error.nextAllowedAt);
+    if ((isMemberDispatchDeferred(error) || error.code === "STUDIOMATE_REGISTRATION_MAINTENANCE") && !nativeDispatch.attempted) {
+      await deferClaim(candidate.ref, claimed, error.nextAllowedAt, error.code);
       summary.processed -= 1;
       summary.deferred = (summary.deferred || 0) + 1;
-      summary.jobs.push({ ...item, ...memberDispatchWindow(), status: "deferred" });
+      summary.jobs.push({ ...item, ...memberDispatchWindow(), status: "deferred",
+        ...(error.code === "STUDIOMATE_REGISTRATION_MAINTENANCE"
+          ? { reason: error.code, nextAllowedAt: error.nextAllowedAt } : {}) });
       return;
     }
     const message = error instanceof Error ? error.message : String(error);
@@ -345,6 +348,7 @@ async function lookupExactMember(page, job) {
 }
 
 async function createInstructorMember(page, ref, job) {
+  assertStudioMateRegistrationAvailable();
   await page.goto(new URL("/users/create", config.baseUrl).toString(), { waitUntil: "networkidle", timeout: 60_000 });
   const nameInput = page.locator('input[placeholder="이름을 입력해주세요"]').first();
   const phoneInput = page.locator('input[placeholder="휴대폰 번호"]').first();
@@ -363,16 +367,19 @@ async function createInstructorMember(page, ref, job) {
   }
 
   await verifyInstructorPaidOrder(db, job);
+  await assertNewMemberForm(page, { baseUrl: config.baseUrl,
+    memberName: normalizeInstructorLessonName(job.memberName), memberPhone: normalizeInstructorLessonPhone(job.memberPhone) });
+  assertStudioMateRegistrationAvailable();
   assertMemberDispatchAllowed();
   await startExternalEffect(ref, job.claimToken, "member", "member_create");
   assertMemberDispatchAllowed();
+  assertStudioMateRegistrationAvailable();
   job.nativeDispatch.attempted = true;
   await page.getByRole("button", { name: "회원 등록 완료", exact: true }).click();
   // Prove persistence by a fresh exact-phone lookup, not a versioned write-response URL.
-  await page.waitForURL(/\/users\/detail\?id=\d+/, { timeout: 30_000 });
-  const createdMemberId = new URL(page.url()).searchParams.get("id") || "";
+  const saved = await observeMemberSave(page, config.baseUrl);
   const lookup = await lookupExactMember(page, job);
-  if (lookup.matches.length !== 1 || !lookup.apiMemberId || lookup.apiMemberId !== createdMemberId) {
+  if (lookup.matches.length !== 1 || !lookup.apiMemberId || (saved.memberId && lookup.apiMemberId !== saved.memberId)) {
     throw new Error("생성 후 StudioMate 검색 원천에서 동일 회원 ID·전화번호를 확인하지 못했습니다.");
   }
   await lookup.matches[0].locator.click();
@@ -430,6 +437,7 @@ async function findActiveInstructorTicket(page, lessonDate, refreshed = false) {
 }
 
 async function issueInstructorLessonTicket(page, ref, job) {
+  assertStudioMateRegistrationAvailable();
   const cards = page
     .locator(".member-basic__user-tickets")
     .first()
@@ -482,6 +490,7 @@ async function issueInstructorLessonTicket(page, ref, job) {
   }
 
   await verifyInstructorPaidOrder(db, job);
+  assertStudioMateRegistrationAvailable();
   assertMemberDispatchAllowed();
   await startExternalEffect(ref, job.claimToken, "ticket", "ticket_issue");
   const responsePromise = page.waitForResponse(
@@ -489,6 +498,7 @@ async function issueInstructorLessonTicket(page, ref, job) {
     { timeout: 15_000 },
   ).catch(() => null);
   assertMemberDispatchAllowed();
+  assertStudioMateRegistrationAvailable();
   job.nativeDispatch.attempted = true;
   await dialog.getByRole("button", { name: "완료", exact: true }).click();
   await dialog.waitFor({ state: "hidden", timeout: 30_000 });
@@ -756,7 +766,7 @@ function restoreFields(data, fields) {
   return Object.fromEntries(fields.map(field => [field, data[field] === undefined ? FieldValue.delete() : data[field]]));
 }
 
-async function deferClaim(ref, job, nextAllowedAt = memberDispatchWindow().nextAllowedAt) {
+async function deferClaim(ref, job, nextAllowedAt = memberDispatchWindow().nextAllowedAt, reason = "MEMBER_DISPATCH_DEFERRED") {
   await db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     const source = await transaction.get(registration(ref.id));
@@ -777,15 +787,19 @@ async function deferClaim(ref, job, nextAllowedAt = memberDispatchWindow().nextA
         deferredStep: current.currentStep,
         effectPreparedAt: current.effectStartedAt || null, deferredAt: new Date().toISOString(),
         providerPostCount: 0, nextAllowedAt,
+        reason,
       }],
     });
     // Preserve verified prior steps and any concurrent operator hold/cancellation.
     if (source.exists && !source.data().cancellation && !source.data().externalOrderReviewRequired
       && source.data().status === "processing") {
       transaction.update(registration(ref.id), {
-        nextAction: "회원·수강권 자동 처리 가능 시간 대기 (09:00 이후)",
+        nextAction: reason === "STUDIOMATE_REGISTRATION_MAINTENANCE"
+          ? "StudioMate 회원등록 개편 점검 종료 후 원본 재검증 대기"
+          : "회원·수강권 자동 처리 가능 시간 대기 (09:00 이후)",
         ...(current.externalEffectStarted ? {
-          [`steps.${current.currentStep}`]: stepValue("pending", stepLabel(current.currentStep), "발송 가능 시간까지 외부 작업 보류"),
+          [`steps.${current.currentStep}`]: stepValue("pending", stepLabel(current.currentStep),
+            reason === "STUDIOMATE_REGISTRATION_MAINTENANCE" ? "개편 점검시간으로 외부 작업 보류" : "발송 가능 시간까지 외부 작업 보류"),
         } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       });

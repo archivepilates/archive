@@ -34,6 +34,7 @@
     "test:instructor-lesson-sample-approval": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-sample-approval.test.ts",
     "test:instructor-lesson-parking": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-parking-pre-registration.test.ts",
     "test:instructor-lesson-registration": "node --test scripts/tests/instructor-lesson-registration-contract.test.mjs && firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-lesson-schedule-summary.test.ts scripts/tests/instructor-lesson-confirmation.test.ts scripts/tests/instructor-lesson-notion-schedule.test.ts",
+    "test:studiomate-registration-compatibility": "node --test scripts/tests/studiomate-registration-flow.test.mjs scripts/tests/studiomate-registration-ticket-separation.test.mjs scripts/tests/studiomate-registration-rules-release.test.mjs scripts/tests/team-instructor-fulfillment-ui.test.mjs",
     "test:staff-evaluation-identity": "node --test scripts/tests/staff-evaluation-identity.test.mjs",
     "test:instructor-observation": "firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-observation-survey.test.ts",
     "validate:instructor-lesson-registration": "node scripts/validate-instructor-lesson-registration-release.mjs",

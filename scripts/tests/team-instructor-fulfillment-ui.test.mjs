@@ -99,7 +99,13 @@ function fixture(t, config = {}) {
     goto: async next => { events.push(`goto:${new URL(next).pathname}`); url = next; },
     waitForResponse: (predicate) => new Promise((resolve, reject) => waiters.push({ predicate, resolve, reject })),
     waitForURL: async pattern => { assert.match(url, pattern); },
-    waitForFunction: async () => {},
+    waitForFunction: async () => {
+      if (state.noCreatedUrl && !state.splitGuide) throw new Error("synthetic save observation timeout");
+      return { jsonValue: async () => ({ url, dialogs: state.splitGuide ? [{
+        title: state.guideTitle ?? "회원 등록 완료 및 이용권 등록 안내",
+        text: "회원 등록이 완료되었습니다. 이어서 수강권을 등록해주세요.", buttons: ["취소", "확인"],
+      }] : [] }), dispose: async () => {} };
+    },
     getByRole: (role, { name }) => new Locator(page, () => name === "회원 등록 완료" ? [memberSave] : []),
     locator: selector => new Locator(page, () => {
       if (selector === 'input[placeholder="이름 또는 전화번호로 검색"]') return [search];
@@ -169,6 +175,36 @@ test("existing member and UI-only nonzero cannot create", async t => {
   f.state.members = []; f.state.uiMembers = [{ ...MEMBER }];
   await assert.rejects(createInstructorMember(f.page, input, f.options));
   assert.ok(!f.events.includes("click:member_create"));
+});
+
+test("split save guide verifies member independently without accepting ticket flow", async t => {
+  const f = fixture(t, { members: [], noCreatedUrl: true, splitGuide: true });
+  const input = { ...INPUT, memberId: undefined };
+  assert.equal((await createInstructorMember(f.page, input, f.options)).memberId, MEMBER.id);
+  assert.equal(f.receipts[0].memberId, MEMBER.id);
+  assert.equal(f.receipts[0].outcome, "accepted_pending_readback");
+  assert.equal(f.events.filter(e => e === "click:member_create").length, 1);
+  assert.ok(!f.events.includes("add:ticket") && !f.events.includes("click:ticket_issue"));
+  await assert.rejects(createInstructorMember(f.page, input, f.options), /already attempted/);
+});
+
+test("unknown post-save dialog preserves uncertainty and prevents replay", async t => {
+  const f = fixture(t, { members: [], noCreatedUrl: true, splitGuide: true, guideTitle: "Unexpected confirmation" });
+  const input = { ...INPUT, memberId: undefined };
+  await assert.rejects(createInstructorMember(f.page, input, f.options), e => e.code === "TEAM_UI_EFFECT_REVIEW_REQUIRED");
+  assert.equal(f.receipts[0].outcome, "unknown");
+  assert.equal(f.events.filter(e => e === "search").length, 1);
+  await assert.rejects(createInstructorMember(f.page, input, f.options), /already attempted/);
+});
+
+test("announced maintenance stops member and ticket writes before claims", async t => {
+  const f = fixture(t, { members: [] });
+  f.setNow("2026-11-17T05:00:00Z");
+  await assert.rejects(createInstructorMember(f.page, { ...INPUT, memberId: undefined }, f.options),
+    e => e.code === "STUDIOMATE_REGISTRATION_MAINTENANCE");
+  await assert.rejects(issueTeamTicket(f.page, INPUT, f.options),
+    e => e.code === "STUDIOMATE_REGISTRATION_MAINTENANCE");
+  assert.equal(f.events.length, 0);
 });
 
 test("exact live master wording issues once, persists response ID before readback", async t => {

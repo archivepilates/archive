@@ -1,4 +1,5 @@
 import { assertMemberDispatchAllowed } from "./member-dispatch-window.mjs";
+import { assertNewMemberForm, assertStudioMateRegistrationAvailable, observeMemberSave } from "./studiomate-registration-flow.mjs";
 import { issuedInstructorTicketId, instructorTicketResponseDiagnostics } from "./instructor-ticket-issue-evidence.mjs";
 
 const BASE = "https://arcpilates.studiomate.kr";
@@ -119,6 +120,7 @@ export async function lookupExactMember(page, input, _options = {}) {
 }
 
 export async function createInstructorMember(page, input, options) {
+  assertStudioMateRegistrationAvailable();
   const identity = inputFor(input), { beforeEffect, onReceipt } = callbacks(options);
   check(!identity.memberId, "Existing member ID cannot enter member creation");
   noReplay(page, "member_create", identity, input);
@@ -135,6 +137,7 @@ export async function createInstructorMember(page, input, options) {
   check(await option.count() === 1, "Unknown instructor-grade option structure");
   await option.first().click();
   const verifyForm = async () => {
+    await assertNewMemberForm(page, { baseUrl: BASE, ...identity });
     check(new URL(page.url()).origin === BASE && new URL(page.url()).pathname === "/users/create", "Unexpected member creation page");
     check(name(await nameInput.inputValue()) === identity.memberName && phone(await phoneInput.inputValue()) === identity.memberPhone
       && name(await grade.inputValue()) === "강사회원", "Member creation form changed");
@@ -142,20 +145,28 @@ export async function createInstructorMember(page, input, options) {
   await verifyForm();
   const save = page.getByRole("button", { name: "회원 등록 완료", exact: true });
   check(await save.count() === 1 && await save.isEnabled(), "Unknown member save button structure");
+  assertStudioMateRegistrationAvailable();
   assertMemberDispatchAllowed();
   await beforeEffect("member_create");
   await verifyForm();
   assertMemberDispatchAllowed();
+  assertStudioMateRegistrationAvailable();
   attempted(page, "member_create", identity);
   let receiptAttempted = false;
   try {
     await save.click();
-    await page.waitForURL(/\/users\/detail\?id=\d+/, { timeout: 30000 });
-    const url = new URL(page.url()), memberId = url.searchParams.get("id");
-    check(url.origin === BASE && nativeId(memberId), "Created member ID unavailable");
+    const saved = await observeMemberSave(page, BASE);
+    let memberId = saved.memberId;
+    // The split-flow popup has no ID: recover it from a fresh exact source lookup.
+    let readback;
+    if (!memberId) {
+      readback = await lookupExactMember(page, input);
+      memberId = readback.memberId;
+    }
+    check(nativeId(memberId), "Created member ID unavailable");
     receiptAttempted = true;
     await onReceipt({ effect: "member_create", memberId, outcome: "accepted_pending_readback" });
-    return await lookupExactMember(page, { ...input, studiomateMemberId: memberId });
+    return readback || await lookupExactMember(page, { ...input, studiomateMemberId: memberId });
   } catch {
     if (!receiptAttempted) {
       try { await onReceipt({ effect: "member_create", memberId: null, outcome: "unknown" }); } catch { /* Keep the durable pre-effect claim. */ }
@@ -247,6 +258,7 @@ async function verifyIssueForm(dialog, start, end) {
 }
 
 export async function issueTeamTicket(page, input, options) {
+  assertStudioMateRegistrationAvailable();
   const identity = inputFor(input, true), { beforeEffect, onReceipt } = callbacks(options);
   check(typeof options.readTicketIdentity === "function", "Independent ticket identity callback required before issuance");
   noReplay(page, "ticket_issue", identity, input);
@@ -293,6 +305,7 @@ export async function issueTeamTicket(page, input, options) {
   await wire.click();
   await verifyIssueForm(dialog, start, end);
   await verifiedDetail(page, identity.memberId);
+  assertStudioMateRegistrationAvailable();
   assertMemberDispatchAllowed();
   await beforeEffect("ticket_issue");
   await verifyIssueForm(dialog, start, end);
@@ -301,6 +314,7 @@ export async function issueTeamTicket(page, input, options) {
     && nativeApiResponse(response) && /\/v2\/staff\/user-tickets(?:\?|$)/.test(response.url()),
   { timeout: 15000 }).catch(() => null);
   assertMemberDispatchAllowed();
+  assertStudioMateRegistrationAvailable();
   attempted(page, "ticket_issue", identity);
   let receiptAttempted = false;
   try {
