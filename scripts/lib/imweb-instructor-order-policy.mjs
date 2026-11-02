@@ -7,6 +7,26 @@ export const IMWEB_LESSON_POLICY = Object.freeze({
   intervalMs: 10 * 60 * 1000, capacity: 10,
 });
 export const orderFingerprint = order => createHash('sha256').update(JSON.stringify(order)).digest('hex');
+export function matchesApprovedInstructorOrderSource(order, approvedFingerprint) {
+  if (!order || typeof order !== 'object' || !/^[a-f0-9]{64}$/.test(approvedFingerprint || '')) return false;
+  if (approvedFingerprint === orderFingerprint(order)) return true;
+  const orderStates = ['OPEN', 'CLOSED'];
+  const sectionStates = ['SHIPPING_READY', 'SHIPPING_COMPLETE', 'PURCHASE_CONFIRMATION'];
+  if (!order || !Array.isArray(order.sections) || order.sections.length !== 1) return false;
+  const orderIndex = orderStates.indexOf(order.orderStatus);
+  const sectionIndex = sectionStates.indexOf(order.sections[0]?.orderSectionStatus);
+  if (orderIndex < 0 || sectionIndex < 0) return false;
+  // Reconstruct only earlier lifecycle states. Every other raw field remains hash-bound.
+  for (let i = 0; i <= orderIndex; i++) {
+    for (let j = 0; j <= sectionIndex; j++) {
+      const previous = structuredClone(order);
+      previous.orderStatus = orderStates[i];
+      previous.sections[0].orderSectionStatus = sectionStates[j];
+      if (orderFingerprint(previous) === approvedFingerprint) return true;
+    }
+  }
+  return false;
+}
 export const orderLedgerId = orderNo => `imweb_${String(orderNo).replace(/[^0-9]/g, '')}`;
 export const LEGACY_PAYMENT_METHOD_REVIEW = '홈페이지 결제수단 매핑 확인필요';
 export const needsPaymentMethodReassessment = reason => reason === LEGACY_PAYMENT_METHOD_REVIEW;
@@ -125,11 +145,13 @@ export function validateInstructorOrderAttendeeResolution(order, resolution, { n
   if (!resolution || resolution.status !== 'approved' || resolution.policy !== INSTRUCTOR_ORDER_ATTENDEE_POLICY
     || resolution.version !== 1 || resolution.studioId !== IMWEB_LESSON_POLICY.studioId
     || resolution.resolutionKey !== orderFingerprint(resolutionBinding(resolution))
-    || resolution.sourceFingerprint !== orderFingerprint(order)
+    || !matchesApprovedInstructorOrderSource(order, resolution.sourceFingerprint)
     || !Number.isFinite(Date.parse(resolution.approval?.approvedAt || ''))
     || Date.parse(resolution.approval.approvedAt) > now.getTime() + 60000) throw new Error('다인 주문 승인·원본 변경 확인필요');
   const expected = createInstructorOrderAttendeeResolution(order, resolution.attendees,
     { ...resolution.approval, now });
+  expected.sourceFingerprint = resolution.sourceFingerprint;
+  expected.resolutionKey = orderFingerprint(resolutionBinding(expected));
   if (expected.resolutionKey !== resolution.resolutionKey) throw new Error('다인 주문 금액·수강자 배분 확인필요');
   return assessOrderQuantity(order, { now, policy: IMWEB_LESSON_POLICY, quantity: resolution.attendees.length });
 }

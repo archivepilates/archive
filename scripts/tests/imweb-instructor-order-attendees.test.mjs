@@ -7,7 +7,7 @@ import { admitInstructorOrderAttendees, reconcileInstructorOrderAttendees } from
 import { verifyInstructorPaidOrder } from '../lib/imweb-instructor-order-source.mjs';
 import {
   IMWEB_LESSON_POLICY as policy, assessInstructorOrder, createInstructorOrderAttendeeResolution,
-  validateInstructorOrderAttendeeResolution, orderLedgerId, orderFingerprint,
+  validateInstructorOrderAttendeeResolution, orderLedgerId, orderFingerprint, matchesApprovedInstructorOrderSource,
 } from '../lib/imweb-instructor-order-policy.mjs';
 import { importInstructorOrder, syncImwebInstructorOrders } from '../lib/imweb-instructor-orders.mjs';
 
@@ -437,6 +437,65 @@ test('reconciliation of unchanged joint source and watcher import is read-only a
     assert.deepEqual(store.all(), before);
   }
   assert.ok(store.commits.slice(1).every(writes => writes.length === 0));
+});
+
+for (const beforeOrder of ['OPEN', 'CLOSED']) {
+  for (const beforeSection of ['SHIPPING_READY', 'SHIPPING_COMPLETE', 'PURCHASE_CONFIRMATION']) {
+    for (const afterOrder of ['OPEN', 'CLOSED']) {
+      for (const afterSection of ['SHIPPING_READY', 'SHIPPING_COMPLETE', 'PURCHASE_CONFIRMATION']) {
+        test(`joint source lifecycle ${beforeOrder}/${beforeSection} -> ${afterOrder}/${afterSection} stays forward-only`, () => {
+          const original = fixture(o => { o.orderStatus = beforeOrder; o.sections[0].orderSectionStatus = beforeSection; });
+          const resolution = createInstructorOrderAttendeeResolution(original, attendees(), APPROVAL);
+          const current = clone(original);
+          current.orderStatus = afterOrder; current.sections[0].orderSectionStatus = afterSection;
+          const snapshots = clone({ original, current, resolution });
+          const forward = ['OPEN', 'CLOSED'].indexOf(afterOrder) >= ['OPEN', 'CLOSED'].indexOf(beforeOrder)
+            && ['SHIPPING_READY', 'SHIPPING_COMPLETE', 'PURCHASE_CONFIRMATION'].indexOf(afterSection)
+              >= ['SHIPPING_READY', 'SHIPPING_COMPLETE', 'PURCHASE_CONFIRMATION'].indexOf(beforeSection);
+          assert.equal(matchesApprovedInstructorOrderSource(current, resolution.sourceFingerprint), forward);
+          if (forward) assert.equal(validateInstructorOrderAttendeeResolution(current, resolution, { now: NOW }).status, 'ready');
+          else assert.throws(() => validateInstructorOrderAttendeeResolution(current, resolution, { now: NOW }));
+          assert.deepEqual({ original, current, resolution }, snapshots);
+        });
+      }
+    }
+  }
+}
+
+test('purchase confirmation reconciles without writes, new jobs or changed approval keys', async () => {
+  const { store, order, keys } = await admitted();
+  const before = store.all();
+  order.orderStatus = 'CLOSED'; order.sections[0].orderSectionStatus = 'PURCHASE_CONFIRMATION';
+  for (const apply of [false, true]) {
+    assert.equal((await importInstructorOrder(store.db, order, { apply, tracked: true, now: NOW })).status, 'unchanged');
+    assert.equal((await verifyInstructorPaidOrder(store.db, store.get(keys.rows[0].job), { read: async () => order, now: NOW })).assessment.status, 'ready');
+    assert.deepEqual(store.all(), before);
+  }
+});
+
+for (const [name, change] of [...sourceChanges,
+  ['unrecognized field', o => { o.unrecognized = 'changed'; }],
+  ['payment timestamp', o => { o.payments[0].paymentCompleteTime = '2026-10-25T02:00:00.000Z'; }],
+  ['section identity', o => { o.sections[0].orderSectionNo = 'different'; }]]) {
+  test(`purchase confirmation does not hide ${name}`, async () => {
+    const { store, order, keys } = await admitted();
+    addForms(store, keys);
+    const resolution = store.get(keys.ledger).attendeeResolution;
+    order.orderStatus = 'CLOSED'; order.sections[0].orderSectionStatus = 'PURCHASE_CONFIRMATION'; change(order);
+    assert.equal(matchesApprovedInstructorOrderSource(order, resolution.sourceFingerprint), false);
+    assert.throws(() => validateInstructorOrderAttendeeResolution(order, resolution, { now: NOW }));
+    assert.equal((await reconcileInstructorOrderAttendees(store.db, order, { apply: true, now: NOW })).status, 'review_required');
+    assertHeld(store, keys);
+  });
+}
+
+test('lifecycle helper rejects malformed or unknown transition sources', () => {
+  const hash = orderFingerprint(fixture());
+  for (const value of [null, undefined, {}, { sections: [] }, fixture(o => { o.orderStatus = 'CANCELLED'; }),
+    fixture(o => { o.sections[0].orderSectionStatus = 'RETURN'; })]) {
+    assert.equal(matchesApprovedInstructorOrderSource(value, hash), false);
+  }
+  assert.equal(matchesApprovedInstructorOrderSource(fixture(), 'invalid'), false);
 });
 
 for (const [name, change] of sourceChanges) {

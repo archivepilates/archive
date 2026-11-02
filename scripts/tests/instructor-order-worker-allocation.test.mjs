@@ -8,9 +8,10 @@ import { verifyInstructorPaidOrder } from '../lib/imweb-instructor-order-source.
 import { assertExistingInstructorTicketBinding } from '../lib/instructor-ticket-issue-evidence.mjs';
 import { assertOrderContactBinding, buildOrderContactBinding } from '../lib/instructor-signup-order-identity.mjs';
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred, MemberDispatchDeferredError } from '../lib/member-dispatch-window.mjs';
+import { assertNewMemberForm, assertStudioMateRegistrationAvailable } from '../lib/studiomate-registration-flow.mjs';
 import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID, INSTRUCTOR_LESSON_TICKET_NAME,
   INSTRUCTOR_LESSON_TICKET_PRICE, normalizeInstructorLessonName, normalizeInstructorLessonPhone,
-  staleExternalActionStatus, deriveInstructorLessonRegistrationState } from '../lib/instructor-lesson-registration-contract.mjs';
+  staleExternalActionStatus, deriveInstructorLessonRegistrationState, isInstructorLessonWaitlist } from '../lib/instructor-lesson-registration-contract.mjs';
 
 const require = createRequire(new URL('../../firebase/kangsain-functions/functions/package.json', import.meta.url));
 const ts = require('typescript');
@@ -232,7 +233,7 @@ for (const marker of ['orderAllocation', 'operatorOrderAllocation', 'quantity', 
         db: f.db, job, ref: {}, verifyInstructorPaidOrder: f.verify,
         assertMemberDispatchAllowed: () => assertMemberDispatchAllowed(NOW),
         startExternalEffect: async () => effects.push('native-effect-prepared'),
-        page: { getByRole: () => button, waitForResponse: async () => ({}) }, dialog: { getByRole: () => button },
+        ...nativeBoundaryContext(job, button),
       });
       await assert.rejects(run(), /승인키 누락/);
       assert.equal(job.nativeDispatch.attempted, false);
@@ -269,9 +270,37 @@ function nativeBoundary(tree, name) {
   const statements = [...declaration(tree, name).body.statements];
   const mark = statements.findIndex(n => n.getText(tree).includes('await startExternalEffect('));
   const click = statements.findIndex((n, i) => i > mark && n.getText(tree).includes('.click()'));
+  const verify = statements.findLastIndex((n, i) => i < mark && /^await verifyInstructorPaidOrder\(db, job\);$/.test(n.getText(tree)));
   assert.ok(mark >= 2 && click > mark);
-  assert.match(statements[mark - 2].getText(tree), /await verifyInstructorPaidOrder\(db, job\)/);
-  return statements.slice(mark - 2, click + 1).map(n => n.getText(tree)).join('\n');
+  assert.ok(verify >= 0 && verify < mark);
+  assert.match(statements[verify].getText(tree), /await verifyInstructorPaidOrder\(db, job\)/);
+  const beforeMark = statements.slice(verify, mark).map(n => n.getText(tree)).join('\n');
+  const beforeClick = statements.slice(mark + 1, click).map(n => n.getText(tree)).join('\n');
+  for (const source of [beforeMark, beforeClick]) {
+    assert.match(source, /assertStudioMateRegistrationAvailable\(\)/);
+    assert.match(source, /assertMemberDispatchAllowed\(\)/);
+  }
+  if (name === 'createInstructorMember') assert.match(beforeMark, /await assertNewMemberForm\(page,/);
+  return statements.slice(verify, click + 1).map(n => n.getText(tree)).join('\n');
+}
+
+function nativeBoundaryContext(job, button) {
+  const config = { baseUrl: 'https://synthetic.invalid' };
+  const page = {
+    url: () => `${config.baseUrl}/users/create`,
+    locator: selector => {
+      const values = {
+        'input[placeholder="이름을 입력해주세요"]': job.memberName,
+        'input[placeholder="휴대폰 번호"]': job.memberPhone,
+      };
+      assert.ok(Object.hasOwn(values, selector), `Unexpected form selector: ${selector}`);
+      return { count: async () => 1, inputValue: async () => values[selector] };
+    },
+    getByRole: () => ({ ...button, count: async () => 1, isEnabled: async () => true }),
+    waitForResponse: async () => ({}),
+  };
+  return { config, page, dialog: { getByRole: () => button }, assertNewMemberForm,
+    assertStudioMateRegistrationAvailable, normalizeInstructorLessonName, normalizeInstructorLessonPhone };
 }
 
 for (const name of ['createInstructorMember', 'issueInstructorLessonTicket']) {
@@ -291,7 +320,7 @@ for (const name of ['createInstructorMember', 'issueInstructorLessonTicket']) {
         verifyInstructorPaidOrder: async (...args) => { calls.push('verify'); await f.verify(...args); if (issue === 'cutoff after read') clock = NIGHT; },
         assertMemberDispatchAllowed: () => assertMemberDispatchAllowed(clock),
         startExternalEffect: async () => { calls.push('mark'); if (issue === 'cutoff after mark') clock = NIGHT; },
-        page: { getByRole: () => button, waitForResponse: async () => ({}) }, dialog: { getByRole: () => button },
+        ...nativeBoundaryContext(job, button),
       });
       if (issue === 'allowed') { await run(); assert.deepEqual(calls, ['verify', 'mark', 'click']); assert.equal(job.nativeDispatch.attempted, true); }
       else {
@@ -310,7 +339,7 @@ function queueApi(f, clock) {
     memberDispatchWindow: () => memberDispatchWindow(clock()), randomUUID: () => 'synthetic-claim',
     os: { hostname: () => 'synthetic-host' }, process: { pid: 1 },
     stepValue: (status, label, detail) => ({ status, label, detail }), stepLabel: name => name,
-    registrationStepName: name => name,
+    registrationStepName: name => name, isInstructorLessonWaitlist,
   });
 }
 
@@ -351,6 +380,7 @@ for (const [kind, values] of [
   delete f.db.rows.get(f.jobPath).ticketId;
   const { completeStep } = evaluate(parsed(WORKER), ['completeStep', 'commitClaimedState', 'stepValue', 'stepLabel', 'nextStepLabel'], {
     db: f.db, registration: id => f.db.doc(`instructorLessonRegistrations/${id}`), FieldValue: f.db.fieldValue,
+    isInstructorLessonWaitlist,
   });
   await completeStep(ref, 'owned', 'ticket', { ...values, ticketPaymentAmount: 70000, nextStep: 'followup' });
   const registration = f.db.rows.get(f.registrationPath), job = f.db.rows.get(f.jobPath);
@@ -496,6 +526,7 @@ test('post-ticket preparation verifies the whole family first and queues the act
     const { preparePostTicketSteps } = evaluate(parsed(WORKER), ['preparePostTicketSteps', 'stepValue'], {
       db: f.db, verifyInstructorPaidOrder: f.verify, registration: id => f.db.doc(`instructorLessonRegistrations/${id}`),
       FieldValue: f.db.fieldValue, INSTRUCTOR_LESSON_TICKET_NAME, INSTRUCTOR_LESSON_TICKET_PRICE, normalizeInstructorLessonPhone,
+      isInstructorLessonWaitlist,
     });
     const run = () => preparePostTicketSteps(ref, 'owned', f.job);
     if (blocked) { await assert.rejects(run()); assert.equal(f.db.writes.length, 0); }

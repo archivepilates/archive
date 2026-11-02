@@ -117,10 +117,19 @@ function harness(quantity = 2) {
   const crypto = { createHash, createHmac, randomBytes };
   const hash = evaluate("utils/hash", { "node:crypto": crypto });
   const state = evaluate("instructorLessonRegistration/instructorLessonRegistrationState", {});
+  const waitlist = evaluate("instructorLessonRegistration/instructorLessonWaitlist", {});
   const cancellation = evaluate("instructorLessonRegistration/instructorLessonCancellationPolicy", {
     "node:crypto": crypto, "../utils/errors": { AppError: Error },
   });
   const window = evaluate("memberSignup/memberDispatchWindow", {}, { Date: Clock });
+  const candidateWindow = evaluate("alimtalk/recommendedMealTestWindow", {
+    "node:crypto": crypto, "../config/firebase": { db },
+    "firebase-admin/firestore": { Timestamp: { now: () => fail("meal test timestamp") } },
+    "../memberSignup/memberDispatchWindow": window,
+    "./testRecipients": { primaryAlimtalkTestRecipient: () => fail("meal test recipient"),
+      normalizeRecipientPhone: () => fail("meal test phone") },
+    "./templates": { ALIMTALK_TEMPLATES: {} },
+  }, { Date: Clock });
   const refs = { alimtalkCandidate: (id: string) => doc(`alimtalkCandidates/${id}`),
     alimtalkSend: (id: string) => doc(`alimtalkSends/${id}`), alimtalkCandidates: () => collection("alimtalkCandidates") };
   const schedule = { lessonDate: DATE, managementNumber: "synthetic-991128", lessonDateText: "Synthetic date",
@@ -137,6 +146,7 @@ function harness(quantity = 2) {
     "./instructorLessonRegistration": { instructorLessonRegistrationId: (studio: string, phone: string, date: string) =>
       `ilr_${createHash("sha256").update(`${studio}|${phone}|${date}`).digest("hex").slice(0, 24)}` },
     "./instructorLessonRegistrationState": state, "./instructorLessonCancellationPolicy": cancellation,
+    "./instructorLessonWaitlist": waitlist,
     "./instructorLessonNotionSchedule": { resolveNotionLessonSchedule: async () => schedule },
   }, { Date: Clock, fetch: async () => ({ ok: true, text: async () =>
     `BEGIN:VCALENDAR\nDTSTART:${schedule.icsStart}\nDTEND:${schedule.icsEnd}\nLOCATION:ARCHIVE PILATES 명지` }) });
@@ -163,6 +173,7 @@ function harness(quantity = 2) {
       const hook = beforeProvider; beforeProvider = undefined; hook?.();
     }, MemberDispatchRequestBlockedError: class extends Error {}, reconcileQueuedMemberDispatchRequests: async () => {} },
     "../memberSignup/memberDispatchWindow": window,
+    "./recommendedMealTestWindow": candidateWindow,
     "./holdingNoticeRuntime": { reconcileHoldingNoticeQueue: async () => {} }, "./holdingNoticeScheduling": {},
     "./holdingQueueSelection": { selectHoldingQueueCandidates: async () => [snap(candidatePath)] },
     "./holdingNoticeQueue": { isHoldingNoticeCandidate: () => false },
