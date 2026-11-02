@@ -229,6 +229,8 @@ export const ACTIONS = [
 ];
 
 export const UNSUPPORTED = [
+  { name: 'operatorCaptureStudioMateReferral', reason: '명지점 추천 접수는 CORE 회원등록의 운영자 입력 전용입니다. 지급 대상 선언을 범용 MCP 수정으로 추가하지 않으며, 실제 포인트는 정기 처리기의 원본 검증·영구 선점·native 확인 뒤에만 적립합니다.' },
+  { name: 'getStudioMateReferralDashboard', reason: '명지점 추천 현황은 현재 CORE 회원등록 화면 전용 조회입니다. StudioMate 실시간 포인트나 직접 적립 명령이 아니며, 별도 검증된 MCP 조회 매핑 전에는 업무 도구로 노출하지 않습니다.' },
   { name: 'getCoreAccessSession', reason: '인증·접근 세션 조회는 auth 모듈 전용입니다. 업무 액션으로 중복 노출하지 않습니다.' },
   { name: 'completeCoreFirstLogin', reason: '최초 비밀번호 설정은 인증 정보 변경이므로 업무 MCP에서 제외합니다.' },
   { name: 'loginStaffWithPin', reason: 'PIN 인증과 인증 토큰 발급은 업무 액션이 아닙니다.' },
