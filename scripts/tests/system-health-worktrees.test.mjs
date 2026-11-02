@@ -7,7 +7,7 @@ test('auxiliary inventory distinguishes clean dirty timeout and unreadable witho
     { status: null, error: { code: 'ETIMEDOUT' }, stderr: 'private' }, { status: 128, stdout: '', stderr: 'private' }];
   const rows = inspectHealthWorktrees(results.map((_, i) => ({ path: `/synthetic/${i}` })), {
     now: () => 0, run: (_cmd, args, options) => {
-      assert.deepEqual(args, ['status', '--porcelain']);
+      assert.deepEqual(args, ['--no-optional-locks', 'status', '--porcelain']);
       assert.equal(options.timeout, 750);
       assert.equal(options.killSignal, 'SIGKILL');
       return results.shift();
