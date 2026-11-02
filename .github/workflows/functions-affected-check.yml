@@ -113,6 +113,11 @@ jobs:
       - name: Validate instructor lesson registration release
         run: node scripts/validate-instructor-lesson-registration-release.mjs
 
+      - name: Test joint paid-order lifecycle and no-resend recovery guards
+        run: |
+          node --test scripts/tests/imweb-instructor-order-policy.test.mjs scripts/tests/imweb-instructor-order-attendees.test.mjs scripts/tests/imweb-instructor-orders.test.mjs scripts/tests/instructor-order-lifecycle-recovery.test.mjs scripts/tests/instructor-order-worker-allocation.test.mjs
+          firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/instructor-order-attendee-guard.test.ts
+
       - name: Test StudioMate split registration compatibility without external effects
         run: npm run test:studiomate-registration-compatibility
 
