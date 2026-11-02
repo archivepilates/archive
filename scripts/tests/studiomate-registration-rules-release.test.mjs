@@ -8,7 +8,8 @@ import { assertRegistrationRulesScope, registrationManifest, parseRegistrationRe
 import { assertManifest } from '../release-e261017-classroom.mjs';
 
 const before = execFileSync('git', ['show', `${REGISTRATION_RULES_BASE}:core/rules/index.html`], { encoding: 'utf8' });
-const after = fs.readFileSync(new URL('../../core/rules/index.html', import.meta.url), 'utf8');
+// Keep the reviewed one-shot payload stable when future rules are added.
+const after = execFileSync('git', ['show', '1541e6a8f74a42424fd7501074216569e6711925:core/rules/index.html'], { encoding: 'utf8' });
 const hash = text => createHash('sha256').update(text).digest('hex');
 
 test('registration rules release accepts exactly the reviewed two-line change', () => {

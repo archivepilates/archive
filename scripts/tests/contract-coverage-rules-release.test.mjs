@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { assertContractCoverageRulesScope,contractCoverageManifest,parseContractCoverageReleaseArgs,COVERAGE_RULES_BASE,COVERAGE_RULES_BASE_HASH } from '../release-contract-coverage-rules.mjs';
 import { assertManifest } from '../release-e261017-classroom.mjs';
 
 const before=execFileSync('git',['show',`${COVERAGE_RULES_BASE}:core/rules/index.html`],{encoding:'utf8'});
-const after=fs.readFileSync(new URL('../../core/rules/index.html',import.meta.url),'utf8');
+// This one-shot release guards its historical payload, not later unrelated rules.
+const after=execFileSync('git',['show','5b17ea289b7545447a711997083c4a3b2b9cb3c1:core/rules/index.html'],{encoding:'utf8'});
 const hash=text=>createHash('sha256').update(text).digest('hex');
 
 test('pins the reviewed Git baseline and accepts only the reviewed new section',()=>{

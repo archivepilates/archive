@@ -10,7 +10,7 @@
 <body><main>
 <small>ARCHIVE PILATES OPS · 2026-11-02</small>
 <h1>StudioMate 회원등록 개편 대응</h1>
-<p class="status"><strong>수정·무발송 검증 완료 / 운영 반영·커밋·배포·푸시 승인 확인, 배포 준비 중.</strong><br>실제 새 등록 화면은 아직 공개되지 않았으므로 개편 후 E2E 검증 완료로 판정하지 않습니다.</p>
+<p class="status"><strong>맥미니 실행기 반영·CORE 운영규칙 배포·main 푸시·실제 게시 확인 완료.</strong><br>실제 새 등록 화면은 아직 공개되지 않았으므로 개편 후 E2E 검증 완료로 판정하지 않습니다.</p>
 <section><h2>확인한 원본</h2>
 <p><a href="https://arcpilates.studiomate.kr/boards/studio-notice/225?page=1">StudioMate 공지 225</a>는 11/2 08:51 게시됐으며 <strong>11/17 14:00~16:00 KST</strong> 개편을 예고합니다. 시간은 변경될 수 있습니다. PC·관리자 앱에서 기본 회원정보 저장과 이용권 발급을 분리합니다. PC는 회원 저장 후 선택 안내 팝업이 나타나며 확인을 선택하면 수강권 발급으로 이어집니다.</p>
 <p>11/2 10:13 KST 인증된 센터 세션으로 공지 이미지와 현재 빈 등록 화면을 읽었습니다. 이름·전화번호·등급·회원 저장 버튼은 각각 1개였고 이름·전화번호는 빈 값이었습니다. 입력·저장 없이 확인했고 로그인 후 비조회 HTTP 요청은 차단했습니다.</p>
@@ -35,8 +35,14 @@
 <tr><td>추가 CORE 검사</td><td>화면·재등록·강사 신원 검사 48건 통과. 선택 실행한 전체 CORE 검사 명령은 기존 알림톡 카탈로그 지문 불일치로 중단됐으며 수정 전 런타임에서도 동일하게 재현됐습니다. 이번 등록 대응과 무관한 카탈로그를 재생성하거나 배포하지 않았고 해당 전체 검사를 통과로 표시하지 않습니다.</td></tr>
 </tbody></table>
 </section>
+<section><h2>운영 반영 결과</h2>
+<p>소스 커밋 <code>1541e6a8f74a42424fd7501074216569e6711925</code>를 origin/main에 반영했습니다. 기존 강사레슨 실행기가 읽는 맥미니 런타임도 같은 소스로 갱신했고 호환성 129건을 재검증했습니다. 실행 주기 120초·LaunchAgent·전역 계약 설정과 계약 정책은 유지했습니다. 수동 등록 작업이나 회원 발송은 실행하지 않았습니다.</p>
+<p>CORE Hosting 버전 <code>3d2226de471a8024</code>, 릴리스 <code>1793591395358000</code>를 11/2 12:49:58 KST에 검증했습니다. <a href="https://core.archivepilates.com/rules/">운영규칙</a>과 Firebase 주소의 응답 SHA256은 모두 <code>ef23e94469059354284119481dd3cb6a0b723c9f9d28d4f5af9060d9ceca31a5</code>입니다. 규칙 파일 하나만 변경했고 나머지 62개 파일·Hosting 설정은 보존했습니다. Functions 구현 변경·재배포는 없습니다.</p>
+<p>소스 CI <a href="https://github.com/archivepilates/archive/actions/runs/41385155077">Functions Affected Check</a>와 <a href="https://github.com/archivepilates/archive/actions/runs/41385155056">CORE MCP Check</a>는 모두 성공했습니다. CORE 홈·이전 현장 웰컴 주소·공식 판매 홈페이지도 읽기 요청에서 HTTP 200과 해당 보호 표시를 확인했습니다. 실제 결제·가입·발송 테스트를 의미하지는 않습니다.</p>
+<p>배포 후 보고서와 과거 일회성 배포 테스트 자료를 고정하는 후속 커밋만 추가합니다. 과거·현재 배포 보호 테스트 10건이 통과했으며 후속 변경에는 운영 코드나 게시된 규칙 변경이 없습니다. 작업 소유 브라우저·잠금은 남기지 않았습니다.</p>
+</section>
 <section><h2>남은 단계</h2>
-<ol><li>승인된 소스를 origin/main에 정식 반영하고 맥미니 실행기와 CORE 운영규칙만 필요한 범위로 배포·검증합니다. CI/패키지 메타데이터 수정은 영향 탐지에서 보수적으로 전체 Functions로 표시되지만 실제 Functions 구현 변경은 없습니다. 불필요한 전체 Functions 배포는 하지 않습니다. 최종 Hosting 버전·CI·런타임 결과는 실제 완료 후 기록합니다.</li><li>11/17 실제 개편 후 등록 폼·안내 팝업·회원 Excel 열을 읽기 재검증합니다. 새 필드나 버튼을 추측해 자동 제출하지 않습니다. 실제 생성·발급 테스트는 별도 승인 대상입니다.</li></ol>
+<ol><li>11/17 실제 개편 후 등록 폼·안내 팝업·회원 Excel 열을 읽기 재검증합니다. 새 필드나 버튼을 추측해 자동 제출하지 않습니다. 실제 생성·발급 테스트는 별도 승인 대상이며 새 모니터·스케줄러는 만들지 않았습니다.</li><li>이번 범위와 무관한 기존 알림톡 카탈로그 지문 불일치와 다른 규칙의 모바일 넘침은 별도 유지보수 항목입니다.</li></ol>
 <p>회원·수강권·계약·예약·메모 생성/수정, 알림톡·문자·서명요청, 큐 수동 실행, 기준선 초기화, 자동화 추가·주기·권한 변경은 없었습니다. 작업 브라우저와 공유 잠금은 정리했습니다.</p>
 <p><a href="../tasks/2026-11-02-studiomate-registration-revamp.md">작업 기록</a> · <code>codex/mini/studiomate-registration-revamp-20261102</code> · 베이스 <code>5b17ea289b7545447a711997083c4a3b2b9cb3c1</code></p>
 </section></main></body></html>
