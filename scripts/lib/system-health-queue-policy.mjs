@@ -59,8 +59,19 @@ export function classifyNotionDocument(data, { nowMs = Date.now(), staleMinutes 
   // Request.status describes lesson workflow, never the Notion projection queue.
   if (!["pending", "failed"].includes(sync?.status)) return { state: "inactive", needsAttention: false };
   if (data.surveyType === "group") return { state: "not_applicable", needsAttention: false };
-  const time = healthTimestampMs(sync.pendingAt ?? sync.failedAt ?? sync.attemptedAt ?? sync.updatedAt ?? data.updatedAt ?? data.createdAt);
-  if (time === null) return { state: "timestamp_unavailable", syncStatus: sync.status, needsAttention: true };
+  const hasAnswers = [data.prePlan, data.postRecord, data.preAnswers, data.postAnswers]
+    .some((answers) => answers && (typeof answers !== "object" || Object.keys(answers).length > 0));
+  if (sync.status === "pending" && sync.deferredReason === "awaiting_submission" && !sync.error &&
+    data.gptStatus === "waiting_post" && !data.preSubmittedAt && !data.postSubmittedAt && !hasAnswers &&
+    !data.cancelledAt && !data.notionProjectionControl?.memberPageId && !sync.instructorPageId && !sync.pageId &&
+    !sync.creationTitle && !data.notionProjectionLease?.token && !sync.leaseToken) {
+    return { state: "awaiting_submission", syncStatus: sync.status, needsAttention: false };
+  }
+  const timestamps = sync.status === "failed"
+    ? [sync.failedAt, sync.attemptedAt, sync.updatedAt, data.updatedAt, data.createdAt]
+    : [sync.pendingAt, sync.attemptedAt, sync.updatedAt, data.updatedAt, data.createdAt];
+  const time = timestamps.map(healthTimestampMs).find((value) => value !== null && value <= nowMs);
+  if (time === undefined) return { state: "timestamp_unavailable", syncStatus: sync.status, needsAttention: true };
   const ageMinutes = (nowMs - time) / 60000;
   return { state: ageMinutes > staleMinutes ? `overdue_${sync.status}` : "within_grace", syncStatus: sync.status,
     ageMinutes, needsAttention: ageMinutes > staleMinutes };

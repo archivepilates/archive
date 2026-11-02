@@ -854,6 +854,7 @@ async function checkNotionSync() {
     const issues = states.filter((row) => row.needsAttention);
     checked.push({ id: `notion:${input.collection}`, sample: docs.length, coverage, staleMinutes: input.staleMinutes,
       aliasesExcluded: states.filter((row) => row.state === "alias").length,
+      awaitingSubmission: states.filter((row) => row.state === "awaiting_submission").length,
       overduePending: states.filter((row) => row.state === "overdue_pending").length,
       overdueFailed: states.filter((row) => row.state === "overdue_failed").length,
       unknownTimestamp: states.filter((row) => row.state === "timestamp_unavailable").length,

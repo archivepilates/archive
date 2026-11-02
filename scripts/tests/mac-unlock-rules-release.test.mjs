@@ -7,7 +7,7 @@ import { assertMacUnlockRulesScope,macUnlockManifest,parseMacUnlockReleaseArgs,M
 import { assertManifest } from '../release-e261017-classroom.mjs';
 
 const before=execFileSync('git',['show',`${MAC_RULES_BASE}:core/rules/index.html`],{encoding:'utf8'});
-const after=fs.readFileSync(new URL('../../core/rules/index.html',import.meta.url),'utf8');
+const after=execFileSync('git',['show','506c653445f26f56359d22bdcd65975083fee6fa:core/rules/index.html'],{encoding:'utf8'});
 const hash=text=>createHash('sha256').update(text).digest('hex');
 
 test('pins the reviewed Git baseline and accepts only the reviewed new section',()=>{

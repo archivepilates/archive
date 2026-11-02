@@ -301,7 +301,16 @@ export function membershipContractDiscoveryWarning(importSummary) {
   const processingIssue = processing && (processing.status === "review" || processing.review > 0);
   const coverageIssue = result?.coverageReviewCount > 0;
   const pendingIssue = result?.invalidPendingCount > 0 || result?.pendingScanLimited === true;
-  if (isRecord(result) && result.ok === true && !processingIssue && !coverageIssue && !pendingIssue) return null;
+  const resultReason = text(result?.reason);
+  const recoveryIssue = result?.signatureRecovery === true && result.candidates === 0 &&
+    ["signature_recovery_approval_unavailable", "signature_recovery_hint_changed"].includes(resultReason);
+  if (isRecord(result) && result.ok === true && !processingIssue && !coverageIssue && !pendingIssue && !recoveryIssue) return null;
+  const reasons = [
+    processingIssue ? text(processing.reason) || "membership_contract_processing_review" : "",
+    coverageIssue ? `member_coverage_review_${result.coverageReviewCount}` : "",
+    pendingIssue ? "pending_contract_hint_scan_review" : "",
+    result?.ok !== true || recoveryIssue ? resultReason : "",
+  ].filter(Boolean);
   return {
     name: "membershipContractDiscovery",
     command: [],
@@ -309,10 +318,6 @@ export function membershipContractDiscoveryWarning(importSummary) {
     stdout: { ...result, ok: false },
     stdoutOk: false,
     requiredFailed: false,
-    stderr:
-      (processingIssue ? text(processing.reason) || "membership_contract_processing_review" : "") ||
-      (coverageIssue ? `member_coverage_review_${result.coverageReviewCount}` : "") ||
-      (pendingIssue ? "pending_contract_hint_scan_review" : "") ||
-      text(result?.reason) || "invalid membership contract discovery result",
+    stderr: [...new Set(reasons)].join("; ") || "invalid membership contract discovery result",
   };
 }

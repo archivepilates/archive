@@ -24,6 +24,7 @@ artifacts/*/node_modules_deps
 .firebase/
 .playwright-cli/
 .DS_Store
+__pycache__/
 firebase/.DS_Store
 
 # Generated immediately before Firebase Hosting deploys.

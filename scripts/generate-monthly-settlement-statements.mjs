@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +17,7 @@ import {
 } from "./lib/monthly-settlement-rate-policy.mjs";
 import { summarizeCurrentSettlementOperation } from "./lib/monthly-settlement-operation.mjs";
 import { dedupeSettlementSourceRows } from "./lib/monthly-settlement-source.mjs";
+import { readSettlementSheetPointerFile, findSettlementSheetPointer } from "./lib/monthly-settlement-reference-reader.mjs";
 
 const HOME = os.homedir();
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -114,9 +115,7 @@ async function exportSettlementBackupWorkbook(outputPath) {
     return;
   }
 
-  const pointer = JSON.parse(readFileSync(gsheetPath, "utf8"));
-  const docId = pointer.doc_id || pointer.id;
-  if (!docId) throw new Error(`Google Sheet doc_id를 읽을 수 없습니다: ${gsheetPath}`);
+  const docId = await readSettlementSheetPointerFile(gsheetPath);
 
   const token = await googleAccessToken({
     credentialsPath,
@@ -168,8 +167,8 @@ async function loadReferenceTables() {
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly", "https://www.googleapis.com/auth/drive.readonly"],
     delegatedUser,
   });
-  const priceFile = findGsheetPointerByNormalizedName(settlementDriveRoot, "기간권 차감금액표");
-  const rateFile = findGsheetPointerByNormalizedName(settlementDriveRoot, "아카이브 강사 보수기준표");
+  const priceFile = await findSettlementSheetPointer(settlementDriveRoot, "기간권 차감금액표");
+  const rateFile = await findSettlementSheetPointer(settlementDriveRoot, "아카이브 강사 보수기준표");
   const priceMap = {};
   const groupMap = {};
   const privateMap = {};
@@ -221,16 +220,6 @@ async function validateSettlementWorkbookRateCoverage(filePath) {
 async function readSheetValues(token, spreadsheetId, range) {
   const result = await sheetsRequest(token, "GET", `/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`);
   return result.values || [];
-}
-
-function findGsheetPointerByNormalizedName(root, baseName) {
-  const wanted = normalizeFileName(`${baseName}.gsheet`);
-  for (const name of readdirSync(root)) {
-    if (normalizeFileName(name) !== wanted) continue;
-    const pointer = JSON.parse(readFileSync(path.join(root, name), "utf8"));
-    return pointer.doc_id || pointer.id || "";
-  }
-  return "";
 }
 
 function sendMissingRateFailureReport(error) {

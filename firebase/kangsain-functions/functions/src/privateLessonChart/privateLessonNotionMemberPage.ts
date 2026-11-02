@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { stableHash } from "../utils/hash";
+import { PrivateNotionAwaitingSubmission, privateNotionCanAwaitSubmission } from "./privateLessonNotionSync";
 
 export interface PrivateNotionMemberIdentity {
   memberId: string;
@@ -8,6 +9,7 @@ export interface PrivateNotionMemberIdentity {
   title: string;
   sourceHash: string;
   recordId: string;
+  awaitingSubmission?: boolean;
 }
 
 export interface PrivateNotionMemberPageState {
@@ -23,7 +25,8 @@ export interface PrivateNotionMemberPageState {
 }
 
 export function privateNotionMemberIdentity(record: any, request: any, profile: any, staff: any,
-  rootPageId: string, staffRootPageId: string): PrivateNotionMemberIdentity {
+  rootPageId: string, staffRootPageId: string, options: { deferUnsubmitted?: boolean } = {}): PrivateNotionMemberIdentity {
+  const awaitingSubmission = Boolean(options.deferUnsubmitted && privateNotionCanAwaitSubmission(record, request));
   const phone = (value: unknown) => String(value || "").replace(/\D/g, "").replace(/^82(?=10)/, "0");
   const nativeId = String(profile?.studiomateMemberId || profile?.memberId || record?.memberId || "");
   const normalizeId = (value: string) => value.replaceAll("-", "").toLowerCase();
@@ -40,12 +43,13 @@ export function privateNotionMemberIdentity(record: any, request: any, profile: 
     || !/^01[016789]\d{7,8}$/.test(phone(profile.phone)) || phone(profile.phone) !== phone(record.memberPhone)
     || phone(profile.phone) !== phone(request.memberPhone) || record.cancelledAt || request.status === "cancelled"
     || record.notionProjectionControl?.aliasOfRecordId
-    || !(record.postSubmittedAt || request.postStatus === "submitted")) {
+    || (!awaitingSubmission && !(record.postSubmittedAt || request.postStatus === "submitted"))) {
     throw new Error("Notion 회원 폴더 자동 연결 확인 필요: 회원·강사·제출 원본 신원이 일치하지 않습니다.");
   }
   const identity = { memberId: nativeId, staffId: String(record.staffId), rootPageId: normalizeId(rootPageId),
     title: `${String(profile.name).trim()}님`, recordId: String(record.recordId) };
-  return { ...identity, sourceHash: stableHash({ ...identity, requestId: request.requestId,
+  return { ...identity, ...(awaitingSubmission ? { awaitingSubmission: true } : {}), sourceHash: stableHash({ ...identity,
+    ...(awaitingSubmission ? { awaitingSubmission: true } : {}), requestId: request.requestId,
     bookingId: record.bookingId, sourceMemberId: record.memberId, phone: phone(profile.phone) }) };
 }
 
@@ -65,6 +69,8 @@ export async function ensurePrivateNotionMemberPage(identity: PrivateNotionMembe
     if (current && !sameBinding(current)) throw new Error("Notion 회원 폴더 연결 원장 충돌: 자동 생성을 차단했습니다.");
     if (current?.status === "ready" && current.pageId) return { result: current.pageId };
     if (current && (current.status !== "rejected" || current.pageId)) throw new Error("Notion 회원 폴더 생성 중 또는 결과 확인 필요: 중복 생성을 차단했습니다.");
+    // Validate identity and existing creation claims, but never claim a new folder for an empty shell.
+    if (identity.awaitingSubmission) throw new PrivateNotionAwaitingSubmission();
     return { next: { memberId: identity.memberId, staffId: identity.staffId, rootPageId: identity.rootPageId,
       title: identity.title, sourceHash: identity.sourceHash, sourceRecordId: identity.recordId,
       status: "creating", attemptId }, result: null };

@@ -39,7 +39,9 @@ import { ensurePrivateNotionMemberPage, privateNotionMemberIdentity,
   type PrivateNotionMemberPageState } from "./privateLessonNotionMemberPage";
 import {
   PRIVATE_NOTION_DEBOUNCE_MS,
+  PrivateNotionAwaitingSubmission,
   assertPrivateNotionPageOwner,
+  privateNotionHasSubmittedContent,
   privateNotionSourceChanged,
   reconcilePrivateNotionPages,
   runPrivateNotionProjection,
@@ -1929,10 +1931,13 @@ function hasManualPrivateLessonReportText(record: PrivateLessonChartRecordDoc): 
 
 function pendingNotionProjection(
   _record: PrivateLessonChartRecordDoc,
-): NonNullable<PrivateLessonChartRecordDoc["notionSync"]> {
+): PrivateNotionState {
   return {
     status: "pending",
     error: "",
+    pendingAt: new Date().toISOString(),
+    deferredReason: "",
+    deferredVersion: "",
   };
 }
 
@@ -2021,7 +2026,8 @@ export async function syncPrivateNotionOnRequestWrite(event: any): Promise<void>
   const recordId = String(event.params.requestId);
   const record = (await refs.privateLessonChartRecord(recordId).get()).data();
   if (!record) return;
-  if (before && privateLessonNotionProjectionVersion(record, before) === privateLessonNotionProjectionVersion(record, after)) return;
+  if (before && privateLessonNotionProjectionVersion(record, before) === privateLessonNotionProjectionVersion(record, after) &&
+    privateNotionHasSubmittedContent(record, before) === privateNotionHasSubmittedContent(record, after)) return;
   await new Promise((resolve) => setTimeout(resolve, PRIVATE_NOTION_DEBOUNCE_MS));
   await syncPrivateNotionByRecordId(recordId);
 }
@@ -2030,7 +2036,7 @@ async function syncPrivateLessonChartRecordToNotion(
   record: PrivateLessonChartRecordDoc,
   chartRequest: PrivateLessonChartRequestDoc,
   checkpoint: (page: Partial<PrivateNotionState>) => Promise<void>,
-): Promise<NonNullable<PrivateLessonChartRecordDoc["notionSync"]>> {
+): Promise<PrivateNotionState> {
   try {
     const reportCanBeExposed = canExposePrivateLessonReport(record);
     // Links are prepared by report generation, never by a display-only worker.
@@ -2054,11 +2060,12 @@ async function syncPrivateLessonChartRecordToNotion(
       syncedAt: new Date().toISOString(),
     };
   } catch (err) {
+    if (err instanceof PrivateNotionAwaitingSubmission) throw err;
     return {
       status: "failed",
       sourceVersion: privateLessonNotionProjectionVersion(record, chartRequest),
       error: errorMessage(err),
-      syncedAt: new Date().toISOString(),
+      failedAt: new Date().toISOString(),
     };
   }
 }
@@ -2141,7 +2148,7 @@ async function ensureInstructorMemberPage(record: PrivateLessonChartRecordDoc, c
     const current = recordSnap.data() as PrivateLessonChartRecordDoc | undefined;
     const staff = staffSnap.data() as any;
     return privateNotionMemberIdentity(current, requestSnap.data(), profileSnap.data(), staff,
-      rootPageId, NOTION_INSTRUCTOR_CHART_PAGE_IDS[String(staff?.name || "")]);
+      rootPageId, NOTION_INSTRUCTOR_CHART_PAGE_IDS[String(staff?.name || "")], { deferUnsubmitted: true });
   };
   const identity = await loadIdentity();
   const bindingRef = refs.syncState(`privateNotionMember_${stableHash({ root: identity.rootPageId, memberId: identity.memberId })}`);

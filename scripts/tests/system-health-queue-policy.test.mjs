@@ -113,6 +113,52 @@ test("six pending and two failed display aliases preserve history without health
   assert.equal(JSON.stringify(docs), before);
 });
 
+function waitingNotionShell() {
+  return { gptStatus: "waiting_post", preSubmittedAt: null, postSubmittedAt: null,
+    notionSync: { status: "pending", deferredReason: "awaiting_submission", error: "", deferredVersion: "source-hash" },
+    updatedAt: ago(5000) };
+}
+
+test("only an explicitly deferred empty shell is healthy waiting, never a bare future shell", () => {
+  const shell = waitingNotionShell();
+  assert.equal(classifyNotionDocument(shell, options).state, "awaiting_submission");
+  assert.equal(classifyNotionDocument(shell, options).needsAttention, false);
+  for (const status of ["pending", "failed"]) {
+    const bare = { ...shell, lessonDate: "2099-01-01", notionSync: { status } };
+    assert.equal(classifyNotionDocument(bare, options).needsAttention, true);
+  }
+});
+
+test("waiting metadata cannot suppress submission, answers, true errors, bindings or uncertain creates", () => {
+  const shell = waitingNotionShell();
+  for (const patch of [
+    { preSubmittedAt: ago(1) }, { postSubmittedAt: ago(1) },
+    ...["prePlan", "postRecord", "preAnswers", "postAnswers"].map((key) => ({ [key]: { synthetic: "present" } })),
+    { gptStatus: "draft_created" }, { cancelledAt: ago(1) },
+    { notionProjectionControl: { memberPageId: "known-parent" } },
+    { notionProjectionLease: { token: "active", untilMs: nowMs + 1 } },
+    ...[{ status: "failed" }, { error: "provider error" }, { creationTitle: "uncertain" },
+      { instructorPageId: "known-page" }, { pageId: "legacy-page" }, { leaseToken: "active" }]
+      .map((sync) => ({ notionSync: { ...shell.notionSync, ...sync } })),
+  ]) {
+    assert.equal(classifyNotionDocument({ ...shell, ...patch }, options).needsAttention, true, JSON.stringify(patch));
+  }
+});
+
+test("Notion timestamps use valid status-specific evidence, never stale cross-status or future metadata", () => {
+  const failed = { notionSync: { status: "failed", pendingAt: ago(1000), failedAt: ago(5), attemptedAt: ago(6) } };
+  assert.equal(classifyNotionDocument(failed, options).ageMinutes, 5);
+  const pending = { notionSync: { status: "pending", pendingAt: ago(5), failedAt: ago(1000) } };
+  assert.equal(classifyNotionDocument(pending, options).ageMinutes, 5);
+  for (const invalid of ["invalid", "", ago(-10), { toMillis() { throw Error("invalid"); } }]) {
+    const row = { notionSync: { status: "failed", failedAt: invalid, attemptedAt: ago(90), syncedAt: ago(0) } };
+    assert.equal(classifyNotionDocument(row, options).ageMinutes, 90);
+  }
+  assert.equal(classifyNotionDocument({ notionSync: { status: "failed", syncedAt: ago(0) } }, options).state,
+    "timestamp_unavailable");
+  assert.equal(classifyNotionDocument({ notionSync: { status: "pending", pendingAt: "invalid" }, createdAt: ago(90) }, options).ageMinutes, 90);
+});
+
 function fakeFirestore(rows, { failRecent = false, failAll = false } = {}) {
   const calls = [];
   return { calls, collection: (name) => {

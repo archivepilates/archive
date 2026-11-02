@@ -13,7 +13,39 @@ export type PrivateNotionState = NonNullable<PrivateLessonChartRecordDoc["notion
   attemptedAt?: string;
   targetVersion?: string;
   creationTitle?: string;
+  pendingAt?: string;
+  failedAt?: string;
+  deferredReason?: "awaiting_submission" | "";
+  deferredVersion?: string;
 };
+
+export class PrivateNotionAwaitingSubmission extends Error {
+  constructor() { super("Notion member folder awaits lesson submission"); }
+}
+
+export function privateNotionHasSubmittedContent(record: any, request?: any): boolean {
+  if (!record) return false;
+  return Boolean(record.preSubmittedAt || record.postSubmittedAt || request?.preStatus === "submitted" ||
+    request?.postStatus === "submitted" || [record.prePlan, record.postRecord, record.preAnswers, record.postAnswers]
+      .some((answers) => answers && (typeof answers !== "object" || Object.keys(answers).length > 0)));
+}
+
+export function privateNotionCanAwaitSubmission(record: any, request?: any): boolean {
+  if (!record) return false;
+  const sync = record.notionSync;
+  return record.gptStatus === "waiting_post" && !privateNotionHasSubmittedContent(record, request) &&
+    !record.cancelledAt && request?.status !== "cancelled" && !record.notionProjectionControl?.aliasOfRecordId &&
+    !record.notionProjectionControl?.memberPageId && !sync?.instructorPageId && !sync?.pageId && !sync?.creationTitle;
+}
+
+export function privateNotionDeferredVersion(record: any, request: any): string {
+  const source = (doc: any) => {
+    const { notionSync, notionProjectionLease, updatedAt, ...fields } = doc;
+    return fields;
+  };
+  // Include identity/source changes that do not alter the rendered Notion page.
+  return stableHash({ record: source(record), request: source(request) });
+}
 
 export interface PrivateNotionSource {
   record: PrivateLessonChartRecordDoc;
@@ -90,6 +122,8 @@ export function privateNotionSourceChanged(before: any, after: any): boolean {
   // A completed stale write wakes one more pass; lease/ack writes never loop.
   const beforeToken = before.notionProjectionLease?.token || before.notionSync?.leaseToken;
   const afterToken = after.notionProjectionLease?.token || after.notionSync?.leaseToken;
+  if (after.notionSync?.deferredReason === "awaiting_submission" && !after.notionSync.error &&
+    privateNotionCanAwaitSubmission(after)) return false;
   return after.notionSync?.status === "pending" && !afterToken &&
     (Boolean(beforeToken) || before.notionSync?.status === "failed");
 }
@@ -108,10 +142,16 @@ export async function runPrivateNotionProjection(id: string, deps: {
     const state: PrivateNotionState = source.record.notionSync || { status: "pending" };
     if ((state.leaseUntilMs || 0) > now()) return { result: null };
     if (!source.request) return {
-      state: { ...state, status: "failed", error: "차트 요청 없음", leaseToken: "", leaseUntilMs: 0 },
+      state: { ...state, status: "failed", error: "차트 요청 없음", failedAt: new Date(now()).toISOString(),
+        deferredReason: "", deferredVersion: "", leaseToken: "", leaseUntilMs: 0 },
       result: null,
     };
     const version = deps.version(source);
+    if (!state.leaseToken && state.status === "pending" && state.deferredReason === "awaiting_submission" &&
+      !state.error && state.deferredVersion === privateNotionDeferredVersion(source.record, source.request) &&
+      privateNotionCanAwaitSubmission(source.record, source.request)) {
+      return { result: null };
+    }
     if (!state.leaseToken && state.status !== "failed" && state.sourceVersion === version) return {
       state: state.status === "pending" ? { ...state, status: "synced", error: "" } : undefined,
       result: null,
@@ -119,6 +159,7 @@ export async function runPrivateNotionProjection(id: string, deps: {
     if (!deps.retryFailures && state.status === "failed" && state.attemptedVersion === version) return { result: null };
     const next: PrivateNotionState = {
       ...state, status: "pending", error: "", targetVersion: version,
+      deferredReason: "", deferredVersion: "",
       attemptedVersion: version, attemptedAt: new Date(now()).toISOString(),
       leaseToken: token, leaseUntilMs: now() + PRIVATE_NOTION_LEASE_MS,
     };
@@ -139,7 +180,9 @@ export async function runPrivateNotionProjection(id: string, deps: {
   try {
     projected = await deps.project(claimed, checkpoint);
   } catch (err) {
-    projected = { status: "failed", error: err instanceof Error ? err.message : String(err) };
+    projected = err instanceof PrivateNotionAwaitingSubmission
+      ? { status: "pending", deferredReason: "awaiting_submission", error: "" }
+      : { status: "failed", error: err instanceof Error ? err.message : String(err), failedAt: new Date(now()).toISOString() };
   }
   return deps.store.transact(id, (current) => {
     const state = current?.record.notionSync as PrivateNotionState | undefined;
@@ -147,11 +190,18 @@ export async function runPrivateNotionProjection(id: string, deps: {
     const currentVersion = current.request ? deps.version(current) : "";
     const changed = Boolean(currentVersion && currentVersion !== version);
     const status = changed ? "pending" : current.request ? projected.status : "failed";
+    const deferred = status === "pending" && !changed && projected.deferredReason === "awaiting_submission" &&
+      current.request && privateNotionDeferredVersion(current.record, current.request) ===
+        privateNotionDeferredVersion(claimed.record, claimed.request) &&
+      privateNotionCanAwaitSubmission(current.record, current.request);
     return {
       state: {
         ...state, ...projected, status,
         sourceVersion: projected.status === "synced" ? version : "",
         targetVersion: currentVersion,
+        deferredReason: deferred ? "awaiting_submission" : "",
+        deferredVersion: deferred ? privateNotionDeferredVersion(current.record, current.request) : "",
+        ...(status === "failed" ? { failedAt: projected.failedAt || new Date(now()).toISOString() } : {}),
         error: changed ? "" : current.request ? projected.error || "" : "차트 요청 없음",
         leaseToken: "", leaseUntilMs: 0,
       },

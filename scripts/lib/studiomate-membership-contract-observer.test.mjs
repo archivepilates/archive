@@ -463,3 +463,73 @@ test("observer failures appear as independent warnings without failing good memb
     false,
   );
 });
+
+test("zero-candidate signature recovery holds surface without changing source results", () => {
+  for (const reason of ["signature_recovery_approval_unavailable", "signature_recovery_hint_changed"]) {
+    const summary = {
+      ok: true,
+      membershipContractDiscovery: {
+        ok: true, mode: "shadow", signatureRecovery: true, candidates: 0, sends: 0, reason,
+      },
+    };
+    const before = structuredClone(summary);
+    const warning = membershipContractDiscoveryWarning(summary);
+    assert.equal(warning.stderr, reason);
+    assert.equal(warning.stdoutOk, false);
+    assert.equal(warning.stdout.ok, false);
+    assert.equal(warning.stdout.candidates, 0);
+    assert.equal(warning.stdout.sends, 0);
+    assert.equal(warning.exitCode, 0);
+    assert.equal(warning.requiredFailed, false);
+    assert.deepEqual(summary, before);
+    for (const change of [{ signatureRecovery: false }, { signatureRecovery: undefined }, { candidates: 1 }]) {
+      assert.equal(membershipContractDiscoveryWarning({
+        ...summary, membershipContractDiscovery: { ...summary.membershipContractDiscovery, ...change },
+      }), null);
+    }
+  }
+});
+
+test("membership warnings preserve single-reason output and ignore successful discovery reasons", () => {
+  const cases = [
+    [{ coverageReviewCount: 3 }, undefined, "member_coverage_review_3"],
+    [{ invalidPendingCount: 1 }, undefined, "pending_contract_hint_scan_review"],
+    [{ pendingScanLimited: true }, undefined, "pending_contract_hint_scan_review"],
+    [{}, { status: "review" }, "membership_contract_processing_review"],
+    [{}, { review: 1, reason: "native_review_required" }, "native_review_required"],
+    [{ ok: false, reason: "partial export" }, undefined, "partial export"],
+    [{ ok: false }, undefined, "invalid membership contract discovery result"],
+    [{ coverageReviewCount: 3, reason: "already_observed_or_older_download" }, undefined, "member_coverage_review_3"],
+  ];
+  for (const [discovery, processing, expected] of cases) {
+    const warning = membershipContractDiscoveryWarning({
+      membershipContractDiscovery: { ok: true, ...discovery },
+      membershipContractProcessing: processing,
+    });
+    assert.equal(warning.stderr, expected);
+  }
+  assert.equal(membershipContractDiscoveryWarning({
+    membershipContractDiscovery: { ok: true, candidates: 0, reason: "already_observed_or_older_download" },
+  }), null);
+});
+
+test("membership warnings retain concurrent processing coverage pending and recovery reasons once", () => {
+  for (const reason of ["signature_recovery_approval_unavailable", "signature_recovery_hint_changed"]) {
+    const discovery = {
+      ok: true, signatureRecovery: true, candidates: 0, reason,
+      coverageReviewCount: 3, invalidPendingCount: 1, pendingScanLimited: true,
+    };
+    assert.equal(membershipContractDiscoveryWarning({
+      membershipContractDiscovery: discovery,
+      membershipContractProcessing: { status: "review", reason: "native_review_required" },
+    }).stderr, `native_review_required; member_coverage_review_3; pending_contract_hint_scan_review; ${reason}`);
+    assert.equal(membershipContractDiscoveryWarning({
+      membershipContractDiscovery: discovery,
+      membershipContractProcessing: { review: 1, reason },
+    }).stderr, `${reason}; member_coverage_review_3; pending_contract_hint_scan_review`);
+  }
+  assert.equal(membershipContractDiscoveryWarning({
+    membershipContractDiscovery: { ok: false, reason: "source_review", coverageReviewCount: 3, invalidPendingCount: 1 },
+    membershipContractProcessing: { status: "review" },
+  }).stderr, "membership_contract_processing_review; member_coverage_review_3; pending_contract_hint_scan_review; source_review");
+});

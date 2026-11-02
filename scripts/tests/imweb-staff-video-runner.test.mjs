@@ -13,6 +13,28 @@ const at = minutes => new Date(start + minutes * 60000).toISOString();
 const busy = () => Object.assign(Error('synthetic private lock owner'),
   { code: STAFF_VIDEO_LOCK_BUSY, phase: 'lock_acquisition' });
 
+test('proven transient reads alert on the third scheduled failure and recover only on full completion', async t => {
+  const f = await fixture(t);
+  const run = async () => { throw Object.assign(Error('synthetic read'), {
+    code: 'IMWEB_TRANSIENT_READ_FAILED',
+    failureDetails: { operation: 'member_list', phase: 'member_scan', statusCode: 503, rawBody: 'must-not-leak' },
+  }); };
+  for (const minute of [0, 5]) {
+    assert.equal((await f.invoke(minute, { run })).exitCode, 1);
+    assert.equal(f.events.length, 0);
+  }
+  await f.invoke(10, { run });
+  await f.invoke(15, { run });
+  assert.equal(f.events.length, 1);
+  assert.equal(f.events[0].consecutiveFailures, 3);
+  assert.deepEqual(f.events[0].failureDetails, { operation: 'member_list', phase: 'member_scan', statusCode: 503 });
+  const complete = { ok: true, mode: 'apply', accessVerified: true, verification: { ok: true }, finishedAt: at(16) };
+  await f.invoke(16, { args: ['--apply', '--member-code', 'm001'], run: async () => complete });
+  assert.equal(f.events.length, 1);
+  await f.invoke(17, { run: async () => ({ ...complete, finishedAt: at(17) }) });
+  assert.deepEqual(f.events.map(event => event.type), ['failure', 'recovery']);
+});
+
 async function fixture(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'staff-video-runner-'));
   t.after(() => rm(directory, { recursive: true, force: true }));

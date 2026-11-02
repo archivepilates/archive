@@ -6,6 +6,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import { ensurePrivateNotionMemberPage, privateNotionMemberIdentity } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionMemberPage";
 import { stableHash } from "../../firebase/kangsain-functions/functions/src/utils/hash";
+import { PrivateNotionAwaitingSubmission } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionSync";
 
 const requireFunctions = createRequire(path.resolve("firebase/kangsain-functions/functions/package.json"));
 const ts = requireFunctions("typescript");
@@ -83,6 +84,71 @@ test("production adapter shares one member folder across separate lesson records
   assert.equal(await f.ensure(first.record, first.request), pageId);
   assert.equal(await f.ensure(second.record, second.request), pageId);
   assert.equal(f.calls.filter(c => c === "POST pages").length, 1);
+});
+
+function emptyShell(f: ReturnType<typeof fixture>, id = "shell") {
+  const row = f.seed("100", id);
+  Object.assign(row.record, { gptStatus: "waiting_post", preSubmittedAt: null, postSubmittedAt: null,
+    notionSync: { status: "pending" } });
+  Object.assign(row.request, { preStatus: "pending", postStatus: "pending" });
+  return row;
+}
+
+test("empty shell defers before a member-folder claim or provider call and submitted content resumes", async () => {
+  const f = fixture(), shell = emptyShell(f);
+  await assert.rejects(f.ensure(shell.record, shell.request), PrivateNotionAwaitingSubmission);
+  assert.equal(f.calls.length, 0);
+  assert.equal([...f.docs.keys()].filter((key) => key.startsWith("sync/")).length, 0);
+  shell.record.postSubmittedAt = "submitted";
+  shell.request.postStatus = "submitted";
+  assert.equal(await f.ensure(shell.record, shell.request), pageId);
+  assert.equal(f.calls.filter((call) => call === "POST pages").length, 1);
+});
+
+test("empty shell still reuses a ready verified parent instead of deferring", async () => {
+  const f = fixture(), first = f.seed("100", "submitted");
+  await f.ensure(first.record, first.request);
+  const shell = emptyShell(f);
+  assert.equal(await f.ensure(shell.record, shell.request), pageId);
+  assert.equal(f.calls.filter((call) => call === "POST pages").length, 1);
+});
+
+test("pre-only content cannot bypass the member-folder post-submission guard", async () => {
+  const f = fixture(), shell = emptyShell(f);
+  shell.record.preSubmittedAt = "submitted";
+  shell.record.prePlan = { synthetic: "content" };
+  shell.request.preStatus = "submitted";
+  await assert.rejects(f.ensure(shell.record, shell.request), (error: unknown) =>
+    !(error instanceof PrivateNotionAwaitingSubmission) && /신원이/.test(String(error)));
+  assert.equal(f.calls.length, 0);
+});
+
+test("waiting shell preserves identity errors and uncertain parent-creation claims", async () => {
+  const invalid = fixture(), bad = emptyShell(invalid);
+  invalid.docs.get("member/100").phone = "01099999999";
+  await assert.rejects(invalid.ensure(bad.record, bad.request), (error: unknown) =>
+    !(error instanceof PrivateNotionAwaitingSubmission));
+  assert.equal(invalid.calls.length, 0);
+  for (const status of ["creating", "review"]) {
+    const f = fixture(), first = f.seed("100", "submitted");
+    await f.ensure(first.record, first.request);
+    for (const [key, value] of f.docs) if (key.startsWith("sync/")) f.docs.set(key, { ...value, status, pageId: "" });
+    const shell = emptyShell(f);
+    const before = f.calls.length;
+    await assert.rejects(f.ensure(shell.record, shell.request), (error: unknown) =>
+      !(error instanceof PrivateNotionAwaitingSubmission));
+    assert.equal(f.calls.length, before);
+  }
+});
+
+test("loss of submission while awaiting provider dispatch blocks parent creation", async () => {
+  const f = fixture(), row = f.seed("100", "submitted");
+  f.beforeProviderAttempt(() => {
+    Object.assign(row.record, { postSubmittedAt: null, gptStatus: "waiting_post" });
+    row.request.postStatus = "pending";
+  });
+  await assert.rejects(f.ensure(row.record, row.request));
+  assert.equal(f.calls.length, 0);
 });
 
 test("production title claim blocks concurrent namesakes before a second create", async () => {
