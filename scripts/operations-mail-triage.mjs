@@ -105,6 +105,9 @@ export function sanitizeHealth(data) {
     activatedAt: timestamp(data?.activatedAt), lastSyncAt: timestamp(data?.lastSyncAt),
     lastErrorCode: typeof data?.lastErrorCode === "string" && /^(?:mail_[a-z0-9_]{1,80}|gmail_http_\d{3})$/.test(data.lastErrorCode)
       ? data.lastErrorCode : null,
+    lastErrorPhase: ["watch", "history", "message_metadata", "profile", "labels", "label_resync"].includes(data?.lastErrorPhase)
+      ? data.lastErrorPhase : null,
+    lastErrorReason: ["watch_label_limit", "provider_rejected"].includes(data?.lastErrorReason) ? data.lastErrorReason : null,
     lastErrorAt: timestamp(data?.lastErrorAt), watchExpiresAt: timestamp(data?.watchExpiresAt) };
 }
 

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import { DelegatedGoogleClient } from "../google/delegatedGoogleClient";
-import { classifyOperationsMail, OPS_MAIL, OPS_MAIL_LABEL_NAMES, type GmailMetadata } from "./operationsMailPolicy";
+import { classifyOperationsMail, OPS_MAIL, OPS_MAIL_LABEL_NAMES, OPS_MAIL_WATCH_LABEL_NAMES,
+  OPS_MAIL_WATCH_POLICY, type GmailMetadata } from "./operationsMailPolicy";
 
 const API = "https://gmail.googleapis.com/gmail/v1/users/me/";
 const METADATA_FIELDS = "id,threadId,internalDate,labelIds,payload(headers)";
@@ -14,6 +15,21 @@ type Json = Record<string, any>;
 const ownsLease = (state: Json | undefined, owner: string, at: Date) => state?.leaseOwner === owner &&
   instant(state.leaseUntil) && Date.parse(state.leaseUntil) > at.getTime();
 export type MailGmailClient = { request<T = Json>(path: string, init?: RequestInit): Promise<T> };
+const ERROR_PHASES = ["watch", "history", "message_metadata", "profile", "labels", "label_resync"] as const;
+type ErrorPhase = typeof ERROR_PHASES[number];
+const ERROR_REASONS = ["watch_label_limit", "provider_rejected"] as const;
+
+export class OperationsMailRequestError extends Error {
+  constructor(status: number, readonly phase: ErrorPhase, readonly reason: typeof ERROR_REASONS[number]) {
+    super(`gmail_http_${status}`);
+  }
+}
+
+function requestPhase(path: string): ErrorPhase {
+  const resource = path.split("?")[0];
+  if (resource === "watch" || resource === "history" || resource === "profile" || resource === "labels") return resource;
+  return resource === "messages" ? "label_resync" : "message_metadata";
+}
 
 export class OperationsMailGmailClient implements MailGmailClient {
   private readonly client = new DelegatedGoogleClient(["https://www.googleapis.com/auth/gmail.metadata"]);
@@ -22,7 +38,14 @@ export class OperationsMailGmailClient implements MailGmailClient {
     const response = await this.client.requestRaw(API + path, {
       ...init, headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(20_000),
     });
-    if (!response.ok) throw new Error(`gmail_http_${response.status}`);
+    if (!response.ok) {
+      const phase = requestPhase(path);
+      // Keep only an explicit diagnostic code, never provider text, headers or tokens.
+      const body = await response.json().catch(() => null) as Json | null;
+      const reason = response.status === 400 && phase === "watch" && body?.error?.message === "Too many labelIds specified"
+        ? "watch_label_limit" : "provider_rejected";
+      throw new OperationsMailRequestError(response.status, phase, reason);
+    }
     return await response.json() as T;
   }
 }
@@ -35,7 +58,9 @@ export function assertOperationsMailRequest(path: string, init: RequestInit = {}
   if (method === "POST" && url.pathname === "/gmail/v1/users/me/watch" && !url.search) {
     const body = JSON.parse(String(init.body || "{}"));
     if (body.topicName !== OPS_MAIL.topic || body.labelFilterBehavior !== "INCLUDE" ||
-        !Array.isArray(body.labelIds) || !body.labelIds.length || body.labelIds.some((id: unknown) => typeof id !== "string" || !/^Label_\d+$/.test(id)))
+        !Array.isArray(body.labelIds) || !body.labelIds.length || body.labelIds.length > 20 ||
+        new Set(body.labelIds).size !== body.labelIds.length ||
+        body.labelIds.some((id: unknown) => typeof id !== "string" || !/^Label_\d+$/.test(id)))
       throw new Error("mail_watch_scope_required");
     return;
   }
@@ -59,19 +84,25 @@ export function parseOperationsMailPush(value: unknown): { emailAddress: string;
     ? { emailAddress: OPS_MAIL.mailbox, historyId: cursor } : null;
 }
 
-async function labelsFor(gmail: MailGmailClient): Promise<Record<string, string>> {
+async function labelsFor(gmail: MailGmailClient): Promise<{ labels: Record<string, string>; watchLabelIds: string[] }> {
   const result = await gmail.request("labels?fields=labels(id,name)");
   if (!Array.isArray(result.labels)) throw new Error("mail_labels_invalid");
   const labels: Record<string, string> = {};
   for (const row of result.labels) if (row && typeof row.id === "string" && /^Label_\d+$/.test(row.id) && OPS_MAIL_LABEL_NAMES.includes(row.name)) labels[row.id] = row.name;
   if (!Object.keys(labels).length) throw new Error("mail_operation_labels_required");
-  return labels;
+  const watchLabelIds = OPS_MAIL_WATCH_LABEL_NAMES.map(name => {
+    const matches = result.labels.filter((row: Json) => row && row.name === name && typeof row.id === "string" && /^Label_\d+$/.test(row.id));
+    if (matches.length !== 1) throw new Error("mail_watch_status_labels_required");
+    return matches[0].id as string;
+  }).sort();
+  if (new Set(watchLabelIds).size !== watchLabelIds.length) throw new Error("mail_watch_status_labels_required");
+  return { labels, watchLabelIds };
 }
 
 export async function activateOperationsMailIngress(db: Firestore, gmail: MailGmailClient): Promise<Json> {
   const ref = db.doc(OPS_MAIL.statePath), previous = await ref.get();
   if (!previous.exists) {
-    const labels = await labelsFor(gmail);
+    const { labels } = await labelsFor(gmail);
     const profile = await gmail.request("profile?fields=emailAddress,historyId");
     if (profile.emailAddress !== OPS_MAIL.mailbox || !historyId(profile.historyId)) throw new Error("mail_mailbox_identity_mismatch");
     // Cutoff is after the profile snapshot; the old cursor still captures every later event.
@@ -111,16 +142,21 @@ export async function runOperationsMailIngress(db: Firestore, gmail: MailGmailCl
     const boundary = await gmail.request("profile?fields=emailAddress,historyId");
     if (boundary.emailAddress !== OPS_MAIL.mailbox || !historyId(boundary.historyId) ||
         BigInt(boundary.historyId) < BigInt(state.historyCursor)) throw new Error("mail_mailbox_identity_mismatch");
-    labels = await labelsFor(gmail);
+    const currentLabels = await labelsFor(gmail);
+    labels = currentLabels.labels;
+    const watchLabelIds = currentLabels.watchLabelIds;
     const labelsChanged = JSON.stringify(Object.entries(labels).sort()) !== JSON.stringify(Object.entries(state.labels).sort());
-    if (labelsChanged || options.source !== "push" && (!instant(state.lastWatchAt) || now().getTime() - Date.parse(state.lastWatchAt) >= 86_400_000 ||
+    const watchChanged = state.watchPolicy !== OPS_MAIL_WATCH_POLICY ||
+      JSON.stringify(state.watchLabelIds) !== JSON.stringify(watchLabelIds);
+    if (labelsChanged || watchChanged || options.source !== "push" && (!instant(state.lastWatchAt) || now().getTime() - Date.parse(state.lastWatchAt) >= 86_400_000 ||
         !instant(state.watchExpiresAt) || Date.parse(state.watchExpiresAt) - now().getTime() < 86_400_000)) {
       const watch = await gmail.request("watch", { method: "POST", body: JSON.stringify({
-        topicName: OPS_MAIL.topic, labelFilterBehavior: "INCLUDE", labelIds: Object.keys(labels),
+        topicName: OPS_MAIL.topic, labelFilterBehavior: "INCLUDE", labelIds: watchLabelIds,
       }) });
       if (!historyId(watch.historyId) || !/^\d+$/.test(String(watch.expiration)) || Number(watch.expiration) <= now().getTime())
         throw new Error("mail_watch_receipt_invalid");
-      await patch({ labels, watchExpiresAt: new Date(Number(watch.expiration)).toISOString(), lastWatchAt: now().toISOString() });
+      await patch({ labels, watchPolicy: OPS_MAIL_WATCH_POLICY, watchLabelIds,
+        watchExpiresAt: new Date(Number(watch.expiration)).toISOString(), lastWatchAt: now().toISOString() });
     }
     if (!labels || !Object.keys(labels).length) throw new Error("mail_operation_labels_required");
     let scan: { ids: string[]; cursor: string; resync: boolean };
@@ -128,8 +164,9 @@ export async function runOperationsMailIngress(db: Firestore, gmail: MailGmailCl
     catch (error) {
       if (!(error instanceof Error) || error.message !== "gmail_http_404") throw error;
       const profile = await gmail.request("profile?fields=emailAddress,historyId");
-      if (profile.emailAddress !== OPS_MAIL.mailbox || !historyId(profile.historyId)) throw new Error("mail_mailbox_identity_mismatch");
-      labels = await labelsFor(gmail);
+      if (profile.emailAddress !== OPS_MAIL.mailbox || !historyId(profile.historyId) ||
+          BigInt(profile.historyId) < BigInt(boundary.historyId)) throw new Error("mail_mailbox_identity_mismatch");
+      labels = (await labelsFor(gmail)).labels;
       scan = { ids: await labelResync(gmail, labels), cursor: profile.historyId, resync: true };
     }
     for (const id of scan.ids) {
@@ -184,11 +221,14 @@ export async function runOperationsMailIngress(db: Firestore, gmail: MailGmailCl
       else if (result === "actionable" || result === "recorded" || result === "excluded") counts[result]++;
     }
     await patch({ historyCursor: scan.cursor, lastSyncAt: now().toISOString(), lastErrorCode: null,
+      lastErrorPhase: null, lastErrorReason: null,
       lastRunCounts: counts, lastResync: scan.resync, lastTrigger: options.source });
     return { status: "synced", ...counts, resync: scan.resync };
   } catch (error) {
     const code = error instanceof Error && /^(?:mail_[a-z0-9_]+|gmail_http_\d{3})$/.test(error.message) ? error.message : "mail_ingress_failed";
-    await patch({ lastErrorCode: code, lastErrorAt: now().toISOString() }).catch(() => undefined);
+    const phase = error instanceof OperationsMailRequestError && ERROR_PHASES.includes(error.phase) ? error.phase : null;
+    const reason = error instanceof OperationsMailRequestError && ERROR_REASONS.includes(error.reason) ? error.reason : null;
+    await patch({ lastErrorCode: code, lastErrorPhase: phase, lastErrorReason: reason, lastErrorAt: now().toISOString() }).catch(() => undefined);
     throw new Error(code);
   } finally {
     await db.runTransaction(async tx => {

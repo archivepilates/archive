@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { before, test } from "node:test";
+import { before, beforeEach, test } from "node:test";
 import { build } from "esbuild";
-import { classifyOperationsMail, OPS_MAIL } from "../../firebase/kangsain-functions/functions/src/sync/operationsMailPolicy";
+import { classifyOperationsMail, OPS_MAIL, OPS_MAIL_LABEL_NAMES, OPS_MAIL_WATCH_POLICY,
+  OPS_MAIL_WATCH_LABEL_NAMES } from "../../firebase/kangsain-functions/functions/src/sync/operationsMailPolicy";
 
 type Json = Record<string, any>;
 type Engine = typeof import("../../firebase/kangsain-functions/functions/src/sync/operationsMailIngress");
@@ -12,6 +13,9 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const require = createRequire(import.meta.url);
 let compilation: Awaited<ReturnType<typeof build>>;
 let engine: Engine;
+beforeEach(t => {
+  t.mock.method(globalThis, "fetch", () => { throw new Error("real_network_forbidden_in_mail_tests"); });
+});
 before(async () => {
   compilation = await build({
     absWorkingDir: root,
@@ -42,6 +46,10 @@ const NOW = "2026-10-24T00:01:00.000Z";
 const CURSOR = "900719925474099312340";
 const NEXT = "900719925474099312341";
 const LABELS = { Label_10: "알림톡 보고", Label_11: "동기화 보고" };
+const WATCH_LABELS = { Label_300: "자동화 성공", Label_9: "자동화 실패", Label_40: "자동화 긴급", Label_200: "자동화 확인필요" };
+const WATCH_LABEL_IDS = Object.keys(WATCH_LABELS).sort();
+const labelRows = (domains: Record<string, string> = LABELS) =>
+  Object.entries({ ...domains, ...WATCH_LABELS }).map(([id, name]) => ({ id, name }));
 const ID = "19ab000000000001";
 const ID2 = "19ab000000000002";
 const ledgerPath = (id = ID) => `${OPS_MAIL.lanePath}/messages/${id}`;
@@ -134,7 +142,7 @@ class FakeGmail {
   histories: Record<string, Json | Error> = { "": history() };
   messages: Record<string, Json | Error> = { [ID]: metadata(), [ID2]: metadata(ID2) };
   listings: Record<string, Json | Error> = {};
-  labels: Json = { labels: Object.entries(LABELS).map(([id, name]) => ({ id, name })) };
+  labels: Json = { labels: labelRows() };
   profile: Json = { emailAddress: OPS_MAIL.mailbox, historyId: NEXT };
   profiles: Array<Json | Error> = [];
   labelSnapshots: Array<Json | Error> = [];
@@ -164,7 +172,8 @@ function fixture(state: Json = {}) {
   let clock = Date.parse(NOW);
   db.seed(OPS_MAIL.statePath, { enabled: true, mailbox: OPS_MAIL.mailbox, topic: OPS_MAIL.topic,
     activatedAt: ACTIVATED, historyCursor: CURSOR, labels: LABELS, policyVersion: 1,
-    lastWatchAt: NOW, watchExpiresAt: new Date(clock + 3 * 86_400_000).toISOString(), ...state });
+    lastWatchAt: NOW, watchExpiresAt: new Date(clock + 3 * 86_400_000).toISOString(),
+    watchPolicy: OPS_MAIL_WATCH_POLICY, watchLabelIds: WATCH_LABEL_IDS, ...state });
   return { db, gmail, advance: (ms: number) => { clock += ms; },
     state: () => db.get(OPS_MAIL.statePath)!,
     run: (options: Json = {}) => engine.runOperationsMailIngress(db as any, gmail, {
@@ -301,7 +310,7 @@ test("a newly created allowed domain label is refreshed on push, watched, and qu
   assert.deepEqual(requestKinds(f.gmail), ["profile", "labels", "watch", "history", `messages/${ID}`]);
   const watch = f.gmail.calls.find(call => call.path === "watch")!;
   assert.deepEqual(JSON.parse(String(watch.init.body)), {
-    topicName: OPS_MAIL.topic, labelFilterBehavior: "INCLUDE", labelIds: [...Object.keys(LABELS), NEW_LABEL.id],
+    topicName: OPS_MAIL.topic, labelFilterBehavior: "INCLUDE", labelIds: WATCH_LABEL_IDS,
   });
   assert.equal(f.state().labels[NEW_LABEL.id], NEW_LABEL.name);
   assert.equal(f.state().historyCursor, NEXT, "A watch receipt must not replace the processing boundary");
@@ -661,6 +670,9 @@ test("only history 404 triggers fixed-profile validation and domain-label-only p
   assert.equal((await f.run()).resync, true);
   assert.equal(ledgers(f.db).length, 2); assert.equal(queues(f.db)[0][1].messageCount, 2);
   assert.equal(f.state().historyCursor, NEXT);
+  assert.equal(f.state().activatedAt, ACTIVATED);
+  assert.equal(f.gmail.calls.filter(call => call.path.startsWith("profile?")).length, 2);
+  assertReleased(f);
   const lists = f.gmail.calls.filter(call => call.path.startsWith("messages?"));
   assert.equal(lists.length, 3);
   for (const call of lists) {
@@ -674,7 +686,30 @@ test("only history 404 triggers fixed-profile validation and domain-label-only p
   assert.equal(failure.state().historyCursor, CURSOR);
 });
 
-test("404 fallback takes a new profile snapshot and refreshes labels before constrained resync", async () => {
+for (const [name, fallbackHead] of [
+  ["older than the stored cursor", "900719925474099312339"],
+  ["equal to the stored cursor but older than the boundary", CURSOR],
+  ["between the stored cursor and the boundary", "900719925474099312345"],
+] as const) {
+  test(`404 fallback rejects a profile ${name} before label refresh or resync`, async () => {
+    const f = fixture(), boundaryHead = "900719925474099312350";
+    f.gmail.histories[""] = new Error("gmail_http_404");
+    f.gmail.profiles = [{ ...f.gmail.profile, historyId: boundaryHead },
+      { ...f.gmail.profile, historyId: fallbackHead }];
+    await assert.rejects(f.run(), { message: "mail_mailbox_identity_mismatch" });
+    assert.deepEqual(requestKinds(f.gmail), ["profile", "labels", "history", "profile"]);
+    assert.equal(f.gmail.calls.some(call => call.path.startsWith("messages?")), false);
+    assert.equal(f.gmail.calls.some(call => call.path.startsWith("messages/")), false);
+    assert.equal(f.state().historyCursor, CURSOR);
+    assert.equal(f.state().activatedAt, ACTIVATED);
+    assert.equal(f.state().lastErrorCode, "mail_mailbox_identity_mismatch");
+    assert.equal(ledgers(f.db).length, 0); assert.equal(queues(f.db).length, 0);
+    assert.equal(f.db.commits.flat().some(write => "historyCursor" in write.data || "activatedAt" in write.data), false);
+    assertReleased(f);
+  });
+}
+
+test("404 fallback takes a newer profile snapshot and refreshes labels before constrained resync", async () => {
   const f = fixture(), fallbackHead = "900719925474099312349";
   f.gmail.histories[""] = new Error("gmail_http_404");
   f.gmail.profiles = [clone(f.gmail.profile), { ...f.gmail.profile, historyId: fallbackHead }];
@@ -689,6 +724,7 @@ test("404 fallback takes a new profile snapshot and refreshes labels before cons
   assert.deepEqual(requestKinds(f.gmail), ["profile", "labels", "history", "profile", "labels",
     "messages", "messages", "messages", `messages/${ID}`]);
   assert.equal(f.state().historyCursor, fallbackHead, "Freeze fallback profile before refreshing labels/scanning");
+  assert.equal(f.state().activatedAt, ACTIVATED);
   assert.equal(ledgers(f.db).length, 1); assert.equal(queues(f.db).length, 1);
   assert.equal(queues(f.db)[0][1].area, "holding"); assert.equal(queues(f.db)[0][1].messageCount, 1);
   const scanned = f.gmail.calls.filter(call => call.path.startsWith("messages?"))
@@ -741,15 +777,15 @@ test("profile failure during history-404 fallback keeps original cursor and stop
   assert.equal(f.gmail.calls.some(call => call.path.startsWith("messages?")), false); assertReleased(f);
 });
 
-test("maintenance watch renews only named operational labels and never skips history to watch receipt", async () => {
+test("maintenance watch renews only four common status labels and never skips history to watch receipt", async () => {
   const f = fixture({ lastWatchAt: ACTIVATED, watchExpiresAt: NOW });
-  f.gmail.labels.labels.push({ id: "Label_99", name: "Private" }, { id: "Label_98", name: "자동화 실패" });
+  f.gmail.labels.labels.push({ id: "Label_99", name: "Private" }, { id: "Label_98", name: "자동화 진행중" });
   f.gmail.watch.historyId = "900719925474099319999";
   await f.run({ source: "maintenance" });
   const watch = f.gmail.calls.find(call => call.path === "watch")!;
   assert.equal(watch.init.method, "POST");
   assert.deepEqual(JSON.parse(String(watch.init.body)), {
-    topicName: OPS_MAIL.topic, labelFilterBehavior: "INCLUDE", labelIds: Object.keys(LABELS),
+    topicName: OPS_MAIL.topic, labelFilterBehavior: "INCLUDE", labelIds: WATCH_LABEL_IDS,
   });
   assert.equal(f.state().historyCursor, NEXT); assert.deepEqual(f.state().labels, LABELS);
 });
@@ -848,4 +884,300 @@ test("transport rejects body/raw/full reads, sends, modification and arbitrary U
   ];
   for (const [path, init] of denied) await assert.rejects(gmail.request(path, init), /mail_(?:request_not_allowed|watch_scope_required)/, path);
   assert.equal(requests, 0);
+});
+
+const watchRequest = (labelIds = WATCH_LABEL_IDS): RequestInit => ({ method: "POST", body: JSON.stringify({
+  topicName: OPS_MAIL.topic, labelFilterBehavior: "INCLUDE", labelIds,
+}) });
+
+for (const count of [21, OPS_MAIL_LABEL_NAMES.length]) {
+  test(`legacy watch migrates ${count} domains without truncating history, resetting cutoff or jumping the cursor`, async () => {
+    const domains = Object.fromEntries(OPS_MAIL_LABEL_NAMES.slice(0, count).map((name, i) => [`Label_${2000 + i}`, name]));
+    const f = fixture({ labels: domains, watchPolicy: undefined, watchLabelIds: undefined });
+    f.gmail.labels = { labels: [...labelRows(domains), { id: "SENT", name: "SENT" }, { id: "Label_999", name: "Private" }] };
+    const ids = Object.keys(domains).map((_, i) => (0x19ac0000 + i).toString(16).padStart(16, "0"));
+    const events = Object.entries(domains).map(([labelId, name], i) => {
+      f.gmail.messages[ids[i]] = { ...metadata(ids[i], `[${name.slice(0, -3)}][실패] SYNTHETIC_FULL_DOMAIN`),
+        labelIds: ["SENT", labelId] };
+      return { message: { id: ids[i], labelIds: ["SENT", labelId] } };
+    });
+    f.gmail.histories = {
+      "": { historyId: NEXT, history: [{ messagesAdded: events.slice(0, 11) }], nextPageToken: "migration-page-2" },
+      "migration-page-2": { historyId: "900719925474099319998", history: [{ messagesAdded: events,
+        labelsAdded: events.map(event => ({ message: { id: event.message.id }, labelIds: event.message.labelIds })) }] },
+    };
+    f.gmail.watch.historyId = "900719925474099319999";
+    const result = await f.run();
+    assert.equal(result.status, "synced"); assert.equal(result.actionable, count);
+    assert.equal(ledgers(f.db).length, count); assert.equal(queues(f.db).length, count);
+    assert.deepEqual(f.state().labels, domains);
+    assert.deepEqual(f.state().watchLabelIds, WATCH_LABEL_IDS);
+    assert.equal(f.state().watchPolicy, OPS_MAIL_WATCH_POLICY);
+    assert.equal(f.state().activatedAt, ACTIVATED);
+    assert.equal(f.state().historyCursor, NEXT);
+    const watch = f.gmail.calls.filter(call => call.path === "watch");
+    assert.equal(watch.length, 1);
+    assert.deepEqual(watch[0].init, watchRequest());
+    const watchWrite = f.db.commits.flat().find(write => write.data.watchPolicy === OPS_MAIL_WATCH_POLICY)!;
+    assert.equal(Object.hasOwn(watchWrite.data, "historyCursor"), false);
+    assert.equal(Object.hasOwn(watchWrite.data, "activatedAt"), false);
+    assert.deepEqual(watchWrite.data.labels, domains);
+    const pages = f.gmail.calls.filter(call => call.path.startsWith("history?"));
+    assert.equal(pages.length, 2);
+    for (const call of pages) assert.equal(new URL(call.path, "https://synthetic.invalid").searchParams.get("startHistoryId"), CURSOR);
+    assert.equal(f.gmail.calls.filter(call => call.path.startsWith("messages/")).length, count);
+    assertReleased(f);
+  });
+}
+
+for (const [name, state] of [
+  ["missing policy", { watchPolicy: undefined }],
+  ["old policy", { watchPolicy: "domain_labels_v0" }],
+  ["missing watch IDs", { watchLabelIds: undefined }],
+  ["empty watch IDs", { watchLabelIds: [] }],
+  ["old 21 domain IDs", { watchLabelIds: Array.from({ length: 21 }, (_, i) => `Label_${2000 + i}`) }],
+  ["duplicate stored IDs", { watchLabelIds: [WATCH_LABEL_IDS[0], ...WATCH_LABEL_IDS.slice(0, 3)] }],
+  ["non-canonical stored ID order", { watchLabelIds: [...WATCH_LABEL_IDS].reverse() }],
+] as const) {
+  test(`push renews a still-unexpired watch with ${name}, persisting only receipt-backed policy`, async () => {
+    const f = fixture(state); f.gmail.histories[""] = history([]);
+    const atWatch = f.state().historyCursor;
+    await f.run();
+    assert.deepEqual(requestKinds(f.gmail), ["profile", "labels", "watch", "history"]);
+    assert.deepEqual(f.gmail.calls.find(call => call.path === "watch")!.init, watchRequest());
+    assert.equal(atWatch, CURSOR);
+    assert.equal(f.state().watchPolicy, OPS_MAIL_WATCH_POLICY);
+    assert.deepEqual(f.state().watchLabelIds, WATCH_LABEL_IDS);
+    assert.deepEqual(f.state().labels, LABELS);
+    assert.equal(f.state().historyCursor, NEXT); assertReleased(f);
+  });
+}
+
+test("changed common status label ID renews watch without changing the domain classifier map", async () => {
+  const f = fixture();
+  const row = f.gmail.labels.labels.find((row: Json) => row.name === "자동화 실패");
+  row.id = "Label_901";
+  await f.run();
+  const expected = WATCH_LABEL_IDS.map(id => id === "Label_9" ? "Label_901" : id).sort();
+  assert.deepEqual(f.gmail.calls.find(call => call.path === "watch")!.init, watchRequest(expected));
+  assert.deepEqual(f.state().watchLabelIds, expected); assert.deepEqual(f.state().labels, LABELS);
+});
+
+test("failed watch migration preserves original policy, labels, cursor and activation cutoff", async () => {
+  const f = fixture({ watchPolicy: undefined, watchLabelIds: undefined });
+  f.gmail.watch.expiration = String(Date.parse(NOW));
+  await assert.rejects(f.run(), /mail_watch_receipt_invalid/);
+  assert.equal(f.state().watchPolicy, undefined); assert.equal(f.state().watchLabelIds, undefined);
+  assert.deepEqual(f.state().labels, LABELS); assert.equal(f.state().historyCursor, CURSOR);
+  assert.equal(f.state().activatedAt, ACTIVATED);
+  assert.deepEqual(requestKinds(f.gmail), ["profile", "labels", "watch"]); assertReleased(f);
+});
+
+test("successful watch followed by failed history never replaces the old cursor with its receipt", async () => {
+  const f = fixture({ watchPolicy: undefined, watchLabelIds: undefined });
+  f.gmail.watch.historyId = "900719925474099319999";
+  f.gmail.histories[""] = new Error("gmail_http_503");
+  await assert.rejects(f.run(), /gmail_http_503/);
+  assert.equal(f.state().watchPolicy, OPS_MAIL_WATCH_POLICY);
+  assert.deepEqual(f.state().watchLabelIds, WATCH_LABEL_IDS);
+  assert.equal(f.state().historyCursor, CURSOR); assert.equal(ledgers(f.db).length, 0); assertReleased(f);
+});
+
+for (const name of OPS_MAIL_WATCH_LABEL_NAMES) {
+  for (const kind of ["missing", "duplicate name", "duplicate row", "invalid ID"] as const) {
+    test(`${kind} common status ${name} fails closed before watch/history; never creates a label`, async () => {
+      const f = fixture();
+      const row = f.gmail.labels.labels.find((row: Json) => row.name === name);
+      if (kind === "missing") f.gmail.labels.labels = f.gmail.labels.labels.filter((row: Json) => row.name !== name);
+      else if (kind === "duplicate name") f.gmail.labels.labels.push({ id: "Label_9999", name });
+      else if (kind === "duplicate row") f.gmail.labels.labels.push(clone(row));
+      else row.id = "SENT";
+      await assert.rejects(f.run(), { message: "mail_watch_status_labels_required" });
+      assert.deepEqual(requestKinds(f.gmail), ["profile", "labels"]);
+      assert.ok(f.gmail.calls.every(call => !call.init.method || call.init.method === "GET"));
+      assert.equal(f.state().historyCursor, CURSOR); assert.deepEqual(f.state().labels, LABELS);
+      assert.equal(ledgers(f.db).length, 0); assert.equal(queues(f.db).length, 0); assertReleased(f);
+    });
+  }
+}
+
+test("all four status names cannot alias one ID; activation cannot save incomplete status labels", async () => {
+  const f = fixture();
+  for (const row of f.gmail.labels.labels) if (OPS_MAIL_WATCH_LABEL_NAMES.includes(row.name)) row.id = "Label_9999";
+  await assert.rejects(f.run(), /mail_watch_status_labels_required/);
+  assert.equal(f.state().historyCursor, CURSOR); assertReleased(f);
+  const db = new FakeFirestore(), gmail = new FakeGmail();
+  gmail.labels.labels = gmail.labels.labels.filter((row: Json) => row.name !== "자동화 실패");
+  await assert.rejects(engine.activateOperationsMailIngress(db as any, gmail), /mail_watch_status_labels_required/);
+  assert.equal(db.records.size, 0); assert.equal(db.commits.length, 0);
+  assert.deepEqual(requestKinds(gmail), ["labels"]);
+});
+
+test("status-only mail cannot enter history or bypass the approved domain at metadata admission", async () => {
+  const f = fixture();
+  f.gmail.histories[""] = { historyId: NEXT, history: [{ messagesAdded: [
+    { message: { id: ID, labelIds: ["SENT", "Label_9"] } },
+    added(ID2),
+  ] }] };
+  f.gmail.messages[ID2] = { ...metadata(ID2), labelIds: ["SENT", "Label_9"] };
+  const result = await f.run();
+  assert.equal(result.checked, 1); assert.equal(result.excluded, 1); assert.equal(result.actionable, 0);
+  assert.equal(f.db.get(ledgerPath(ID)), undefined);
+  assert.equal(f.db.get(ledgerPath(ID2))!.classification, "excluded");
+  assert.equal(queues(f.db).length, 0);
+  assert.equal(f.gmail.calls.some(call => call.path.startsWith(`messages/${ID}?`)), false);
+  assert.equal(f.state().historyCursor, NEXT);
+});
+
+test("existing maintenance history still captures domain mail with no common status label", async () => {
+  const f = fixture();
+  assert.ok(!(f.gmail.messages[ID] as Json).labelIds.some((id: string) => WATCH_LABEL_IDS.includes(id)));
+  const result = await f.run({ source: "maintenance" });
+  assert.equal(result.actionable, 1); assert.equal(ledgers(f.db).length, 1);
+  assert.equal(f.gmail.calls.some(call => call.path === "watch"), false);
+  assert.equal(f.state().historyCursor, NEXT);
+});
+
+test("history-404 resync scans every approved domain even above watch limit; never scans status or SENT", async () => {
+  const domains = Object.fromEntries(OPS_MAIL_LABEL_NAMES.map((name, i) => [`Label_${2000 + i}`, name]));
+  const f = fixture({ labels: domains });
+  f.gmail.labels = { labels: labelRows(domains) };
+  f.gmail.histories[""] = new Error("gmail_http_404");
+  f.gmail.listings = Object.fromEntries(Object.keys(domains).map(id => [`${id}:`, {}]));
+  const lastId = Object.keys(domains).at(-1)!;
+  f.gmail.listings[`${lastId}:`] = { messages: [{ id: ID }] };
+  f.gmail.messages[ID] = { ...metadata(ID, `[${domains[lastId].slice(0, -3)}][실패] SYNTHETIC_LAST_DOMAIN`), labelIds: ["SENT", lastId] };
+  const result = await f.run({ source: "maintenance" });
+  assert.equal(result.resync, true); assert.equal(result.actionable, 1);
+  const scanned = f.gmail.calls.filter(call => call.path.startsWith("messages?"))
+    .map(call => new URL(call.path, "https://synthetic.invalid").searchParams.get("labelIds"));
+  assert.deepEqual(scanned.sort(), Object.keys(domains).sort());
+  assert.ok(scanned.length > 20); assert.ok(scanned.every(id => !WATCH_LABEL_IDS.includes(id!)));
+  assert.deepEqual(f.state().labels, domains); assert.equal(f.state().historyCursor, NEXT); assertReleased(f);
+});
+
+for (const [name, ids] of [
+  ["21 unique IDs", Array.from({ length: 21 }, (_, i) => `Label_${1000 + i}`)],
+  ["duplicate IDs", ["Label_10", "Label_10"]],
+  ["four IDs containing a duplicate", [...WATCH_LABEL_IDS.slice(0, 3), WATCH_LABEL_IDS[0]]],
+  ["no IDs", []], ["SENT", ["SENT"]],
+] as const) {
+  test(`watch request rejects ${name} before any provider transport`, async () => {
+    let calls = 0;
+    const module = loadEngine({ construct() {}, async requestRaw() { calls++; throw new Error("provider_must_not_be_called"); } });
+    assert.throws(() => module.assertOperationsMailRequest("watch", watchRequest([...ids])), /mail_watch_scope_required/);
+    await assert.rejects(new module.OperationsMailGmailClient().request("watch", watchRequest([...ids])), /mail_watch_scope_required/);
+    assert.equal(calls, 0);
+  });
+}
+
+test("request guard permits the exact watch scope and at most twenty unique IDs without changing the body", async () => {
+  let calls = 0;
+  const module = loadEngine({ construct() {}, async requestRaw(_url, init) {
+    calls++; assert.deepEqual(JSON.parse(init.body), JSON.parse(String(expected.body)));
+    return new Response(JSON.stringify({ historyId: NEXT }));
+  } });
+  const gmail = new module.OperationsMailGmailClient();
+  let expected = watchRequest();
+  for (const ids of [WATCH_LABEL_IDS, Array.from({ length: 20 }, (_, i) => `Label_${1000 + i}`)]) {
+    expected = watchRequest(ids);
+    const before = clone(expected);
+    await gmail.request("watch", expected);
+    assert.deepEqual(expected, before);
+  }
+  assert.equal(calls, 2);
+});
+
+const HTTP_PHASE_REQUESTS: Array<[string, string, RequestInit?]> = [
+  ["watch", "watch", watchRequest()], ["history", `history?startHistoryId=${CURSOR}`],
+  ["message_metadata", metadataRequest()], ["profile", "profile?fields=emailAddress,historyId"],
+  ["labels", "labels?fields=labels(id,name)"], ["label_resync", "messages?labelIds=Label_10&maxResults=100"],
+];
+const PRIVATE_PROVIDER_DETAIL = "SYNTHETIC_PRIVATE_PROVIDER_MESSAGE person@example.invalid Authorization: Bearer SYNTHETIC_TOKEN";
+const httpFailure = (status: number, message = PRIVATE_PROVIDER_DETAIL) => new Response(JSON.stringify({
+  error: { code: status, message, details: [PRIVATE_PROVIDER_DETAIL] }, headers: { authorization: PRIVATE_PROVIDER_DETAIL },
+}), { status });
+
+for (const [phase, path, init] of HTTP_PHASE_REQUESTS) {
+  test(`HTTP error exposes only safe ${phase} diagnostics, never raw provider content`, async () => {
+    const module = loadEngine({ construct() {}, async requestRaw() { return httpFailure(400, "Too many labelIds specified"); } });
+    await assert.rejects(new module.OperationsMailGmailClient().request(path, init), error => {
+      assert.ok(error instanceof module.OperationsMailRequestError);
+      assert.equal(error.message, "gmail_http_400"); assert.equal(error.phase, phase);
+      assert.equal(error.reason, phase === "watch" ? "watch_label_limit" : "provider_rejected");
+      const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
+      for (const secret of [PRIVATE_PROVIDER_DETAIL, "person@example.invalid", "SYNTHETIC_TOKEN", "Too many labelIds specified"])
+        assert.equal(serialized.includes(secret), false);
+      return true;
+    });
+  });
+}
+
+for (const [status, message] of [
+  [400, "Too many labelIds specified."], [400, "too many labelIds specified"],
+  [400, "Too many labelIds specified "], [400, PRIVATE_PROVIDER_DETAIL],
+  [401, "Too many labelIds specified"], [403, "Too many labelIds specified"],
+  [429, "Too many labelIds specified"], [503, "Too many labelIds specified"],
+] as const) {
+  test(`watch HTTP ${status} with ${message === PRIVATE_PROVIDER_DETAIL ? "private text" : JSON.stringify(message)} is not the exact watch-limit failure`, async () => {
+    const module = loadEngine({ construct() {}, async requestRaw() { return httpFailure(status, message); } });
+    await assert.rejects(new module.OperationsMailGmailClient().request("watch", watchRequest()), error => {
+      assert.ok(error instanceof module.OperationsMailRequestError);
+      assert.equal(error.message, `gmail_http_${status}`);
+      assert.equal(error.phase, "watch"); assert.equal(error.reason, "provider_rejected"); return true;
+    });
+  });
+}
+
+test("non-JSON provider failure remains gmail_http_400 with safe fallback diagnostics", async () => {
+  const module = loadEngine({ construct() {}, async requestRaw() { return new Response(PRIVATE_PROVIDER_DETAIL, { status: 400 }); } });
+  await assert.rejects(new module.OperationsMailGmailClient().request("watch", watchRequest()), error => {
+    assert.ok(error instanceof module.OperationsMailRequestError);
+    assert.equal(error.message, "gmail_http_400"); assert.equal(error.reason, "provider_rejected"); return true;
+  });
+});
+
+for (const [phase, target] of HTTP_PHASE_REQUESTS) {
+  test(`engine persists sanitized ${phase} HTTP diagnostics without advancing cursor or leaking provider data`, async () => {
+    const f = fixture(phase === "watch" ? { watchPolicy: undefined, watchLabelIds: undefined } : {});
+    if (phase === "label_resync") f.gmail.histories[""] = new Error("gmail_http_404");
+    const module = loadEngine({ construct() {}, async requestRaw(url, init) {
+      const path = url.slice("https://gmail.googleapis.com/gmail/v1/users/me/".length);
+      if (path.split("?")[0] === target.split("?")[0]) return httpFailure(400, phase === "watch" ? "Too many labelIds specified" : PRIVATE_PROVIDER_DETAIL);
+      try { return new Response(JSON.stringify(await f.gmail.request(path, init))); }
+      catch (error) {
+        if (error instanceof Error && error.message === "gmail_http_404") return httpFailure(404);
+        throw error;
+      }
+    } });
+    await assert.rejects(module.runOperationsMailIngress(f.db as any, new module.OperationsMailGmailClient(), {
+      source: "push", push: { emailAddress: OPS_MAIL.mailbox, historyId: NEXT }, now: () => new Date(NOW),
+    }), { message: "gmail_http_400" });
+    assert.equal(f.state().lastErrorCode, "gmail_http_400"); assert.equal(f.state().lastErrorPhase, phase);
+    assert.equal(f.state().lastErrorReason, phase === "watch" ? "watch_label_limit" : "provider_rejected");
+    assert.equal(f.state().historyCursor, CURSOR); assert.equal(f.state().activatedAt, ACTIVATED);
+    assert.equal(ledgers(f.db).length, 0); assert.equal(queues(f.db).length, 0); assertReleased(f);
+    const stored = JSON.stringify({ records: [...f.db.records], commits: f.db.commits });
+    for (const secret of [PRIVATE_PROVIDER_DETAIL, "person@example.invalid", "SYNTHETIC_TOKEN", "Too many labelIds specified"])
+      assert.equal(stored.includes(secret), false);
+  });
+}
+
+test("engine refuses forged or non-whitelisted diagnostic values and clears them on successful retry", async () => {
+  for (const kind of ["untyped", "invalid phase", "invalid reason"] as const) {
+    const f = fixture({ lastErrorPhase: "watch", lastErrorReason: "watch_label_limit" });
+    const failure = kind === "untyped" ? Object.assign(new Error("gmail_http_400"), { phase: "watch", reason: "watch_label_limit" })
+      : new engine.OperationsMailRequestError(400, kind === "invalid phase" ? PRIVATE_PROVIDER_DETAIL as any : "history",
+        kind === "invalid reason" ? PRIVATE_PROVIDER_DETAIL as any : "provider_rejected");
+    f.gmail.before = async () => { throw failure; };
+    await assert.rejects(f.run(), { message: "gmail_http_400" });
+    assert.equal(f.state().lastErrorPhase, kind === "invalid reason" ? "history" : null);
+    assert.equal(f.state().lastErrorReason, kind === "invalid phase" ? "provider_rejected" : null);
+    assert.equal(f.state().historyCursor, CURSOR); assertReleased(f);
+    assert.equal(JSON.stringify(f.db.commits).includes(PRIVATE_PROVIDER_DETAIL), false);
+    f.gmail.before = undefined;
+    assert.equal((await f.run()).status, "synced");
+    assert.equal(f.state().lastErrorCode, null); assert.equal(f.state().lastErrorPhase, null);
+    assert.equal(f.state().lastErrorReason, null); assert.equal(f.state().historyCursor, NEXT); assertReleased(f);
+  }
 });

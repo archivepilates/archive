@@ -156,9 +156,12 @@ test("health has only allowed fields and timestamp normalization", () => {
   const health = sanitizeHealth({ enabled: false, activatedAt: at, lastSyncAt: { toDate: () => new Date(at) },
     lastErrorCode: "mail_backlog_review_required", lastErrorAt: at, watchExpiresAt: at,
     historyCursor: "secret", labels: ["private"], mailbox: "secret", leaseOwner: "secret" });
-  assert.deepEqual(Object.keys(health), ["enabled", "activatedAt", "lastSyncAt", "lastErrorCode", "lastErrorAt", "watchExpiresAt"]);
+  assert.deepEqual(Object.keys(health), ["enabled", "activatedAt", "lastSyncAt", "lastErrorCode", "lastErrorPhase", "lastErrorReason", "lastErrorAt", "watchExpiresAt"]);
   assert.equal(health.lastSyncAt, at); assert.equal(JSON.stringify(health).includes("secret"), false);
   assert.equal(sanitizeHealth({ lastErrorCode: "raw private error" }).lastErrorCode, null);
+  assert.equal(sanitizeHealth({ lastErrorPhase: "watch", lastErrorReason: "watch_label_limit" }).lastErrorReason, "watch_label_limit");
+  assert.equal(sanitizeHealth({ lastErrorPhase: "private path", lastErrorReason: "raw provider text" }).lastErrorPhase, null);
+  assert.equal(sanitizeHealth({ lastErrorReason: "raw provider text" }).lastErrorReason, null);
   assert.equal(sanitizeHealth(null).enabled, null);
   assert.equal(timestamp({ toDate() { throw Error("private"); } }), null);
 });

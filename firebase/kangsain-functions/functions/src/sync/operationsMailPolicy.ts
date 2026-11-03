@@ -38,6 +38,11 @@ export const OPS_MAIL_LABEL_NAMES: readonly string[] = Object.freeze(
   Object.keys(AREAS).map(area => `${area} 보고`),
 );
 
+export const OPS_MAIL_WATCH_POLICY = "automation_status_labels_v1";
+export const OPS_MAIL_WATCH_LABEL_NAMES: readonly string[] = Object.freeze([
+  "자동화 성공", "자동화 실패", "자동화 긴급", "자동화 확인필요",
+]);
+
 const STATUSES = Object.freeze({
   "실패": "failure",
   "긴급": "urgent",
