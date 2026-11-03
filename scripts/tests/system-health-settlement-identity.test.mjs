@@ -16,16 +16,16 @@ const home = "/synthetic";
 const finalPath = monthlySettlementIndexPath(home, now);
 const stamp = "2026-11-02T00:00:00Z";
 
-async function inspect({ finalExists = false, reviewExists = true, exitCode = 1 } = {}) {
+async function inspect({ finalExists = false, reviewExists = true, exitCode = 1, plistExists = true, loaded = true } = {}) {
   const findings = [], checked = [], statuses = [];
   const item = { id: "monthly-settlement-statements", label: "synthetic", title: "월말정산 명세서",
     area: "settlement", resultFile: finalPath, maxAgeMinutes: 40 * 24 * 60, plist: "/synthetic/worker.plist", repair: "none" };
   const inspect = vm.runInNewContext(`${declaration.getText(tree)}\ncheckLaunchAgents`, {
     HOME: home, now, AUTOMATIONS: [item], checked, completedChecks: new Set(),
-    existsSync: () => true,
+    existsSync: () => plistExists,
     monthlySettlementArtifacts: (home, date) => monthlySettlementArtifacts(home, date,
       file => file.endsWith("_INDEX_검토본.html") ? reviewExists : finalExists),
-    launchAgentState: () => ({ loaded: true, state: "not running", runs: 1, lastExitCode: exitCode }),
+    launchAgentState: () => ({ loaded, state: "not running", runs: 1, lastExitCode: exitCode }),
     latestEvidence: () => ({ path: finalPath, exists: finalExists, ageMinutes: finalExists ? 10 : null,
       mtimeIso: finalExists ? stamp : null }),
     addFinding: finding => findings.push(finding), REPAIR: false, READ_ONLY: false, runId: "synthetic",
@@ -62,4 +62,14 @@ test("missing drafts never manufacture completion and a final artifact cannot er
   assert.equal(final.findings[0].cause, "LaunchAgent last exit code 1");
   assert.equal(final.statuses[0].status, "failed");
   assert.equal(final.statuses[0].lastRunAt, stamp);
+});
+
+test("missing or unloaded LaunchAgents also preserve their historical finding identity", async () => {
+  const missing = await inspect({ plistExists: false });
+  assert.equal(missing.findings.length, 1);
+  assert.equal(missing.findings[0].title, "Monthly settlement statements LaunchAgent plist 없음");
+  assert.equal(missing.findings[0].cause, "/synthetic/worker.plist 파일이 없습니다.");
+  const unloaded = await inspect({ loaded: false });
+  assert.equal(unloaded.findings[0].title, "Monthly settlement statements LaunchAgent 미로드");
+  assert.equal(unloaded.findings[0].cause, "launchctl print에서 서비스를 찾지 못했습니다.");
 });
