@@ -52,7 +52,7 @@ export async function recordAutomationStatus(db, input) {
     title: input.title || automationId,
     ownerArea: input.ownerArea || "other",
     status: input.status || "unknown",
-    lastRunAt: input.lastRunAt || now,
+    lastRunAt: input.lastRunAt === null ? "" : input.lastRunAt || now,
     nextRunAt: input.nextRunAt || "",
     updatedAt: now,
     lastResult: input.lastResult || "",

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 
 const KST_TIME_ZONE = "Asia/Seoul";
 
@@ -20,6 +21,15 @@ export function monthlySettlementIndexPath(home, now = new Date()) {
     month,
     `아카이브 정산명세서 ${month}_INDEX.html`,
   );
+}
+
+export function monthlySettlementArtifacts(home, now = new Date(), exists = existsSync) {
+  const finalPath = monthlySettlementIndexPath(home, now);
+  const reviewPath = finalPath.replace(/_INDEX\.html$/, "_INDEX_검토본.html");
+  const finalExists = exists(finalPath);
+  const reviewExists = exists(reviewPath);
+  return { month: expectedMonthlySettlementMonth(now), finalPath, reviewPath, finalExists, reviewExists,
+    state: finalExists ? "final_present" : reviewExists ? "review_only" : "missing" };
 }
 
 function kstParts(date) {

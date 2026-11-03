@@ -3,10 +3,22 @@ import test from "node:test";
 import {
   expectedMonthlySettlementMonth,
   monthlySettlementIndexPath,
+  monthlySettlementArtifacts,
 } from "../lib/system-health-schedule-evidence.mjs";
 
 test("uses the completed previous month after the monthly run window", () => {
   assert.equal(expectedMonthlySettlementMonth(new Date("2026-08-28T00:00:00Z")), "202607");
+});
+
+test("review-only monthly artifacts never replace the missing final index", () => {
+  const date = new Date("2026-11-03T00:00:00Z");
+  const reviewed = monthlySettlementArtifacts("/synthetic", date, file => file.endsWith("_INDEX_검토본.html"));
+  assert.equal(reviewed.month, "202610");
+  assert.equal(reviewed.state, "review_only");
+  assert.equal(reviewed.finalExists, false);
+  assert.equal(reviewed.reviewExists, true);
+  assert.equal(monthlySettlementArtifacts("/synthetic", date, () => false).state, "missing");
+  assert.equal(monthlySettlementArtifacts("/synthetic", date, () => true).state, "final_present");
 });
 
 test("keeps the prior completed month before the first-day run grace ends", () => {

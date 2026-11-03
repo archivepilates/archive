@@ -61,6 +61,18 @@ export function classifyNotionDocument(data, { nowMs = Date.now(), staleMinutes 
   if (data.surveyType === "group") return { state: "not_applicable", needsAttention: false };
   const hasAnswers = [data.prePlan, data.postRecord, data.preAnswers, data.postAnswers]
     .some((answers) => answers && (typeof answers !== "object" || Object.keys(answers).length > 0));
+  if (sync.status === "pending" && sync.deferredReason === "cancelled_without_submission" &&
+    sync.deferredVersion && !sync.error && data.cancelledAt && data.gptStatus === "waiting_post" &&
+    ![data.gptTaskId, data.gptSourceHash, data.gptDraftSummary, data.gptDraftNextDirection,
+      data.publicSummary, data.publicNextDirection, data.publicReportUrl, data.publicReportCanonicalUrl,
+      data.media, data.publicReportApproval, data.approvedReportSnapshot, data.sentReportSnapshot,
+      data.legacySentReportSnapshot, data.manualReportEdit].some(Boolean) &&
+    !data.preSubmittedAt && !data.postSubmittedAt && !hasAnswers && !data.notionPageId && !data.notionPageUrl &&
+    !data.notionProjectionControl?.memberPageId && !sync.instructorPageId && !sync.instructorPageUrl &&
+    !sync.pageId && !sync.pageUrl && !sync.creationTitle && !sync.syncedAt && !sync.sourceVersion &&
+    !data.notionProjectionLease?.token && !sync.leaseToken) {
+    return { state: "cancelled_without_submission", syncStatus: sync.status, needsAttention: false };
+  }
   if (sync.status === "pending" && sync.deferredReason === "awaiting_submission" && !sync.error &&
     data.gptStatus === "waiting_post" && !data.preSubmittedAt && !data.postSubmittedAt && !hasAnswers &&
     !data.cancelledAt && !data.notionProjectionControl?.memberPageId && !sync.instructorPageId && !sync.pageId &&

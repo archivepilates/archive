@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { stableHash } from "../utils/hash";
-import { PrivateNotionAwaitingSubmission, privateNotionCanAwaitSubmission } from "./privateLessonNotionSync";
+import { PRIVATE_NOTION_IDENTITY_MISMATCH, PrivateNotionAwaitingSubmission, privateNotionCanAwaitSubmission } from "./privateLessonNotionSync";
 
 export interface PrivateNotionMemberIdentity {
   memberId: string;
@@ -44,7 +44,7 @@ export function privateNotionMemberIdentity(record: any, request: any, profile: 
     || phone(profile.phone) !== phone(request.memberPhone) || record.cancelledAt || request.status === "cancelled"
     || record.notionProjectionControl?.aliasOfRecordId
     || (!awaitingSubmission && !(record.postSubmittedAt || request.postStatus === "submitted"))) {
-    throw new Error("Notion 회원 폴더 자동 연결 확인 필요: 회원·강사·제출 원본 신원이 일치하지 않습니다.");
+    throw new Error(PRIVATE_NOTION_IDENTITY_MISMATCH);
   }
   const identity = { memberId: nativeId, staffId: String(record.staffId), rootPageId: normalizeId(rootPageId),
     title: `${String(profile.name).trim()}님`, recordId: String(record.recordId) };

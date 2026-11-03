@@ -15,12 +15,40 @@ export type PrivateNotionState = NonNullable<PrivateLessonChartRecordDoc["notion
   creationTitle?: string;
   pendingAt?: string;
   failedAt?: string;
-  deferredReason?: "awaiting_submission" | "";
+  deferredReason?: "awaiting_submission" | "cancelled_without_submission" | "";
   deferredVersion?: string;
 };
 
 export class PrivateNotionAwaitingSubmission extends Error {
   constructor() { super("Notion member folder awaits lesson submission"); }
+}
+
+export const PRIVATE_NOTION_IDENTITY_MISMATCH = "Notion 회원 폴더 자동 연결 확인 필요: 회원·강사·제출 원본 신원이 일치하지 않습니다.";
+
+export function privateNotionCanSkipCancelled(record: any, request?: any): boolean {
+  if (!record || !request || !record.cancelledAt || request.status !== "cancelled" ||
+    !request.cancelledAt || record.studioId !== "5330" || request.studioId !== "5330" ||
+    !record.recordId || record.recordId !== record.requestId) return false;
+  if (!["requestId", "memberId", "staffId", "bookingId"].every((key) =>
+    Boolean(record[key]) && String(record[key]) === String(request[key]))) return false;
+  const sync = record.notionSync;
+  return ["pending", "failed"].includes(sync?.status) && record.gptStatus === "waiting_post" &&
+    !privateNotionHasSubmittedContent(record, request) &&
+    ![record.gptTaskId, record.gptSourceHash, record.gptDraftSummary, record.gptDraftNextDirection,
+      record.publicSummary, record.publicNextDirection, record.publicReportUrl, record.publicReportCanonicalUrl,
+      record.media, record.publicReportApproval, record.approvedReportSnapshot, record.sentReportSnapshot,
+      record.legacySentReportSnapshot, record.manualReportEdit].some(Boolean) &&
+    !record.notionProjectionControl?.aliasOfRecordId && !record.notionProjectionControl?.memberPageId &&
+    !record.notionPageId && !record.notionPageUrl && !sync?.pageId && !sync?.pageUrl &&
+    !sync?.instructorPageId && !sync?.instructorPageUrl && !sync?.creationTitle && !sync?.syncedAt &&
+    !sync?.sourceVersion && !sync?.leaseToken && !record.notionProjectionLease?.token &&
+    (!sync?.error || sync.error === PRIVATE_NOTION_IDENTITY_MISMATCH);
+}
+
+export function privateNotionCancelledDeferral(record: any, request: any): PrivateNotionState | null {
+  if (!privateNotionCanSkipCancelled(record, request)) return null;
+  return { ...record.notionSync, status: "pending", error: "", deferredReason: "cancelled_without_submission",
+    deferredVersion: privateNotionDeferredVersion(record, request), sourceVersion: "", leaseToken: "", leaseUntilMs: 0 };
 }
 
 export function privateNotionHasSubmittedContent(record: any, request?: any): boolean {
@@ -146,6 +174,16 @@ export async function runPrivateNotionProjection(id: string, deps: {
         deferredReason: "", deferredVersion: "", leaseToken: "", leaseUntilMs: 0 },
       result: null,
     };
+    // A source-confirmed empty cancellation must never create a Notion folder.
+    // Keep it explicitly deferred, not synced; existing pages and unknown writes stay reviewable.
+    const cancelled = privateNotionCancelledDeferral(source.record, source.request);
+    if (cancelled) {
+      return {
+        state: state.status === "pending" && state.deferredReason === "cancelled_without_submission" &&
+          state.deferredVersion === cancelled.deferredVersion && !state.error && !state.leaseToken ? undefined : cancelled,
+        result: null,
+      };
+    }
     const version = deps.version(source);
     if (!state.leaseToken && state.status === "pending" && state.deferredReason === "awaiting_submission" &&
       !state.error && state.deferredVersion === privateNotionDeferredVersion(source.record, source.request) &&

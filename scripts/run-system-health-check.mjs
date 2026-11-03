@@ -11,7 +11,7 @@ import { inspectHealthWorktrees } from "./lib/system-health-worktrees.mjs";
 import { systemHealthEmail } from "./lib/system-health-email.mjs";
 import { shouldApplyOperationalDataPurge } from "./lib/operational-data-retention-policy.mjs";
 import { isActionableAlimtalkFailure } from "./lib/system-health-alimtalk.mjs";
-import { monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
+import { monthlySettlementArtifacts, monthlySettlementIndexPath } from "./lib/system-health-schedule-evidence.mjs";
 import { classifyPrivateChartStateIssues } from "./lib/private-chart-consistency.mjs";
 import { classifyInstructorTicketIntakeCoverage, instructorTicketIntakeBounds } from "./lib/instructor-ticket-intake-coverage.mjs";
 import {
@@ -173,7 +173,7 @@ const AUTOMATIONS = [
   {
     id: "monthly-settlement-statements",
     label: "com.archive.monthly-settlement-statements",
-    title: "Monthly settlement statements",
+    title: "월말정산 명세서",
     area: "settlement",
     resultFile: monthlySettlementIndexPath(HOME, now),
     maxAgeMinutes: 40 * 24 * 60,
@@ -473,6 +473,9 @@ async function checkLaunchAgents() {
     const stale = pipeline ? pipeline.stale : item.maxAgeMinutes && latest.exists && latest.ageMinutes > item.maxAgeMinutes;
     const missingEvidence = pipeline ? !pipeline.lastSuccessAt : item.maxAgeMinutes && !latest.exists && !item.keepAlive;
     const evidenceAge = pipeline ? pipeline.successAgeMinutes : latest.ageMinutes;
+    const settlement = item.id === "monthly-settlement-statements" ? monthlySettlementArtifacts(HOME, now) : null;
+    // Legacy unkeyed findings include their title/cause in the durable identity.
+    const findingTitle = settlement ? "Monthly settlement statements" : item.title;
     const checkKey = item.syncEvidence ? `sync:${item.id}` : "";
     if (checkKey) {
       completedChecks.add(checkKey);
@@ -491,6 +494,7 @@ async function checkLaunchAgents() {
       runs: launchState.runs,
       lastExitCode: launchState.lastExitCode,
       ...(pipeline ? { syncEvidence: pipeline } : {}),
+      ...(settlement ? { settlementEvidence: settlement } : {}),
     });
 
     const executionFailed = Boolean((pipeline?.latestPath && !pipeline.latestAttemptSucceeded) || (launchState.loaded &&
@@ -515,10 +519,11 @@ async function checkLaunchAgents() {
       if (!contractIssues.length) completedChecks.add(contractCheckKey);
       else addFinding({
         checkKey: contractCheckKey, area: item.area, severity: "action_required",
-        title: "회원 계약 자동화 확인 필요",
+        title: contractIssues.every((issue) => issue.reason === "signature_recovery_approval_unavailable")
+          ? "회원 계약 자동화 복구 승인 보류" : "회원 계약 자동화 확인 필요",
         cause: contractIssues.map((issue) => `${issue.name}: ${issue.reason}`).join("; "),
         impact: "회원·예약 동기화와 별개로 계약 감지 또는 서명 요청이 지연될 수 있습니다.",
-        suggestedAction: "계약 후보와 StudioMate 계약 원장을 확인하세요. 중복 발송 방지를 위해 무조건 재전송하지 않습니다.",
+        suggestedAction: "계약 후보와 StudioMate 계약 원장 및 현재 복구 승인을 확인하세요. 승인 보류는 권한 오류가 아니며, 승인 초기화나 계약 재전송으로 우회하지 않습니다.",
         sourceRefs: [pipeline.latestPath], autoRepairable: false,
       });
     }
@@ -576,10 +581,11 @@ async function checkLaunchAgents() {
         checkKey: checkKey ? `${checkKey}:execution` : "",
         area: item.area,
         severity: pipeline && stale ? "action_required" : "warning",
-        title: `${item.title} 최근 실행 실패`,
+        title: `${findingTitle} 최근 실행 실패`,
         cause: pipeline?.error || `LaunchAgent last exit code ${launchState.lastExitCode}`,
         impact: pipeline
           ? `마지막 정상 동기화 ${pipeline.lastSuccessAt || "확인 불가"} · 연속 실패 ${pipeline.consecutiveFailures}${pipeline.failureCountIsLowerBound ? "회 이상" : "회"}`
+          : settlement ? "최근 예약 실행의 실패 기록이 남아 있습니다. 이번 점검시각은 새 실패 발생시각이 아닙니다."
           : `${item.title}의 최근 예약 실행이 정상 완료되지 않았습니다.`,
         suggestedAction: pipeline?.missingBrowserExecutable
           ? headlessRuntime.ok
@@ -598,13 +604,16 @@ async function checkLaunchAgents() {
         checkKey,
         area: item.area,
         severity: missingEvidence || evidenceAge > item.maxAgeMinutes * 2 ? "action_required" : "warning",
-        title: `${item.title} 실행 결과 최신성 확인 필요`,
+        title: `${findingTitle} 실행 결과 최신성 확인 필요`,
         cause: missingEvidence
           ? "정상 완료된 실행 결과를 찾지 못했습니다."
           : `마지막 ${pipeline ? "정상 반영 원천" : "결과"}이 ${Math.round(evidenceAge)}분 전입니다.`,
-        impact: "후속 데이터나 관제 화면이 오래된 원천을 볼 수 있습니다.",
+        impact: settlement?.state === "review_only"
+          ? `${settlement.month} 검토본은 있지만 확정 INDEX는 없습니다. 검토본을 정상 완료 증거로 대신하지 않습니다.`
+          : "후속 데이터나 관제 화면이 오래된 원천을 볼 수 있습니다.",
         suggestedAction: repaired?.ok ? "자동 재실행을 요청했습니다. 다음 Health Check에서 재확인합니다." : "로그와 실행 결과를 확인하세요.",
-        sourceRefs: [pipeline?.lastSuccessPath || latest.path || item.reportDir || item.runLog || item.resultFile || item.plist],
+        sourceRefs: [pipeline?.lastSuccessPath || latest.path || item.reportDir || item.runLog || item.resultFile || item.plist,
+          ...(settlement?.reviewExists ? [settlement.reviewPath] : [])],
         autoRepairable: item.repair === "kickstart",
         repairStatus: repaired?.ok ? "requested" : repaired ? "failed" : "not_attempted",
       });
@@ -616,7 +625,7 @@ async function checkLaunchAgents() {
       title: item.title,
       ownerArea: item.area,
       status: !plistExists || !launchState.loaded || executionFailed ? "failed" : stale || missingEvidence || contractIssues.length || staffEmploymentIssues.length ? "warning" : "healthy",
-      lastRunAt: latest.mtimeIso || new Date().toISOString(),
+      lastRunAt: latest.mtimeIso || null,
       runId,
       lastResult: !plistExists
         ? "LaunchAgent plist 없음"
@@ -856,6 +865,7 @@ async function checkNotionSync() {
     checked.push({ id: `notion:${input.collection}`, sample: docs.length, coverage, staleMinutes: input.staleMinutes,
       aliasesExcluded: states.filter((row) => row.state === "alias").length,
       awaitingSubmission: states.filter((row) => row.state === "awaiting_submission").length,
+      cancelledWithoutSubmission: states.filter((row) => row.state === "cancelled_without_submission").length,
       overduePending: states.filter((row) => row.state === "overdue_pending").length,
       overdueFailed: states.filter((row) => row.state === "overdue_failed").length,
       unknownTimestamp: states.filter((row) => row.state === "timestamp_unavailable").length,
