@@ -49,7 +49,9 @@
 <p><code>systemHealthRuns/health_202611041430_weekly</code>, 해당 로컬 weekly-repair 보고서, 위 두 canonical 차트·요청, 정확한 회원·강사 원장, 알림 수집 상태, 11/3~11/4 자연 Excel 실행 보고서를 한정 조회했습니다. 원문 메일은 진단 자료일 뿐 작업 승인으로 취급하지 않았습니다.</p>
 <p>전용 worktree: <code>codex/mini/ops-monitor-accuracy-20261104</code>. 승인된 기존 프로필 연결·Notion 동기화 메타데이터만 복구했습니다. 회원 재발송·계약 재요청·영상 업로드·권한 확대·주기 변경·새 감시기·기준선 초기화는 없습니다. 실시간 조회 전용 MCP는 자체 정리됐으며 별도 GUI 탭은 열지 않았습니다.</p>
 <h2>검증·운영 반영</h2>
-<p>통합 Node 관제·알림·메일·릴리스 245건과 추가 경계 사례를 포함한 회원 연결 13건, Notion·메일 watch 216건, Python 31건 통과. Functions TypeScript 빌드·CORE Hosting 검증 통과. 기존 테스트의 helper 연결과 공유 홀딩 메일 경로 검증을 보완했으며 실제 발송은 하지 않았습니다. 연결 도구는 트랜잭션 재시도 중 시각과 기존 감사·유일성을 다시 대조하도록 최종 강화했으며 완료된 운영 연결은 재실행하지 않았습니다. Functions 소스 변경이 없어 Functions 배포 대상은 없습니다.</p>
+<p>Node 22 통합 관제·알림·메일·릴리스 247건, Notion·메일 watch 216건, Python 31건 통과. Functions TypeScript 빌드·CORE Hosting 검증 통과. 기존 테스트의 helper 연결과 공유 홀딩 메일 경로 검증을 보완했으며 실제 발송은 하지 않았습니다. 연결 도구는 트랜잭션 재시도 중 시각과 기존 감사·유일성을 다시 대조하도록 최종 강화했으며 완료된 운영 연결은 재실행하지 않았습니다. Functions 소스 변경이 없어 Functions 배포 대상은 없습니다.</p>
 <p>320·390·768·1440px 정적 화면을 확인했습니다. 새 안내는 표시되며 추가 가로 넘침은 없었습니다. 다만 기존 전체 페이지는 320·390px에서 기준선과 수정본 모두 scrollWidth 405px의 넘침이 있어 전체 반응형 검증 성공으로 표시하지 않습니다. 인증 없는 로컬 레이아웃 시험이며 로그인 업무 검증은 아닙니다.</p>
-<p id="release-status">운영 실행기·CORE Hosting 게시·GitHub CI·최종 Git 상태는 구현 후 독립 확인 예정입니다. 로컬 성공을 운영 배포 완료로 표시하지 않습니다.</p>
+<p id="release-status">운영 반영 소스 <code>63c204cb1efe9707ed0498f2c7ece9e42aace03d</code>를 main·작업 브랜치에 푸시하고 맥미니 실행기를 fast-forward했습니다. CORE Hosting <code>archive-pilates-core</code> 배포 완료, 운영 도메인과 web.app 규칙 페이지 모두 HTTP 200 및 동일 소스 해시 <code>69e6387e80d7fed05cf0f3e22cf3ab9eaa028971b67ad302343aa7b56a408c0c</code>를 확인했습니다. Functions·다른 사이트는 배포하지 않았습니다. CORE MCP Check 41819280176, Functions Affected Check 41819280282가 성공했습니다.</p>
+<p>20:12 KST 기존 관제 실행 <code>health_202611042012_quick</code>에서 차트 원장 15건의 조회가 완전했고 별칭 8·제출 대기 5·빈 취소 2건으로 확인됐습니다. 지연 pending·failed·시각 미상·신원 차단은 0건이며 해당 기존 finding·Codex action queue가 resolved로 전환됐음을 독립 재조회했습니다. repair·재시작·회원 발송 없이 기존 판정 경로를 사용했습니다.</p>
+<p>20:12:57 KST 자연 알림 실행은 목록 15건 읽기에 성공했지만 과거 공백 대조 필요로 warning을 남겼습니다. 새 코드의 운영 동작 증거이며 누락 대조 완료가 아닙니다. 전체 관제에는 별도 계약 복구 승인 보류와 정산 확정 실행 증거 2건이 남아 있고 이번 작업에서 초기화하거나 업무 성공으로 바꾸지 않았습니다. 문서 증거 보완은 정적 배포 바이트를 바꾸지 않으므로 Hosting 재배포 대상이 아닙니다.</p>
 </main></html>
