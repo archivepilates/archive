@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { formatOperationsReport, renderOperationsEmail, normalizeOperationsIdentity, operationsReportLabels, kstTimestamp, buildOperationsReportMime } from '../lib/operations-email-format.mjs';
 import { holdingFingerprint } from '../lib/studiomate-holding-source.mjs';
+import { reportHoldingReviewOnce } from '../lib/holding-review-notifications.mjs';
 import { systemHealthEmail } from '../lib/system-health-email.mjs';
 import { deliverAutomationReport, reportMessageId } from '../../firebase/kangsain-functions/macmini-studiomate/automation-report-delivery.mjs';
 
@@ -56,10 +57,11 @@ test('MIME has identical plain/HTML content, wrapped encoding and stable deliver
   assert.throws(() => buildOperationsReportMime({ ...input, to: 'home@example.test\r\nBcc:other@example.test' }), /Invalid report header/);
 });
 
-test('holding error notification keys satisfy the sender contract and are stable', () => {
+test('the two inline holding notification keys satisfy the sender contract and are stable', () => {
   const source = readFileSync(new URL('../run-automatic-holding-notices.ts', import.meta.url), 'utf8');
   const expressions = [...source.matchAll(/AUTOMATION_REPORT_EVENT_ID:\s*(holdingFingerprint\([^\n]+\)),/g)].map(match => match[1]);
-  assert.equal(expressions.length, 3);
+  assert.equal(expressions.length, 2);
+  assert.ok(expressions.some(expression => expression.includes('holding_browser_busy')));
   const evaluate = (expression, rows = [{ id: 'b', reason: 'waiting' }, { id: 'a', reason: 'waiting' }]) => new Function('holdingFingerprint', 'job', 'reason', 'receiptReviews', 'busy', `return ${expression}`)(holdingFingerprint, { jobId: 'fixture' }, 'review', rows, { patch: { browserBusySince: '2026-10-24T00:00:00.000Z' } });
   for (const expression of expressions) {
     assert.doesNotThrow(() => reportMessageId(evaluate(expression)));
@@ -69,4 +71,47 @@ test('holding error notification keys satisfy the sender contract and are stable
   assert.ok(receiptExpression);
   assert.equal(evaluate(receiptExpression), evaluate(receiptExpression, [{ id: 'a', reason: 'waiting' }, { id: 'b', reason: 'waiting' }]));
   assert.doesNotMatch(source, /AUTOMATION_REPORT_EVENT_ID:\s*`holding_/);
+});
+
+test('the third holding notification path uses a shared sender-compatible key and dedupes reimports', async () => {
+  const source = readFileSync(new URL('../run-automatic-holding-notices.ts', import.meta.url), 'utf8');
+  assert.match(source, /import \{[^}]*\breportHoldingReviewOnce\b[^}]*\} from "\.\/lib\/holding-review-notifications\.mjs"/);
+  assert.match(source, /await reportHoldingReviewOnce\(\{ db, job, reason, observationFingerprint, send: async \(fingerprint: string\) => JSON\.parse\([\s\S]*?AUTOMATION_REPORT_EVENT_ID: fingerprint,/);
+
+  const job = { jobId: 'a'.repeat(64), memberId: 'synthetic-member', ticketRevision: 'synthetic-revision' };
+  const reason = 'synthetic_review', observationFingerprint = 'b'.repeat(64);
+  const fingerprint = holdingFingerprint(['holding_review_alert_v1', job.jobId, reason, observationFingerprint]);
+  let record;
+  const sentKeys = [];
+  // One in-memory alert document; no SDK, provider or persistent state.
+  const db = {
+    doc(path) {
+      assert.equal(path, `workLanes/holding-allowance-notice/reviewAlerts/${fingerprint}`);
+      return { path };
+    },
+    async runTransaction(run) {
+      return run({
+        async get() { return { exists: record !== undefined, data: () => structuredClone(record) }; },
+        create(_ref, value) { assert.equal(record, undefined); record = structuredClone(value); },
+        update(_ref, value) { assert.ok(record); record = { ...record, ...structuredClone(value) }; },
+      });
+    },
+  };
+  const input = { db, job, reason, observationFingerprint, now: () => new Date('2026-11-04T01:00:00.000Z'),
+    send: async key => {
+      assert.equal(key, fingerprint);
+      assert.equal(record.status, 'claimed_no_retry');
+      sentKeys.push(key);
+      return { ok: true, messageId: reportMessageId(key) };
+    },
+  };
+  assert.deepEqual(await reportHoldingReviewOnce(input), {
+    duplicateBlocked: false, messageId: `automation-${fingerprint}@archivepilates.com`,
+  });
+  assert.deepEqual(await reportHoldingReviewOnce({ ...input,
+    job: { ...job, sourceImportId: 'synthetic-new-import', downloadedAt: '2026-11-04T02:00:00.000Z' },
+  }), { duplicateBlocked: true });
+  assert.deepEqual(sentKeys, [fingerprint]);
+  assert.equal(record.status, 'sent');
+  assert.equal(record.fingerprint, fingerprint);
 });

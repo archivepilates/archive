@@ -10,7 +10,7 @@ import {
   recoveredMainFailureIds, studioMateReservationSyncWindow, successfulSyncReport,
   summarizeSyncReports, unresolvedMainWorkflowFailures,
 } from "../lib/system-health-current-state.mjs";
-import { canAutoRetryQueueDocument, classifyNotionDocument, classifyQueueDocument, queryCoverage } from "../lib/system-health-queue-policy.mjs";
+import { canAutoRetryQueueDocument, classifyNotionDocument, classifyQueueDocument, notionAttentionSummary, queryCoverage } from "../lib/system-health-queue-policy.mjs";
 import { classifyCloudReadError, readSystemHealthCloudState } from "../lib/system-health-cloud-state.mjs";
 import { inspectHealthWorktrees } from "../lib/system-health-worktrees.mjs";
 
@@ -293,7 +293,7 @@ test("capped and permission-failed queue reads preserve prior age, failure and c
 });
 
 async function notionAudit(rows, error = null) {
-  const globals = findingHarness({ classifyNotionDocument, queryCoverage, db: { collection: (collection) => ({
+  const globals = findingHarness({ classifyNotionDocument, notionAttentionSummary, queryCoverage, db: { collection: (collection) => ({
     where(field, op, statuses) {
       assert.equal(field, "notionSync.status");
       assert.equal(op, "in");

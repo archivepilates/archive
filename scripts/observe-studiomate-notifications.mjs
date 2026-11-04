@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 
 export async function observeStudioMateNotifications({ apply = false, forceRead = false,
   readOnly = false, now = Date.now(), read = null, db = null } = {}) {
-  let release, reader;
+  let release, reader, continuityLost = false;
   try {
     try { release = await acquireStudioMateBrowserLock({ owner: 'notification-ingress-state',
       lockPath: '~/ArchiveIN/automation/locks/studiomate-notification-ingress.lock', waitMs: 0 }); }
@@ -24,15 +24,18 @@ export async function observeStudioMateNotifications({ apply = false, forceRead 
       throw error;
     }
     const previous = await readState();
+    continuityLost = !!previous?.continuityLost;
     if (!forceRead && previous?.nextPollAt > now) return { ok: true, status: 'not_due' };
     reader = read ? null : createLiveReader({ budgetMs: 20_000,
       acquire: () => acquireStudioMateBrowserLock({ owner: 'notification-ingress-read', waitMs: 0 }) });
     const source = await (read ? read() : reader.getNotifications());
     const observed = observeNotificationHints(previous, source.rows.map(notificationHint), now);
+    continuityLost = !!observed.state.continuityLost;
     // Never emit names, message bodies, credentials, or raw browser errors.
     if (readOnly) return { ok: true, status: 'read_only', received: observed.received,
       hints: source.rows.map(notificationHint), checkedAt: source.checkedAt,
-      coverage: source.coverage, livePushVerified: false, externalActions: 0 };
+      coverage: source.coverage, continuityLost, currentContinuityLost: observed.continuityLost,
+      livePushVerified: false, externalActions: 0 };
     let next = observed.state;
     const plan = planNotificationRefresh(next, now);
     let routing = { status: apply ? plan.status : 'shadow' };
@@ -53,18 +56,18 @@ export async function observeStudioMateNotifications({ apply = false, forceRead 
     await saveState(next);
     return { ok: true, status: observed.baseline ? 'baseline' : 'observed',
       received: observed.received, newHints: observed.newHints, actionable: observed.actionable,
-      kinds: observed.kinds, continuityLost: observed.continuityLost, routing,
+      kinds: observed.kinds, continuityLost, currentContinuityLost: observed.continuityLost, routing,
       transport: next.transport, livePushVerified: false, checkedAt: source.checkedAt,
       externalActions: 0 };
   } catch (error) {
     if (error?.code === 'LIVE_BUSY') return { ok: true, status: 'browser_busy', externalActions: 0 };
     return { ok: false, status: 'review', code: /^LIVE_[A-Z_]+$/.test(error?.code || '') ? error.code : 'NOTIFICATION_INGRESS_FAILED',
-      externalActions: 0 };
+      continuityLost, externalActions: 0 };
   } finally {
     try {
       await reader?.close();
     } catch {
-      return { ok: false, status: 'review', code: 'LIVE_CLEANUP_REQUIRED', externalActions: 0 };
+      return { ok: false, status: 'review', code: 'LIVE_CLEANUP_REQUIRED', continuityLost, externalActions: 0 };
     } finally {
       await release?.();
     }

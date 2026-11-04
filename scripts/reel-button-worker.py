@@ -13,6 +13,8 @@ import time
 import traceback
 from zoneinfo import ZoneInfo
 
+from google.auth.exceptions import RefreshError, TransportError
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('reel_publisher', ROOT / 'scripts/publish-approved-reel.py')
 publisher = importlib.util.module_from_spec(spec)
@@ -42,11 +44,29 @@ def verify_credentials(video_id=None):
     return result
 
 
+def oauth_reason(error):
+    seen = set()
+    for _ in range(8):
+        if error is None or id(error) in seen:
+            break
+        seen.add(id(error))
+        if isinstance(error, RefreshError) and len(error.args) > 1:
+            payload = error.args[1]
+            code = payload.get('error') if type(payload) is dict else None
+            if type(code) is str and code in ('invalid_grant', 'deleted_client', 'access_denied'):
+                return code
+        if isinstance(error, TransportError):
+            # Broad transport category, not a diagnosis of the connection failure.
+            return 'connection'
+        error = error.__cause__
+    return 'unknown'
+
+
 def safe_error(error):
     # Do not log exception messages, subprocess output, API bodies or local values.
     return {'errorType': type(error).__name__, 'frames': [
         {'file': Path(frame.filename).name, 'line': frame.lineno, 'function': frame.name}
-        for frame in traceback.extract_tb(error.__traceback__)]}
+        for frame in traceback.extract_tb(error.__traceback__)], 'oauthReason': oauth_reason(error)}
 
 
 def bridge(action, data=None):

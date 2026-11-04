@@ -89,6 +89,19 @@ export function classifyNotionDocument(data, { nowMs = Date.now(), staleMinutes 
     ageMinutes, needsAttention: ageMinutes > staleMinutes };
 }
 
+export function notionAttentionSummary(states) {
+  const issues = states.filter((row) => row.needsAttention);
+  return {
+    count: issues.length,
+    overduePending: issues.filter((row) => row.state === "overdue_pending").length,
+    overdueFailed: issues.filter((row) => row.state === "overdue_failed").length,
+    unknownTimestamp: issues.filter((row) => row.state === "timestamp_unavailable").length,
+    identityUnverified: issues.filter((row) => row.doc?.data?.notionSync?.error ===
+      "Notion 회원 폴더 자동 연결 확인 필요: 회원·강사·제출 원본 신원이 일치하지 않습니다.").length,
+    sourceIds: issues.map((row) => row.doc.id),
+  };
+}
+
 export function queryCoverage({ size = 0, limit, error = null } = {}) {
   const capped = size >= limit;
   return { complete: !error && !capped, capped, unavailable: Boolean(error), countIsLowerBound: Boolean(error) || capped };

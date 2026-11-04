@@ -17,6 +17,7 @@ import { classifyInstructorTicketIntakeCoverage, instructorTicketIntakeBounds } 
 import {
   canAutoRetryQueueDocument,
   classifyNotionDocument,
+  notionAttentionSummary,
   classifyQueueDocument,
   loadRecentQueueFailures,
   queryCoverage,
@@ -862,6 +863,7 @@ async function checkNotionSync() {
     const coverage = queryCoverage({ size: docs.length, limit: 250, error: queryError });
     const states = docs.map((doc) => ({ doc, ...classifyNotionDocument(doc.data, { nowMs: now.getTime(), staleMinutes: input.staleMinutes }) }));
     const issues = states.filter((row) => row.needsAttention);
+    const attention = notionAttentionSummary(states);
     checked.push({ id: `notion:${input.collection}`, sample: docs.length, coverage, staleMinutes: input.staleMinutes,
       aliasesExcluded: states.filter((row) => row.state === "alias").length,
       awaitingSubmission: states.filter((row) => row.state === "awaiting_submission").length,
@@ -869,6 +871,8 @@ async function checkNotionSync() {
       overduePending: states.filter((row) => row.state === "overdue_pending").length,
       overdueFailed: states.filter((row) => row.state === "overdue_failed").length,
       unknownTimestamp: states.filter((row) => row.state === "timestamp_unavailable").length,
+      identityUnverified: attention.identityUnverified,
+      issueRefs: attention.sourceIds.map((id) => `${input.collection}/${id}`),
     });
     const checkKey = `notion:${input.collection}:sync`;
     if (coverage.complete && !issues.length) completedChecks.add(checkKey);
@@ -876,10 +880,10 @@ async function checkNotionSync() {
     if (issues.length) addFinding({
       checkKey,
       area: "notion", severity: "action_required", title: `${input.title} 동기화 확인 필요`,
-      cause: `notionSync pending/failed 지연 또는 날짜 미상 ${issues.length}건${coverage.complete ? "" : " 이상"} · 기준 ${input.staleMinutes}분`,
+      cause: `notionSync 확인필요 ${issues.length}건${coverage.complete ? "" : " 이상"} · pending 지연 ${attention.overduePending} · failed 지연 ${attention.overdueFailed} · 날짜 미상 ${attention.unknownTimestamp} · 원본 신원 미확인 ${attention.identityUnverified} · 기준 ${input.staleMinutes}분`,
       impact: "Notion 표시가 원천 기록과 다를 수 있습니다. 수업 전 응답 대기는 동기화 지연으로 분류하지 않습니다.",
       suggestedAction: "원천 notionSync 상태와 projection worker 결과를 확인하세요. 자동 재시도나 Notion 수정은 수행하지 않습니다.",
-      sourceRefs: issues.slice(0, 5).map(({ doc }) => `${input.collection}/${doc.id}`), autoRepairable: false,
+      sourceRefs: issues.slice(0, 20).map(({ doc }) => `${input.collection}/${doc.id}`), autoRepairable: false,
     });
   }
 }

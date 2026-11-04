@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import fcntl
 import importlib.util
 import io
+import json
 from pathlib import Path
 import socket
 import subprocess
@@ -31,10 +32,18 @@ class FrozenDatetime(datetime):
         return NOW.astimezone(tz) if tz else NOW.replace(tzinfo=None)
 
 
+class RefreshError(Exception):
+    pass
+
+
+class TransportError(Exception):
+    pass
+
+
 def import_scripts():
     # Stub Google modules before import, including on machines without the SDK.
     names = (
-        'google', 'google.auth', 'google.auth.transport',
+        'google', 'google.auth', 'google.auth.exceptions', 'google.auth.transport',
         'google.auth.transport.requests', 'google.oauth2',
         'google.oauth2.credentials', 'googleapiclient',
         'googleapiclient.discovery',
@@ -51,6 +60,8 @@ def import_scripts():
     modules['google.oauth2.credentials'].Credentials = credentials
     modules['googleapiclient.discovery'].build = build
     modules['google.auth.transport.requests'].Request = request
+    modules['google.auth.exceptions'].RefreshError = RefreshError
+    modules['google.auth.exceptions'].TransportError = TransportError
 
     def load(name, filename):
         spec = importlib.util.spec_from_file_location(name, SCRIPTS / filename)
@@ -462,11 +473,123 @@ class ReelButtonTests(unittest.TestCase):
             diagnostic = self.worker.safe_error(error)
         health = self.saved_journal()['buttonWorkerHealth']
         self.assertEqual(health['lastError']['errorType'], 'PermissionError')
+        self.assertEqual(health['lastError']['oauthReason'], 'unknown')
         self.assertTrue(diagnostic['frames'])
         self.assertNotIn('secret-token', str(health))
         self.assertNotIn('private-link', str(diagnostic))
         self.assertEqual(health['failures'], 1)
         self.bridge.assert_not_called()
+
+
+    def test_oauth_reason_is_persisted_without_private_payload(self):
+        error = RefreshError('private-description', {
+            'error': 'invalid_grant', 'error_description': 'private-description',
+            'access_token': 'private-access-token', 'refresh_token': 'private-refresh-token',
+            'error_uri': 'https://private-oauth-link',
+        })
+        self.worker.report_health(False, error)
+        diagnostic = self.saved_journal()['buttonWorkerHealth']['lastError']
+        self.assertEqual(diagnostic, {
+            'errorType': 'RefreshError', 'frames': [], 'oauthReason': 'invalid_grant',
+        })
+        self.assertNotIn('private-', json.dumps(diagnostic))
+        self.credentials.from_authorized_user_file.assert_not_called()
+        self.build.assert_not_called()
+        self.bridge.assert_not_called()
+
+
+class SafeOAuthDiagnosticsTests(unittest.TestCase):
+    def setUp(self):
+        self.publisher, self.worker = import_scripts()
+
+    def diagnostic(self, error):
+        result = self.worker.safe_error(error)
+        self.assertEqual(set(result), {'errorType', 'frames', 'oauthReason'})
+        self.assertEqual(result['errorType'], type(error).__name__)
+        self.assertEqual(result['frames'], [])
+        self.assertNotIn('private-', json.dumps(result))
+        self.publisher.Credentials.from_authorized_user_file.assert_not_called()
+        self.publisher.Request.assert_not_called()
+        self.publisher.build.assert_not_called()
+        return result['oauthReason']
+
+    def test_exact_provider_allowlist_never_stringifies_exceptions(self):
+        class NoStringification(RefreshError):
+            def __str__(self):
+                raise AssertionError('Exception stringification is forbidden')
+
+            def __repr__(self):
+                raise AssertionError('Exception representation is forbidden')
+
+        for code in ('invalid_grant', 'deleted_client', 'access_denied'):
+            with self.subTest(code=code):
+                error = NoStringification('private-description', {
+                    'error': code, 'error_description': 'private-description',
+                    'access_token': 'private-access-token', 'refresh_token': 'private-refresh-token',
+                    'error_uri': 'https://private-oauth-link',
+                })
+                self.assertEqual(self.diagnostic(error), code)
+
+    def test_missing_or_malformed_provider_payload_is_unknown(self):
+        payloads = (None, {}, [], 'invalid_grant', {'error': ['invalid_grant']},
+                    {'error': {'code': 'invalid_grant'}}, {'error': None},
+                    {'error': 'invalid_grant private-token'}, {'error': 'INVALID_GRANT'},
+                    {'error': 'connection'}, {'error': 'invalid_client'},
+                    {'error_description': 'deleted_client'})
+        for index, payload in enumerate(payloads):
+            with self.subTest(case=index):
+                self.assertEqual(self.diagnostic(RefreshError('private-description', payload)), 'unknown')
+
+    def test_message_only_or_untyped_provider_code_is_unknown(self):
+        for error in (RefreshError('invalid_grant private-token'), RefreshError(),
+                      ValueError('private-description', {'error': 'deleted_client'}),
+                      ConnectionError('private-description')):
+            self.assertEqual(self.diagnostic(error), 'unknown')
+
+    def test_transport_category_never_stringifies_exception(self):
+        class NoStringification(TransportError):
+            def __str__(self):
+                raise AssertionError('Exception stringification is forbidden')
+
+            def __repr__(self):
+                raise AssertionError('Exception representation is forbidden')
+
+        self.assertEqual(self.diagnostic(NoStringification('private-description')), 'connection')
+
+    def test_explicit_causes_can_supply_typed_provider_or_transport_reason(self):
+        for cause, expected in ((RefreshError('private-description', {'error': 'access_denied'}),
+                                 'access_denied'), (TransportError('private-description'), 'connection')):
+            error = RuntimeError('private-wrapper')
+            error.__cause__ = cause
+            self.assertEqual(self.diagnostic(error), expected)
+
+    def test_outer_provider_reason_takes_precedence_over_transport_cause(self):
+        error = RefreshError('private-description', {'error': 'deleted_client'})
+        error.__cause__ = TransportError('private-description')
+        self.assertEqual(self.diagnostic(error), 'deleted_client')
+
+    def test_implicit_context_is_not_used_as_causal_evidence(self):
+        error = RefreshError('private-description')
+        error.__context__ = TransportError('private-description')
+        self.assertEqual(self.diagnostic(error), 'unknown')
+
+    def test_self_and_multi_node_cause_cycles_are_unknown(self):
+        first = RefreshError('private-description')
+        first.__cause__ = first
+        self.assertEqual(self.diagnostic(first), 'unknown')
+        second = RuntimeError('private-description')
+        first.__cause__ = second
+        second.__cause__ = first
+        self.assertEqual(self.diagnostic(first), 'unknown')
+
+    def test_cause_traversal_stops_after_eight_exceptions(self):
+        for wrappers, expected in ((7, 'connection'), (8, 'unknown')):
+            error = TransportError('private-description')
+            for _ in range(wrappers):
+                wrapper = RuntimeError('private-wrapper')
+                wrapper.__cause__ = error
+                error = wrapper
+            self.assertEqual(self.diagnostic(error), expected)
 
 
 if __name__ == '__main__':
