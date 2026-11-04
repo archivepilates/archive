@@ -22,6 +22,7 @@
 - 593 focused TypeScript tests passed: ticket facts, renewal, member exclusions, safeguards, dedupe, welcome readback/queue/history.
 - 75 catalog/release-policy/target-validation/CORE visibility tests passed.
 - Expanded final suite including the pinned parity audit, attendee preflight and meal-test window passed: 1,011 tests, zero failures.
+- Additional approval/queue-window suite passed: 66 tests. Its older isolated claim harness initially lacked the already-existing candidate-window dependency; added a bound ordinary-candidate adapter to the real clock policy, explicitly rejecting meal-exception markers. Runtime code is unchanged. Total selected regressions: 1,077 passing.
 - Full five-codebase local build and function-boundary validation passed; 107 exports retained.
 - Generated catalog validation passed (34 rows). Affected deployment targets: `functions-alimtalk`, `functions-sync`, and CORE Hosting for rules/catalog.
 - Shared-policy parity initially had one pre-existing failure. Review traced all six differing function bodies to already-released `8088b8686f3a8a3625dba38374f958964bc5f5ea` (allocation preflight) and `b4cc07b6039022fb363facaae1e66e77c1fe204d` (one approved test exception). The test now pins only those six bodies to the latter commit, retaining all other original execution hashes and the existing fixture. All 12 parity checks pass. Runtime dispatch code was not changed.

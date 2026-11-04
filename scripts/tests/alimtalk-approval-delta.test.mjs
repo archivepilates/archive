@@ -365,6 +365,11 @@ function harness(options = {}) {
       nowTimestamp: stubs["../utils/date"].nowTimestamp,
       Date: HarnessDate,
       memberDispatchWindow: dispatch.memberDispatchWindow,
+      candidateDispatchWindow: async (candidate) => {
+        // This harness covers ordinary approval claims; meal exceptions have their own suite.
+        assert.equal(candidate.payload?.quietHoursTestCampaign, undefined);
+        return dispatch.memberDispatchWindow();
+      },
       MEMBER_DISPATCH_WINDOW_POLICY: dispatch.MEMBER_DISPATCH_WINDOW_POLICY,
       randomBytes,
       isMembershipWelcomeCandidate: (item) =>
