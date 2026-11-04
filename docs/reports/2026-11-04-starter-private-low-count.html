@@ -2,9 +2,11 @@
 <html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 스타터 횟수 안내 점검</title>
 <style>body{margin:0;background:#f5f6f8;color:#202328;font:16px/1.7 system-ui,sans-serif}main{max-width:800px;margin:auto;padding:32px 20px}h1{font-size:26px}h2{font-size:20px;margin-top:32px}li{margin:8px 0}strong{color:#a32631}p{overflow-wrap:anywhere}</style>
 <main><p>ARCHIVE PILATES OPS · 2026-11-04</p><h1>스타터 프라이빗 2회권 횟수부족 안내</h1>
-<p><strong>원인 확인 · 로컬 수정 및 무발송 검증 완료 · 운영 배포 전</strong></p>
+<p><strong>수정·무발송 검증·운영 배포·실제 반영 확인 완료</strong></p>
 <h2>확인한 내용</h2><p>오늘 11:30:35 KST 발송 처리 원장 1건의 상품은 ‘스타터 패키지 OT 2회권’, 잔여 2회였습니다. 저장된 회원 원천도 총 2회·잔여 2회로 일치했습니다. 일반 프라이빗권의 3회 이하 조건이 최초 제공 OT까지 포함한 것이 원인입니다.</p>
 <p>발송 처리와 SOLAPI 메시지 ID를 확인했으며 최종 전달은 별도 조회하지 않았습니다. StudioMate 실시간 화면이 아닌 저장 원천과 발송 원장을 대조한 결과입니다.</p>
 <h2>수정 범위</h2><ul><li>스타터 최초 프라이빗·OT 2회권은 횟수부족 후보에서 제외합니다.</li><li>대기 중인 기존 후보도 실제 발송 직전에 최신 연결 수강권으로 재검증합니다.</li><li>스타터 그룹권·다른 일반권·기존 만료 안내는 유지합니다. 만료일이 없으면 만료 임박으로 오인하지 않습니다.</li><li>기존 발송·중복방지·실행 주기·계약·웰컴은 변경하거나 재실행하지 않았습니다.</li></ul>
-<h2>검증 및 남은 작업</h2><p>최종 확대 무발송 회귀검사 1,011건, 전체 Functions 로컬 빌드 및 경계 검사를 통과했습니다. 변경하지 않은 기존 발송 코드와 과거 감사 기준의 불일치는 두 기존 커밋의 변경 함수에 한정해 검토·보완했으며, 공유 정책 검사 12건도 모두 통과했습니다.</p>
-<p>CORE 운영규칙·카탈로그 수정은 소스에 준비했습니다. 사용자가 검증 후 배포·커밋·푸시를 승인했습니다. 기존 감사 불일치는 이미 배포된 두 커밋의 변경 함수 6개에 한정해 대조·보완했고 공유 정책 검사 12건이 통과했습니다. 관련 Functions 두 코드베이스 및 CORE Hosting의 실제 반영 결과는 배포 후 별도로 기록합니다. 회원 재발송은 하지 않습니다.</p></main></html>
+<h2>검증 결과</h2><p>무발송 회귀검사 총 1,077건, 전체 Functions 로컬 빌드 및 경계 검사, 배포 사전 점검이 통과했습니다. 과거 감사 기준 불일치는 기존 두 커밋의 변경 함수에 한정해 검토·보완했고, GitHub Functions 검사와 CORE MCP 검사도 모두 통과했습니다.</p>
+<h2>운영 반영</h2><p>승인된 커밋을 최신 main에 통합·푸시하고, 알림톡·동기화 Functions 및 CORE Hosting만 배포했습니다. 관련 함수 27개 모두 ACTIVE이며, 실제 배포된 소스·실행용 코드 12개 파일이 수정본과 일치했습니다. CORE 운영규칙·카탈로그도 실제 주소에서 HTTP 200 및 원본과 동일한 해시를 확인했습니다. 최종 코드 대조는 2026-11-04 12:18 KST에 완료했습니다.</p>
+<p>수정 커밋: <code>281a6e99</code> · 배포 소스: <code>2b78d67b</code> · <a href="https://github.com/archivepilates/archive/actions/runs/41765649871">Functions CI 성공</a> · <a href="https://github.com/archivepilates/archive/actions/runs/41765649766">CORE MCP CI 성공</a></p>
+<p>기존 11:30 일일 처리·10분 큐 주기와 발송 원장은 유지했습니다. 실제 회원 발송 테스트·재발송·수동 큐 실행은 하지 않았으며, 다음 자연 정기 실행은 아직 관측하지 않았습니다. 별도 모니터나 스케줄러는 추가하지 않았습니다.</p></main></html>
