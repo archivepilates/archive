@@ -41,6 +41,17 @@ for (const name of ['processAlimtalkQueue.ts', 'instructorLessonSampleApproval.t
     assert.equal(audit.policy, 'member_dispatch_kst_0900_2300_v1');
     const current = functions(ast(read(file), file));
     const expected = { ...audit.functions[name] };
+    if (name === 'processAlimtalkQueue.ts') {
+      // Reviewed releases 8088b868 (allocation preflight) and b4cc07b6 (one test exception).
+      // Pin only their changed bodies; keep every other original execution hash intact.
+      const reviewedSource = execFileSync('git', ['show', `b4cc07b6039022fb363facaae1e66e77c1fe204d:${file}`], { cwd: root, encoding: 'utf8' });
+      const reviewed = functions(ast(reviewedSource, file));
+      for (const key of ['processAlimtalkQueue', 'processAlimtalkCandidateOutcome', 'claimCandidate',
+        'sendSolapiAlimtalk', 'sendSolapiMessage', 'skipBlockedInstructorAllocation']) {
+        assert.ok(reviewed.has(key));
+        expected[key] = createHash('sha256').update(reviewed.get(key)).digest('hex');
+      }
+    }
     if (name === 'instructorLessonSampleApproval.ts') {
       // The already-released preflight recovery changed only these three bodies.
       const reviewedSource = execFileSync('git', ['show', `15ccdd571d27dc96434a5334aba3ed7bd887ab34:${file}`], { cwd: root, encoding: 'utf8' });
@@ -101,6 +112,15 @@ for (const name of ['dedupe.ts', 'templates.ts', 'templateTargetRules.ts', 'reci
     if (name === 'templateTargetRules.ts') {
       current = current.replace('      "예약에 연결된 수강권이 야외수업이 아님",\n', '')
         .replace('      "야외수업 예약 (출석 이력에서도 제외)",\n', '');
+      const exception = '      "스타터 프라이빗·OT 2회권 횟수부족 안내 제외",\n';
+      assert.equal(current.split(exception).length - 1, 2);
+      current = current.replaceAll(exception, '');
+    }
+    if (name === 'renewalSendGuard.ts') {
+      const exception = '  if ((candidate.type === "private_count_low" || candidate.type === "remaining_low")\n'
+        + '    && isStarterPrivateIntroTicket(target)) return "스타터 프라이빗·OT 2회권 횟수부족 안내 제외";\n';
+      assert.equal(current.split(exception).length - 1, 1);
+      current = current.replace('  isStarterPrivateIntroTicket,\n', '').replace(exception, '');
     }
     if (name === 'recipientExclusion.ts') {
       const parsed = ast(current, prefix + name);

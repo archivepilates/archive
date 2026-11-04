@@ -38,6 +38,7 @@ import {
   assessRenewalTicket,
   hasSameKindAlternativeTicket,
   isRenewalManagedTicket,
+  isStarterPrivateIntroTicket,
   renewalBookingKind,
   renewalSourceTicketKey,
   renewalTicketKind,
@@ -982,11 +983,11 @@ function alimtalkTypeFromTicket(
   sourceDate: string,
 ): SendableAlimtalkCandidateType | null {
   const remaining = ticket.remainingCount == null ? Number.NaN : Number(ticket.remainingCount);
-  if (Number.isFinite(remaining) && remaining >= 0) {
+  if (!isStarterPrivateIntroTicket(ticket) && Number.isFinite(remaining) && remaining >= 0) {
     if (isPrivateProfileTicket(ticket) && remaining <= 3) return "private_count_low";
     if (!isPrivateProfileTicket(ticket) && remaining < 5) return "remaining_low";
   }
-  const days = Number(remainingDays(ticket.expiresAt, sourceDate));
+  const days = ticket.expiresAt ? Number(remainingDays(ticket.expiresAt, sourceDate)) : Number.NaN;
   if (Number.isFinite(days) && days <= 14) {
     if (isPrivateProfileTicket(ticket)) return "private_ticket_expiring";
     return "ticket_expiring";

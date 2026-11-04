@@ -67,6 +67,13 @@ test("four fact-only contracts keep followup candidates without blanket template
   }
 });
 
+test("starter intro exclusion is documented only for low-count notices", () => {
+  assert.ok(saved.sourceFingerprints.some((row) => row.path === sourceRoot + "renewal/renewalPolicy.ts"));
+  const types = saved.rows.filter((row) => row.policy?.exclusionRules?.includes("스타터 프라이빗·OT 2회권 횟수부족 안내 제외"))
+    .map((row) => row.type).sort();
+  assert.deepEqual(types, ["private_count_low", "remaining_low"]);
+});
+
 test("timing parity: schedules are extracted from declarations and original source lines", () => {
   const reader = sourceReader();
   for (const row of saved.rows.filter((row) => row.schedule)) {

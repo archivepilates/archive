@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "0e53c798619427aa59d02f6077421528905b57a9cea93a843c003fd4092f29dd",
+  "policyFingerprint": "417a25fc61765817055ac104185c65ebda2ca332895c9957f999305403651581",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -54,7 +54,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
-      "sha256": "4fb5a02c388a2236f37366f4d6276dff8a2e1dc29dd83e85942b9bd1470bced7"
+      "sha256": "00cc34c5023ea770aa2f98ce22b326efc8addbbb1eff8b7437844783314af649"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/recipientExclusion.ts",
@@ -62,7 +62,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/renewalSendGuard.ts",
-      "sha256": "30ff467f1b996cc133e639ede75261cea9fe6a0a1927ea410a7eee29f5c69ea0"
+      "sha256": "75f7a911effdf22be7f1f858d386ef46c4e37ecc379bbef3c10b4a5fc77b1543"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templates.ts",
@@ -70,7 +70,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/templateTargetRules.ts",
-      "sha256": "42a0644f431053c019e17d23361a6b724e1732c2cdfc8aaa77637001e3ac95be"
+      "sha256": "5e29a315d0f192ab22724b5eeeb952a8859cdba29c67fd20968ecf6e71b9dfaa"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/ticketNoticePolicy.ts",
@@ -109,6 +109,10 @@
       "sha256": "db85003dbc475219600044e5bfba4893139a374e6c18567bdc70dda2dc734469"
     },
     {
+      "path": "firebase/kangsain-functions/functions/src/renewal/renewalPolicy.ts",
+      "sha256": "a2e08a8f72c153763ce3bde09b88afcb79e01b5814baf8be51d02f05b0a54f56"
+    },
+    {
       "path": "scripts/fixtures/alimtalk-catalog-known-provider.json",
       "sha256": "b5a47175a807c083750196342c0bc6f4704d31794ec69f15390c8e71bf307680"
     },
@@ -122,7 +126,7 @@
     },
     {
       "path": "scripts/generate-alimtalk-catalog.mjs",
-      "sha256": "2ca34a3e5ecfa2bb40faaf00eef1c99dd87c63475cdd7181b3bcbb439a5b3983"
+      "sha256": "a167a38aae0cabb15731eab8638237f913da19d7f3103b780a935f8dfdf5e25e"
     },
     {
       "path": "scripts/lib/alimtalk-catalog-metadata.mjs",
@@ -561,6 +565,7 @@
           "알림톡 제외 회원",
           "전화번호 없음",
           "프라이빗 또는 강사레슨 수강권",
+          "스타터 프라이빗·OT 2회권 횟수부족 안내 제외",
           "수업권이 아닌 상품",
           "검토된 사실 안내 본문·버튼과 불일치",
           "잔여횟수 0회 또는 5회 이상",
@@ -663,6 +668,7 @@
           "알림톡 제외 회원",
           "전화번호 없음",
           "그룹 또는 강사레슨 수강권",
+          "스타터 프라이빗·OT 2회권 횟수부족 안내 제외",
           "수업권이 아닌 상품",
           "검토된 사실 안내 본문·버튼과 불일치",
           "잔여횟수 0회 또는 4회 이상",

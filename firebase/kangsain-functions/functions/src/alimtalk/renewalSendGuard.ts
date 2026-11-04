@@ -2,6 +2,7 @@ import type { AlimtalkCandidateDoc, MemberProfileDoc } from "../types/models";
 import { refs } from "../firestore/refs";
 import {
   isRenewalManagedTicket,
+  isStarterPrivateIntroTicket,
   renewalTicketKind,
 } from "../renewal/renewalPolicy";
 
@@ -32,6 +33,8 @@ export function renewalCandidateProfileIssue(
   const classType = String(target.classType || "").trim().toUpperCase();
   if (classType === "I" || classType === "INSTRUCTOR") return "강사레슨 수강권 일반 안내 제외";
   if (!isRenewalManagedTicket(target)) return "재등록 안내 제외 수강권";
+  if ((candidate.type === "private_count_low" || candidate.type === "remaining_low")
+    && isStarterPrivateIntroTicket(target)) return "스타터 프라이빗·OT 2회권 횟수부족 안내 제외";
 
   const remaining = target.remainingCount == null ? Number.NaN : Number(target.remainingCount);
   const expiryDays = daysUntil(target.expiresAt?.toDate?.(), candidate.sourceDate);

@@ -53,6 +53,18 @@ export function isRenewalManagedTicket(ticket: Pick<ActiveTicket, "name">): bool
   return Boolean(name) && !RENEWAL_EXCLUDED_TICKET_KEYWORDS.some((keyword) => name.includes(keyword));
 }
 
+// Introductory sessions start below the regular low-count threshold; expiry is separate.
+export function isStarterPrivateIntroTicket(ticket: Pick<ActiveTicket, "name" | "classType" | "maxCount">): boolean {
+  const name = String(ticket.name || "").normalize("NFKC").toLowerCase();
+  if (!/스타터|\bstarter\b/.test(name)) return false;
+  const classType = String(ticket.classType || "").normalize("NFKC").trim().toLowerCase();
+  const privateIntro = /프라이빗|개인|private|\bot\b|오티|오리엔테이션|orientation/.test(name)
+    || /^(p|private|프라이빗|개인)$/.test(classType);
+  if (!privateIntro) return false;
+  if (ticket.maxCount != null) return Number(ticket.maxCount) === 2;
+  return /(?:^|\D)2\s*회(?:권|\s|$)/.test(name);
+}
+
 export function renewalCountThreshold(kind: RenewalTicketKind): number {
   return kind === "private" ? 3 : 5;
 }
