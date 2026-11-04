@@ -814,7 +814,47 @@
   <link rel="stylesheet" href="/assets/public-home-ux-20260905.css">
   <link rel="stylesheet" href="/assets/academy-nav-20260915.css">
   <script src="/assets/academy-nav-20260915b.js" defer></script>
-  <script src="/assets/public-home-ux-20260905.js" defer></script>
+  <style>
+    .public-home .class-grid.new-release-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 28px;
+    }
+
+    .public-home .new-release-grid .class-body { padding-top: 18px; }
+    .public-home .new-release-grid .class-body .class-meta {
+      margin-top: 10px;
+      font-size: 0.875rem;
+    }
+
+    .public-home .classes-learning {
+      max-width: 65ch;
+      margin: 0 0 24px;
+      color: var(--muted);
+    }
+
+    @media (min-width: 641px) {
+      .public-home .class-grid.new-release-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .new-release-grid .class-offline {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: auto;
+        align-items: start;
+        gap: 24px;
+      }
+      .public-home .new-release-grid .class-offline .class-body { padding-top: 0; }
+    }
+
+    @media (min-width: 1024px) {
+      .public-home .class-grid.new-release-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .new-release-grid .class-offline {
+        grid-column: auto;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto 1fr;
+        gap: 0;
+      }
+      .public-home .new-release-grid .class-offline .class-body { padding-top: 18px; }
+    }
+  </style>
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -898,23 +938,54 @@
         <p class="hero-lead">강사의 수업을 기록하고, 레슨의 기준을 다시 세웁니다.<span class="hero-detail">아카이브필라테스 · 부산 명지<br>5:1 필라테스 강사레슨과 온라인 강사교육</span></p>
         <div class="actions" aria-label="클래스 바로가기">
           <a class="button primary" href="/offline">강사레슨 일정 확인</a>
-          <a class="button ghost" href="https://archivepilates.imweb.me/17">강사레슨 영상구매</a>
+          <a class="button ghost" href="#classes">신작 영상 살펴보기</a>
         </div>
         <a class="hero-browse" href="#classes">수업 둘러보기 <span aria-hidden="true">↓</span></a>
       </div>
     </section>
 
-    <section id="classes" class="classes">
+    <section id="classes" class="classes" aria-labelledby="classes-title">
       <div class="wrap">
         <div class="section-head">
           <div>
             <p class="section-kicker">ARCHIVE METHOD</p>
-            <h2>필라테스 강사레슨과 영상 클래스</h2>
+            <h2 id="classes-title">새로 공개된 강사레슨 영상</h2>
           </div>
           <a class="text-link" href="https://archivepilates.imweb.me/17">전체 영상 둘러보기 <span aria-hidden="true">→</span></a>
         </div>
-        <div class="class-grid">
+        <p class="classes-learning">관찰에서 교정, 큐잉까지. 두 기구의 외부 피드백을 살펴보고 수업에 사용할 언어를 정리해 보세요. 구매 계정으로 40일 동안 반복 학습합니다.</p>
+        <div class="class-grid new-release-grid">
           <article class="class-card">
+            <div class="class-preview" id="ab11-preview">
+              <a class="preview-launch" href="https://www.youtube.com/embed/gZTRX-sd0zQ" aria-label="AB11 바렐과 스틱 외부 피드백2 미리보기 재생" data-home-preview data-preview-title="AB11 바렐과 스틱 외부 피드백2 미리보기">
+                <img src="https://i.ytimg.com/vi/gZTRX-sd0zQ/hqdefault.jpg" alt="AB11 바렐과 스틱 외부 피드백2 미리보기" width="480" height="360" loading="lazy" decoding="async">
+                <span class="preview-play"><span aria-hidden="true">▶</span> 미리보기</span>
+              </a>
+            </div>
+            <div class="class-body">
+              <p class="type">신작 · AB11</p>
+              <h3>바렐 + 스틱</h3>
+              <p class="class-meta">배민진 · 외부 피드백2 · 57:52</p>
+              <p>스틱의 접촉과 움직임으로 몸통이 움직이는 순서를 관찰합니다. 몸통·골반 위치, 복부 당김과 팔의 과개입을 구분하며 교정 방향과 큐잉을 짚어보세요.</p>
+              <a class="text-link" href="https://archivepilates.imweb.me/17/?idx=88">AB11 영상 상세 보기 <span aria-hidden="true">→</span></a>
+            </div>
+          </article>
+          <article class="class-card">
+            <div class="class-preview" id="ar7-preview">
+              <a class="preview-launch" href="https://www.youtube.com/embed/iRMthLJlooA" aria-label="AR7 리포머와 블럭 외부 피드백2 미리보기 재생" data-home-preview data-preview-title="AR7 리포머와 블럭 외부 피드백2 미리보기">
+                <img src="https://i.ytimg.com/vi/iRMthLJlooA/hqdefault.jpg" alt="AR7 리포머와 블럭 외부 피드백2 미리보기" width="480" height="360" loading="lazy" decoding="async">
+                <span class="preview-play"><span aria-hidden="true">▶</span> 미리보기</span>
+              </a>
+            </div>
+            <div class="class-body">
+              <p class="type">신작 · AR7</p>
+              <h3>리포머 + 블럭</h3>
+              <p class="class-meta">정은영 · 외부 피드백2 · 약 56분</p>
+              <p>블럭의 접촉과 방향으로 발의 압력과 지지를 관찰합니다. 캐리지 움직임과 몸통 정렬을 함께 교정하는 과정을 살펴보며 큐잉을 정리해 보세요.</p>
+              <a class="text-link" href="https://archivepilates.imweb.me/17/?idx=89">AR7 영상 상세 보기 <span aria-hidden="true">→</span></a>
+            </div>
+          </article>
+          <article class="class-card class-offline">
             <picture>
               <source srcset="/assets/offline-class.webp" type="image/webp">
               <img src="/assets/offline-class.jpg" alt="ARCHIVE PILATES 오프라인 강사레슨 현장" width="1200" height="1000" loading="lazy">
@@ -925,21 +996,6 @@
               <p>필라테스 강사와 예비 강사를 위한 현장 중심 강사교육입니다. 직접 움직이며 시퀀스 구성과 큐잉, 움직임 관찰을 함께 익힙니다.</p>
               <a class="text-link" href="/offline">강사레슨 일정 확인 <span aria-hidden="true">→</span></a>
               <a class="related-video" href="/instructor-lessons">필라테스 강사레슨·교육 안내 <span aria-hidden="true">→</span></a>
-            </div>
-          </article>
-          <article class="class-card">
-            <div class="class-preview" id="ach9-preview">
-              <a class="preview-launch" href="https://www.youtube.com/embed/JVdsoaWkH-s" aria-label="체어 지지와 움직임 ACH9 미리보기 재생" data-home-preview>
-                <img src="https://i.ytimg.com/vi/JVdsoaWkH-s/hqdefault.jpg" srcset="https://i.ytimg.com/vi/JVdsoaWkH-s/hqdefault.jpg 480w, https://i.ytimg.com/vi/JVdsoaWkH-s/maxresdefault.jpg 1280w" sizes="(max-width: 640px) calc(100vw - 40px), (max-width: 1224px) 46vw, 576px" alt="체어 지지와 움직임 ACH9 미리보기" width="1280" height="720" loading="lazy" decoding="async">
-                <span class="preview-play"><span aria-hidden="true">▶</span> 미리보기</span>
-              </a>
-            </div>
-            <div class="class-body">
-              <p class="type">체어 · ACH9</p>
-              <h3>지지와 움직임</h3>
-              <p>ARCHIVE METHOD 기구별 수업을 구매 계정으로 40일 동안 반복 학습합니다.</p>
-              <a class="text-link" href="https://archivepilates.imweb.me/17/?idx=85">ACH9 영상 보기 <span aria-hidden="true">→</span></a>
-              <a class="related-video" href="https://archivepilates.imweb.me/17/?idx=84">같은 주제의 캐딜락 수업 · ACA6 <span aria-hidden="true">→</span></a>
             </div>
           </article>
         </div>
@@ -1027,6 +1083,24 @@
   </footer>
 
   <script>
+    document.querySelectorAll("[data-home-preview]").forEach((preview) => {
+      preview.addEventListener("click", (event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        const frame = document.createElement("iframe");
+        frame.src = preview.href;
+        frame.title = preview.dataset.previewTitle;
+        frame.width = "560";
+        frame.height = "315";
+        frame.allow = "encrypted-media; picture-in-picture; fullscreen";
+        frame.allowFullscreen = true;
+        frame.referrerPolicy = "strict-origin-when-cross-origin";
+        frame.tabIndex = 0;
+        preview.replaceWith(frame);
+        frame.focus();
+      });
+    });
+
     (() => {
       const items = Array.from(document.querySelectorAll(".reveal"));
       if (!items.length || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
