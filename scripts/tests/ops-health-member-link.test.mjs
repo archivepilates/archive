@@ -12,7 +12,7 @@ const proof = { memberId: RECOVERY_PROFILE, nativeMemberId: RECOVERY_NATIVE_ID, 
   phoneSha256: createHash('sha256').update(profile.phone).digest('hex'), checkedAt: at, queryKind: 'full_phone',
   sourceKind: 'studiomate_rendered_dom', liveReadback: true, uniqueMatchCount: 1 };
 
-function fixture() {
+function fixture({ now = () => nowMs } = {}) {
   const rows = new Map([[profilePath, structuredClone(profile)]]), writes = [];
   const doc = path => ({ path, id: path.split('/').at(-1) });
   const snap = ref => ({ ...ref, exists: rows.has(ref.path), data: () => rows.get(ref.path) });
@@ -32,7 +32,7 @@ function fixture() {
     for (const [path, data] of pending) { rows.set(path, { ...rows.get(path), ...data }); writes.push(path); }
     return result;
   } };
-  return { rows, writes, db, run: (p = proof) => recoverVerifiedChartMemberLink({ db, proof: p, resolvedAt: at, nowMs }) };
+  return { rows, writes, db, run: (p = proof) => recoverVerifiedChartMemberLink({ db, proof: p, resolvedAt: at, now }) };
 }
 
 test('atomic link preserves all source fields and creates no native profile', async () => {
@@ -74,4 +74,32 @@ test('changed identity, duplicate source, native profile and unknown prior work 
 test('an inconsistent prior audit can never be replayed', async () => {
   const h = fixture(); await h.run(); h.rows.get(lookupPath).resolvedAt = 'different';
   await assert.rejects(h.run(), /prior_outcome/); assert.equal(h.writes.length, 3);
+});
+
+test('freshness is rechecked at transaction entry and after asynchronous reads', async () => {
+  for (const expiresOnCall of [2, 3]) {
+    let calls = 0;
+    const h = fixture({ now: () => ++calls >= expiresOnCall ? nowMs + 31000 : nowMs });
+    await assert.rejects(h.run(), /live_proof/);
+    assert.equal(h.writes.length, 0);
+  }
+});
+
+test('prior success requires consistent audit, lookup receipt and unique native ownership', async () => {
+  const auditPath = 'workLanes/ops-monitor-accuracy-20261104/reports/member-link-5095448';
+  for (const mutate of [
+    h => h.rows.get(lookupPath).studioId = 'other',
+    h => h.rows.get(auditPath).outcome = 'unknown',
+    h => h.rows.get(auditPath).studiomateMemberId = 'other',
+    h => h.rows.get(auditPath).resolvedAt = 'different',
+    h => h.rows.get(auditPath).sourceCheckedAt = 'different',
+    h => h.rows.get(lookupPath).verification.liveReadback = false,
+    h => h.rows.set('memberProfiles/duplicate', { ...profile }),
+    h => h.rows.set('memberProfiles/other', { studiomateMemberId: RECOVERY_NATIVE_ID }),
+    h => h.rows.set(`memberProfiles/${RECOVERY_NATIVE_ID}`, { ...profile }),
+  ]) {
+    const h = fixture(); await h.run(); mutate(h);
+    await assert.rejects(h.run(), /prior_outcome/);
+    assert.equal(h.writes.length, 3);
+  }
 });

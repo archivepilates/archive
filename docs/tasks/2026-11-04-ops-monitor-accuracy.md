@@ -9,7 +9,7 @@
 - Existing health emails include bounded allowlisted source references. Notion findings separate overdue pending, overdue failed, unknown time and identity blockers; preserve stable finding identity and incomplete-query safeguards.
 - Notification observer propagates persisted continuity loss, including failures. Recovery reports carry observed time, distinguish read recovery from historical reconciliation, and retain attention routing while a gap remains. Existing schedules, locks, hints, action keys and dispatch rules are unchanged.
 - YouTube worker logs only allowlisted structured OAuth reasons or a broad typed connection category, never exception messages, responses, URLs or credentials.
-- Bounded one-off member-link helper is fixed to the approved existing profile and native ID. Fresh live full-phone proof, transaction uniqueness, prior-claim checks and atomic lookup/audit evidence are required. It cannot clone a native profile or overwrite an existing link.
+- Bounded one-off member-link helper is fixed to the approved existing profile and native ID. Fresh live full-phone proof, transaction uniqueness, prior-claim checks and atomic lookup/audit evidence are required. Freshness is rechecked at each transaction attempt and after asynchronous reads; idempotent success also validates audit, lookup proof and unique native ownership. It cannot clone a native profile or overwrite an existing link. This review hardening does not replay the completed live recovery.
 - CORE rules updated in existing health and notification sections. No Functions source/config changes.
 
 ## Verified recovery
@@ -30,7 +30,7 @@
 ## Validation And Release
 
 - 51 focused Node tests; 102 system-health tests; 216 private-Notion/mail-watch tests; 31 Python tests passed. Functions TypeScript build, CORE Hosting validator and whitespace checks passed. One VM test harness was updated for the new pure summary dependency. Existing holding-email test was corrected to cover two inline keys plus the shared deduplicated path, without changing holding runtime.
-- Combined Node monitoring/notification/mail/release suite: 245 passed. Private-Notion/mail-watch: 216 passed. Python worker: 31 passed. No real sends were used for tests.
+- Combined Node monitoring/notification/mail/release suite: 245 passed, followed by 13/13 hardened member-link tests (two additional regression cases). Private-Notion/mail-watch: 216 passed. Python worker: 31 passed. No real sends were used for tests.
 - Static CORE rules screenshots at 320/390/768/1440px confirmed the added notes render and introduce no new horizontal width. An existing whole-page overflow remains at 320/390px (baseline and updated scrollWidth both 405px); it is not treated as a fully passing responsive page or repaired by an unrelated CSS change. Screenshots are private local artifacts, not an authenticated workflow test.
 - Runtime integration, Hosting publication, GitHub CI and final source status: pending at this implementation checkpoint; update after independent verification.
 - Report: `docs/reports/2026-11-04-ops-monitor-accuracy-triage.html`.
