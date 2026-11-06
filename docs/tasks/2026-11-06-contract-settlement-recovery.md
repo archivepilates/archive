@@ -78,7 +78,15 @@
 - Seal/message diagnostics are persisted at their existing non-replayable stage before reconciliation reads, so a second read failure cannot discard the original write failure. No automatic retry, policy relaxation, writer enablement or member message is added.
 - Full Node 22 contract regression: 1,143 tests passed, zero failures/skips. Independent bounded review passed, including dual-failure/no-replay tests. Hosting/catalog validation, empty affected-Functions detection and whitespace checks passed. CORE rules UI checks are rerun; release evidence is recorded after live verification below.
 
-## Private evidence locations
+## Seal-only follow-up release evidence
+
+- Source commit `758413ab72930580742d3ac8f55a455c866e06fc` was promoted and pushed to main and the scoped branch. Runtime fast-forwarded to that exact source without restarting workers or changing schedules/settings.
+- CORE Hosting `archive-pilates-core` deployed from clean main with the existing operator service account and root Firebase config. Both CORE rules URLs returned HTTP 200 and source SHA-256 `93bbc3521b65e6484dc11d7464e8d806352e5f55373a532b5963a621f4eceb7c`. No Functions were affected or deployed.
+- Node 22 contract tests: 1,143 passed. CORE rules browser tests: 22 passed across 320/390/768/1440px. Hosting/catalog, affected-target and whitespace checks passed. Existing whole-page mobile overflow remains unchanged; this is not a layout repair.
+- Task-owned browser cleanup receipts confirm closed contexts/process connections; shared StudioMate lock is absent. User-owned tabs and production sessions are preserved. No extra contract, member message, signature request or writer activation occurred in this follow-up.
+- Main GitHub checks passed: CORE MCP `42166828407`, Functions Affected Check `42166828451`. Documentation-only completion evidence is committed separately; Hosting content remains byte-identical and needs no redeploy.
+
+## Private evidence archive
 
 - `~/ArchiveIN/operations/contract-settlement-recovery-20261106/`: closure intent/verified receipt, finalization evidence and durable finalization intent.
 - Prior corrected payroll sources: `~/ArchiveIN/operations/october-payroll-actual-20261102/`.
