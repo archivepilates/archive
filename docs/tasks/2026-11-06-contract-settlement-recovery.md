@@ -14,7 +14,7 @@
 - The exact five October recovery jobs have independently checked full accepted single-attempt/no-replay native receipts. Four canonical records are signed; the remaining exact native contract is unsigned with an expired request. This task did not re-request it.
 - Main applied `close-membership-contract-recovery.mjs` once after a read-only plan and synthetic tests. Transactional CAS protected settings, five jobs, five contracts and five hints. It closed only the expired batch approval and attached supplemental hint closure metadata. Writer remains disabled; source jobs/contracts and hint status/reason are unchanged. It asserts dispatch acceptance, not completion of every member signature.
 - Private closure plan hash: `4b187f02ee091e0167bc4bb76e432fb102cef8ad2c8a3b661304c27645b2fb55`.
-- Positive live E2E for the replacement seal path is pending. User approved one separate operator test draft without notification in `call_64f3eb816a6c4e938fcf5fe7ec0f4431`. The follow-up attempt and unresolved outcome are recorded below; do not enable the writer based on synthetic tests or approval alone.
+- The replacement seal path was positively verified on the exact operator-saved renewal draft in the follow-up below. Programmatic creation remains unverified; the global writer remains disabled.
 
 ## 202610 settlement recovery
 
@@ -32,7 +32,7 @@
 - Combined contract, closure and settlement regression: 1,306 tests passed on Node 22, including new upload safety, no-replay, historical-proof gates, real synthetic finalization and CLI no-fallback/overwrite guards. Intentional overwrite-guard rejection was also verified against current October artifacts without mutation.
 - Settlement/closure tests include synthetic success, source drift, wrong links/identity, partial publication, concurrent destinations and retained unknown intents.
 - CORE operating rules updated in the existing contract, health and settlement records. Functions source/config is unchanged.
-- No positive live seal test or automatic-writer reactivation should be inferred from the completed code release below.
+- The initial code release below preceded the positive seal test. Its historical results do not imply automatic-writer reactivation.
 - First source CI run found an independent runner drift: CORE rules UI browser installation selected unsupported `ubuntu26.04-x64` with lockfile Playwright 1.59.1. Pin only the browser-test job to `ubuntu-24.04`; do not change app dependencies or widen permissions. The security job and all existing tests remain enabled. Official platform reference: https://playwright.dev/docs/intro#system-requirements and https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job .
 - Initial post-release health run `health_202611061114_quick` independently recognized final 202610 artifacts, but its older unkeyed settlement finding/queue item remained open. Added an exact legacy-title mapping plus nonempty same-month completed-source requirements; other titles, missing references, prior months and active failures remain unresolved. 34 health-state tests pass; no direct status reset is used.
 
@@ -47,7 +47,7 @@
 - Existing health run `health_202611061119_quick` resolved the exact old settlement finding and Codex queue item `health_2d4e7c01de2ef1f1c5e7d8c31550` through completed-source evidence. Independent document reads confirmed both statuses `resolved`; no manual status reset.
 - Final health run `health_202611061122_quick` recognized 202610 `final_present` and no CI finding. Its only remaining finding is the contract writer lane, referencing the prior natural hourly report at `2026-11-06T02:08:57.760Z`. Current settings independently show old recovery `completed`, accepted count 5, writer still false. This is not full-system healthy; no manual sync or scheduler was added to refresh the report.
 - All main/test/agent-owned browser contexts, local test servers and tracked browser processes were closed; user tabs and production sessions were preserved. No member message, contract re-request, payment or instructor distribution occurred.
-- Remaining blocker: positive evidence for the separately approved operator test draft. The new route is implemented/released and synthetically verified, but actual seal storage and automatic writer reactivation are not complete. The unsigned expired member contract remains review-only and was not resent.
+- At this initial release, positive live seal evidence was still pending. The later exact-draft test below resolves only that storage check, not programmatic creation or global writer reactivation. The unsigned expired member contract remains review-only and was not resent.
 
 ## Approved canary follow-up
 
@@ -61,7 +61,24 @@
 - Published CORE rules already state that actual storage verification is pending and the writer is paused. That rule and production settings did not change, so this documentation-only follow-up does not need a new Hosting/Functions release.
 - Internal attention report was accepted by home-account Gmail as message `1a1af2c814f9f0d7` with the domain/status labels applied. The first local mail invocation rejected a non-digest event ID before authentication or transport; it was corrected to a stable SHA-256 event ID, not replayed after an accepted send.
 
-## Private evidence
+## Operator-saved renewal draft: verified seal-only test
+
+- The user saved a new renewal draft at `2026-11-06T04:48:40.000Z` and explicitly identified it. Exact contract ID: `14b508a0235b2db293565132e7bdeb998dd6c1464daaae8a629176d288b9475a`. This follow-up created no contract and sent no signature request or member message.
+- After fresh identity, member/pass and full-history checks, only this draft received the approved 200x200 center seal. Reservation GET, image PUT and finalization PATCH occurred at `04:52:06.562Z`, `04:52:07.634Z` and `04:52:08.725Z` respectively. No session credentials were forwarded to image storage.
+- An initial whole-content fingerprint warning was reconciled read-only: only the authorized center party status changed from pending to signed and its update timestamp changed. Restoring those two prior metadata values reproduced the exact original content hash. Contract terms, member consent/signature, member profile, passes and the three prior contracts were unchanged; complete history contains four records.
+- Independent fresh-browser reads confirmed the center image loaded at 200x200, draft status, member unsigned, zero agreed terms and no signature-request timestamps. Uploaded source bytes passed the official hash check. Optional independent image-byte fetch was unavailable; no claim of a stored-byte hash comparison is made.
+- At `2026-11-06T05:02:38.951Z`, a guarded transaction recorded only `sealUploadVerification` and create-only audit `workLanes/studiomate-membership-contract-automation/reports/center-seal-e2e-20261106`. Independent readback verified every other setting unchanged, `contractWriterEnabled=false` and `contractCreationVerified=false`.
+- Private intent, independent readback and verified receipt are under `~/ArchiveIN/operations/contract-seal-canary-20261106/`. The original false-positive attempt evidence is preserved, not reset or replayed. Browser contexts and shared lock were closed/released in finally blocks.
+
+## Creation diagnostics: repaired gaps and remaining uncertainty
+
+- The initial create harness discarded typed HTTP/transport metadata. Its historical server response cannot be reconstructed; no specific HTTP status, bad field or authentication cause is asserted. Current required profile fields match the saved native draft, so missing identity data is not established as the cause.
+- The consumed first create intent remains no-replay. The old fixture creator is explicitly retired; the existing user-saved draft was used rather than creating another document.
+- Native HTTP, transport and JSON-body failures now retain a strict six-field diagnostic without message, stack, response body, headers, URL or tokens. The timeout covers body decoding; image PUT errors retain typed metadata. Writer journals validate that exact allowlist.
+- Seal/message diagnostics are persisted at their existing non-replayable stage before reconciliation reads, so a second read failure cannot discard the original write failure. No automatic retry, policy relaxation, writer enablement or member message is added.
+- Full Node 22 contract regression: 1,143 tests passed, zero failures/skips. Independent bounded review passed, including dual-failure/no-replay tests. Hosting/catalog validation, empty affected-Functions detection and whitespace checks passed. CORE rules UI checks are rerun; release evidence is recorded after live verification below.
+
+## Private evidence locations
 
 - `~/ArchiveIN/operations/contract-settlement-recovery-20261106/`: closure intent/verified receipt, finalization evidence and durable finalization intent.
 - Prior corrected payroll sources: `~/ArchiveIN/operations/october-payroll-actual-20261102/`.

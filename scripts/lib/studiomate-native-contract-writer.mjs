@@ -5,6 +5,7 @@ import {
 } from "./studiomate-native-contract-source.mjs";
 import { verifyStudioMateOfficialSeal } from "./studiomate-membership-contract-seal.mjs";
 import { uploadStudioMateCenterSeal } from "./studiomate-contract-seal-upload.mjs";
+import { sanitizeContractDiagnostic } from "./studiomate-contract-diagnostics.mjs";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
 
 export const MEMBERSHIP_CONTRACT_TEMPLATES = Object.freeze({
@@ -269,6 +270,7 @@ export async function executeStudioMateMembershipContract({
   let preparedPayload = claim.preparedPayload || "";
   let postStarted = false;
   let blockedStage = "";
+  let signatureRequestDiagnostic;
   // A journal await can cross 23:00. Undo only our marker, never an attempted POST.
   const post = async (stage, url, body, fields = {}) => {
     postStarted = false;
@@ -294,6 +296,7 @@ export async function executeStudioMateMembershipContract({
           throw new StudioMateNativeApiError("StudioMate create response has no contract ID", {
             method: "POST",
             ambiguous: true,
+            errorKind: "invalid_response",
           });
         await journal.stage(selection.jobKey, "created", { contractId });
         safeStage = "created";
@@ -302,6 +305,7 @@ export async function executeStudioMateMembershipContract({
         if (dispatchPaused(error) && !postStarted) throw error;
         await journal.stage(selection.jobKey, "unknown", {
           reason: "contract_create_outcome_unknown",
+          diagnostic: sanitizeContractDiagnostic(error, { phase: "create", method: "POST" }),
         });
         return { status: "review", reason: "contract_create_outcome_unknown" };
       }
@@ -323,8 +327,10 @@ export async function executeStudioMateMembershipContract({
         return { status: "review", reason: "official_seal_outcome_unknown", contractId };
       blockedStage = "before_seal_read";
       assertMemberDispatchAllowed(now());
+      let sealPhase = "seal_reserve", sealDiagnostic;
       try {
         await sealUploader({ api, contractId, seal, beforeStep: async phase => {
+          sealPhase = `seal_${phase}`;
           blockedStage = "attempting_seal";
           assertMemberDispatchAllowed(now());
           await authorizeDispatch?.();
@@ -336,6 +342,10 @@ export async function executeStudioMateMembershipContract({
         } });
       } catch (error) {
         if (dispatchPaused(error) && !postStarted) throw error;
+        sealDiagnostic = sanitizeContractDiagnostic(error, { phase: sealPhase,
+          method: sealPhase === "seal_reserve" ? "GET" : sealPhase === "seal_upload" ? "PUT" : "PATCH" });
+        await journal.stage(selection.jobKey, "attempting_seal", { contractId,
+          reason: "official_seal_outcome_unknown", diagnostic: sealDiagnostic });
         // A failed response may still have committed. Read back once, never blind-retry.
       }
       readback = validateCreatedContractReadback(
@@ -348,10 +358,12 @@ export async function executeStudioMateMembershipContract({
         await journal.stage(selection.jobKey, "review", {
           reason: "official_seal_outcome_unknown",
           contractId,
+          ...(sealDiagnostic ? { diagnostic: sealDiagnostic } : {}),
         });
         return { status: "review", reason: "official_seal_outcome_unknown", contractId };
       }
-      await journal.stage(selection.jobKey, "sealed", { contractId, sealSha256: seal.sha256 });
+      await journal.stage(selection.jobKey, "sealed", { contractId, sealSha256: seal.sha256,
+        ...(sealDiagnostic ? { diagnostic: sealDiagnostic } : {}) });
       safeStage = "sealed";
       postStarted = false;
     }
@@ -386,6 +398,7 @@ export async function executeStudioMateMembershipContract({
           await journal.stage(selection.jobKey, "review", {
             reason: "signature_request_prepare_outcome_unknown",
             contractId,
+            diagnostic: sanitizeContractDiagnostic(error, { phase: "signature_prepare", method: "POST" }),
           });
           return {
             status: "review",
@@ -433,6 +446,9 @@ export async function executeStudioMateMembershipContract({
         // The provider may have accepted the send before a transport failure.
         // Resolve that ambiguity through the authoritative contract status below.
         signatureMessageError = true;
+        signatureRequestDiagnostic = sanitizeContractDiagnostic(error, { phase: "signature_message", method: "POST" });
+        await journal.stage(selection.jobKey, "attempting_signature_message", { contractId,
+          reason: "signature_message_outcome_unknown", diagnostic: signatureRequestDiagnostic });
       }
       readback = validateCreatedContractReadback(
         await api.get(`/v2/staff/contract/${contractId}`),
@@ -446,6 +462,7 @@ export async function executeStudioMateMembershipContract({
             ? "signature_message_outcome_unknown"
             : "signature_request_outcome_unknown",
           contractId,
+          ...(signatureRequestDiagnostic ? { diagnostic: signatureRequestDiagnostic } : {}),
         });
         return {
           status: "review",
@@ -467,6 +484,7 @@ export async function executeStudioMateMembershipContract({
     await journal.stage(selection.jobKey, "signature_requested", {
       contractId,
       providerStatus: readback.detail.providerStatus,
+      ...(signatureRequestDiagnostic ? { diagnostic: signatureRequestDiagnostic } : {}),
     });
     return {
       status: readback.detail.status === "signed" ? "signed" : "waiting",

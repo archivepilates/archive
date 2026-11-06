@@ -32,12 +32,13 @@ const firstText = (row, keys) => {
 };
 
 export class StudioMateNativeApiError extends Error {
-  constructor(message, { status = 0, method = "GET", ambiguous = false } = {}) {
+  constructor(message, { status = 0, method = "GET", ambiguous = false, errorKind = "unknown" } = {}) {
     super(message);
     this.name = "StudioMateNativeApiError";
     this.status = status;
     this.method = method;
     this.ambiguous = ambiguous;
+    this.errorKind = errorKind;
   }
 }
 
@@ -111,34 +112,39 @@ export function createStudioMateNativeApiClient({
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response;
     try {
-      response = await fetchImpl(new URL(pathname, origin), {
-        method: upper,
-        headers: {
-          ...sessionHeaders,
-          ...(body === undefined ? {} : { "content-type": "application/json" }),
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      throw new StudioMateNativeApiError("StudioMate API request outcome is unknown", {
-        method: upper,
-        ambiguous: WRITE_METHODS.has(upper),
-      });
+      try {
+        response = await fetchImpl(new URL(pathname, origin), {
+          method: upper,
+          headers: {
+            ...sessionHeaders,
+            ...(body === undefined ? {} : { "content-type": "application/json" }),
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch {
+        throw new StudioMateNativeApiError("StudioMate API request outcome is unknown", {
+          method: upper, ambiguous: WRITE_METHODS.has(upper), errorKind: "transport",
+        });
+      }
+      if (!response.ok) {
+        throw new StudioMateNativeApiError(`StudioMate API returned ${response.status}`, {
+          status: response.status, method: upper, ambiguous: WRITE_METHODS.has(upper), errorKind: "http",
+        });
+      }
+      if (response.status === 204) return null;
+      const contentType = response.headers?.get?.("content-type") || "";
+      if (!contentType.includes("json")) return null;
+      try {
+        return await response.json();
+      } catch {
+        throw new StudioMateNativeApiError("StudioMate response body could not be decoded", {
+          status: response.status, method: upper, ambiguous: WRITE_METHODS.has(upper), errorKind: "invalid_response",
+        });
+      }
     } finally {
       clearTimeout(timeout);
     }
-    if (!response.ok) {
-      throw new StudioMateNativeApiError(`StudioMate API returned ${response.status}`, {
-        status: response.status,
-        method: upper,
-        ambiguous: WRITE_METHODS.has(upper),
-      });
-    }
-    if (response.status === 204) return null;
-    const contentType = response.headers?.get?.("content-type") || "";
-    if (!contentType.includes("json")) return null;
-    return response.json();
   };
   return Object.freeze({
     get: (pathname) => request("GET", pathname),

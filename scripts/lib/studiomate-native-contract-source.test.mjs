@@ -348,3 +348,31 @@ test("requires signed session headers and marks write transport failures ambiguo
     return true;
   });
 });
+
+test("HTTP and malformed successful responses retain safe typed metadata without response contents", async () => {
+  for (const [response, kind, status] of [
+    [{ ok: false, status: 400 }, "http", 400],
+    [{ ok: true, status: 200, headers: { get: () => "application/json" },
+      json: async () => { throw new Error("private-body-and-token"); } }, "invalid_response", 200],
+  ]) {
+    const api = createStudioMateNativeApiClient({ headers: SESSION_HEADERS, fetchImpl: async () => response });
+    await assert.rejects(api.post("/v2/staff/contract/join", {}), error => {
+      assert.ok(error instanceof StudioMateNativeApiError);
+      assert.equal(error.status, status); assert.equal(error.method, "POST");
+      assert.equal(error.ambiguous, true); assert.equal(error.errorKind, kind);
+      assert.equal(JSON.stringify(error).includes("private-body-and-token"), false);
+      assert.equal(error.message.includes("private-body-and-token"), false);
+      return true;
+    });
+  }
+});
+
+test("request timeout covers response body decoding too", async () => {
+  const api = createStudioMateNativeApiClient({ headers: SESSION_HEADERS, timeoutMs: 10,
+    fetchImpl: async (_url, { signal }) => ({ ok: true, status: 200, headers: { get: () => "application/json" },
+      json: () => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("body aborted")), { once: true })) }) });
+  await assert.rejects(api.post("/v2/staff/contract/join", {}), error => {
+    assert.equal(error.errorKind, "invalid_response"); assert.equal(error.status, 200);
+    assert.equal(error.method, "POST"); assert.equal(error.ambiguous, true); return true;
+  });
+});

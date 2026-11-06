@@ -70,6 +70,16 @@ test('network ambiguity and failed uploads never finalize or retry', async () =>
   }
 });
 
+test('image transfer failures expose only typed status and method for safe diagnosis', async () => {
+  const { args, calls } = fixture();
+  args.fetchImpl = async () => ({ ok: false, status: 403 });
+  await assert.rejects(uploadStudioMateCenterSeal(args), error => {
+    assert.equal(error.status, 403); assert.equal(error.method, 'PUT');
+    assert.equal(error.errorKind, 'http'); assert.equal(error.ambiguous, true); return true;
+  });
+  assert.equal(calls.some(x => x[0] === 'patch'), false);
+});
+
 test('authorization is rechecked immediately before every remote step', async t => {
   for (const phase of ['reserve', 'upload', 'finalize']) await t.test(phase, async () => {
     const { args, calls } = fixture();

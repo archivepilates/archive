@@ -36,6 +36,64 @@ test("missing live authorization stops every legacy entrypoint before claiming",
   /contract_live_authorization_required/);
 });
 
+test("create HTTP diagnostics survive the journal without leaking response data or enabling replay", async () => {
+  const input = fixture(); let saved, posts = 0;
+  const journal = { claim: async ({ payloadHash }) => saved ? { status: "resume", payloadHash, ...saved } :
+    { status: "claimed", payloadHash }, stage: async (_key, stage, fields) => { saved = { ...saved, stage, ...fields }; } };
+  const args = { ...input, journal, api: { post: async () => { posts++; throw Object.assign(new Error("secret-response-token"),
+    { status: 400, method: "POST", ambiguous: true, errorKind: "http", response: { token: "secret-response-token" } }); } } };
+  assert.equal((await executeStudioMateMembershipContract(args)).reason, "contract_create_outcome_unknown");
+  assert.deepEqual(saved.diagnostic, { schemaVersion: 1, phase: "create", kind: "http", httpStatus: 400, method: "POST", ambiguous: true });
+  assert.equal(JSON.stringify(saved).includes("secret-response-token"), false);
+  assert.equal((await executeStudioMateMembershipContract(args)).reason, "ambiguous_create_must_not_retry");
+  assert.equal(posts, 1);
+});
+
+test("seal failures preserve their exact phase and typed HTTP result", async () => {
+  const input = fixture(); let saved;
+  const result = await executeStudioMateMembershipContract({ ...input,
+    journal: { claim: async ({ payloadHash }) => ({ status: "resume", stage: "created", contractId: CONTRACT_ID, payloadHash }),
+      stage: async (_key, stage, fields) => { saved = { stage, ...fields }; } },
+    sealUploader: async ({ beforeStep }) => { await beforeStep("reserve"); throw Object.assign(new Error("private"),
+      { status: 403, method: "GET", errorKind: "http", ambiguous: false }); },
+    api: { get: async () => nativeContract(input, "draft", { centerSignaturePresent: false }) } });
+  assert.equal(result.reason, "official_seal_outcome_unknown");
+  assert.deepEqual(saved.diagnostic, { schemaVersion: 1, phase: "seal_reserve", kind: "http", httpStatus: 403, method: "GET", ambiguous: false });
+});
+
+test("original write diagnostics survive a failed reconciliation read without replay", async t => {
+  for (const phase of ["seal", "signature_message"]) await t.test(phase, async () => {
+    const input = fixture(); let saved, reads = 0, writes = 0;
+    const journal = { claim: async ({ payloadHash }) => ({ status: "resume", stage: "created",
+      contractId: CONTRACT_ID, payloadHash, ...saved }),
+      stage: async (_key, stage, fields) => { saved = { ...saved, stage, ...fields }; } };
+    const args = { ...input, journal,
+      sealUploader: async ({ beforeStep }) => { writes++; await beforeStep("reserve");
+        throw Object.assign(new Error("private-write-detail"), { status: 403, method: "GET", errorKind: "http" }); },
+      api: { get: async () => { if (++reads === 2) throw new Error("readback_unavailable");
+        return nativeContract(input, "draft", { centerSignaturePresent: phase !== "seal" }); },
+        post: async url => { if (!url.includes("/sms/")) return { contract_id_hash: CONTRACT_ID,
+          contractor_name: input.member.name, contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}` };
+          writes++; throw Object.assign(new Error("private-write-detail"), { status: 503, method: "POST", errorKind: "http", ambiguous: true }); } } };
+    await assert.rejects(executeStudioMateMembershipContract(args), /readback_unavailable/);
+    assert.equal(saved.diagnostic.phase, phase === "seal" ? "seal_reserve" : phase);
+    assert.equal(saved.diagnostic.httpStatus, phase === "seal" ? 403 : 503);
+    assert.equal(JSON.stringify(saved).includes("private-write-detail"), false);
+    assert.equal((await executeStudioMateMembershipContract(args)).status, "review");
+    assert.equal(writes, 1);
+  });
+});
+
+test("Firestore journal rejects non-allowlisted diagnostic fields before persistence", async () => {
+  const writes = [];
+  const journal = firestoreJournal({ collection: () => ({ doc: () => ({ set: async value => writes.push(value) }) }) });
+  const diagnostic = { schemaVersion: 1, phase: "create", kind: "http", httpStatus: 400, method: "POST", ambiguous: true };
+  await assert.rejects(journal.stage("synthetic", "unknown", { diagnostic: { ...diagnostic, token: "private" } }), /diagnostic_invalid/);
+  assert.equal(writes.length, 0);
+  await journal.stage("synthetic", "unknown", { diagnostic });
+  assert.deepEqual(writes[0].diagnostic, diagnostic);
+});
+
 test("operator signature claims block replay regardless of expired or stale job stage", async () => {
   const input = fixture();
   const payloadHash = createHash("sha256").update(JSON.stringify(buildStudioMateJoinContractPayload(input))).digest("hex");

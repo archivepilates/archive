@@ -38,8 +38,12 @@ export async function uploadStudioMateCenterSeal({ api, contractId, seal, before
   try {
     uploaded = await fetchImpl(url.href, { method: 'PUT', headers, body: bytes,
       redirect: 'error', signal: AbortSignal.timeout(20000) });
-  } catch { throw new Error('contract_seal_upload_outcome_unknown'); }
-  if (!uploaded.ok) throw new Error('contract_seal_upload_unconfirmed');
+  } catch { throw Object.assign(new Error('contract_seal_upload_outcome_unknown'), {
+    method: 'PUT', ambiguous: true, errorKind: 'transport',
+  }); }
+  if (!uploaded.ok) throw Object.assign(new Error('contract_seal_upload_unconfirmed'), {
+    method: 'PUT', status: uploaded.status, ambiguous: true, errorKind: 'http',
+  });
   await beforeStep('finalize');
   await api.patch(`/v2/staff/contract/signature/direct/temporary/${digitalId}/${partyId}`,
     { upload_token: data.upload_token });

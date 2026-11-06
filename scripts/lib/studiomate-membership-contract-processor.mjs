@@ -15,6 +15,7 @@ import { resolveContractCandidateGroups } from "./studiomate-membership-contract
 import { selectNativeMembershipContractCandidate } from "./studiomate-membership-contract-native-selection.mjs";
 import { signatureMaintenanceRecovery, signatureRecoverySelectionPolicy } from "./studiomate-membership-contract-maintenance-recovery.mjs";
 import { CONTRACT_SEAL_UPLOAD_POLICY } from "./studiomate-contract-seal-upload.mjs";
+import { isContractDiagnostic } from "./studiomate-contract-diagnostics.mjs";
 import {
   executeStudioMateMembershipContract,
   buildStudioMateSignatureRequestPayload,
@@ -427,6 +428,8 @@ async function markHint(db, hintId, status, reason, fields = {}) {
 }
 
 function sanitizeJournalFields(fields) {
+  if (fields.diagnostic !== undefined && !isContractDiagnostic(fields.diagnostic))
+    throw new Error("contract_diagnostic_invalid");
   if (fields.dispatchDeferrals !== undefined && (!Array.isArray(fields.dispatchDeferrals) || fields.dispatchDeferrals.length > 100 ||
     fields.dispatchDeferrals.some(row => !row || Object.keys(row).some(key => !["stage", "deferredAt", "nextAllowedAt", "providerPostCount"].includes(key)) ||
       !/^[a-z_]{1,80}$/.test(row.stage || "") || !Number.isFinite(Date.parse(row.deferredAt)) || row.providerPostCount !== 0 ||
@@ -454,7 +457,8 @@ function sanitizeJournalFields(fields) {
         ].includes(key) &&
         (typeof value === "string" || value === null),
     ),
-  ), ...(fields.dispatchDeferrals !== undefined ? { dispatchDeferrals: structuredClone(fields.dispatchDeferrals) } : {}) };
+  ), ...(fields.dispatchDeferrals !== undefined ? { dispatchDeferrals: structuredClone(fields.dispatchDeferrals) } : {}),
+  ...(fields.diagnostic !== undefined ? { diagnostic: structuredClone(fields.diagnostic) } : {}) };
 }
 
 function safeReason(error) {
