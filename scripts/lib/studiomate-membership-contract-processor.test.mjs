@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { runStudioMateMembershipContractCandidates } from './studiomate-membership-contract-processor.mjs';
+import { firestoreJournal, runStudioMateMembershipContractCandidates } from './studiomate-membership-contract-processor.mjs';
 import { CONTRACT_SEAL_UPLOAD_POLICY } from './studiomate-contract-seal-upload.mjs';
 
 const now = () => Date.parse('2026-11-06T01:00:00Z');
@@ -9,6 +9,23 @@ const creationProof = { schemaVersion: 1, policy: 'studiomate_join_create_v1', s
   studioId: '5330', categoryId: 1, signType: 1, status: 'verified', contractId: 'c'.repeat(64),
   payloadHash: 'a'.repeat(64), createdAt: '2026-11-06T00:00:00.000Z', verifiedAt: '2026-11-06T00:01:00.000Z',
   independentReloadVerified: true, originalMemberAndPassesPreserved: true, termsUnchecked: true };
+
+test('operator-closed exact contract jobs retain claims and cannot resume or recreate', async () => {
+  const data = { contractId: 'c'.repeat(64), memberId: '100', userTicketId: '200',
+    stage: 'review', payloadHash: 'original', operatorReviewDisposition: { schemaVersion: 1,
+      policy: 'operator_contract_review_closed_v1', status: 'excluded', noReplay: true, sendAllowed: false,
+      contractId: 'c'.repeat(64), memberId: '100', userTicketId: '200' } };
+  const before = structuredClone(data);
+  const db = { collection: () => ({ doc: () => ({}) }), runTransaction: cb => cb({
+    get: async () => ({ exists: true, data: () => data }),
+    create: () => assert.fail('no new claim'), set: () => assert.fail('no reset'), update: () => assert.fail('no rewrite'),
+  }) };
+  const result = await firestoreJournal(db).claim({ jobKey: 'synthetic', payloadHash: 'new' });
+  assert.deepEqual(result, { status: 'rejected', reason: 'operator_contract_review_closed' });
+  assert.deepEqual(data, before);
+  data.operatorReviewDisposition.contractId = 'd'.repeat(64);
+  assert.equal((await firestoreJournal(db).claim({ jobKey: 'synthetic', payloadHash: 'new' })).reason, 'job_payload_mismatch');
+});
 test('historical E2E proof never enables a new seal route', async () => {
   const prior = process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_WRITER;
   process.env.STUDIOMATE_MEMBERSHIP_CONTRACT_WRITER = 'enabled';

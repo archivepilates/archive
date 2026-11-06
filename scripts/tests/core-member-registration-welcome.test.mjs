@@ -11,6 +11,7 @@ const functions = new Map([...source.matchAll(/^(?:async )?function (\w+)\([^]*?
 const names = [
   "normalizePhone", "timestampMs", "formatDate", "isFailureStatus", "isPermissionDenied", "getCollectionBy", "getRecentStudioCollectionBy",
   "memberRegistrationReason", "membershipPhoneFingerprint", "memberRegistrationItemTime", "memberRegistrationLatest",
+  "memberRegistrationReviewClosed", "memberRegistrationOpenEntry",
   "memberRegistrationExcludedProductTitle", "memberRegistrationTicketHint", "memberRegistrationWelcomeState", "memberRegistrationProfilePreference",
   "verifiedLegacyMembershipWelcomeDisposition", "memberRegistrationHistoricalContractReview",
   "preferredMemberRegistrationProfile", "memberRegistrationWelcomeReference", "memberRegistrationWelcomeRecordMatches",
@@ -671,5 +672,292 @@ test("existing no-action hints stay absent without losing canonical records", as
     const hints = [unverifiedHint(extra)], profiles = [hintProfile()];
     assert.equal((await harness({ contracts: [], profiles, hints }).load()).items.length, 0);
     assert.equal((await harness({ profiles, hints }).load()).items.length, 1);
+  }
+});
+
+const CLOSED_AT = "2026-10-20T08:00:00.000Z";
+const reviewClosedContract = () => ({
+  id: "a".repeat(64), contractId: "a".repeat(64), schemaVersion: 1,
+  source: "studiomate_native_contract", studioId: "5330", bindingVerified: true,
+  memberName: "Synthetic Member", status: "excluded", observationStatus: "excluded",
+  observationHold: true, updatedAt: CLOSED_AT,
+  binding: { verified: true, contractId: "a".repeat(64), studioId: "5330",
+    memberId: "10001", userTicketId: "20001", memberPhone: PHONE, selectionJobKey: "original-contract-job" },
+  operatorReviewDisposition: {
+    schemaVersion: 1, policy: "operator_contract_review_closed_v1", status: "excluded",
+    contractId: "a".repeat(64), memberId: "10001", userTicketId: "20001",
+    closedAt: CLOSED_AT, approvalReference: "user_close_review_20261106", noReplay: true, sendAllowed: false,
+  },
+});
+const registrationEntry = (extra = {}) => ({
+  fingerprint: purchaseHint().phoneFingerprint, profiles: [hintProfile()],
+  contracts: [reviewClosedContract()], hints: [purchaseHint()], candidates: [candidate()], sends: [send()], ...extra,
+});
+
+test("valid operator closure removes pending review without signing, completion or source mutation", async () => {
+  const source = reviewClosedContract();
+  const options = { contracts: [source], profiles: [hintProfile({ updatedAt: NEW })],
+    hints: [purchaseHint()], candidates: [candidate()], sends: [send()] };
+  const before = structuredClone(options);
+  const h = harness(options);
+  assert.equal(h.api.memberRegistrationReviewClosed(source), true);
+  const data = await h.load();
+  assert.equal(data.items.length, 0);
+  assert.deepEqual(plain(data.counts), { recent: 0, active: 0, review: 0, completed: 0, observation: 0 });
+  assert.equal(source.completion, undefined);
+  assert.equal(source.signatureReceipt, undefined);
+  assert.equal(source.status, "excluded");
+  assert.deepEqual(options, before);
+});
+
+const invalidReviewClosures = [
+  ["missing marker", row => { delete row.operatorReviewDisposition; }],
+  ["malformed marker", row => { row.operatorReviewDisposition = "excluded"; }],
+  ["source schema", row => { row.schemaVersion = 2; }],
+  ["non-native source", row => { row.source = "excel_contract"; }],
+  ["unverified source", row => { row.bindingVerified = false; }],
+  ["unverified binding", row => { row.binding.verified = false; }],
+  ["wrong binding studio", row => { row.binding.studioId = "5331"; }],
+  ["non-excluded source status", row => { row.status = "review"; }],
+  ["non-excluded observation", row => { row.observationStatus = "review"; }],
+  ["missing observation hold", row => { delete row.observationHold; }],
+  ["false observation hold", row => { row.observationHold = false; }],
+  ["malformed contract ID", row => {
+    row.contractId = row.binding.contractId = row.operatorReviewDisposition.contractId = "not-a-native-contract";
+  }],
+  ["wrong binding contract", row => { row.binding.contractId = "b".repeat(64); }],
+  ["wrong marker contract", row => { row.operatorReviewDisposition.contractId = "b".repeat(64); }],
+  ["wrong marker member", row => { row.operatorReviewDisposition.memberId = "10002"; }],
+  ["wrong marker ticket", row => { row.operatorReviewDisposition.userTicketId = "20002"; }],
+  ["fallback member ID", row => { row.binding.memberId = row.operatorReviewDisposition.memberId = "excel_10001"; }],
+  ["fallback ticket ID", row => { row.binding.userTicketId = row.operatorReviewDisposition.userTicketId = "ticket-1"; }],
+  ["numeric member instead of string", row => { row.binding.memberId = row.operatorReviewDisposition.memberId = 10001; }],
+  ["numeric ticket instead of string", row => { row.binding.userTicketId = row.operatorReviewDisposition.userTicketId = 20001; }],
+  ["marker schema", row => { row.operatorReviewDisposition.schemaVersion = 2; }],
+  ["wrong policy", row => { row.operatorReviewDisposition.policy = "other_policy"; }],
+  ["wrong marker status", row => { row.operatorReviewDisposition.status = "review"; }],
+  ["replay allowed", row => { row.operatorReviewDisposition.noReplay = false; }],
+  ["missing no-replay guard", row => { delete row.operatorReviewDisposition.noReplay; }],
+  ["send allowed", row => { row.operatorReviewDisposition.sendAllowed = true; }],
+  ["missing send guard", row => { delete row.operatorReviewDisposition.sendAllowed; }],
+  ["missing approval", row => { delete row.operatorReviewDisposition.approvalReference; }],
+  ["blank approval", row => { row.operatorReviewDisposition.approvalReference = " "; }],
+  ["invalid close time", row => { row.operatorReviewDisposition.closedAt = "invalid"; }],
+  ["missing close time", row => { delete row.operatorReviewDisposition.closedAt; }],
+  ["future close time", row => { row.operatorReviewDisposition.closedAt = "2026-10-21T08:00:00.001Z"; }],
+];
+for (const [name, mutate] of invalidReviewClosures) {
+  test(`operator review closure rejects ${name} and keeps the contract visible`, async () => {
+    const source = reviewClosedContract(); mutate(source);
+    const before = structuredClone(source);
+    const h = harness({ contracts: [source], profiles: [hintProfile()] });
+    assert.equal(h.api.memberRegistrationReviewClosed(source), false);
+    const entry = registrationEntry({ contracts: [source] });
+    assert.equal(h.api.memberRegistrationOpenEntry(entry), entry);
+    const data = await h.load();
+    assert.equal(data.items.length, 1);
+    assert.equal(data.items[0].memberId, String(source.binding?.memberId || "10001"));
+    assert.notEqual(data.items[0].status, "completed");
+    assert.deepEqual(source, before);
+  });
+}
+
+test("out-of-studio or unbound contracts cannot establish an operator closure", async () => {
+  for (const mutate of [row => { row.studioId = "5331"; }, row => { delete row.binding; }]) {
+    const source = reviewClosedContract(); mutate(source);
+    const h = harness({ contracts: [source], profiles: [hintProfile()] });
+    assert.equal(h.api.memberRegistrationReviewClosed(source), false);
+    const entry = registrationEntry({ contracts: [source] });
+    assert.equal(h.api.memberRegistrationOpenEntry(entry), entry);
+    const withoutMarker = structuredClone(source);
+    delete withoutMarker.operatorReviewDisposition;
+    assert.deepEqual(plain(await h.load()), plain(await harness({ contracts: [withoutMarker], profiles: [hintProfile()] }).load()));
+  }
+});
+
+test("operator closure expires related hints, candidates and sends inclusively at their close time", () => {
+  const h = harness();
+  const first = reviewClosedContract();
+  first.operatorReviewDisposition.closedAt = OLD;
+  const last = reviewClosedContract();
+  last.id = last.contractId = last.binding.contractId = last.operatorReviewDisposition.contractId = "b".repeat(64);
+  const records = [OLD, CLOSED_AT, NEW].map(updatedAt => ({ contractId: last.contractId, updatedAt }));
+  const entry = registrationEntry({ contracts: [first, last], hints: records, candidates: records, sends: records });
+  const before = structuredClone(entry);
+  const open = h.api.memberRegistrationOpenEntry(entry);
+  assert.deepEqual(plain(open.contracts), []);
+  for (const field of ["hints", "candidates", "sends"]) assert.deepEqual(plain(open[field]), [records[2]], field);
+  assert.equal(open.profiles, entry.profiles);
+  assert.deepEqual(entry, before);
+  last.operatorReviewDisposition.closedAt = NOW;
+  assert.equal(h.api.memberRegistrationReviewClosed(last), true);
+});
+
+test("each item-time field can preserve genuinely new work after operator closure", () => {
+  const h = harness();
+  for (const field of ["updatedAt", "createdAt", "discoveredAt", "sourceDownloadedAt", "sentAt", "completion"]) {
+    const record = { contractId: "a".repeat(64), updatedAt: OLD, [field]: field === "completion" ? { checkedAt: NEW } : NEW };
+    const open = h.api.memberRegistrationOpenEntry(registrationEntry({ hints: [record], candidates: [record], sends: [record] }));
+    for (const collection of ["hints", "candidates", "sends"]) assert.deepEqual(plain(open[collection]), [record], `${collection}.${field}`);
+  }
+});
+
+test("operator closure leaves a different member's pending review unchanged", async () => {
+  const phone = "01000000002";
+  const other = contract({ id: "b".repeat(64), status: "review", welcomeCandidateId: undefined,
+    welcomeStatus: undefined, completion: undefined,
+    binding: { memberId: "10002", memberPhone: phone, userTicketId: "20002" } });
+  const options = { contracts: [other], profiles: [hintProfile(), hintProfile({ id: "10002", memberId: "10002", phone })] };
+  const baseline = plain(await harness(options).load());
+  const result = plain(await harness({ ...options, contracts: [reviewClosedContract(), other] }).load());
+  assert.deepEqual(result, baseline);
+  assert.equal(result.items[0].memberId, "10002");
+  assert.equal(result.items[0].status, "review");
+});
+
+test("a contract created after closure reappears as pending, never signed or completed", async () => {
+  const next = contract({ id: "b".repeat(64), status: "waiting", updatedAt: NEW,
+    completion: undefined, welcomeCandidateId: undefined, welcomeStatus: undefined });
+  const options = { contracts: [next], profiles: [hintProfile()] };
+  const baseline = plain(await harness(options).load());
+  const data = plain(await harness({ ...options, contracts: [reviewClosedContract(), next] }).load());
+  assert.deepEqual(data, baseline);
+  assert.equal(data.items[0].status, "active");
+  assert.equal(data.items[0].steps.find(step => step.name === "서명").status, "active");
+  assert.equal(data.counts.completed, 0);
+});
+
+test("a genuinely new hint reappears after closure while profile-only and old history stay absent", async () => {
+  const options = { contracts: [reviewClosedContract()], profiles: [hintProfile({ updatedAt: NEW })],
+    candidates: [candidate()], sends: [send()] };
+  assert.equal((await harness(options).load()).items.length, 0);
+  for (const discoveredAt of [OLD, CLOSED_AT]) {
+    assert.equal((await harness({ ...options, hints: [unverifiedHint({ contractId: "a".repeat(64), discoveredAt })] }).load()).items.length, 0);
+  }
+  const data = await harness({ ...options, hints: [unverifiedHint({ contractId: "a".repeat(64), discoveredAt: NEW })] }).load();
+  assert.equal(data.items.length, 1);
+  assert.equal(data.items[0].status, "observation");
+  assert.equal(data.items[0].steps.find(step => step.name === "계약서").status, "pending");
+});
+
+test("an older other active contract preserves its hints and welcome history despite a later closure", async () => {
+  const active = contract({ id: "c".repeat(64), status: "waiting", completion: undefined,
+    welcomeStatus: undefined, updatedAt: OLD });
+  const options = { contracts: [active], profiles: [hintProfile()], hints: [purchaseHint()],
+    candidates: [candidate()], sends: [send()] };
+  const h = harness(options);
+  const pending = contract({ ...active, welcomeCandidateId: undefined });
+  const pendingData = await harness({ contracts: [pending, reviewClosedContract()] }).load();
+  assert.equal(pendingData.items.length, 1);
+  assert.equal(pendingData.items[0].status, "active");
+  const entry = registrationEntry({ contracts: [active, reviewClosedContract()] });
+  const open = h.api.memberRegistrationOpenEntry(entry);
+  assert.deepEqual(plain(open.contracts), plain([active]));
+  for (const field of ["hints", "candidates", "sends"]) assert.equal(open[field], entry[field]);
+  const baseline = plain(await h.load());
+  const data = plain(await harness({ ...options, contracts: [active, reviewClosedContract()] }).load());
+  assert.deepEqual(data, baseline);
+  assert.equal(data.items[0].status, "review");
+  assert.equal(data.items[0].reason, welcomeReasons.history_time_limit);
+});
+
+test("closure suppresses old records only with an explicit matching identity or source reference", () => {
+  const h = harness();
+  for (const reference of [
+    { contractId: "a".repeat(64) }, { sourceContractId: "a".repeat(64) },
+    { binding: { contractId: "a".repeat(64) } },
+    { jobKey: "original-contract-job" }, { selectionJobKey: "original-contract-job" },
+    { memberId: "10001" }, { binding: { memberId: "10001" } }, { completion: { memberId: "10001" } },
+    { memberId: "10001", userTicketId: "20001" },
+  ]) {
+    const record = { updatedAt: OLD, ...reference };
+    const entry = registrationEntry({ hints: [record], candidates: [record], sends: [record] });
+    const before = structuredClone(entry);
+    const open = h.api.memberRegistrationOpenEntry(entry);
+    for (const field of ["hints", "candidates", "sends"]) assert.deepEqual(plain(open[field]), [], JSON.stringify(reference));
+    assert.deepEqual(entry, before);
+  }
+});
+
+const unrelatedClosureRecords = [
+  ["anonymous phone-only record", {}],
+  ["anonymous ticket-only record", { userTicketId: "20001" }],
+  ["different member", { memberId: "10002" }],
+  ["different bound member", { binding: { memberId: "10002" } }],
+  ["different completion member", { completion: { memberId: "10002" } }],
+  ["different member despite exact contract", { memberId: "10002", contractId: "a".repeat(64) }],
+  ["different ticket", { memberId: "10001", userTicketId: "20002" }],
+  ["different bound ticket", { memberId: "10001", binding: { userTicketId: "20002" } }],
+  ["different ticket despite exact contract", { contractId: "a".repeat(64), userTicketId: "20002" }],
+  ["different contract", { memberId: "10001", contractId: "b".repeat(64) }],
+  ["different source contract", { memberId: "10001", sourceContractId: "b".repeat(64) }],
+  ["different bound contract", { memberId: "10001", binding: { contractId: "b".repeat(64) } }],
+  ["different job", { memberId: "10001", jobKey: "other-contract-job" }],
+  ["different selection job", { memberId: "10001", selectionJobKey: "other-contract-job" }],
+  ["ambiguous names despite exact member", { memberId: "10001", ambiguousNames: true }],
+  ["ambiguous names despite exact contract", { contractId: "a".repeat(64), ambiguousNames: true }],
+];
+for (const [name, reference] of unrelatedClosureRecords) {
+  test(`operator closure preserves ${name} in the same phone group`, () => {
+    const record = { memberPhone: PHONE, updatedAt: OLD, ...reference };
+    const entry = registrationEntry({ hints: [record], candidates: [record], sends: [record] });
+    const before = structuredClone(entry);
+    const open = harness().api.memberRegistrationOpenEntry(entry);
+    for (const field of ["hints", "candidates", "sends"]) assert.deepEqual(plain(open[field]), [record], field);
+    assert.deepEqual(entry, before);
+  });
+}
+
+test("same-phone other member's failed welcome remains visible without another open contract", async () => {
+  const options = { contracts: [], profiles: [hintProfile({ id: "10002", memberId: "10002" })],
+    candidates: [candidate({ memberId: "10002" })], sends: [send({ memberId: "10002" })] };
+  const baseline = plain(await harness(options).load());
+  const data = plain(await harness({ ...options, contracts: [reviewClosedContract()] }).load());
+  assert.deepEqual(data, baseline);
+  assert.equal(data.items.length, 1);
+  assert.equal(data.items[0].memberId, "10002");
+  assert.equal(data.items[0].status, "review");
+  assert.equal(data.items[0].reason, welcomeReasons.history_time_limit);
+});
+
+test("anonymous old hint remains an observation after same-phone contract closure", async () => {
+  const options = { contracts: [], profiles: [hintProfile()], hints: [unverifiedHint()] };
+  const baseline = plain(await harness(options).load());
+  const data = plain(await harness({ ...options, contracts: [reviewClosedContract()] }).load());
+  assert.deepEqual(data, baseline);
+  assert.equal(data.items.length, 1);
+  assert.equal(data.items[0].status, "observation");
+});
+
+test("a legacy hint's exact recovery receipt connects only its own closed contract", async () => {
+  const receipt = { type: "dispatch_accepted_not_all_signed", signatureCompletion: "not_asserted",
+    contractId: "a".repeat(64), memberId: "10001", userTicketId: "20001", jobId: "original-contract-job" };
+  const hint = unverifiedHint({ status: "review", reason: "official_seal_outcome_unknown",
+    signatureMaintenanceRecoveryClosure: receipt });
+  const options = { contracts: [reviewClosedContract()], hints: [hint], profiles: [hintProfile()] };
+  assert.equal((await harness(options).load()).counts.review, 0);
+  for (const field of Object.keys(receipt)) {
+    const changed = { ...hint, signatureMaintenanceRecoveryClosure: { ...receipt, [field]: "mismatch" } };
+    assert.equal((await harness({ ...options, hints: [changed] }).load()).counts.review, 1, field);
+  }
+  for (const extra of [{ memberId: "10002" }, { userTicketId: "20002" }, { contractId: "b".repeat(64) },
+    { jobKey: "other-job" }, { ambiguousNames: true }, { discoveredAt: NEW }]) {
+    assert.equal((await harness({ ...options, hints: [{ ...hint, ...extra }] }).load()).counts.review, 1, JSON.stringify(extra));
+  }
+});
+
+test("a later unrelated closure cannot suppress work newer than its own referenced closure", () => {
+  const first = reviewClosedContract();
+  first.operatorReviewDisposition.closedAt = OLD;
+  const second = reviewClosedContract();
+  second.id = second.contractId = second.binding.contractId = second.operatorReviewDisposition.contractId = "b".repeat(64);
+  second.binding.selectionJobKey = "later-contract-job";
+  for (const reference of [{ contractId: first.contractId }, { sourceContractId: first.contractId },
+    { binding: { contractId: first.contractId } }, { jobKey: first.binding.selectionJobKey },
+    { selectionJobKey: first.binding.selectionJobKey }]) {
+    const record = { updatedAt: CLOSED_AT, ...reference };
+    const entry = registrationEntry({ contracts: [first, second], hints: [record], candidates: [record], sends: [record] });
+    const open = harness().api.memberRegistrationOpenEntry(entry);
+    for (const field of ["hints", "candidates", "sends"]) assert.deepEqual(plain(open[field]), [record], JSON.stringify(reference));
   }
 });

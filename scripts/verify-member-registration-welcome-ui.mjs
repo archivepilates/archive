@@ -38,6 +38,17 @@ contracts.push({id:legacyId,contractId:legacyId,schemaVersion:1,source:"studioma
   welcomeDisposition:{verified:true,source:"studiomate_native_member_ticket",reason:"legacy_member_before_contract_cutover",
     memberId:"10099",contractId:legacyId,registeredAt:"2024-01-01T00:00:00.000Z",cutoverAt:"2026-09-23T03:50:35.295Z",
     checkedAt:old,priorRegularIssuanceIds:["100"]}});
+for (let index = 0; index < 2; index += 1) {
+  const contractId = createHash("sha256").update(`synthetic-closed-review-${index}`).digest("hex");
+  const memberId = String(11001 + index), userTicketId = String(21001 + index);
+  contracts.push({ id: contractId, contractId, schemaVersion: 1, source: "studiomate_native_contract", studioId: "5330",
+    bindingVerified: true, memberName: `합성 검토제외 ${index + 1}`, status: "excluded", observationStatus: "excluded",
+    observationHold: true, welcomeStatus: "review", updatedAt: old,
+    binding: { verified: true, studioId: "5330", contractId, memberId, userTicketId, memberPhone: `0108888000${index}` },
+    operatorReviewDisposition: { schemaVersion: 1, policy: "operator_contract_review_closed_v1", status: "excluded",
+      contractId, memberId, userTicketId, closedAt: "2026-10-21T07:00:00.000Z", approvalReference: "synthetic_operator_close",
+      noReplay: true, sendAllowed: false } });
+}
 const fixtures = { memberProfiles: [], studiomateMembershipContracts: contracts,
   alimtalkCandidates: [...unrelated, ...candidates], alimtalkSends: [...unrelated, ...sends] };
 const report = { scope: "Synthetic read-only browser QA; no real auth, production data, delivery proof or writes.",
@@ -79,7 +90,7 @@ try {
     .replace('<script src="../firebase-config.js"></script>', "");
   assets.set("/core/member-registration/", { type: "text/html", body: html });
   assets.set("/core/assets/app.js", { type: "text/javascript", body });
-  for (const file of ["core/assets/styles.css", "core/assets/interface.css", "core/icons/archive-pilates-icon-192.png"]) {
+  for (const file of ["core/assets/styles.css", "core/assets/interface.css", "core/assets/studiomate-referral-intake.css", "core/icons/archive-pilates-icon-192.png"]) {
     assets.set(`/${file}`, { type: file.endsWith("css") ? "text/css" : "image/png", body: await fs.readFile(path.join(root, file)) });
   }
   for (const file of ["core/assets/app.js", "core/member-registration/index.html", "core/assets/styles.css", "core/assets/interface.css"]) {
@@ -137,13 +148,14 @@ try {
         const dashboard = await window.__welcomeQA.run(runtime);
         return { queries, exactReads, counts: dashboard.counts };
       }, fixtures);
-      assert.deepEqual(readback.counts, { recent: codes.length + 2, active: 0, review: codes.length, completed: 2 });
+      assert.deepEqual(readback.counts, { recent: codes.length + 2, active: 0, review: codes.length, completed: 2, observation: 0 });
       assert.equal(readback.exactReads.length, (codes.length + 1) * 2);
       for (const path of ["alimtalkCandidates", "alimtalkSends"]) {
         const query = readback.queries.find((query) => query.path === path);
         assert.equal(query.count, 250); assert.equal(query.unrelatedOnly, true);
       }
       const main = page.getByRole("main"), articles = main.getByRole("article");
+      assert.equal(await main.getByRole("link", { name: /합성 검토제외/ }).count(), 0);
       const proof = [];
       for (let index = 0; index < codes.length; index += 1) {
         const row = articles.filter({ has: page.getByRole("link", { name: `합성 실패회원 ${index + 1}`, exact: true }) });

@@ -279,6 +279,12 @@ export function firestoreJournal(db, recoveryApproval = null, now = Date.now) {
         const snap = await tx.get(ref);
         if (snap.exists) {
           const data = snap.data();
+          const closed = data.operatorReviewDisposition;
+          if (closed?.schemaVersion === 1 && closed.policy === "operator_contract_review_closed_v1" &&
+            closed.status === "excluded" && closed.noReplay === true && closed.sendAllowed === false &&
+            /^[a-f0-9]{64}$/.test(data.contractId || "") && closed.contractId === data.contractId &&
+            closed.memberId === data.memberId && closed.userTicketId === data.userTicketId)
+            return { status: "rejected", reason: "operator_contract_review_closed" };
           // An accepted or ambiguous operator send remains terminal even after its signing link expires.
           if (data.operatorDraftSignatureRequest) return { status: "rejected", reason: "operator_signature_claim_no_replay" };
           if (data.payloadHash !== payloadHash)

@@ -8022,6 +8022,50 @@ function memberRegistrationLatest(items = []) {
   return [...items].sort((a, b) => memberRegistrationItemTime(b) - memberRegistrationItemTime(a))[0] || null;
 }
 
+function memberRegistrationReviewClosed(source) {
+  const disposition = source?.operatorReviewDisposition;
+  const binding = source?.binding;
+  const closedAt = timestampMs(disposition?.closedAt);
+  return source?.schemaVersion === 1 && source.source === "studiomate_native_contract" &&
+    source.studioId === "5330" && source.bindingVerified === true && binding?.verified === true &&
+    source.status === "excluded" && source.observationStatus === "excluded" && source.observationHold === true &&
+    /^[a-f0-9]{64}$/.test(source.contractId || "") && binding.contractId === source.contractId &&
+    binding.studioId === source.studioId &&
+    [binding.memberId, binding.userTicketId].every(value => typeof value === "string" && /^[1-9]\d{0,63}$/.test(value)) &&
+    disposition?.schemaVersion === 1 && disposition.policy === "operator_contract_review_closed_v1" &&
+    disposition.status === "excluded" && disposition.contractId === source.contractId &&
+    disposition.memberId === binding.memberId && disposition.userTicketId === binding.userTicketId &&
+    disposition.noReplay === true && disposition.sendAllowed === false &&
+    typeof disposition.approvalReference === "string" && disposition.approvalReference.trim().length > 0 &&
+    closedAt > 0 && closedAt <= Date.now();
+}
+
+function memberRegistrationOpenEntry(entry) {
+  const closed = entry.contracts.filter(memberRegistrationReviewClosed);
+  if (!closed.length) return entry;
+  const contracts = entry.contracts.filter(contract => !memberRegistrationReviewClosed(contract));
+  if (contracts.length) return { ...entry, contracts };
+  const remainsOpen = record => !closed.some(contract => {
+    if (record.ambiguousNames === true ||
+      memberRegistrationItemTime(record) > timestampMs(contract.operatorReviewDisposition.closedAt)) return false;
+    const binding = contract.binding;
+    const memberId = record.memberId || record.binding?.memberId || record.completion?.memberId;
+    const ticketId = record.userTicketId || record.binding?.userTicketId;
+    if ((memberId && memberId !== binding.memberId) || (ticketId && ticketId !== binding.userTicketId)) return false;
+    const contractId = record.contractId || record.binding?.contractId || record.sourceContractId;
+    if (contractId) return contractId === contract.contractId;
+    const jobKey = record.jobKey || record.selectionJobKey;
+    if (jobKey) return jobKey === binding.selectionJobKey;
+    const recovery = record.signatureMaintenanceRecoveryClosure;
+    if (recovery?.type === "dispatch_accepted_not_all_signed" && recovery.signatureCompletion === "not_asserted" &&
+      recovery.contractId === contract.contractId && recovery.memberId === binding.memberId &&
+      recovery.userTicketId === binding.userTicketId && recovery.jobId === binding.selectionJobKey) return true;
+    return memberId === binding.memberId;
+  });
+  return { ...entry, contracts, hints: entry.hints.filter(remainsOpen),
+    candidates: entry.candidates.filter(remainsOpen), sends: entry.sends.filter(remainsOpen) };
+}
+
 function memberRegistrationExcludedProductTitle(value) {
   const title = typeof value === "string" ? value.normalize("NFKC").replace(/\s+/g, "").toLowerCase() : "";
   return /야외|outdoor|체험|(?:^|[^\d주])1회권/.test(title);
@@ -8240,7 +8284,8 @@ async function loadMemberRegistrationDashboard(runtime) {
   }
 
   const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
-  const items = [...groups.values()].map((entry) => {
+  const items = [...groups.values()].map((storedEntry) => {
+    const entry = memberRegistrationOpenEntry(storedEntry);
     const profile = preferredMemberRegistrationProfile(entry.profiles);
     const hint = memberRegistrationLatest(entry.hints);
     const contract = memberRegistrationLatest(entry.contracts);
