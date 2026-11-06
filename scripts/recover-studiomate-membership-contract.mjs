@@ -12,6 +12,7 @@ import { buildStudioMateJoinContractPayload, executeStudioMateMembershipContract
 import { firestoreJournal, persistStudioMateMembershipContractSource } from "./lib/studiomate-membership-contract-processor.mjs";
 import { verifyStudioMateOfficialSeal } from "./lib/studiomate-membership-contract-seal.mjs";
 import { CONTRACT_SEAL_UPLOAD_POLICY } from "./lib/studiomate-contract-seal-upload.mjs";
+import { validateContractCreationVerification } from "./lib/studiomate-contract-creation-proof.mjs";
 
 // Explicit operator recovery only; never invoked by a scheduler or the Excel runner.
 const args = process.argv.slice(2);
@@ -38,6 +39,8 @@ try {
     !config.sourcePromoted || !config.nativeE2eVerified) throw new Error("Contract writer not enabled/promoted");
   if (config.sealUploadVerification?.policy !== CONTRACT_SEAL_UPLOAD_POLICY ||
     config.sealUploadVerification?.status !== "verified") throw new Error("contract_seal_upload_e2e_required");
+  if (!validateContractCreationVerification(config.contractCreationVerification))
+    throw new Error("contract_creation_e2e_required");
   const authorizeDispatch = async () => {
     const current = (await db.doc("systemSettings/membershipContractAutomation").get()).data();
     if (JSON.stringify(current) !== JSON.stringify(config))

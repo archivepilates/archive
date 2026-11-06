@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { firestoreJournal } from "./studiomate-membership-contract-processor.mjs";
+import { normalizeContractDetail } from "./studiomate-native-contract-source.mjs";
 import {
   buildStudioMateSignatureRequestPayload,
   buildStudioMateJoinContractPayload,
@@ -545,7 +546,7 @@ function nativeContract(input, status, { centerSignaturePresent = true } = {}) {
           }
         : null,
     field_values: {
-      basic: { required: { name: input.member.name, mobile: input.member.phone } },
+      basic: { required: { ...payload.basic.required } },
       join_user_tickets: [{ required: { ...requiredTicket } }],
     },
     term: payload.terms.map((term) => ({ ...term })),
@@ -1189,6 +1190,124 @@ test("readback rejects a different or missing issuance with otherwise identical 
       { ok: false, reason: "contract_ticket_mismatch", detail: null },
     );
   }
+});
+
+test("raw readback requires every expected basic profile field without relaxing input policy", async t => {
+  const input = fixture();
+  const payload = buildStudioMateJoinContractPayload(input);
+  for (const key of Object.keys(payload.basic.required)) {
+    for (const missing of [false, true]) await t.test(`${key}_${missing ? "missing" : "changed"}`, () => {
+      const raw = nativeContract(input, "draft");
+      if (missing) delete raw.field_values.basic.required[key];
+      else raw.field_values.basic.required[key] = "different";
+      assert.equal(validateCreatedContractReadback(raw, input.selection, payload, CONTRACT_ID).ok, false);
+    });
+  }
+  for (const gender of [undefined, ""]) {
+    assert.throws(() => buildStudioMateJoinContractPayload({ ...input, member: { ...input.member, gender } }),
+      /Member identity is incomplete/);
+  }
+});
+
+test("raw readback rejects changed or missing counts and payment components", async t => {
+  const input = fixture();
+  const payload = buildStudioMateJoinContractPayload(input);
+  for (const key of ["max_coupon", "remaining_coupon", "max_cancel", "card_amount", "installment",
+    "installment_period", "cash_amount", "wiretransfer_amount", "point_amount", "amount", "unpaid_amount"]) {
+    for (const missing of [false, true]) await t.test(`${key}_${missing ? "missing" : "changed"}`, () => {
+      const raw = nativeContract(input, "draft");
+      const required = raw.field_values.join_user_tickets[0].required;
+      if (missing) delete required[key];
+      else required[key] += 1;
+      assert.deepEqual(validateCreatedContractReadback(raw, input.selection, payload, CONTRACT_ID),
+        { ok: false, reason: "contract_ticket_mismatch", detail: null });
+    });
+  }
+  const split = nativeContract(input, "draft");
+  split.field_values.join_user_tickets[0].required.card_amount -= 1;
+  split.field_values.join_user_tickets[0].required.cash_amount += 1;
+  assert.equal(validateCreatedContractReadback(split, input.selection, payload, CONTRACT_ID).ok, false);
+  for (const tickets of [undefined, [], [split.field_values.join_user_tickets[0], split.field_values.join_user_tickets[0]]]) {
+    const raw = nativeContract(input, "draft");
+    raw.field_values.join_user_tickets = tickets;
+    assert.equal(validateCreatedContractReadback(raw, input.selection, payload, CONTRACT_ID).ok, false);
+  }
+});
+
+test("raw readback requires exact terms and explicit unchecked draft consent", async t => {
+  const input = fixture();
+  const payload = buildStudioMateJoinContractPayload(input);
+  const mutations = {
+    title: raw => { raw.term[0].title += " changed"; },
+    contents: raw => { raw.term[0].contents += " changed"; },
+    agree_type: raw => { raw.term[0].agree_type = "S"; },
+    missing_contents: raw => { delete raw.term[0].contents; },
+    agreed: raw => { raw.term[0].is_agree = true; },
+    missing_consent: raw => { delete raw.term[0].is_agree; },
+    invalid_consent: raw => { raw.term[0].is_agree = 0; },
+    missing_terms: raw => { delete raw.term; },
+    missing_term: raw => { raw.term.pop(); },
+    extra_term: raw => { raw.term.push({ ...raw.term[0] }); },
+    reordered_terms: raw => { raw.term.reverse(); },
+  };
+  for (const [name, mutate] of Object.entries(mutations)) await t.test(name, () => {
+    const raw = nativeContract(input, "draft");
+    mutate(raw);
+    assert.deepEqual(validateCreatedContractReadback(raw, input.selection, payload, CONTRACT_ID),
+      { ok: false, reason: "contract_terms_mismatch", detail: null });
+  });
+  for (const status of ["waiting", "complete"]) {
+    const raw = nativeContract(input, status);
+    raw.term.forEach(term => { term.is_agree = true; });
+    assert.equal(validateCreatedContractReadback(raw, input.selection, payload, CONTRACT_ID).ok, true);
+    raw.term[0].contents += " changed";
+    assert.equal(validateCreatedContractReadback(raw, input.selection, payload, CONTRACT_ID).ok, false);
+  }
+});
+
+test("normalized unsigned readback cannot bypass raw checks; legacy signed readback remains valid", () => {
+  const input = fixture();
+  const payload = buildStudioMateJoinContractPayload(input);
+  for (const status of ["draft", "waiting", "complete"]) {
+    const detail = normalizeContractDetail(nativeContract(input, status));
+    const result = validateCreatedContractReadback(detail, input.selection, payload, CONTRACT_ID);
+    assert.equal(result.ok, status === "complete");
+    if (!result.ok) assert.equal(result.reason, "contract_raw_readback_required");
+  }
+});
+
+test("resumed draft content mismatches stop before seal, signature preparation or message writes", async t => {
+  for (const action of Object.keys(MEMBERSHIP_CONTRACT_TEMPLATES)) {
+    for (const field of ["profile", "term", "payment"]) await t.test(`${action}_${field}`, async () => {
+      const input = fixture(action);
+      const raw = nativeContract(input, "draft", { centerSignaturePresent: false });
+      if (field === "profile") raw.field_values.basic.required.birthday = "1999-01-02";
+      if (field === "term") raw.term[0].contents += " changed";
+      if (field === "payment") raw.field_values.join_user_tickets[0].required.point_amount += 1;
+      const result = await executeStudioMateMembershipContract({ ...input,
+        api: { get: async () => raw, post: () => assert.fail("mismatch must not POST") },
+        sealUploader: () => assert.fail("mismatch must not upload a seal"),
+        journal: { claim: async ({ payloadHash }) => ({ status: "resume", stage: "created",
+          contractId: CONTRACT_ID, payloadHash }), stage: async (_key, stage) => assert.equal(stage, "review") },
+      });
+      assert.equal(result.status, "review");
+      assert.equal(result.reason, field === "profile" ? "contract_basic_profile_mismatch" :
+        field === "term" ? "contract_terms_mismatch" : "contract_ticket_mismatch");
+    });
+  }
+});
+
+test("resumed signed contracts accept member consent without replaying any write", async () => {
+  const input = fixture();
+  const raw = nativeContract(input, "complete");
+  raw.term.forEach(term => { term.is_agree = true; });
+  const result = await executeStudioMateMembershipContract({ ...input,
+    api: { get: async () => raw, post: () => assert.fail("signed resume must not POST") },
+    journal: { claim: async ({ payloadHash }) => ({ status: "resume", stage: "attempting_signature_message",
+      contractId: CONTRACT_ID, payloadHash }), stage: async (_key, stage) => assert.equal(stage, "signature_requested") },
+  });
+  assert.equal(result.status, "signed");
+  assert.equal(result.reason, "member_already_signed");
 });
 
 test("signature request readback requires both sent state and retained center seal", async () => {

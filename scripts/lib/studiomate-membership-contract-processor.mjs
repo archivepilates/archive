@@ -16,6 +16,7 @@ import { selectNativeMembershipContractCandidate } from "./studiomate-membership
 import { signatureMaintenanceRecovery, signatureRecoverySelectionPolicy } from "./studiomate-membership-contract-maintenance-recovery.mjs";
 import { CONTRACT_SEAL_UPLOAD_POLICY } from "./studiomate-contract-seal-upload.mjs";
 import { isContractDiagnostic } from "./studiomate-contract-diagnostics.mjs";
+import { validateContractCreationVerification } from "./studiomate-contract-creation-proof.mjs";
 import {
   executeStudioMateMembershipContract,
   buildStudioMateSignatureRequestPayload,
@@ -68,6 +69,8 @@ export async function runStudioMateMembershipContractCandidates({
   if (config?.sealUploadVerification?.policy !== CONTRACT_SEAL_UPLOAD_POLICY ||
     config?.sealUploadVerification?.status !== "verified")
     return { ...result, status: "review", reason: "contract_seal_upload_e2e_required" };
+  if (!validateContractCreationVerification(config?.contractCreationVerification, { now: now() }))
+    return { ...result, status: "review", reason: "contract_creation_e2e_required" };
   if (
     !Array.isArray(discovery?.candidateFingerprints) ||
     !discovery.candidateFingerprints.length ||
@@ -198,7 +201,10 @@ export async function runStudioMateMembershipContractCandidates({
             if (current?.contractWriterEnabled !== true || current?.mode !== "live" ||
               current?.sourcePromoted !== true || current?.nativeE2eVerified !== true || current?.studioId !== "5330" ||
               current?.sealUploadVerification?.policy !== CONTRACT_SEAL_UPLOAD_POLICY ||
-              current?.sealUploadVerification?.status !== "verified") throw new Error("writer_paused");
+              current?.sealUploadVerification?.status !== "verified" ||
+              !validateContractCreationVerification(current?.contractCreationVerification, { now: now() }) ||
+              JSON.stringify(current.contractCreationVerification) !== JSON.stringify(config.contractCreationVerification))
+              throw new Error("writer_paused");
             if (!recovery) {
               if (current.signatureMaintenanceRecovery && current.signatureMaintenanceRecovery.status !== "completed")
                 throw new Error("recovery_unclosed");

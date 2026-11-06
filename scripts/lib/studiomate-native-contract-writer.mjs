@@ -189,21 +189,47 @@ export function validateCreatedContractReadback(raw, selection, payload, contrac
             ? "contract_template_mismatch"
             : detail.memberPhone !== selection.memberPhone
               ? "contract_recipient_mismatch"
-              : !detail.ticket ||
-                  detail.ticket.userTicketId !== String(expectedTicket.user_ticket_id) ||
-                  detail.ticket.productId !== String(expectedTicket.ticket_id) ||
-                  detail.ticket.title !== expectedTicket.title ||
-                  detail.ticket.availabilityStartAt !== expectedTicket.availability_start_at ||
-                  detail.ticket.expireAt !== expectedTicket.expire_at ||
-                  detail.ticket.amount !== expectedTicket.amount ||
-                  detail.ticket.unpaidAmount !== expectedTicket.unpaid_amount
-                ? "contract_ticket_mismatch"
-                : !["draft", "sent", "signed"].includes(detail.status)
-                  ? "unexpected_contract_status"
-                  : "";
+              : detail.memberName !== payload.basic.required.name
+                ? "contract_member_name_mismatch"
+                : !detail.ticket ||
+                    detail.ticket.userTicketId !== String(expectedTicket.user_ticket_id) ||
+                    detail.ticket.productId !== String(expectedTicket.ticket_id) ||
+                    detail.ticket.title !== expectedTicket.title ||
+                    detail.ticket.availabilityStartAt !== expectedTicket.availability_start_at ||
+                    detail.ticket.expireAt !== expectedTicket.expire_at ||
+                    detail.ticket.amount !== expectedTicket.amount ||
+                    detail.ticket.unpaidAmount !== expectedTicket.unpaid_amount
+                  ? "contract_ticket_mismatch"
+                  : !["draft", "sent", "signed"].includes(detail.status)
+                    ? "unexpected_contract_status"
+                    : rawContractContentIssue(raw, payload, detail.status);
   return issue
     ? { ok: false, reason: issue, detail: null }
     : { ok: true, reason: "exact_contract_readback", detail };
+}
+
+function rawContractContentIssue(raw, payload, status) {
+  // Normalized records omit fields needed before a send; retain legacy signed readback.
+  if (raw?.source === "studiomate_native_contract")
+    return status === "signed" ? "" : "contract_raw_readback_required";
+  const required = raw?.field_values?.basic?.required;
+  if (!required || Object.entries(payload.basic.required).some(([key, value]) =>
+    required[key] !== value)) return "contract_basic_profile_mismatch";
+
+  const tickets = raw?.field_values?.join_user_tickets;
+  const purchaseFields = ["max_coupon", "remaining_coupon", "max_cancel", "card_amount",
+    "installment", "installment_period", "cash_amount", "wiretransfer_amount", "point_amount",
+    "amount", "unpaid_amount"];
+  if (!Array.isArray(tickets) || tickets.length !== payload.join_user_tickets.length ||
+    tickets.some((ticket, index) => !ticket?.required ||
+      purchaseFields.some(key => ticket.required[key] !== payload.join_user_tickets[index].required[key])))
+    return "contract_ticket_mismatch";
+
+  if (!Array.isArray(raw.term) || raw.term.length !== payload.terms.length ||
+    raw.term.some((term, index) => !term ||
+      ["title", "contents", "agree_type"].some(key => term[key] !== payload.terms[index][key]) ||
+      (status === "draft" && term.is_agree !== false))) return "contract_terms_mismatch";
+  return "";
 }
 
 /**
