@@ -14,7 +14,7 @@
 - The exact five October recovery jobs have independently checked full accepted single-attempt/no-replay native receipts. Four canonical records are signed; the remaining exact native contract is unsigned with an expired request. This task did not re-request it.
 - Main applied `close-membership-contract-recovery.mjs` once after a read-only plan and synthetic tests. Transactional CAS protected settings, five jobs, five contracts and five hints. It closed only the expired batch approval and attached supplemental hint closure metadata. Writer remains disabled; source jobs/contracts and hint status/reason are unchanged. It asserts dispatch acceptance, not completion of every member signature.
 - Private closure plan hash: `4b187f02ee091e0167bc4bb76e432fb102cef8ad2c8a3b661304c27645b2fb55`.
-- Positive live E2E for the replacement seal path is pending. Asked permission for a separate operator test draft with no signature message; no response or test creation is recorded yet. Do not enable the writer based on synthetic tests alone.
+- Positive live E2E for the replacement seal path is pending. User approved one separate operator test draft without notification in `call_64f3eb816a6c4e938fcf5fe7ec0f4431`. The follow-up attempt and unresolved outcome are recorded below; do not enable the writer based on synthetic tests or approval alone.
 
 ## 202610 settlement recovery
 
@@ -47,7 +47,19 @@
 - Existing health run `health_202611061119_quick` resolved the exact old settlement finding and Codex queue item `health_2d4e7c01de2ef1f1c5e7d8c31550` through completed-source evidence. Independent document reads confirmed both statuses `resolved`; no manual status reset.
 - Final health run `health_202611061122_quick` recognized 202610 `final_present` and no CI finding. Its only remaining finding is the contract writer lane, referencing the prior natural hourly report at `2026-11-06T02:08:57.760Z`. Current settings independently show old recovery `completed`, accepted count 5, writer still false. This is not full-system healthy; no manual sync or scheduler was added to refresh the report.
 - All main/test/agent-owned browser contexts, local test servers and tracked browser processes were closed; user tabs and production sessions were preserved. No member message, contract re-request, payment or instructor distribution occurred.
-- Remaining blocker: permission and positive evidence for the separately proposed operator test draft. The new route is implemented/released and synthetically verified, but actual seal storage and automatic writer reactivation are not complete. The unsigned expired member contract remains review-only and was not resent.
+- Remaining blocker: positive evidence for the separately approved operator test draft. The new route is implemented/released and synthetically verified, but actual seal storage and automatic writer reactivation are not complete. The unsigned expired member contract remains review-only and was not resent.
+
+## Approved canary follow-up
+
+- User allowed exactly one new operator test contract, no change to existing contracts, purchases or passes, no member consent/signature, no signature invitation. Approval did not authorize replaying an uncertain creation or reactivating the global writer without positive storage evidence.
+- Fresh native identity search was unique. Current ticket and all-time contract history were read independently. The operator test pass has no verified payment source, so the ordinary commercial candidate rules were not relaxed or marked verified. A separate canary fixture used the display values of an existing operator test document, not a new purchase or payment decision; terms remained unchecked.
+- At `2026-11-06T04:36:31.088Z`, one private pretransport create intent was persisted before the single native contract-create request. No successful creation response/ID was retained. The one-off harness recorded a sanitized generic exception but omitted typed HTTP/transport details, so the failure cause is not established and must not be retroactively called a provider rejection. The consumed intent remains `needs_review` with no-replay and max-create-attempt guards intact.
+- No seal reservation, image upload, finalization, signature request or member message was invoked. No new route E2E proof or global writer-setting mutation was made.
+- Read-only reconciliation at `2026-11-06T04:42:46.633Z` verified unchanged member/profile hash, unchanged pass-list hash and all three original contract hashes. Complete native history remained three records, zero new canaries and zero unplanned contract records. Current absence is recorded as a readback observation, not proof that the original transport never dispatched.
+- The already-existing unsigned test draft also has a center seal; it was only read, not overwritten as an alternative test. No second create, latch reset, contract deletion or blind replay occurred.
+- Requested a user-saved, explicitly identified new test draft with no signature request as the next safe input. A positive result is still pending. Private helper/intent/reconciliation remain under `~/ArchiveIN/operations/contract-seal-canary-20261106/`, outside Git, without tokens or presigned URLs.
+- Published CORE rules already state that actual storage verification is pending and the writer is paused. That rule and production settings did not change, so this documentation-only follow-up does not need a new Hosting/Functions release.
+- Internal attention report was accepted by home-account Gmail as message `1a1af2c814f9f0d7` with the domain/status labels applied. The first local mail invocation rejected a non-digest event ID before authentication or transport; it was corrected to a stable SHA-256 event ID, not replayed after an accepted send.
 
 ## Private evidence
 
