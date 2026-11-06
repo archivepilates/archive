@@ -80,7 +80,8 @@ jobs:
       - run: npm audit --omit=dev
         working-directory: services/archive-core-mcp
   rules-ui:
-    runs-on: ubuntu-latest
+    # Match the Linux image supported by the lockfile's Playwright version.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:

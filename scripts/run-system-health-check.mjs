@@ -477,7 +477,7 @@ async function checkLaunchAgents() {
     const settlement = item.id === "monthly-settlement-statements" ? monthlySettlementArtifacts(HOME, now) : null;
     // Legacy unkeyed findings include their title/cause in the durable identity.
     const findingTitle = settlement ? "Monthly settlement statements" : item.title;
-    const checkKey = item.syncEvidence ? `sync:${item.id}` : "";
+    const checkKey = item.syncEvidence ? `sync:${item.id}` : settlement ? "settlement:monthly-statements" : "";
     if (checkKey) {
       completedChecks.add(checkKey);
       completedChecks.add(`${checkKey}:availability`);
@@ -503,6 +503,14 @@ async function checkLaunchAgents() {
       launchState.runs > 0 &&
       launchState.lastExitCode !== null &&
       launchState.lastExitCode !== 0));
+    if (settlement?.finalExists && !stale && !missingEvidence && !executionFailed) {
+      // Resolve only the exact observed month's readable artifacts, never unrelated historical alerts.
+      try {
+        if (!readFileSync(settlement.finalPath).length) throw new Error("empty_settlement_index");
+        completedChecks.add(settlement.finalPath);
+        if (settlement.reviewExists && readFileSync(settlement.reviewPath).length) completedChecks.add(settlement.reviewPath);
+      } catch { /* Unreadable sources cannot close a prior finding. */ }
+    }
     const contractIssues = pipeline?.contractIssues || [];
     const staffEmploymentIssues = pipeline?.staffEmploymentIssues || [];
     if (pipeline) {

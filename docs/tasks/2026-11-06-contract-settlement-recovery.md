@@ -33,6 +33,8 @@
 - Settlement/closure tests include synthetic success, source drift, wrong links/identity, partial publication, concurrent destinations and retained unknown intents.
 - CORE operating rules updated in the existing contract, health and settlement records. Functions source/config is unchanged.
 - Runtime integration, scoped CORE Hosting publication, CI and fresh health evidence remain pending until the release section is appended. No positive live seal test or automatic-writer reactivation should be inferred from a code release.
+- First source CI run found an independent runner drift: CORE rules UI browser installation selected unsupported `ubuntu26.04-x64` with lockfile Playwright 1.59.1. Pin only the browser-test job to `ubuntu-24.04`; do not change app dependencies or widen permissions. The security job and all existing tests remain enabled. Official platform reference: https://playwright.dev/docs/intro#system-requirements and https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job .
+- Initial post-release health run `health_202611061114_quick` independently recognized final 202610 artifacts, but its older unkeyed settlement finding/queue item remained open. Added an exact legacy-title mapping plus nonempty same-month completed-source requirements; other titles, missing references, prior months and active failures remain unresolved. 34 health-state tests pass; no direct status reset is used.
 
 ## Private evidence
 
