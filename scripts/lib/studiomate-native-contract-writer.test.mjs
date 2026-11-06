@@ -12,7 +12,81 @@ import {
 
 const CONTRACT_ID = "c".repeat(64);
 const dayClock = () => Date.parse("2026-10-22T01:00:00.000Z");
-const executeStudioMateMembershipContract = input => executeWithClock({ now: dayClock, ...input });
+const executeStudioMateMembershipContract = input => executeWithClock({ now: dayClock,
+  authorizeDispatch: async () => {},
+  sealVerifier: async () => ({ sha256: "a".repeat(64), mimeType: "image/png", path: "/synthetic/seal.png", bytes: 1 }),
+  ...input, api: { get: () => assert.fail("unexpected GET"), post: () => assert.fail("unexpected POST"),
+    patch: () => assert.fail("unexpected PATCH"), ...input.api } });
+
+test("invalid seal and unsupported transport stop before any new contract claim", async () => {
+  const input = fixture();
+  await assert.rejects(executeWithClock({ ...input, now: dayClock,
+    authorizeDispatch: async () => {},
+    sealVerifier: async () => { throw new Error("seal_invalid"); },
+    journal: { claim: () => assert.fail("no claim") } }), /seal_invalid/);
+  await assert.rejects(executeWithClock({ ...input, now: dayClock,
+    authorizeDispatch: async () => {},
+    sealVerifier: async () => ({}), api: { get() {}, post() {} },
+    journal: { claim: () => assert.fail("no claim") } }), /preflight_required/);
+});
+
+test("missing live authorization stops every legacy entrypoint before claiming", async () => {
+  await assert.rejects(executeWithClock({ ...fixture(), now: dayClock,
+    journal: { claim: () => assert.fail("no claim") }, api: { post: () => assert.fail("no POST") } }),
+  /contract_live_authorization_required/);
+});
+
+test("operator signature claims block replay regardless of expired or stale job stage", async () => {
+  const input = fixture();
+  const payloadHash = createHash("sha256").update(JSON.stringify(buildStudioMateJoinContractPayload(input))).digest("hex");
+  for (const status of ["accepted", "unknown", "attempting"]) {
+    const saved = { payloadHash, stage: "review", contractId: CONTRACT_ID,
+      operatorDraftSignatureRequest: { status, noReplay: true, attempts: 1 } };
+    const db = { collection: () => ({ doc: () => ({}) }), runTransaction: cb => cb({
+      get: async () => ({ exists: true, data: () => saved }), create: () => assert.fail("no claim") }) };
+    assert.equal((await executeStudioMateMembershipContract({ ...input,
+      journal: firestoreJournal(db, null, dayClock) })).reason, "operator_signature_claim_no_replay");
+  }
+});
+
+test("unsealed contracts use the new uploader and require independent seal readback before sending", async () => {
+  const input = fixture(); let sealed = false, sent = false;
+  const stages = [], posts = [], phases = [];
+  const result = await executeStudioMateMembershipContract({ ...input,
+    journal: { claim: async ({ payloadHash }) => ({ status: "resume", stage: "created", contractId: CONTRACT_ID, payloadHash }),
+      stage: async (_key, stage, fields) => stages.push([stage, fields]) },
+    sealUploader: async ({ beforeStep, contractId }) => {
+      assert.equal(contractId, CONTRACT_ID);
+      for (const phase of ["reserve", "upload", "finalize"]) { phases.push(phase); await beforeStep(phase); }
+      sealed = true;
+    },
+    api: { get: async () => nativeContract(input, sent ? "waiting" : "draft", { centerSignaturePresent: sealed }),
+      post: async url => {
+        posts.push(url); assert.ok(sealed);
+        if (url.includes("/sms/")) { sent = true; return {}; }
+        return { contract_id_hash: CONTRACT_ID, contractor_name: input.member.name,
+          contract_link: `https://sign.studiomate.kr/${CONTRACT_ID}` };
+      } } });
+  assert.equal(result.status, "waiting");
+  assert.deepEqual(phases, ["reserve", "upload", "finalize"]);
+  assert.deepEqual(stages.filter(x => x[0] === "attempting_seal").map(x => x[1].sealPhase), phases);
+  assert.equal(posts.some(x => x === "/v2/staff/contract/signature/direct"), false);
+});
+
+test("ambiguous seal upload is read once and remains non-replayable without sending", async () => {
+  const input = fixture(); let reads = 0, saved;
+  const journal = { claim: async ({ payloadHash }) => ({ status: "resume", stage: "created", contractId: CONTRACT_ID,
+    payloadHash, ...saved }), stage: async (_key, stage, fields) => { saved = { stage, ...fields }; } };
+  let uploads = 0;
+  const args = { ...input, journal, sealUploader: async ({ beforeStep }) => {
+    uploads++; await beforeStep("reserve"); throw new Error("network_ambiguous");
+  }, api: { get: async () => { reads++; return nativeContract(input, "draft", { centerSignaturePresent: false }); },
+    post: () => assert.fail("no request or message") } };
+  assert.equal((await executeStudioMateMembershipContract(args)).reason, "official_seal_outcome_unknown");
+  assert.equal(reads, 2);
+  assert.equal((await executeStudioMateMembershipContract(args)).reason, "official_seal_outcome_unknown");
+  assert.equal(uploads, 1);
+});
 
 test("revoked maintenance approval stops before a claim", async () => {
   const result = await executeStudioMateMembershipContract({ ...fixture(),

@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import {
   normalizeContractDetail,
   StudioMateNativeApiError,
 } from "./studiomate-native-contract-source.mjs";
 import { verifyStudioMateOfficialSeal } from "./studiomate-membership-contract-seal.mjs";
+import { uploadStudioMateCenterSeal } from "./studiomate-contract-seal-upload.mjs";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
 
 export const MEMBERSHIP_CONTRACT_TEMPLATES = Object.freeze({
@@ -223,6 +223,8 @@ export async function executeStudioMateMembershipContract({
   operatorTestApproval,
   now = Date.now,
   authorizeDispatch,
+  sealVerifier = verifyStudioMateOfficialSeal,
+  sealUploader = uploadStudioMateCenterSeal,
 }) {
   const authorizationPaused = error => error?.code === "contract_dispatch_authorization_paused";
   const dispatchPaused = error => isMemberDispatchDeferred(error) || authorizationPaused(error);
@@ -238,8 +240,15 @@ export async function executeStudioMateMembershipContract({
     operatorTestApproval,
   });
   const payloadHash = hash(payload);
+  if (typeof authorizeDispatch !== "function") throw new Error("contract_live_authorization_required");
   let claim;
+  let seal;
   try {
+    assertMemberDispatchAllowed(now());
+    await authorizeDispatch?.();
+    seal = await sealVerifier({ path: sealPath });
+    if (typeof api?.get !== "function" || typeof api?.post !== "function" || typeof api?.patch !== "function" ||
+      typeof sealUploader !== "function") throw new Error("contract_seal_upload_preflight_required");
     assertMemberDispatchAllowed(now());
     await authorizeDispatch?.();
     claim = await journal.claim({ jobKey: selection.jobKey, payloadHash, selection });
@@ -314,16 +323,17 @@ export async function executeStudioMateMembershipContract({
         return { status: "review", reason: "official_seal_outcome_unknown", contractId };
       blockedStage = "before_seal_read";
       assertMemberDispatchAllowed(now());
-      const seal = await verifyStudioMateOfficialSeal({ path: sealPath });
-      const bytes = await readFile(seal.path);
-      const signatureData = `data:${seal.mimeType};base64,${bytes.toString("base64")}`;
       try {
-        await post("attempting_seal", "/v2/staff/contract/signature/direct", {
-          contract_id_hash: contractId,
-          signature_party: "M",
-          signature_method: "upload",
-          signature_data: signatureData,
-        }, { sealSha256: seal.sha256 });
+        await sealUploader({ api, contractId, seal, beforeStep: async phase => {
+          blockedStage = "attempting_seal";
+          assertMemberDispatchAllowed(now());
+          await authorizeDispatch?.();
+          await journal.stage(selection.jobKey, "attempting_seal", { contractId, sealSha256: seal.sha256, sealPhase: phase });
+          assertMemberDispatchAllowed(now());
+          await authorizeDispatch?.();
+          assertMemberDispatchAllowed(now());
+          postStarted = true;
+        } });
       } catch (error) {
         if (dispatchPaused(error) && !postStarted) throw error;
         // A failed response may still have committed. Read back once, never blind-retry.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, lstatSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
@@ -18,6 +19,7 @@ import {
 import { summarizeCurrentSettlementOperation } from "./lib/monthly-settlement-operation.mjs";
 import { dedupeSettlementSourceRows } from "./lib/monthly-settlement-source.mjs";
 import { readSettlementSheetPointerFile, findSettlementSheetPointer } from "./lib/monthly-settlement-reference-reader.mjs";
+import { prepareMonthlySettlementFinalization, applyMonthlySettlementFinalization } from "./lib/monthly-settlement-finalization.mjs";
 
 const HOME = os.homedir();
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -55,6 +57,34 @@ main().catch(async (error) => {
 });
 
 async function main() {
+  // Corrected actual-payroll artifacts must never enter the legacy raw-data rebuild.
+  if (args["finalize-reviewed"]) {
+    if (rebuildFromRaw) throw new Error("finalization_cannot_rebuild_payroll");
+    const evidencePath = expandHome(String(args["finalize-reviewed"]));
+    const stat = lstatSync(evidencePath);
+    if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) || stat.uid !== process.getuid())
+      throw new Error("private_finalization_evidence_required");
+    const evidenceBytes = readFileSync(evidencePath);
+    const evidenceHash = createHash("sha256").update(evidenceBytes).digest("hex");
+    if (evidenceHash !== args["finalization-evidence-sha256"]) throw new Error("finalization_evidence_hash_mismatch");
+    const options = JSON.parse(evidenceBytes);
+    if (options.month !== ym || path.resolve(options.reviewDirectory) !== path.resolve(targetDir))
+      throw new Error("finalization_target_mismatch");
+    const plan = apply ? applyMonthlySettlementFinalization(options, {
+      expectedPlanSha256: args["expected-finalization-plan"], intentPath: args["finalization-intent"],
+    }) : prepareMonthlySettlementFinalization(options);
+    console.log(JSON.stringify({ ok: true, mode: apply ? "verified_artifact_finalization" : "plan",
+      month: ym, planSha256: plan.planSha256, checks: plan.checks,
+      outputCount: plan.outputs.length, state: plan.state || "prepared", payrollPaid: false, staffSent: false }, null, 2));
+    return;
+  }
+  const reviewIndex = path.join(targetDir, `아카이브 정산명세서 ${ym}_INDEX_검토본.html`);
+  const canonicalIndex = path.join(targetDir, `아카이브 정산명세서 ${ym}_INDEX.html`);
+  const reviewStatement = path.join(targetDir, `아카이브 정산명세서 ${ym}_검토본.xlsx`);
+  if ([reviewIndex, canonicalIndex, reviewStatement, statementXlsx].every(existsSync) &&
+    readFileSync(reviewIndex).equals(readFileSync(canonicalIndex)) &&
+    readFileSync(reviewStatement).equals(readFileSync(statementXlsx)))
+    throw new Error("reviewed_finalization_legacy_overwrite_forbidden");
   mkdirSync(targetDir, { recursive: true });
   await ensureInputWorkbooks();
   const statement = readStatementWorkbook(statementXlsx);

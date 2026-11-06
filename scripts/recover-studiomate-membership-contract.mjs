@@ -11,6 +11,7 @@ import { selectNativeMembershipContractCandidate } from "./lib/studiomate-member
 import { buildStudioMateJoinContractPayload, executeStudioMateMembershipContract, MEMBERSHIP_CONTRACT_TEMPLATES } from "./lib/studiomate-native-contract-writer.mjs";
 import { firestoreJournal, persistStudioMateMembershipContractSource } from "./lib/studiomate-membership-contract-processor.mjs";
 import { verifyStudioMateOfficialSeal } from "./lib/studiomate-membership-contract-seal.mjs";
+import { CONTRACT_SEAL_UPLOAD_POLICY } from "./lib/studiomate-contract-seal-upload.mjs";
 
 // Explicit operator recovery only; never invoked by a scheduler or the Excel runner.
 const args = process.argv.slice(2);
@@ -35,6 +36,13 @@ try {
   const config = (await db.doc("systemSettings/membershipContractAutomation").get()).data();
   if (config?.enabled !== true || config.mode !== "live" || config.studioId !== "5330" || !config.contractWriterEnabled ||
     !config.sourcePromoted || !config.nativeE2eVerified) throw new Error("Contract writer not enabled/promoted");
+  if (config.sealUploadVerification?.policy !== CONTRACT_SEAL_UPLOAD_POLICY ||
+    config.sealUploadVerification?.status !== "verified") throw new Error("contract_seal_upload_e2e_required");
+  const authorizeDispatch = async () => {
+    const current = (await db.doc("systemSettings/membershipContractAutomation").get()).data();
+    if (JSON.stringify(current) !== JSON.stringify(config))
+      throw Object.assign(new Error("contract_config_changed"), { code: "contract_dispatch_authorization_paused" });
+  };
   const baseline = (await db.doc("workLanes/studiomate-membership-contract-automation/state/excelBaseline").get()).data();
   const discoveryStartAt = options["discovery-start-at"] || baseline?.downloadedAt;
   if (!Number.isFinite(Date.parse(discoveryStartAt)) || Date.parse(discoveryStartAt) < Date.parse(config.cutoverAt))
@@ -94,7 +102,7 @@ try {
     };
     const outcome = await executeStudioMateMembershipContract({ api, journal: firestoreJournal(db, recoveryApproval), selection: selected.selection,
       member, ticket, staff: { id: String(config.contractStaffId), name: config.contractStaffName },
-      template: loaded.template, terms: loaded.terms });
+      template: loaded.template, terms: loaded.terms, authorizeDispatch });
     if (["waiting", "signed"].includes(outcome.status)) {
       await persistStudioMateMembershipContractSource({ db, contractId: outcome.contractId, member, ticket,
         selection: selected.selection, template: loaded.template });

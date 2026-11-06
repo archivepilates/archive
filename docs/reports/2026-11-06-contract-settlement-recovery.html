@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES OPS 복구 검증</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f4f5f6;color:#202428;font:16px/1.7 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-top:32px}table{border-collapse:collapse;width:100%;background:white}th,td{padding:14px;text-align:left;vertical-align:top;border-bottom:1px solid #d5dadd}th{width:28%}.note{border-left:4px solid #b52231;padding-left:16px}code{overflow-wrap:anywhere}a{color:#126a57}@media(max-width:600px){th{width:32%}th,td{padding:10px}}</style></head>
+<body><main><p>ARCHIVE PILATES OPS · 2026-11-06</p><h1>계약·10월 정산 복구 검증</h1>
+<table><tr><th>10월 정산</th><td>수정된 실제 급여 원문·수업·산출물을 대조하고 최종 INDEX와 명세서 XLSX 연결을 복구했습니다. 기존 금액·양식·개인 명세서·검토본은 보존했습니다.</td></tr>
+<tr><th>옛 계약 복구 승인</th><td>기존 5건의 1회 발송 접수를 확인하여 만료된 일괄 복구 승인만 종료했습니다. 원장은 4건 서명 완료, 1건 미서명·요청기한 만료입니다. 기존 계약·발송 이력을 변경하거나 재발송하지 않았습니다.</td></tr>
+<tr><th>자동 계약 작성기</th><td>현재 StudioMate의 새 직인 업로드 경로와 중복방지·단계별 설정 재확인을 구현했습니다. 실제 저장 검증이 아직 없어 작성기는 중지 상태를 유지합니다.</td></tr></table>
+<h2>정산 완료 증거</h2><p>실제 급여 원문 2개·수정 산출물 8개·수업 원본·강사별 명세서 4개 및 링크를 검증했습니다. 사용자 지정 별도 지급 수업은 근무시간 외 오전 2건으로 유지했습니다. 최종 파일은 검증된 수정본과 바이트가 동일하며 독립 재조회도 통과했습니다.</p>
+<p>INDEX SHA-256: <code>23477d9845df54304caf2d9c025122555489e593dea816c3928428bb649109ec</code></p>
+<p class="note">문서 최종화는 지급 승인·이체·강사 발송이 아닙니다. 실제 금융 처리나 회원 메시지 발송은 하지 않았습니다.</p>
+<h2>계약 안전장치</h2><p>옛 단일 저장 요청을 현재 화면에서 확인한 임시 업로드·이미지 전송·저장 확정 경로로 교체했습니다. 직인 해시·업로드 대상·헤더·현재 설정·발송 가능시간을 검증하며, 같은 계약의 독립 재조회가 필요합니다. 전송 불명확 상태와 기존 발송 선점은 재시도하지 않습니다.</p>
+<p>기존 승인 종료는 발송 접수만 확인한 것입니다. 모든 회원이 서명했다고 기록하거나 만료 계약을 재요청하지 않았습니다. 새 경로의 실제 저장 검증 전에는 과거 E2E 검증값으로 작성기를 활성화하지 않습니다.</p>
+<h2>배포·남은 단계</h2><p id="release-status">운영 실행기 반영·CORE Hosting 게시·CI·최신 관제 확인 결과는 작업 기록의 릴리스 항목에 별도로 기록합니다. 실제 직인 테스트와 작성기 재개는 미완료입니다.</p>
+<p>새 모니터·일정·발송기를 추가하지 않았으며 기존 정산 주기와 일반 계약 대상·기한을 유지합니다. 상세 급여·회원정보·인증값은 이 보고서에 포함하지 않습니다.</p>
+</main></body></html>

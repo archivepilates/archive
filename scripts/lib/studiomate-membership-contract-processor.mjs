@@ -14,6 +14,7 @@ import {
 import { resolveContractCandidateGroups } from "./studiomate-membership-contract-observer.mjs";
 import { selectNativeMembershipContractCandidate } from "./studiomate-membership-contract-native-selection.mjs";
 import { signatureMaintenanceRecovery, signatureRecoverySelectionPolicy } from "./studiomate-membership-contract-maintenance-recovery.mjs";
+import { CONTRACT_SEAL_UPLOAD_POLICY } from "./studiomate-contract-seal-upload.mjs";
 import {
   executeStudioMateMembershipContract,
   buildStudioMateSignatureRequestPayload,
@@ -60,7 +61,12 @@ export async function runStudioMateMembershipContractCandidates({
     config?.nativeE2eVerified !== true ||
     config?.studioId !== "5330"
   )
-    return result;
+    return config?.mode === "live" && config?.sourcePromoted === true &&
+      config?.sealUploadVerification?.policy !== CONTRACT_SEAL_UPLOAD_POLICY
+      ? { ...result, status: "review", reason: "contract_seal_upload_e2e_required" } : result;
+  if (config?.sealUploadVerification?.policy !== CONTRACT_SEAL_UPLOAD_POLICY ||
+    config?.sealUploadVerification?.status !== "verified")
+    return { ...result, status: "review", reason: "contract_seal_upload_e2e_required" };
   if (
     !Array.isArray(discovery?.candidateFingerprints) ||
     !discovery.candidateFingerprints.length ||
@@ -185,15 +191,24 @@ export async function runStudioMateMembershipContractCandidates({
           name: String(config.contractStaffName || "").trim(),
         };
         const journal = firestoreJournal(db, recovery?.approval || null, now);
-        const authorizeDispatch = recovery ? async () => {
+        const authorizeDispatch = async () => {
           try {
             const current = (await db.doc(SETTINGS).get()).data();
+            if (current?.contractWriterEnabled !== true || current?.mode !== "live" ||
+              current?.sourcePromoted !== true || current?.nativeE2eVerified !== true || current?.studioId !== "5330" ||
+              current?.sealUploadVerification?.policy !== CONTRACT_SEAL_UPLOAD_POLICY ||
+              current?.sealUploadVerification?.status !== "verified") throw new Error("writer_paused");
+            if (!recovery) {
+              if (current.signatureMaintenanceRecovery && current.signatureMaintenanceRecovery.status !== "completed")
+                throw new Error("recovery_unclosed");
+              return;
+            }
             const approval = signatureMaintenanceRecovery(current, now());
             const bounded = signatureRecoverySelectionPolicy({ config: current, hint, member: memberResult.member, ticketRead, now: now() });
             if (approval && approval.approvalHash === recovery.approval.approvalHash && bounded?.ticketId === recovery.ticketId) return;
           } catch { /* An unavailable approval is not an attempted provider request. */ }
             throw Object.assign(new Error("signature_recovery_approval_unavailable"), { code: "contract_dispatch_authorization_paused" });
-        } : undefined;
+        };
         const outcome = await executeStudioMateMembershipContract({
           api,
           journal,
@@ -257,6 +272,8 @@ export function firestoreJournal(db, recoveryApproval = null, now = Date.now) {
         const snap = await tx.get(ref);
         if (snap.exists) {
           const data = snap.data();
+          // An accepted or ambiguous operator send remains terminal even after its signing link expires.
+          if (data.operatorDraftSignatureRequest) return { status: "rejected", reason: "operator_signature_claim_no_replay" };
           if (data.payloadHash !== payloadHash)
             return { status: "rejected", reason: "job_payload_mismatch" };
           if (data.stage === "complete")
@@ -431,6 +448,7 @@ function sanitizeJournalFields(fields) {
           "contractId",
           "reason",
           "sealSha256",
+          "sealPhase",
           "providerStatus",
           "preparedPayload",
         ].includes(key) &&
