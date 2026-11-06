@@ -127,7 +127,24 @@ test('provider content, presentation, security and link drift fail exact readbac
     assert.throws(() => assertInstructorWaitlistTemplate({ ...actual, ...change }, payload));
 });
 
-test('optional empty text fields are safe without normalizing required fields or structured defaults', () => {
+test('observed SOLAPI empty highlight/item defaults carry no extra content', () => {
+  const payload = instructorWaitlistTemplatePayload(reference);
+  const actual = { ...structuredClone(payload), templateId: NEW_ID, status: 'PENDING',
+    highlight: { title: null, description: null, imageId: null },
+    item: { summary: { title: null, description: null }, list: [] } };
+  assert.doesNotThrow(() => assertInstructorWaitlistTemplate(actual, payload));
+  for (const field of ['title', 'description', 'imageId']) {
+    const changed = structuredClone(actual); changed.highlight[field] = 'unexpected';
+    assert.throws(() => assertInstructorWaitlistTemplate(changed, payload));
+  }
+  for (const changed of [{ ...actual, item: { ...actual.item, list: [{}] } },
+    { ...actual, item: { ...actual.item, summary: { title: 'unexpected', description: null } } },
+    { ...actual, highlight: { ...actual.highlight, extra: null } }]) {
+    assert.throws(() => assertInstructorWaitlistTemplate(changed, payload));
+  }
+});
+
+test('optional empty text fields are safe without normalizing required fields or unknown structured defaults', () => {
   const payload = instructorWaitlistTemplatePayload(reference), actual = { ...payload, status: 'PENDING' };
   for (const empty of ['', null, undefined]) {
     const optional = Object.fromEntries(['ad', 'extra', 'imageId', 'imageUrl', 'header', 'title', 'subtitle', 'highlight', 'item', 'commerce']

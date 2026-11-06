@@ -39,9 +39,18 @@ export function assertInstructorWaitlistTemplate(actual, payload) {
     });
   };
   if (!isDeepStrictEqual(normalize(actual.buttons), normalize(payload.buttons))) throw Error('Template links differ');
-  for (const field of ['ad', 'extra', 'imageId', 'imageUrl', 'header', 'title', 'subtitle', 'highlight', 'item', 'commerce']) {
+  for (const field of ['ad', 'extra', 'imageId', 'imageUrl', 'header', 'title', 'subtitle', 'commerce']) {
     if (actual[field] != null && actual[field] !== '') throw Error('Template additional content differs');
   }
+  const emptyFields = (value, keys) => value == null || value === '' || (typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).length === keys.length
+    && Object.keys(value).every(key => keys.includes(key) && (value[key] == null || value[key] === '')));
+  if (!emptyFields(actual.highlight, ['title', 'description', 'imageId'])) throw Error('Template additional content differs');
+  if (actual.item != null && actual.item !== '' && (typeof actual.item !== 'object' || Array.isArray(actual.item)
+    || Object.keys(actual.item).length !== 2 || Object.keys(actual.item).some(key => !['summary', 'list'].includes(key))
+    || !emptyFields(actual.item.summary, ['title', 'description'])
+    || (actual.item.list != null && (!Array.isArray(actual.item.list) || actual.item.list.length))))
+    throw Error('Template additional content differs');
   if (actual.isDeleted || !isDeepStrictEqual(actual.quickReplies ?? [], [])) throw Error('Template deleted or quick replies differ');
   if (!['PENDING', 'INSPECTING', 'APPROVED', 'REJECTED'].includes(actual.status)) throw Error('Unknown template status');
 }
