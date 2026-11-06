@@ -1,0 +1,17 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ARCHIVE PILATES 수강대기 안내</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f5f7;color:#202428;font:16px/1.7 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:28px 20px}h1{font-size:26px}h2{font-size:20px;margin-top:28px}table{border-collapse:collapse;width:100%;background:#fff}th,td{padding:12px;text-align:left;vertical-align:top;border-bottom:1px solid #d5dadd}th{width:28%}code{overflow-wrap:anywhere}pre{white-space:pre-wrap;font:inherit;padding:18px;border-left:3px solid #bc2334;background:#fff}a{color:#9e1d30}</style><main><p>ARCHIVE PILATES OPS · 2026-11-06</p><h1>강사레슨 수강대기 접수 안내</h1>
+<h2>본문과 버튼</h2><pre>#{이름}님,
+ARCHIVE PILATES 수강대기가 접수되었습니다.
+
+수업: #{수업명}
+주제: #{수업주제}
+수강일: #{수강일}
+
+현재는 예약 확정 전이며,
+결원 발생 시 별도로 안내드립니다.
+
+아래 버튼에서 현재 대기순번을 확인하거나
+수강대기를 취소하실 수 있습니다.</pre><p>버튼: <strong>현재 대기순번 확인 / 수강대기 취소</strong>. 고정된 접수 순번을 본문에 쓰지 않고 버튼에서 최신 순번만 확인합니다.</p>
+<h2>권한과 안전장치</h2><p>링크는 해당 접수·연락처·수강일·대기 등록 시점에 묶인 서명으로 보호합니다. 조회 응답에 다른 대기자의 이름·연락처·명단은 없습니다. 취소는 확인 후 해당 미입금 대기 한 건만 처리하며, 조회·링크 미리보기·브라우저 새로고침으로 취소하지 않습니다. 이미 확정 전환됐거나 발급 이력·원천 불일치가 있으면 센터 확인으로 남깁니다.</p>
+<h2>운영 범위</h2><p>정본은 기존 <code>instructorLessonRegistrations</code>이며 기존 CORE 대기순번 계산을 재사용합니다. 정원·확정 예약·수강권·결제·환불·가입서·메모·기존 발송 이력과 실행 주기는 유지합니다. 자동 승급·기존 대기자 소급 발송·신규 접수 알림 자동발송은 활성화하지 않습니다.</p>
+<h2>구현·검증·배포</h2><p>로컬 회귀 141건, 5개 코드베이스 TypeScript 빌드와 108개 함수 소유권 검사가 통과했습니다. 320/390/768/1440px 합성 브라우저·키보드·취소 확인창을 검증했습니다. 실제 회원 대기는 취소하지 않고 합성 사례로 취소·중복·확정 전환 경쟁·취소기간 경계를 검증했습니다. 취소 검토 중 상태를 확정으로 표시하지 않고, 비동기 조회 후에도 마감시각을 재확인하도록 보완했습니다. 배포 코드·현재 원장 조회와 실제 회원 취소 실행은 별개입니다. 템플릿 생성·심사 요청·승인·발송도 각각 별도로 기록합니다. 실제 배포·제공자 심사 결과는 아래에 추가합니다.</p>
+<p>템플릿 형식과 생성 후 심사 절차는 <a href="https://solapi.com/developers/api/templates-createTemplate">SOLAPI 공식 문서</a>를 확인했습니다. 실제 심사 결과는 제공자 재조회로 판정합니다.</p></main></html>

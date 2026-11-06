@@ -176,6 +176,15 @@
           ]
         },
         {
+          "source": "/archivein/instructor{Waitlist,-waitlist}/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+            { "key": "X-Content-Type-Options", "value": "nosniff" }
+          ]
+        },
+        {
           "source": "/archivein/instructor-evaluation/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -369,6 +378,13 @@
             "region": "asia-northeast3"
           }
         },
+        {
+          "source": "/archivein/api/instructorWaitlist",
+          "function": { "functionId": "instructorLessonWaitlistApi", "region": "asia-northeast3" }
+        },
+        { "source": "/archivein/instructor-waitlist/app.js", "destination": "/archivein/instructorWaitlist/app.js" },
+        { "source": "/archivein/instructor-waitlist/styles.css", "destination": "/archivein/instructorWaitlist/styles.css" },
+        { "source": "/archivein/instructor-waitlist/**", "destination": "/archivein/instructorWaitlist/index.html" },
         {
           "source": "/archivein/private-chart/**",
           "destination": "/archivein/private-chart/index.html"
@@ -625,6 +641,15 @@
           ]
         },
         {
+          "source": "/instructor{Waitlist,-waitlist}/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "private, no-store, max-age=0" },
+            { "key": "Referrer-Policy", "value": "no-referrer" },
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+            { "key": "X-Content-Type-Options", "value": "nosniff" }
+          ]
+        },
+        {
           "source": "/recommendedMealSurvey/**",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -788,6 +813,13 @@
             "region": "asia-northeast3"
           }
         },
+        {
+          "source": "/api/instructorWaitlist",
+          "function": { "functionId": "instructorLessonWaitlistApi", "region": "asia-northeast3" }
+        },
+        { "source": "/instructor-waitlist/app.js", "destination": "/instructorWaitlist/app.js" },
+        { "source": "/instructor-waitlist/styles.css", "destination": "/instructorWaitlist/styles.css" },
+        { "source": "/instructor-waitlist/**", "destination": "/instructorWaitlist/index.html" },
         {
           "source": "/private-chart/**",
           "destination": "/private-chart/index.html"

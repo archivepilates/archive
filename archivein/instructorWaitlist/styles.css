@@ -1,0 +1,67 @@
+:root {
+  color-scheme: light;
+  --ink: #222222;
+  --muted: #626262;
+  --line: #dedede;
+  --accent: #b92e29;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: #ffffff;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  letter-spacing: 0;
+}
+main { width: min(100%, 38rem); margin: 0 auto; padding: 24px 20px 48px; }
+header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+header > div, section, dd, button { min-width: 0; }
+p, h1, dt, dd, button { overflow-wrap: anywhere; word-break: keep-all; }
+.brand { margin: 0 0 8px; color: var(--accent); font-size: 12px; font-weight: 800; }
+h1 { margin: 0; font-size: 25px; line-height: 1.4; letter-spacing: 0; }
+.brand-mark { display: block; width: 48px; height: 48px; object-fit: contain; }
+img { max-width: 100%; }
+#loading { color: var(--muted); margin: 24px 0; }
+dl { margin: 0; }
+dl > div { padding: 18px 0; border-bottom: 1px solid var(--line); }
+dt { margin-bottom: 5px; color: var(--muted); font-size: 14px; }
+dd { margin: 0; font-size: 18px; font-weight: 700; }
+#position { color: var(--accent); font-size: 28px; font-variant-numeric: tabular-nums; }
+.note { margin: 20px 0; color: var(--muted); font-size: 14px; }
+.message { margin: 20px 0; padding-left: 12px; border-left: 3px solid var(--accent); font-size: 14px; }
+.actions { display: grid; gap: 12px; margin-top: 24px; }
+button {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #992621; border-color: #992621; }
+button.secondary { background: #ffffff; border-color: #777777; color: var(--ink); }
+button.secondary:hover:not(:disabled) { background: #f4f4f4; border-color: #555555; }
+button:disabled { opacity: .6; cursor: wait; }
+button:focus-visible { outline: 3px solid #225c9b; outline-offset: 3px; }
+[hidden] { display: none !important; }
+@media (min-width: 720px) {
+  main { padding-top: 48px; }
+  dl > div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 16px; align-items: baseline; }
+  dt { margin: 0; }
+}

@@ -46,6 +46,8 @@ import {
 import { recommendedMealSurveyApiHandler } from "../mealPlan/recommendedMealSurvey";
 import { instructorObservationSurveyApiHandler } from "../onboarding/instructorObservationSurvey";
 import { instructorLessonCalendarApiHandler } from "../instructorLessonRegistration/instructorLessonCalendar";
+import { createInstructorWaitlistApi } from "../instructorLessonRegistration/instructorLessonWaitlistPublic";
+import { db } from "../config/firebase";
 import {
   generateRecommendedMealProgramDraftForSubmittedResponse,
   generateRecommendedMealProgramDraftHandler,
@@ -282,6 +284,11 @@ export const instructorApplicantEvaluationApi = onRequest(
 );
 
 export const recommendedMealSurveyApi = onRequest(publicRequestOptions, recommendedMealSurveyApiHandler);
+
+export const instructorLessonWaitlistApi = onRequest(
+  { ...publicRequestOptions, maxInstances: 2, secrets: [privateSurveyWebhookSecret] },
+  createInstructorWaitlistApi({ db, secret: () => privateSurveyWebhookSecret.value() }),
+);
 
 export const instructorObservationSurveyApi = onRequest(
   { ...publicRequestOptions, secrets: [notionToken] },

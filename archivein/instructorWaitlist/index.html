@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#ffffff">
+  <title>강사레슨 대기 확인 | ARCHIVE PILATES</title>
+  <script src="./app.js"></script>
+  <link rel="stylesheet" href="./styles.css">
+  <link id="brandIcon" rel="icon">
+</head>
+<body>
+  <main id="waitlistPage" aria-busy="true">
+    <header>
+      <div>
+        <p class="brand">ARCHIVE PILATES</p>
+        <h1>강사레슨 대기 확인</h1>
+      </div>
+      <img id="brandMark" class="brand-mark" width="48" height="48" alt="">
+    </header>
+    <p id="loading" role="status">대기 정보를 확인하고 있습니다.</p>
+    <section id="details" aria-label="내 대기 정보" hidden>
+      <dl>
+        <div><dt>수업일</dt><dd id="lessonDate"></dd></div>
+        <div><dt>현재 상태</dt><dd id="status"></dd></div>
+        <div id="positionRow"><dt>현재 대기 순번</dt><dd id="position"></dd></div>
+      </dl>
+      <p id="note" class="note"></p>
+    </section>
+    <p id="message" class="message" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+    <div class="actions">
+      <button id="cancelButton" type="button" aria-describedby="note" hidden>대기 취소</button>
+      <button id="refreshButton" type="button" class="secondary" hidden>상태 다시 확인</button>
+    </div>
+    <noscript><p>대기 정보를 확인하려면 JavaScript를 켠 뒤 안내받은 원래 링크를 다시 열어 주세요.</p></noscript>
+  </main>
+</body>
+</html>
