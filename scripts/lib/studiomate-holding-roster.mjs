@@ -26,6 +26,15 @@ const isHeld = status => /^(?:일시|사용)?(?:정지|중지|홀딩)(?:중|예�
 const blocked = reason => ({ ok: false, mode: "discovery_only", reason, jobs: [], sends: 0 });
 const kstDay = milliseconds => new Date(milliseconds + 9 * 3600_000).toISOString().slice(0, 10);
 
+function historicalTicket(row, today) {
+  const status = text(row["수강권상태"]).replace(/\s/g, "");
+  if (!/^(?:이용만료|사용만료|기간만료|만료)(?:\([^()]*\))?$/.test(status)) return false;
+  const dates = [row["수강권시작일"], row["수강권종료일"]].map(text);
+  if (!dates.every(day => /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(`${day}T00:00:00Z`)) &&
+    new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day)) return false;
+  return dates[0] <= dates[1] && dates[1] < today;
+}
+
 function recentTicketChanges(rows, now) {
   const earliest = kstDay(Date.parse(now) - 48 * 3600_000), today = kstDay(Date.parse(now));
   const out = [];
@@ -49,11 +58,12 @@ function recentTicketChanges(rows, now) {
   return out;
 }
 
-export function buildHoldingRoster(rows) {
+export function buildHoldingRoster(rows, now = new Date().toISOString()) {
+  if (!instant(now)) throw new Error("invalid_roster_observation_time");
   if (!Array.isArray(rows) || !rows.length || !rows.every(row => record(row) &&
     ["전화번호", "수강권명", "수강권상태"].every(key => Object.hasOwn(row, key))))
     throw new Error("empty_or_incomplete_holding_export");
-  const members = new Map();
+  const members = new Map(), today = kstDay(Date.parse(now));
   for (const row of rows) {
     const phone = holdingRosterPhone(row["전화번호"]), ticketName = text(row["수강권명"]);
     const status = text(row["수강권상태"]), held = isHeld(status);
@@ -62,9 +72,13 @@ export function buildHoldingRoster(rows) {
       throw new Error("unrecognized_holding_status");
     if (!phone) continue;
     const key = holdingRosterMemberKey(phone);
-    const member = members.get(key) || { key, rows: 0, tickets: [], productCounts: Object.create(null) };
+    const member = members.get(key) || { key, rows: 0, tickets: [], productCounts: Object.create(null),
+      readbackProductCounts: Object.create(null) };
     member.rows++;
     if (ticketName) member.productCounts[ticketName] = (member.productCounts[ticketName] || 0) + 1;
+    // Retain history for coverage; only positively terminal rows stop blocking a native read.
+    if (ticketName && !historicalTicket(row, today))
+      member.readbackProductCounts[ticketName] = (member.readbackProductCounts[ticketName] || 0) + 1;
     if (held) member.tickets.push({ ticketName, status, startText: text(row["수강권시작일"]),
       endText: text(row["수강권종료일"]), updatedAtText: text(row["수강권최종수정일"]) });
     members.set(key, member);
@@ -106,7 +120,7 @@ export function planHoldingRoster({ rows, source, previous = null, profiles = []
   if (previous && Date.parse(previous.downloadedAt) >= Date.parse(source.downloadedAt))
     return { ok: true, mode: "discovery_only", reason: "already_observed_or_older_download", jobs: [], sends: 0 };
   let members;
-  try { members = buildHoldingRoster(rows); } catch (error) { return blocked(error.message); }
+  try { members = buildHoldingRoster(rows, now); } catch (error) { return blocked(error.message); }
   if (source.recentTicketChanges === true && !rows.every(row => Object.hasOwn(row, "수강권최종수정일")))
     return blocked("ticket_modification_column_required");
   const rowCounts = Object.fromEntries([...members.values()].map(member => [member.key, member.rows]));
@@ -135,7 +149,7 @@ export function planHoldingRoster({ rows, source, previous = null, profiles = []
     const currentMember = members.get(memberKey), memberIds = [...(byKey.get(memberKey) || [])];
     const names = new Set([...(current?.tickets || []), ...(old?.tickets || [])].map(ticket => ticket.ticketName));
     for (const ticketName of names) {
-      const ambiguous = (currentMember?.productCounts[ticketName] || 0) > 1 ||
+      const ambiguous = (currentMember?.readbackProductCounts[ticketName] || 0) > 1 ||
         (old?.tickets.filter(ticket => ticket.ticketName === ticketName).length || 0) > 1;
       const reason = memberIds.length !== 1 ? "native_member_phone_match_required" : ambiguous ? "duplicate_product_readback_review_required" : "";
       if (reason) counts.review++;
@@ -156,7 +170,7 @@ export function planHoldingRoster({ rows, source, previous = null, profiles = []
       existingKeys.add(jobId);
       const memberIds = [...(byKey.get(memberKey) || [])];
       const reason = memberIds.length !== 1 ? "native_member_phone_match_required" :
-        members.get(memberKey)?.productCounts[ticketName] !== 1 ? "duplicate_product_readback_review_required" : "";
+        members.get(memberKey)?.readbackProductCounts[ticketName] !== 1 ? "duplicate_product_readback_review_required" : "";
       counts.ticketChanged++;
       if (reason) counts.review++;
       jobs.push({ jobId, memberKey, memberId: memberIds.length === 1 ? memberIds[0] : null,
