@@ -27,16 +27,16 @@
       </aside>
       <main class="main rules-page">
         <section class="panel rule-section" id="member-inquiry-intake">
-          <div class="panel-header"><div><h2>회원 문의 접수·관리자 승인</h2><p>재등록·수업 취소/변경·홀딩·전환·고정예약·기타 문의를 한 접수함에서 관리합니다.</p></div><span class="pill warn">implemented · 배포 대기</span></div>
-          <div class="rule-note"><strong>현재 상태 · 2026.11.10</strong><span>회원용 2D 카테고리 접수, 전 직원 열람, 수정번호·처리안 해시에 묶인 관리자 결정과 수동 결과 기록을 구현하고 합성 검증했습니다. 운영자가 전 직원 열람·90일 보관·배포·도메인 전환을 승인했습니다. 실제 접수는 배포·인증·TTL 검증 후 개시합니다.</span></div>
+          <div class="panel-header"><div><h2>회원 문의 접수·관리자 승인</h2><p>재등록·수업 취소/변경·홀딩·전환·고정예약·기타 문의를 한 접수함에서 관리합니다.</p></div><span class="pill warn">deployed · 도메인 인증 대기</span></div>
+          <div class="rule-note"><strong>현재 상태 · 2026.11.10</strong><span>회원용 2D 접수·CORE 접수함·문의 서버와 접근 규칙을 배포했습니다. 승인된 전 직원 열람·90일 보관을 적용했습니다. 기본 주소 archive-pilates-help.web.app에서 가상 문의 1건의 접수·담당 지정·처리안 제출·관리자 승인·완료 기록과 원장 이력 5건을 대조했습니다. help.archivepilates.com DNS 연결은 저장·공용 DNS 확인을 마쳤고 인증서 발급은 대기 중입니다.</span></div>
           <ul>
             <li>접수 정보는 회원의 입력이며 본인 확인·수강권·예약 원본 확인이 아닙니다. 현재 재직·CORE 인증이 유효한 같은 지점의 모든 스태프가 문의를 열람합니다. 미배정 건은 담당으로 접수한 뒤 검토하고, 다른 직원의 담당 건은 열람만 합니다. 관리자는 배정·검토·승인합니다. 비활성·퇴사·다른 지점·조회 전용 계정은 허용하지 않습니다.</li>
             <li>고정예약은 취소·변경 불가입니다(운영자 현재 기준 확인 2026.11.09). 예외 요청과 전환 기준 미확인은 관리자 검토로 분류하며 자동 허용하지 않습니다. AI 요약이나 규정 확인만으로 변경하지 않습니다.</li>
             <li>직원의 처리안·회원 답변안·규정 버전과 현재 수정번호를 묶어 승인합니다. 처리안 수정 시 이전 승인을 무효화하며, 승인과 실제 처리·원본 확인·회원 발송을 구분합니다. 이 기능은 StudioMate·결제·환불·연락처·메모·회원 발송 작업을 만들거나 실행하지 않습니다.</li>
             <li>정본은 memberInquiryRequests 및 그 하위 memberInquiryEvents/memberInquiryCommands입니다. 회원 의사표시·문의 처리 이력에만 사용하고 회원/수강권/예약 사실의 정본이나 외부 실행 대상 선정에 사용하지 않습니다. member360 미러와 workLanes에서 회원 변경 대상을 고르지 않습니다.</li>
-            <li>문의 개인정보는 접수일 기준 90일 보관입니다(운영자 승인 2026.11.10). 만료된 건은 서버 조회를 차단하며 전용 expiresAt TTL로 삭제합니다. 개인정보 안내·보존 설정·승격 검토·담당자 권한 확인 전에는 서버 접수를 닫아둡니다. 민감한 증빙은 접수창에 수집하지 않습니다.</li>
+            <li>문의 개인정보는 접수일 기준 90일 보관입니다(운영자 승인 2026.11.10). 만료된 건은 서버 조회를 차단하며 전용 expiresAt TTL로 삭제합니다. 개인정보 안내·승격 승인·실제 인증과 TTL 4개 ACTIVE·목록 인덱스 READY를 확인하고 기본 사이트 접수를 열었습니다. 민감한 증빙은 접수창에 수집하지 않습니다.</li>
           </ul>
-          <div class="rule-note"><strong>범위·검증·다음 조치</strong><span>영향: help 회원 화면, CORE 문의 접수함, functions-app의 memberInquiryApi/memberInquiryStaff, 문의 전용 정본·중복·제한 원장. 배포는 미실행입니다. 승인 완료: 전 직원 열람·90일 보관·배포·DNS 전환. 다음: 실제 인증·TTL·인덱스 검증과 도메인 연결을 확인한 뒤 접수를 개시합니다. 실운영 검증과 새 함수 MCP 등록은 별도 상태로 관리합니다.</span></div>
+          <div class="rule-note"><strong>범위·검증·다음 조치</strong><span>영향: help 회원 화면, CORE 접수함, functions-app의 memberInquiryApi/memberInquiryStaff, 문의 정본·중복·제한 원장. Node22 문의 검사 88개·반응형 320/390/768/1366px·실제 가상 문의 원장·GitHub 검사를 통과했습니다. 서버 110개 ACTIVE와 CORE·회원 기본 사이트 배포를 확인했습니다. 비인증 호출·직접 DB 조회·미허용 Origin은 차단합니다. 남은 조치: Firebase 사용자 지정 도메인 인증서·일반 HTTPS 확인. 문의 승인은 현재 CORE UI 전용이며 MCP 자동실행 연결은 미개시입니다. 상세: 2026-11-10-member-inquiry-release 보고서.</span></div>
         </section>
         <header class="page-hero">
           <h1>운영 규칙</h1>

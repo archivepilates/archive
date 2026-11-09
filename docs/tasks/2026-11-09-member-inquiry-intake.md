@@ -48,3 +48,11 @@
 - Release preparation uses archive-codex-operator@archive-pilates.iam.gserviceaccount.com for project archive-pilates; no member messages or native booking/ticket changes are included.
 
 - Release CI found the new mixed read/write inquiry callable missing explicit MCP coverage. It is deliberately excluded from generic MCP business actions until separate read and prepare/execute contracts exist; staff use the approved CORE UI. Added the documented exclusion, preserved callable coverage checks, and reran the relevant check. Added the inquiry link to the current-staff navigation while preserving the private-record landing page.
+
+## Production verification 2026-11-10
+- Source promoted and pushed through bece4b7f. Guarded clean-main release completed five detected Functions codebases, CORE Hosting and isolated help Hosting. Provider: 110/110 ACTIVE. GitHub CORE MCP and affected checks successful.
+- Four dedicated TTL fields ACTIVE/index exemptions applied; list composite READY. Rules deployed. Unlisted existing indexes and field overrides preserved.
+- Actual public UI -> Firestore -> authenticated CORE operator -> claim/review/approve/complete -> independent read: synthetic receipt mi_e5b26e55a01d619828fb91764b22f4cc, revision5, events5, commands4, exactly one synthetic request, exact90day expiry. No external action/message.
+- Same-studio current-staff read scope approved; assigned-only mutations and manager decisions retained. No bulk staff flags granted.
+- Cloudflare official home account signed in with native autofill. Added exact help CNAME and ACME TXT DNS-only. No independent old help A existed; wildcard preserved. NS/1.1.1.1/8.8.8.8 verified. Custom TLS pending; verified working site https://archive-pilates-help.web.app/.
+- Private proof: operations/2026-11-10-member-inquiry-release. Self-contained result: docs/reports/2026-11-10-member-inquiry-release.html. No duplicate scheduler created. Remaining: custom-domain certificate and normal HTTPS verification.

@@ -1,6 +1,6 @@
 # Member inquiry intake: promotion review and release boundary
 
-Status: implemented and locally verified. On 2026-11-10 the operator approved all current same-studio staff read access, 90-day retention, deployment and help.archivepilates.com domain transition. Release and live verification are in progress.
+Status: approved and deployed on 2026-11-10. The operator approved all current same-studio staff read access, 90-day retention, deployment and help.archivepilates.com domain transition. Default-site production intake and CORE review are verified; custom-domain TLS is pending.
 
 ## Authority and source
 
@@ -36,7 +36,7 @@ Status: implemented and locally verified. On 2026-11-10 the operator approved al
 - Root Hosting/manifest/shared contracts/prepare guard changes affect all five codebases under the existing detector. All five built locally; do not manually override affected detection or legacy release guards. The inquiry functions themselves belong only to functions-app.
 - Canonical shared contract generates a self-contained Functions source copy and browser JSON; prepare checks freshness. Runtime bundles never depend on a sibling contracts directory outside the uploaded Functions root.
 
-## Verification evidence and release criteria
+## Historical local verification evidence and release criteria
 
 - Local suite: 82 tests; no real recipient/identity/provider/Firestore writes. Atomic fake database tests include stage failures and rollback, map-key reordering, stale approval, assignment isolation, 101-item pagination and receipt recovery.
 - Browser: actual member UI -> real service business logic with atomic memory DB -> staff plan submission -> manager approval -> independent ledger read. One synthetic request at revision3 and exactly three events; memberNotificationStatus=not_sent_by_system and externalExecutionAuthorized=false.
@@ -44,3 +44,12 @@ Status: implemented and locally verified. On 2026-11-10 the operator approved al
 - Build, boundary validation, CORE Hosting regression guard, contract/schema freshness and diff checks passed. Existing catalog fingerprints were regenerated solely for the changed CORE navigation file; template content did not change.
 - Actual Firebase authentication, real Firestore rule/index/TTL behavior, custom domain TLS and live delivery are not claimed verified. Node25.9.0 used locally; Functions deployment runtime remains Node22. No commit, push, deployment, production config write, access grant, scheduler or member send was performed.
 - Before release: verify dedicated site availability, promote source/data policy, deploy scoped reviewed source under current release guards, verify TTL/index activation and real account role boundaries, enable intake last, run one explicitly approved synthetic production smoke case and independently read it back.
+
+## Approved release readback 2026-11-10
+
+- The earlier no-write/no-deployment statements describe the implementation phase. Approved release promoted source and data policy, recorded workLanes/member-inquiry-intake, created settings/memberInquiryIntake and enabled canonical intake after authentication, rules, TTL/index and endpoint checks. No member-facing external action uses the work lane.
+- Canonical memberInquiryRequests and dedicated audit/command/limit groups are now deployed. Four TTL configurations are ACTIVE and list index READY. A real public UI synthetic request was read independently: one request, revision5, received/claim/review/approve/complete events5, commands4, exact90day expiry, approval hash matches, externalExecutionAuthorized=false, not_sent_by_system.
+- Actual existing CORE operator authentication and manager decisions passed. Current-staff same-studio reading and assigned-only mutation were tested in the server suite and synthetic staff UI; separate live instructor logins were not performed. No staff flags or credentials were changed.
+- Node22.23.4 passed all88 inquiry tests and five builds. Navigation tests8, MCP callable coverage and GitHub CORE MCP/affected checks passed. All110 Functions ACTIVE; CORE and isolated help Hosting verified on normal HTTPS. No scheduler or member message was created.
+- Cloudflare home@archivepilates.com official profile saved exact DNS-only help CNAME and ACME TXT. Authoritative/public DNS verifies archive-pilates-help.web.app. The old A was not an exact help record; wildcard and other records were preserved. Firebase custom-domain certificate is still pending and normal help HTTPS is not yet verified. The usable site is https://archive-pilates-help.web.app/; CORE is https://core.archivepilates.com/inquiries/.
+- Current execution evidence and limitations: docs/reports/2026-11-10-member-inquiry-release.html and private operations/2026-11-10-member-inquiry-release. CORE operating rule is updated to deployed/domain-pending. No Notion update was needed.
