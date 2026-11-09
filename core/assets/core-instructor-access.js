@@ -4,6 +4,7 @@ const APPROVED_HOSTS = new Set(["in.archivepilates.com", "core.archivepilates.co
 const CORE_BASE = new URL("../", import.meta.url).pathname;
 const ROUTES = [
   ["private", `${CORE_BASE}private/`, "프라이빗", "clipboard-check"],
+  ["inquiries", `${CORE_BASE}inquiries/`, "회원 문의", "messages-square"],
   ["sequence", `${CORE_BASE}sequence/`, "시퀀스 노트", "notebook-pen"],
   ["climate", `${CORE_BASE}climate/`, "에어컨", "air-vent"],
 ];
