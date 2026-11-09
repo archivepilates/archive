@@ -88,6 +88,7 @@ export function codebasesForFile(file) {
   if (normalized.includes("/videoAnalytics/")) return ["functions-app"];
   if (normalized.startsWith("firebase/kangsain-functions/functions/src/climate/")) return ["functions-app"];
   if (normalized.includes("/onboarding/")) return ["functions-app"];
+  if (normalized.startsWith("firebase/kangsain-functions/functions/src/memberInquiries/")) return ["functions-app"];
   if (/\/instructorLessonRegistration\/instructorLesson(Confirmation|NotionSchedule|CancellationPolicy)\.ts$/.test(normalized)) {
     return ["functions-alimtalk", "functions-app"];
   }
@@ -115,6 +116,7 @@ function isSharedPath(file) {
     "firebase/kangsain-functions/functions/src/types/",
     "firebase/kangsain-functions/functions/src/utils/",
     "scripts/prepare-functions-codebase.mjs",
+    "scripts/build-member-inquiry-contract.mjs",
     "scripts/validate-functions-boundaries.mjs",
     "scripts/validate-functions-predeploy.mjs",
     "scripts/detect-affected-function-codebases.mjs",

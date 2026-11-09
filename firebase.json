@@ -911,6 +911,55 @@
         "firebase-debug.log",
         "firebase-debug.*.log"
       ]
+    },
+    {
+      "site": "archive-pilates-help",
+      "public": "help",
+      "cleanUrls": true,
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "no-referrer"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "X-Robots-Tag",
+              "value": "noindex, nofollow"
+            },
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+            }
+          ]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/api/inquiries",
+          "function": {
+            "functionId": "memberInquiryApi",
+            "region": "asia-northeast3"
+          }
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "ignore": [
+        "**/.*",
+        "**/node_modules/**"
+      ]
     }
   ]
 }

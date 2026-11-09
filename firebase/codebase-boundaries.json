@@ -89,6 +89,8 @@
       "physicalSource": "firebase/function-codebases/app",
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/app.ts",
       "owns": [
+        "memberInquiryApi",
+        "memberInquiryStaff",
         "getCoreAirConditioners",
         "operatorControlCoreAirConditioner",
         "operatorReconcileCoreAirConditioner",

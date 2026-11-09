@@ -860,6 +860,7 @@ const NAV_ICONS = {
   refunds: "receipt-text",
   staff: "user-round",
   messages: "messages-square",
+  inquiries: "messages-square",
   content: "file-text",
   automation: "activity",
   business: "chart-no-axes-combined",
@@ -886,6 +887,7 @@ const NAV_LABELS = {
   refunds: "환불",
   staff: "강사",
   messages: "알림톡",
+  inquiries: "회원 문의",
   content: "콘텐츠",
   automation: "자동화",
   business: "경영",
@@ -973,6 +975,13 @@ function enhanceNav() {
   registrationLink.href = `${coreRootHref}member-registration/`;
   registrationLink.removeAttribute("target");
   registrationLink.removeAttribute("rel");
+  if (!nav.querySelector('[data-section="inquiries"]')) {
+    const link = document.createElement("a");
+    link.href = `${coreRootHref}inquiries/`;
+    link.dataset.section = "inquiries";
+    link.textContent = NAV_LABELS.inquiries;
+    nav.insertBefore(link, nav.querySelector('[data-section="messages"]'));
+  }
   if (!nav.querySelector('[data-section="sequence"]')) {
     const link = document.createElement("a");
     link.href = `${coreRootHref}sequence/`;

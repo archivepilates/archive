@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildMemberInquiryContract } from "./build-member-inquiry-contract.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -12,6 +13,7 @@ const targets = Object.entries(manifest.targetCodebases || {});
 const baseNodeModulesDir = path.join(repoRoot, "firebase", "kangsain-functions", "functions", "node_modules");
 
 const requested = process.argv[2] || "all";
+buildMemberInquiryContract({ check: true });
 const selected = selectTargets(requested);
 
 for (const [codebase, config] of selected) {

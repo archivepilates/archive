@@ -550,6 +550,13 @@ service cloud.firestore {
       }
     }
 
+    // Inquiry intake/review uses server-side identity, assignment and revision checks only.
+    match /memberInquiryRequests/{requestId} {
+      allow read, write: if false;
+      match /{document=**} { allow read, write: if false; }
+    }
+    match /memberInquiryRateLimits/{limitId} { allow read, write: if false; }
+
     match /automationStatus/{statusId} {
       allow read: if isManager();
       allow write: if false;

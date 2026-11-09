@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "memberInquiryRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studioId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "privateLessonChartRequests",
       "queryScope": "COLLECTION",
       "fields": [
@@ -404,6 +412,30 @@
     }
   ],
   "fieldOverrides": [
+    {
+      "collectionGroup": "memberInquiryRequests",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "memberInquiryRateLimits",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "memberInquiryEvents",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "memberInquiryCommands",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
     {
       "collectionGroup": "sequenceNotes",
       "fieldPath": "payload",

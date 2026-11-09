@@ -1,0 +1,263 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  assertActor, assertRead, fixedException, InquiryError, planHash,
+  transition, validateSubmission, type Actor, type InquiryRow,
+} from "../../firebase/kangsain-functions/functions/src/memberInquiries/policy";
+import { memberInquiryContract as contract } from "../../firebase/packages/contracts/lib/member-inquiries";
+
+const NOW = "2026-11-09T13:00:00.000Z";
+const owner: Actor = { staffId: "manager-1", name: "테스트관리자", studioId: "5330", role: "manager", active: true };
+const worker: Actor = { staffId: "worker-1", name: "테스트직원", studioId: "5330", role: "instructor", active: true };
+const categoryAnswers: Record<string, Record<string, unknown>> = {
+  renewal: { lesson: "그룹레슨", start: "현재 수강권 종료 후" },
+  booking: { request: "수업 취소", mode: "자유예약" },
+  holding: { ticket: "횟수권", duration: "1주" },
+  conversion: { current: "그룹레슨", desired: "프라이빗", start: "상담 후 결정" },
+  fixed: { request: "이용 규정 문의" },
+  other: { topic: "시설 이용", reply: "이용 방법 안내" },
+};
+
+function body(category = "renewal", overrides: Record<string, unknown> = {}): any {
+  return { requestKey: "a".repeat(48), category, memberName: "테스트회원", memberPhone: "01000000000",
+    answers: { ...categoryAnswers[category] }, details: "", contact: "문자", privacyConsent: true,
+    privacyVersion: contract.privacyVersion, policyVersion: contract.policyVersion, website: "", ...overrides };
+}
+function row(category = "renewal", overrides: Record<string, unknown> = {}): InquiryRow {
+  return { ...validateSubmission(body(category)), id: "mi_" + "b".repeat(32), studioId: "5330",
+    revision: 1, status: "in_review", assignedStaffId: worker.staffId, approval: null, completion: null, ...overrides };
+}
+function reviewInput(overrides: Record<string, unknown> = {}): any {
+  return { action: "review", expectedRevision: 1, resolutionKind: "guidance", policyFit: "within_policy",
+    plan: "현재 수강료 기준으로 상담 안내", memberReply: "담당자가 안내드리겠습니다.", internalNote: "", ...overrides };
+}
+function reviewed(source: InquiryRow = row(), overrides: Record<string, unknown> = {}): InquiryRow {
+  return { ...source, ...transition(source, worker, reviewInput({ expectedRevision: source.revision, ...overrides }), NOW) } as InquiryRow;
+}
+function approved(source: InquiryRow = reviewed()): InquiryRow {
+  return { ...source, ...transition(source, owner, { action: "approve", expectedRevision: source.revision,
+    expectedReviewHash: source.reviewHash, reason: fixedException(source) ? "예외 상담안 검토" : "" }, NOW) } as InquiryRow;
+}
+function rejects(status: number, action: () => unknown): void {
+  assert.throws(action, (error: unknown) => error instanceof InquiryError && error.status === status);
+}
+
+for (const category of Object.keys(categoryAnswers)) {
+  test(`accepts one valid ${category} inquiry without free text`, () => {
+    const result = validateSubmission(body(category));
+    assert.equal(result.category, category);
+    assert.equal(result.memberName, "테스트회원");
+    assert.equal(result.memberPhone, "01000000000");
+    assert.equal(result.details, "");
+    assert.equal(result.privacyConsent, true);
+  });
+}
+
+test("normalizes deliberate phone separators and international prefix", () => {
+  assert.equal(validateSubmission(body("renewal", { memberPhone: "+82 10-0000-0000" })).memberPhone, "01000000000");
+});
+test("rejects arbitrary characters instead of silently changing the phone", () => {
+  rejects(400, () => validateSubmission(body("renewal", { memberPhone: "010abc00000000" })));
+});
+
+for (const [name, patch] of Object.entries({
+  category: { category: "refund" },
+  unknownChoice: { answers: { lesson: "무료 무제한", start: "이번 달" } },
+  missingChoice: { answers: { lesson: "그룹레슨" } },
+  unknownQuestion: { answers: { ...categoryAnswers.renewal, payment: "paid" } },
+  consent: { privacyConsent: false },
+  policyVersion: { policyVersion: "old" },
+  privacyVersion: { privacyVersion: "old" },
+  requestKey: { requestKey: "short" },
+  honeypot: { website: "https://example.invalid" },
+  phone: { memberPhone: "0100000000" },
+  emptyName: { memberName: " " },
+  controlText: { details: "입력\u0000오류" },
+  tooLongText: { details: "가".repeat(201) },
+  invalidContact: { contact: "공개 댓글" },
+  clientAuthority: { approval: { decision: "approve" } },
+  sourceRecord: { memberId: "native-member-fixture", currentTicket: { remaining: 100 } },
+})) {
+  test(`submission rejects ${name}`, () => rejects(400, () => validateSubmission(body("renewal", patch))));
+}
+
+test("validated payload carries member intent, not client identity or execution authority", () => {
+  const result = validateSubmission(body());
+  for (const key of ["requestKey", "memberId", "approval", "status", "externalExecutionAuthorized", "currentTicket"])
+    assert.equal(Object.hasOwn(result, key), false);
+  assert.deepEqual(result.answers, categoryAnswers.renewal);
+});
+
+test("rejects stale answers to booking questions hidden by cancellation choice", () => {
+  rejects(400, () => validateSubmission(body("booking", { answers: { ...categoryAnswers.booking, nextDay: ["월"], nextTime: "오전" } })));
+});
+test("rejects stale fixed-schedule answers hidden by a guidance request", () => {
+  rejects(400, () => validateSubmission(body("fixed", { answers: { request: "이용 규정 문의", days: ["월"], time: "오전" } })));
+});
+test("requires active change questions and rejects duplicate or contradictory multiple choices", () => {
+  const change = { request: "다른 수업으로 변경", mode: "자유예약" };
+  rejects(400, () => validateSubmission(body("booking", { answers: change })));
+  for (const nextDay of [["월", "월"], ["월", "상담 후 결정"], ["없는요일"]])
+    rejects(400, () => validateSubmission(body("booking", { answers: { ...change, nextDay, nextTime: "오전" } })));
+  const result = validateSubmission(body("booking", { answers: { ...change, nextDay: ["수", "월"], nextTime: "오전" } }));
+  assert.deepEqual(result.answers.nextDay, ["수", "월"].sort());
+});
+test("validates calendar dates, month and clock time rather than regex shape alone", () => {
+  for (const classDate of ["2026-02-29", "2026-13-01", "2026-11-31"])
+    rejects(400, () => validateSubmission(body("booking", { answers: { ...categoryAnswers.booking, classDate } })));
+  for (const classTime of ["24:00", "12:60", "9:00"])
+    rejects(400, () => validateSubmission(body("booking", { answers: { ...categoryAnswers.booking, classTime } })));
+  rejects(400, () => validateSubmission(body("fixed", { answers: { request: "이용 규정 문의", month: "2026-13" } })));
+  assert.equal(validateSubmission(body("booking", { answers: { ...categoryAnswers.booking, classDate: "2028-02-29", classTime: "19:30" } })).answers.classDate, "2028-02-29");
+});
+
+test("all active same-studio instructors, owners and managers can read assigned or unassigned inquiries without a special flag", () => {
+  for (const actor of [worker, { ...worker, memberInquiryAccess: false }, owner, { ...owner, role: "owner" }]) {
+    assert.doesNotThrow(() => assertActor(actor));
+    assert.doesNotThrow(() => assertRead(actor, row()));
+    assert.doesNotThrow(() => assertRead(actor, row("renewal", { assignedStaffId: "other-worker" })));
+    assert.doesNotThrow(() => assertRead(actor, row("renewal", { assignedStaffId: "" })));
+    rejects(403, () => assertRead(actor, row("renewal", { studioId: "another-studio" })));
+  }
+});
+for (const actor of [
+  { ...worker, active: false }, { ...worker, role: "viewer" },
+  { ...worker, role: "member" }, { ...worker, studioId: "another-studio" },
+  { ...worker, staffId: "" }, { ...owner, active: false },
+]) test(`actor fails closed: ${JSON.stringify(actor)}`, () => rejects(403, () => assertActor(actor)));
+
+test("read-all permission does not let an instructor review or claim another employee's inquiry", () => {
+  const source = row("renewal", { assignedStaffId: "other-worker" });
+  assert.doesNotThrow(() => assertRead(worker, source));
+  rejects(403, () => transition(source, worker, reviewInput(), NOW));
+  rejects(403, () => transition(source, worker, { action: "claim", expectedRevision: 1 }, NOW));
+  assert.equal(transition(source, owner, reviewInput(), NOW).status, "awaiting_approval");
+  assert.equal(transition(source, owner, { action: "claim", expectedRevision: 1 }, NOW).assignedStaffId, owner.staffId);
+});
+test("an instructor can claim an unassigned inquiry before reviewing it", () => {
+  const source = row("renewal", { assignedStaffId: "", status: "received" });
+  rejects(403, () => transition(source, worker, reviewInput(), NOW));
+  const claimed = { ...source, ...transition(source, worker, { action: "claim", expectedRevision: 1 }, NOW) } as InquiryRow;
+  assert.equal(claimed.assignedStaffId, worker.staffId);
+  assert.equal(claimed.status, "in_review");
+  assert.equal(transition(claimed, worker, reviewInput({ expectedRevision: claimed.revision }), NOW).status, "awaiting_approval");
+});
+
+test("review binds the full plan and clears previous approval/completion", () => {
+  const source = approved();
+  const next = transition(source, worker, reviewInput({ expectedRevision: source.revision, plan: "수정한 상담안" }), NOW);
+  assert.equal(next.status, "awaiting_approval");
+  assert.equal(next.approval, null);
+  assert.equal(next.completion, null);
+  assert.notEqual(next.reviewHash, source.reviewHash);
+  assert.equal(next.reviewHash, planHash(source, next.review));
+  assert.equal(source.status, "approved");
+});
+for (const source of [
+  row("booking", { answers: { request: "수업 취소", mode: "고정예약" } }),
+  row("booking", { answers: { request: "다른 수업으로 변경", mode: "고정예약", nextDay: ["월"], nextTime: "오전" } }),
+  row("fixed", { answers: { request: "취소·변경 예외 상담" } }),
+]) {
+  test(`fixed cancellation/change requires exception classification: ${source.category}/${source.answers.request}`, () => {
+    assert.equal(fixedException(source), true);
+    rejects(400, () => transition(source, worker, reviewInput(), NOW));
+    rejects(400, () => transition(source, worker, reviewInput({ policyFit: "exception", resolutionKind: "manual_processing" }), NOW));
+    assert.equal(reviewed(source, { policyFit: "exception", resolutionKind: "exception_review" }).review.policyFit, "exception");
+  });
+}
+test("fixed guidance and a new fixed application are not mislabeled as cancellation exceptions", () => {
+  assert.equal(fixedException(row("fixed")), false);
+  assert.equal(fixedException(row("fixed", { answers: { request: "새 고정예약 신청", days: ["월"], time: "오전" } })), false);
+});
+test("ticket conversion cannot be declared within policy even by a manager", () => {
+  rejects(400, () => transition(row("conversion"), owner, reviewInput(), NOW));
+  assert.equal(reviewed(row("conversion"), { policyFit: "insufficient", resolutionKind: "manual_processing" }).status, "awaiting_approval");
+});
+test("review rejects missing or oversized plan/reply/note", () => {
+  for (const patch of [{ plan: " " }, { memberReply: "" }, { plan: "가".repeat(2001) },
+    { memberReply: "가".repeat(1501) }, { internalNote: "가".repeat(1001) }])
+    rejects(400, () => transition(row(), worker, reviewInput(patch), NOW));
+});
+
+for (const action of ["approve", "reject", "needs_information"]) {
+  test(`only manager may ${action} the exact review`, () => {
+    const source = reviewed();
+    const input = { action, expectedRevision: source.revision, expectedReviewHash: source.reviewHash, reason: "검토 사유" };
+    rejects(403, () => transition(source, worker, input, NOW));
+    const next = transition(source, owner, input, NOW);
+    assert.equal(next.status, action === "approve" ? "approved" : action === "reject" ? "rejected" : "needs_information");
+    assert.equal(next.approval.scope, "inquiry_plan_only");
+    assert.equal(next.approval.externalExecutionAuthorized, false);
+  });
+}
+test("manager must record an exception reason for fixed cancellation review", () => {
+  const source = reviewed(row("fixed", { answers: { request: "취소·변경 예외 상담" } }), { policyFit: "exception", resolutionKind: "exception_review" });
+  rejects(400, () => transition(source, owner, { action: "approve", expectedRevision: source.revision, expectedReviewHash: source.reviewHash, reason: "" }, NOW));
+});
+test("stale, fractional, missing revisions and wrong review hashes never approve", () => {
+  const source = reviewed();
+  for (const expectedRevision of [source.revision - 1, 1.5, undefined])
+    rejects(409, () => transition(source, owner, { action: "approve", expectedRevision, expectedReviewHash: source.reviewHash }, NOW));
+  rejects(409, () => transition(source, owner, { action: "approve", expectedRevision: source.revision, expectedReviewHash: "stale-hash" }, NOW));
+});
+test("changing reviewed member intent or review content invalidates the approval plan", () => {
+  const source = reviewed();
+  const changedRows = [
+    { ...source, details: "달라진 문의" }, { ...source, memberName: "다른테스트회원" },
+    { ...source, memberPhone: "01000000001" }, { ...source, answers: { ...source.answers, start: "다음 달" } },
+    { ...source, review: { ...source.review, plan: "승인 전 변경된 내용" } },
+  ];
+  for (const changed of changedRows)
+    rejects(409, () => transition(changed, owner, { action: "approve", expectedRevision: changed.revision, expectedReviewHash: source.reviewHash }, NOW));
+});
+test("Firestore map key reordering preserves the review hash and exact-plan approval", () => {
+  const source = reviewed();
+  const reordered = { ...source,
+    answers: Object.fromEntries(Object.entries(source.answers).reverse()),
+    review: Object.fromEntries(Object.entries(source.review).reverse()),
+  } as InquiryRow;
+  assert.deepEqual(reordered.answers, source.answers);
+  assert.deepEqual(reordered.review, source.review);
+  assert.equal(planHash(reordered, reordered.review), source.reviewHash);
+  const next = transition(reordered, owner, { action: "approve", expectedRevision: source.revision,
+    expectedReviewHash: source.reviewHash }, NOW);
+  assert.equal(next.status, "approved");
+  assert.equal(next.approval.reviewHash, source.reviewHash);
+});
+test("approval rejects a review from a superseded policy version even if its hash is recomputed", () => {
+  const source = reviewed();
+  source.review = { ...source.review, policyVersion: "old" };
+  source.reviewHash = planHash(source, source.review);
+  rejects(409, () => transition(source, owner, { action: "approve", expectedRevision: source.revision, expectedReviewHash: source.reviewHash }, NOW));
+});
+
+test("completion requires current manager approval and a recorded manual verification", () => {
+  const source = approved();
+  const input = { action: "complete", expectedRevision: source.revision, expectedReviewHash: source.reviewHash,
+    completionNote: "상담 결과를 확인했습니다.", evidence: "합성 테스트 확인 기록" };
+  const next = transition(source, worker, input, NOW);
+  assert.equal(next.status, "completed");
+  assert.equal(next.completion.recordedManually, true);
+  assert.equal(next.completion.providerSendVerified, false);
+  assert.equal(next.memberNotificationStatus, "not_sent_by_system");
+  for (const bad of [reviewed(), { ...source, approval: null }, { ...source, review: { ...source.review, plan: "변경됨" } }])
+    rejects(409, () => transition(bad as InquiryRow, worker, { ...input, expectedRevision: bad.revision }, NOW));
+  rejects(409, () => transition(source, worker, { ...input, expectedReviewHash: "old" }, NOW));
+  rejects(400, () => transition(source, worker, { ...input, evidence: "" }, NOW));
+  rejects(400, () => transition(source, worker, { ...input, completionNote: " " }, NOW));
+});
+test("read-all permission does not authorize completing another assignee's approved inquiry", () => {
+  const source = { ...approved(), assignedStaffId: "other-worker" } as InquiryRow;
+  const input = { action: "complete", expectedRevision: source.revision, expectedReviewHash: source.reviewHash,
+    completionNote: "상담 결과 확인", evidence: "합성 테스트 기록" };
+  assert.doesNotThrow(() => assertRead(worker, source));
+  rejects(403, () => transition(source, worker, input, NOW));
+  assert.equal(transition(source, owner, input, NOW).status, "completed");
+});
+test("completed inquiries reject every mutating policy transition", () => {
+  const source = approved();
+  const completed = { ...source, ...transition(source, worker, { action: "complete", expectedRevision: source.revision,
+    expectedReviewHash: source.reviewHash, completionNote: "완료 확인", evidence: "합성 확인 기록" }, NOW) } as InquiryRow;
+  for (const action of ["claim", "review", "approve", "reject", "needs_information", "complete"])
+    rejects(409, () => transition(completed, owner, { ...reviewInput(), action, expectedRevision: completed.revision, expectedReviewHash: completed.reviewHash }, NOW));
+});

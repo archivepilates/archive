@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fffdfa">
+  <meta name="description" content="ARCHIVE PILATES 회원 문의와 변경 신청을 한곳에서 접수하세요.">
+  <title>회원 문의 · ARCHIVE PILATES</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/app.js" type="module"></script>
+</head>
+<body>
+  <a class="skip-link" href="#category-screen">문의 선택으로 이동</a>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="wordmark" href="/" aria-label="ARCHIVE PILATES 문의 홈">ARCHIVE PILATES</a>
+      <span class="header-label">MEMBER HELP</span>
+    </header>
+
+    <main id="main-content">
+      <div class="flow-stepper" aria-label="문의 접수 단계">
+        <span id="step-label-1" aria-current="step"><i aria-hidden="true">1</i>문의 선택</span>
+        <span id="step-label-2"><i aria-hidden="true">2</i>내용 선택</span>
+        <span id="step-label-3"><i aria-hidden="true">3</i>회원 정보</span>
+      </div>
+
+      <section id="category-screen" class="category-screen" aria-labelledby="home-title" tabindex="-1">
+        <div class="home-intro">
+          <p class="eyebrow">HOW CAN WE HELP?</p>
+          <h1 id="home-title">무엇을<br class="mobile-break"> 도와드릴까요?</h1>
+          <p>문의 종류를 고르고,<br class="mobile-break"> 필요한 내용만 간단히 선택해 주세요.</p>
+        </div>
+
+        <div class="scoreboard" id="category-board">
+          <button class="category-tile renewal" type="button" data-category="renewal">
+            <span class="tile-top"><span class="tile-no" aria-hidden="true">01</span><span class="tile-arrow" aria-hidden="true">↗</span></span>
+            <svg class="tile-art" viewBox="0 0 160 120" aria-hidden="true" focusable="false"><use href="/assets/categories.svg#renewal"></use></svg>
+            <span class="tile-copy"><b>재등록 문의</b><small>다음 운동을 함께 준비해요</small></span>
+          </button>
+          <button class="category-tile booking" type="button" data-category="booking">
+            <span class="tile-top"><span class="tile-no" aria-hidden="true">02</span><span class="tile-arrow" aria-hidden="true">↗</span></span>
+            <svg class="tile-art" viewBox="0 0 160 120" aria-hidden="true" focusable="false"><use href="/assets/categories.svg#booking"></use></svg>
+            <span class="tile-copy"><b>수업 취소·변경</b><small>예약한 수업 일정 문의</small></span>
+          </button>
+          <button class="category-tile holding" type="button" data-category="holding">
+            <span class="tile-top"><span class="tile-no" aria-hidden="true">03</span><span class="tile-arrow" aria-hidden="true">↗</span></span>
+            <svg class="tile-art" viewBox="0 0 160 120" aria-hidden="true" focusable="false"><use href="/assets/categories.svg#holding"></use></svg>
+            <span class="tile-copy"><b>수강권 홀딩</b><small>잠시 쉬어갈 기간 신청</small></span>
+          </button>
+          <button class="category-tile conversion" type="button" data-category="conversion">
+            <span class="tile-top"><span class="tile-no" aria-hidden="true">04</span><span class="tile-arrow" aria-hidden="true">↗</span></span>
+            <svg class="tile-art" viewBox="0 0 160 120" aria-hidden="true" focusable="false"><use href="/assets/categories.svg#conversion"></use></svg>
+            <span class="tile-copy"><b>수강권 전환</b><small>다른 수업으로 전환 상담</small></span>
+          </button>
+          <button class="category-tile fixed" type="button" data-category="fixed">
+            <span class="tile-top"><span class="tile-no" aria-hidden="true">05</span><span class="tile-arrow" aria-hidden="true">↗</span></span>
+            <svg class="tile-art" viewBox="0 0 160 120" aria-hidden="true" focusable="false"><use href="/assets/categories.svg#fixed"></use></svg>
+            <span class="tile-copy"><b>고정예약 문의</b><small>꾸준한 운동 일정 만들기</small></span>
+          </button>
+          <button class="category-tile other" type="button" data-category="other">
+            <span class="tile-top"><span class="tile-no" aria-hidden="true">06</span><span class="tile-arrow" aria-hidden="true">↗</span></span>
+            <svg class="tile-art" viewBox="0 0 160 120" aria-hidden="true" focusable="false"><use href="/assets/categories.svg#other"></use></svg>
+            <span class="tile-copy"><b>기타 문의</b><small>궁금하거나 불편했던 점</small></span>
+          </button>
+        </div>
+        <p class="home-note"><span aria-hidden="true">✳</span> 선택한 내용은 담당자가 확인하고 안내드립니다.</p>
+      </section>
+
+      <section class="flow-panel" id="detail-screen" aria-labelledby="category-title" hidden>
+        <div class="panel-heading"><p class="eyebrow">TELL US A LITTLE</p><h2 id="category-title" tabindex="-1"></h2><p>해당하는 보기를 골라 주세요.<br>잘 모르겠다면 상담으로 넘길 수 있어요.</p></div>
+        <form id="detail-form">
+          <div id="choice-fields"></div>
+          <details class="optional-note">
+            <summary>추가로 전할 내용이 있어요 <span>선택</span></summary>
+            <label for="details">선택한 내용 외에 필요한 말씀만 남겨주세요</label>
+            <textarea id="details" name="details" maxlength="200" placeholder="200자 이내로 간단히 적어주세요."></textarea>
+            <small>민감한 증빙은 담당자의 별도 안내를 받아 전달해 주세요.</small>
+          </details>
+          <div class="note policy-note"><span class="note-mark" aria-hidden="true">i</span><div><b>관련 안내</b><p id="policy-text"></p><a id="policy-link" target="_blank" rel="noopener">규정 자세히 보기 <span aria-hidden="true">↗</span></a></div></div>
+          <p class="policy-reminder" id="policy-reminder">신청 내용은 담당자 확인 후 안내드립니다.</p>
+          <p class="error" id="detail-error" role="alert"></p>
+          <div class="flow-actions"><button class="secondary" id="back-categories" type="button"><span aria-hidden="true">←</span> 다시 선택</button><button type="submit">다음 · 회원 정보 <span aria-hidden="true">→</span></button></div>
+        </form>
+      </section>
+
+      <section class="flow-panel" id="member-screen" aria-labelledby="member-title" hidden>
+        <div class="panel-heading"><p class="eyebrow">ONE LAST STEP</p><h2 tabindex="-1" id="member-title">회원 정보를 알려주세요</h2><p>문의하신 내용을 확인하고<br>안내드리는 데 필요한 정보예요.</p></div>
+        <form id="member-form">
+          <label for="member-name">성함 <span class="required-label">필수</span></label>
+          <input id="member-name" name="memberName" autocomplete="name" maxlength="40" required placeholder="회원 성함을 입력해 주세요">
+          <label for="member-phone">연락처 <span class="required-label">필수</span></label>
+          <input id="member-phone" name="memberPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required placeholder="010-0000-0000">
+          <div id="contact-choices"></div>
+          <div class="review-block"><p class="eyebrow">YOUR REQUEST</p><h3>선택한 문의</h3><p id="selection-summary"></p></div>
+          <div class="consent-block"><label class="consent-choice"><input id="privacy-consent" name="privacyConsent" type="checkbox" required><span>문의 접수를 위한 개인정보 수집·이용에 동의합니다. <small>필수</small></span></label><a href="/privacy.html" target="_blank" rel="noopener">수집·이용 안내 보기 <span aria-hidden="true">↗</span></a></div>
+          <div class="honeypot" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+          <p class="error" id="member-error" role="alert"></p>
+          <div class="flow-actions"><button class="secondary" id="back-details" type="button"><span aria-hidden="true">←</span> 내용 확인</button><button id="submit-inquiry" type="submit">문의 접수하기 <span aria-hidden="true">→</span></button></div>
+          <p class="submission-note">접수 후 담당자 확인과 관리자 검토를 거쳐 안내드립니다.<br>접수만으로 수강권이나 예약이 변경되지는 않습니다.</p>
+        </form>
+      </section>
+
+      <section class="flow-panel result-panel" id="result-screen" aria-labelledby="result-title" hidden>
+        <svg class="result-art" viewBox="0 0 160 120" aria-hidden="true" focusable="false"><use href="/assets/categories.svg#received"></use></svg>
+        <p class="eyebrow">THANK YOU</p><h2 id="result-title" tabindex="-1">문의가 접수되었습니다</h2>
+        <p class="receipt-label">접수번호 <strong id="receipt-id"></strong></p>
+        <p id="result-state" class="result-state" role="status"></p>
+        <dl class="review-block receipt" id="receipt"></dl>
+        <button id="new-request" class="secondary" type="button">다른 문의하기 <span aria-hidden="true">↗</span></button>
+      </section>
+    </main>
+
+    <footer class="site-footer"><span class="footer-brand">ARCHIVE PILATES</span><p>회원님의 이야기를 차분히 살피겠습니다.<br>접수하신 내용은 담당자가 확인 후 안내드립니다.</p><a href="/privacy.html">개인정보 안내</a></footer>
+  </div>
+</body>
+</html>

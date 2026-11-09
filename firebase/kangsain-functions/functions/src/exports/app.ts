@@ -1,4 +1,5 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
+import { memberInquiryApiHandler, memberInquiryStaffHandler } from "../memberInquiries/handlers";
 import { operatorCaptureStudioMateReferralHandler, getStudioMateReferralDashboardHandler } from "../callable/studiomateReferral";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { climateHandler, lgThinQConnection } from "../climate/climateCallables";
@@ -78,6 +79,11 @@ import { toHttpsError } from "../utils/errors";
 import { getVideoWatchDashboardHandler, videoWatchEventApiHandler } from "../videoAnalytics/videoWatchAnalytics";
 
 const secretlessCallableOptions = { ...callableOptions, secrets: [] };
+
+export const memberInquiryApi = onRequest({ ...publicRequestOptions, maxInstances: 2, concurrency: 10 }, memberInquiryApiHandler);
+export const memberInquiryStaff = onCall(secretlessCallableOptions, async request => {
+  try { return await memberInquiryStaffHandler(request); } catch (error) { throw toHttpsError(error); }
+});
 
 const climateOptions = {
   region: REGION, invoker: "public" as const, secrets: [lgThinQConnection],

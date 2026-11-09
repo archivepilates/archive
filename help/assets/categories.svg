@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="renewal" viewBox="0 0 160 120">
+    <path d="M22 97h116" stroke="#e4d8c4" stroke-width="3" stroke-linecap="round"/>
+    <rect x="31" y="29" width="91" height="61" rx="9" fill="#ded1b4" transform="rotate(-9 76 60)"/>
+    <path d="M38 33h84v19a9 9 0 0 0 0 18v21H38V70a9 9 0 0 0 0-18z" fill="#f4dfac" stroke="#635a48" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M98 39v9m0 7v9m0 7v9" stroke="#a58e60" stroke-width="2" stroke-linecap="round"/>
+    <path d="M55 51h28m-28 9h20" stroke="#635a48" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="120" cy="80" r="22" fill="#a92b34"/>
+    <path d="M110 81a10 10 0 1 0 3-9m-2-6 1 8 8-1" fill="none" stroke="#fffdfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m30 20 2 5m-11 1 5 2" stroke="#b8a169" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="booking" viewBox="0 0 160 120">
+    <path d="M22 100h116" stroke="#e6d7cd" stroke-width="3" stroke-linecap="round"/>
+    <rect x="29" y="29" width="86" height="69" rx="8" fill="#fffdfa" stroke="#756258" stroke-width="2"/>
+    <path d="M29 38a9 9 0 0 1 9-9h68a9 9 0 0 1 9 9v15H29z" fill="#ce7c67"/>
+    <path d="M49 22v16m45-16v16" stroke="#756258" stroke-width="4" stroke-linecap="round"/>
+    <rect x="41" y="63" width="12" height="10" rx="2" fill="#e9d8c8"/><rect x="65" y="63" width="12" height="10" rx="2" fill="#e9d8c8"/><rect x="41" y="81" width="12" height="9" rx="2" fill="#e9d8c8"/>
+    <circle cx="112" cy="80" r="25" fill="#f0d7c9"/>
+    <path d="M98 74h25l-6-6m7 18H99l6 6" fill="none" stroke="#a92b34" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m131 34 5 5m-2-14v6" stroke="#ce7c67" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="holding" viewBox="0 0 160 120">
+    <path d="M22 100h116" stroke="#d7e1d6" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="77" cy="62" r="38" fill="#d6e1ce"/>
+    <circle cx="77" cy="62" r="29" fill="#f8fbf8" stroke="#77816b" stroke-width="2"/>
+    <rect x="65" y="47" width="8" height="30" rx="3" fill="#6d806a"/><rect x="82" y="47" width="8" height="30" rx="3" fill="#6d806a"/>
+    <path d="M114 96V68m0 17c15-2 21-12 18-24-14 1-21 10-18 24" fill="#a8ba9b" stroke="#77816b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M114 94c-16-3-22-12-19-22 14 1 21 10 19 22" fill="#ccd9bd" stroke="#77816b" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M31 45v9m-5-5h10" stroke="#a92b34" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="conversion" viewBox="0 0 160 120">
+    <path d="M20 100h120" stroke="#dddbe8" stroke-width="3" stroke-linecap="round"/>
+    <rect x="23" y="27" width="55" height="59" rx="9" fill="#d9d8e8" stroke="#737087" stroke-width="2"/>
+    <rect x="82" y="41" width="55" height="59" rx="9" fill="#f1dedb" stroke="#947872" stroke-width="2"/>
+    <path d="M37 43h27m-27 9h18m31 31h27m-27 9h18" stroke="#fffdfa" stroke-width="4" stroke-linecap="round"/>
+    <path d="M68 27h42l-8-7m-10 78H50l8 7" fill="none" stroke="#a92b34" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M113 26v9M50 90v9" stroke="#a92b34" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="78" cy="62" r="17" fill="#fffdfa"/>
+    <path d="m70 62 6 6 11-12" fill="none" stroke="#737087" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="fixed" viewBox="0 0 160 120">
+    <path d="M20 100h120" stroke="#e9d6cf" stroke-width="3" stroke-linecap="round"/>
+    <rect x="30" y="28" width="90" height="70" rx="8" fill="#fffdfa" stroke="#866c61" stroke-width="2"/>
+    <path d="M30 37a9 9 0 0 1 9-9h72a9 9 0 0 1 9 9v15H30z" fill="#d9a091"/>
+    <path d="M51 22v15m48-15v15" stroke="#866c61" stroke-width="4" stroke-linecap="round"/>
+    <rect x="41" y="62" width="17" height="15" rx="4" fill="#f1d8cf"/><rect x="66" y="62" width="17" height="15" rx="4" fill="#f1d8cf"/><rect x="91" y="62" width="17" height="15" rx="4" fill="#f1d8cf"/>
+    <path d="m45 69 3 3 6-6m16 3 3 3 6-6m16 3 3 3 6-6" fill="none" stroke="#a92b34" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M110 84c0-10 7-16 15-16s15 6 15 16c0 10-15 21-15 21s-15-11-15-21" fill="#a92b34"/>
+    <circle cx="125" cy="83" r="5" fill="#fffdfa"/>
+  </symbol>
+  <symbol id="other" viewBox="0 0 160 120">
+    <path d="M23 100h115" stroke="#e2ddd0" stroke-width="3" stroke-linecap="round"/>
+    <path d="M67 54h59a11 11 0 0 1 11 11v17a11 11 0 0 1-11 11h-5v13l-17-13H67a11 11 0 0 1-11-11V65a11 11 0 0 1 11-11" fill="#d8cdb5" stroke="#827762" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M33 25h66a11 11 0 0 1 11 11v30a11 11 0 0 1-11 11H58L41 91V77h-8a11 11 0 0 1-11-11V36a11 11 0 0 1 11-11" fill="#f6e8c8" stroke="#827762" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="47" cy="52" r="4" fill="#a92b34"/><circle cx="66" cy="52" r="4" fill="#a92b34"/><circle cx="85" cy="52" r="4" fill="#a92b34"/>
+    <path d="M124 29v10m-5-5h10" stroke="#a92b34" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="received" viewBox="0 0 160 120">
+    <path d="M23 101h114" stroke="#dfd8cb" stroke-width="3" stroke-linecap="round"/>
+    <path d="M35 46h88v51H35z" fill="#f0dfbd" stroke="#8a7b63" stroke-width="2" stroke-linejoin="round"/>
+    <path d="m35 47 44 30 44-30M35 96l31-28m57 28L93 68" fill="none" stroke="#b59a71" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="81" cy="41" r="28" fill="#a92b34"/>
+    <path d="m68 42 9 9 17-20" fill="none" stroke="#fffdfa" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m124 27 6-5m-4 17h8M34 22l4 5" stroke="#b59a71" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+</svg>
