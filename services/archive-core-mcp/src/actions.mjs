@@ -229,6 +229,7 @@ export const ACTIONS = [
 ];
 
 export const UNSUPPORTED = [
+  { name: 'memberInquiryStaff', reason: '회원 문의의 열람·담당 배정·관리자 결정은 현재 CORE 문의 접수함 전용입니다. 읽기와 쓰기가 하나의 callable 안에 있어 범용 MCP 액션으로 노출하지 않습니다. 분리된 조회·prepare/execute 계약을 검증하기 전에는 승인이나 외부 자동처리를 이 함수로 우회하지 않습니다.' },
   { name: 'operatorCaptureStudioMateReferral', reason: '명지점 추천 접수는 CORE 회원등록의 운영자 입력 전용입니다. 지급 대상 선언을 범용 MCP 수정으로 추가하지 않으며, 실제 포인트는 정기 처리기의 원본 검증·영구 선점·native 확인 뒤에만 적립합니다.' },
   { name: 'getStudioMateReferralDashboard', reason: '명지점 추천 현황은 현재 CORE 회원등록 화면 전용 조회입니다. StudioMate 실시간 포인트나 직접 적립 명령이 아니며, 별도 검증된 MCP 조회 매핑 전에는 업무 도구로 노출하지 않습니다.' },
   { name: 'getCoreAccessSession', reason: '인증·접근 세션 조회는 auth 모듈 전용입니다. 업무 액션으로 중복 노출하지 않습니다.' },

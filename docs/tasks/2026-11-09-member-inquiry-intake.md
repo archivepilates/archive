@@ -46,3 +46,5 @@
 ## 2026-11-10 approved release
 - Operator approved all current same-studio staff read access, 90-day retention, deployment and help.archivepilates.com domain transition. Manager approval remains unchanged. Non-manager mutation remains assigned-only; unassigned requests can be claimed. No default assignee is invented.
 - Release preparation uses archive-codex-operator@archive-pilates.iam.gserviceaccount.com for project archive-pilates; no member messages or native booking/ticket changes are included.
+
+- Release CI found the new mixed read/write inquiry callable missing explicit MCP coverage. It is deliberately excluded from generic MCP business actions until separate read and prepare/execute contracts exist; staff use the approved CORE UI. Added the documented exclusion, preserved callable coverage checks, and reran the relevant check. Added the inquiry link to the current-staff navigation while preserving the private-record landing page.

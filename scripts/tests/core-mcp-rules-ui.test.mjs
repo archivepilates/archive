@@ -25,7 +25,7 @@ test('fixed callable exports are covered without inventing endpoints or exposing
   assert.equal(endpoints.size, exports.length, 'callable exports must be unique');
   const supported = new Set(CALLABLE_ACTIONS.map(action => action.name));
   assert.equal(supported.size, CALLABLE_ACTIONS.length);
-  const excludedNames = ['operatorCaptureStudioMateReferral', 'getStudioMateReferralDashboard',
+  const excludedNames = ['memberInquiryStaff', 'operatorCaptureStudioMateReferral', 'getStudioMateReferralDashboard',
     'getCoreAccessSession', 'completeCoreFirstLogin', 'loginStaffWithPin',
     'setupStaffPinWithTempCode', 'adminIssueStaffTempCode', 'registerFcmToken',
     'adminSyncLecturesRange', 'adminSyncManagerStaffs', 'adminPollManagerNotices'];
