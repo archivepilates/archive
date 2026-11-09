@@ -11,6 +11,13 @@
 
 ## Working Guidelines
 
+### Settlement Reference Originals
+
+- Effective 2026-11-09, the only active compensation reference is Google Sheet `1vMCzM58IYdCwEbrHWWhDbYPLT49MHIr6PGWqRm9ogXQ` (`아카이브 강사 보수기준표`); the only active period-ticket deduction reference is Google Sheet `1_3gthls6B7UnPA1OD-txmvSDB2QmKX2sgxtm2TeG4-E` (`기간권 차감금액표`). Preserve these IDs and existing `아카이브 정산` pointers used by the monthly runner. Do not create another active XLSX copy or substitute an archival backup.
+- As part of an authorized new-instructor or signed-contract-renewal task, reconcile the exact instructor, signed terms, applicable dates, group/private basis and regular-payroll inclusion, then update the applicable original Sheet and independently read it back with the existing settlement account. An expired document is not proof of renewal, and missing or conflicting terms must not receive an assumed rate. This is a task completion rule, not a newly installed contract detector or background writer.
+- Keep effective-period evidence and change history. A reference update does not authorize recalculating finalized months, transferring pay or sending staff statements. Preserve the current source-row deduction priority, regular/freelance split and existing schedule. Backups and finalized monthly statements are historical evidence, not alternative active references.
+- Keep compensation references restricted to authorized access. Do not enable public-link sharing or copy detailed compensation into public CORE rules, Git, or operator email. Verify the existing monthly settlement reader after any approved sharing change; do not add permissions or weaken access merely to restore a read.
+
 ### On-Demand Mac Mini Unlock
 
 - For an already authorized GUI task blocked by ordinary screen lock on the configured Mac mini, use `/Users/archivepilates/.local/bin/archive-mac-unlock status`, then `unlock` once only when credential ACL, Accessibility, session and retry guards are ready. Verify a fresh unlocked status before proceeding; skip input when already unlocked. Do not ask for manual unlock before checking this approved local path.
