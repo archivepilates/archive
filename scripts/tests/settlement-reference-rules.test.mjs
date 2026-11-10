@@ -38,10 +38,13 @@ test('source selection, finalized-month protection and sensitive-data boundaries
 
 test('scoped Hosting release accepts only the reviewed three policy rows',()=>{
  const before=execFileSync('git',['show',`${SETTLEMENT_RULES_BASE}:core/rules/index.html`]);
- assert.doesNotThrow(()=>assertSettlementReferenceRulesScope(before,html));
- assert.throws(()=>assertSettlementReferenceRulesScope(before,html.replace('별도 계약 자동 감지기','계약 자동 감지기')));
- assert.throws(()=>assertSettlementReferenceRulesScope(before,html+'\n'));
- assert.throws(()=>assertSettlementReferenceRulesScope(before,html.replace('8. 정산·비즈니스 지표','다른 제목')));
+ // A one-time release stays bound to its historical source, not later rule edits.
+ const released=execFileSync('git',['show','588275e4119fc8770de79c15ac6cd51ebd94900e:core/rules/index.html']).toString();
+ assert.doesNotThrow(()=>assertSettlementReferenceRulesScope(before,released));
+ assert.throws(()=>assertSettlementReferenceRulesScope(before,released.replace('별도 계약 자동 감지기','계약 자동 감지기')));
+ assert.throws(()=>assertSettlementReferenceRulesScope(before,released+'\n'));
+ assert.throws(()=>assertSettlementReferenceRulesScope(before,released.replace('8. 정산·비즈니스 지표','다른 제목')));
+ assert.throws(()=>assertSettlementReferenceRulesScope(before,html));
 });
 test('single-file manifest retains every other live file hash',()=>{
  const old='a'.repeat(64),next='b'.repeat(64),other='c'.repeat(64);

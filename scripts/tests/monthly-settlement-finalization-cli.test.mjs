@@ -35,3 +35,19 @@ test('legacy apply refuses to overwrite a finalized corrected pair before rebuil
     names.forEach((name, i) => assert.deepEqual(readFileSync(path.join(dir, name)), before[i]));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('a cleaned HTML-only finalized folder stays protected after workbook archival', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'settlement-html-only-'));
+  try {
+    const dir=path.join(root,'202610'), archive=path.join(root,'정산 근거보관','202610');
+    mkdirSync(dir,{recursive:true});mkdirSync(archive,{recursive:true});
+    const index=path.join(dir,'아카이브 정산명세서 202610_INDEX.html');
+    const workbook=path.join(archive,'아카이브 정산명세서 202610.xlsx');
+    writeFileSync(index,'preserve-recipient-index');writeFileSync(workbook,'preserve-corrected-payroll');
+    const result=spawnSync(process.execPath,[script,'--month=202610',`--root=${root}`,'--apply','--rebuild-from-raw'],{encoding:'utf8'});
+    assert.notEqual(result.status,0);assert.match(result.stderr,/archived_finalization_legacy_overwrite_forbidden/);
+    assert.equal(readFileSync(index,'utf8'),'preserve-recipient-index');
+    assert.equal(readFileSync(workbook,'utf8'),'preserve-corrected-payroll');
+    assert.equal(readdirSync(dir).length,1);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});

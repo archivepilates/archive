@@ -20,6 +20,7 @@ import { summarizeCurrentSettlementOperation } from "./lib/monthly-settlement-op
 import { dedupeSettlementSourceRows } from "./lib/monthly-settlement-source.mjs";
 import { readSettlementSheetPointerFile, findSettlementSheetPointer } from "./lib/monthly-settlement-reference-reader.mjs";
 import { prepareMonthlySettlementFinalization, applyMonthlySettlementFinalization } from "./lib/monthly-settlement-finalization.mjs";
+import { renderSettlementRecipientDocument, settlementRecipientCss } from "./lib/settlement-recipient-template.mjs";
 
 const HOME = os.homedir();
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -81,6 +82,9 @@ async function main() {
   const reviewIndex = path.join(targetDir, `아카이브 정산명세서 ${ym}_INDEX_검토본.html`);
   const canonicalIndex = path.join(targetDir, `아카이브 정산명세서 ${ym}_INDEX.html`);
   const reviewStatement = path.join(targetDir, `아카이브 정산명세서 ${ym}_검토본.xlsx`);
+  const archivedStatement = path.join(rootDir, '정산 근거보관', ym, `아카이브 정산명세서 ${ym}.xlsx`);
+  if (existsSync(canonicalIndex) && existsSync(archivedStatement))
+    throw new Error('archived_finalization_legacy_overwrite_forbidden');
   if ([reviewIndex, canonicalIndex, reviewStatement, statementXlsx].every(existsSync) &&
     readFileSync(reviewIndex).equals(readFileSync(canonicalIndex)) &&
     readFileSync(reviewStatement).equals(readFileSync(statementXlsx)))
@@ -966,7 +970,6 @@ function renderIndexHtml({ ym, summary, files, generatedAt }) {
 }
 
 function renderInstructorHtml({ ym, instructor, generatedAt }) {
-  const title = `ARCHIVE PILATES 정산명세서 ${ym} ${instructor.name}`;
   const displayRole = instructorRole(instructor.name, instructor.role);
   const totalClassCount = number(instructor.groupCount) + number(instructor.privateCount) + number(instructor.lessonCount);
   const adjustmentRows = parseAdjustmentRows(instructor);
@@ -982,68 +985,24 @@ function renderInstructorHtml({ ym, instructor, generatedAt }) {
   ];
   if (instructor.regularPayout) rows.push(detailRow("정규직 실지급", "급여 지급분", instructor.regularPayout));
   if (instructor.combinedPayout) rows.push(detailRow("실지급 합산", "프리랜서 지급액 + 정규직 실지급", instructor.combinedPayout, true));
-  return `<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)}</title>
-  <style>${baseCss()}</style>
-</head>
-<body>
-<main>
-  <article class="statement">
-    <header class="brand-row">
-      <div>
-        <div class="brand-mark">AP</div>
-        <div class="eyebrow" style="margin-top:18px;">ARCHIVE PILATES</div>
-        <h1>정산명세서</h1>
-      </div>
-      <div class="meta">
-        <strong>${escapeHtml(formatYm(ym))} 정산</strong>
-        작성일 ${formatDate(generatedAt)}<br>
-        전달용 HTML
-      </div>
-    </header>
-    <section class="person">
-      <div class="panel">
-        <div class="label">${escapeHtml(displayRole)}</div>
-        <div class="name">${escapeHtml(instructor.name)}</div>
-        <div class="role">총 수업 ${formatCount(totalClassCount)}회</div>
-      </div>
-      <div class="panel">
-        <div class="label">최종 지급 기준액</div>
-        <div class="total">${formatWon(instructor.finalPayout)}</div>
-        <div class="role">${instructor.combinedPayout ? "실지급 합산" : "지급액"}</div>
-      </div>
-    </section>
-    <section class="grid">
-      <div class="metric"><div class="label">그룹</div><div class="value">${formatCount(instructor.groupCount)}회</div></div>
-      <div class="metric"><div class="label">프라이빗</div><div class="value">${formatCount(instructor.privateCount)}회</div></div>
-      <div class="metric"><div class="label">그룹 평균</div><div class="value">${formatNumber(instructor.groupAverage, 2)}명</div></div>
-      <div class="metric"><div class="label">세전 보수</div><div class="value">${formatWon(instructor.pretaxPay)}</div></div>
-    </section>
-    <section>
-      <table aria-label="정산 상세">
-        <thead><tr><th>항목</th><th>금액</th></tr></thead>
-        <tbody>${rows.join("")}</tbody>
-      </table>
-    </section>
-    <section>
-      <ul class="note-list">
-        ${instructor.combinedPayout ? "<li>프리랜서 수업 보수와 정규직 실지급을 합산해 최종 지급 기준액을 표시했습니다.</li>" : "<li>세전 보수총액에서 원천징수 3.3%를 반영해 지급액을 표시했습니다.</li>"}
-        ${instructor.bank ? `<li>지급 계좌: ${escapeHtml(instructor.bank)} · ${escapeHtml(String(instructor.account || ""))} · ${escapeHtml(instructor.accountHolder || instructor.name)}</li>` : ""}
-        <li>본 명세서는 ARCHIVE PILATES 내부 정산 기준에 따라 작성되었습니다.</li>
-      </ul>
-    </section>
-    <footer class="footer">
-      <span>ARCHIVE PILATES</span>
-      <span>정산 관련 문의는 운영자에게 확인해 주세요.</span>
-    </footer>
-  </article>
-</main>
-</body>
-</html>`;
+  return renderSettlementRecipientDocument({
+    month: ym, name: instructor.name, role: displayRole,
+    issuedAt: formatDate(generatedAt), totalClasses: formatCount(totalClassCount),
+    payout: formatWon(instructor.finalPayout),
+    payoutDescription: instructor.combinedPayout ? '실지급 합산' : '지급액',
+    metrics: [
+      { label: '그룹', value: `${formatCount(instructor.groupCount)}회` },
+      { label: '프라이빗', value: `${formatCount(instructor.privateCount)}회` },
+      { label: '그룹 평균', value: `${formatNumber(instructor.groupAverage, 2)}명` },
+      { label: '세전 보수', value: formatWon(instructor.pretaxPay) },
+    ],
+    sections: [{ html: `<table aria-label="정산 상세"><thead><tr><th>항목</th><th>금액</th></tr></thead><tbody>${rows.join('')}</tbody></table>` }],
+    notes: [
+      instructor.combinedPayout ? '프리랜서 수업 보수와 정규직 실지급을 합산해 최종 지급 기준액을 표시했습니다.' : '세전 보수총액에서 원천징수 3.3%를 반영해 지급액을 표시했습니다.',
+      ...(instructor.bank ? [`지급 계좌: ${instructor.bank} · ${String(instructor.account || '')} · ${instructor.accountHolder || instructor.name}`] : []),
+      '본 명세서는 ARCHIVE PILATES 내부 정산 기준에 따라 작성되었습니다.',
+    ],
+  });
 }
 
 function detailRow(label, sub, value, accent = false) {
@@ -1058,21 +1017,12 @@ function parseAdjustmentRows(instructor) {
   const lesson = text.match(/강사\s*레슨\s*([-,\d]+)/);
   if (salary) rows.push(detailRow("정규직 급여 공제", "프리랜서 수업 보수에서 차감", -Math.abs(money(salary[1]))));
   if (lesson) rows.push(detailRow("강사 레슨 조정", "정산 조정 반영", money(lesson[1])));
-  if (!rows.length) rows.push(detailRow("조정금액", text, instructor.adjustmentAmount));
+  if (!rows.length) rows.push(detailRow("조정금액", "계약 조건에 따른 보수 조정", instructor.adjustmentAmount));
   return rows;
 }
 
 function baseCss() {
-  return `
-:root{color-scheme:light;--bg:#f7f4ef;--paper:#fffdfa;--ink:#171717;--muted:#726b62;--line:#e6ded3;--soft:#f1ebe3;--accent:#f36b21;--accent-dark:#c84f12}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;min-height:100dvh;background:radial-gradient(circle at 20% 0%,#fff 0,#f7f4ef 36%,#efe7db 100%);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","SF Pro Display","SF Pro Text",sans-serif;line-height:1.55}
-main{width:min(960px,calc(100% - 32px));margin:0 auto;padding:34px 0 48px}.statement{background:var(--paper);border:1px solid rgba(55,45,35,.12);border-radius:28px;padding:clamp(24px,4vw,42px);box-shadow:0 24px 70px rgba(48,38,25,.13)}
-.brand-row{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:24px}.brand-mark{width:62px;height:62px;border-radius:18px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:900;font-size:22px;letter-spacing:.5px;box-shadow:0 18px 28px rgba(243,107,33,.22)}
-.eyebrow{color:var(--accent-dark);font-size:13px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}h1{margin:8px 0 0;font-size:clamp(30px,5vw,50px);line-height:1.05;letter-spacing:0}.meta{text-align:right;color:var(--muted);font-size:14px}.meta strong{color:var(--ink);display:block;font-size:18px}
-.person{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:26px}.panel{background:linear-gradient(180deg,#fff,#fbf7f1);border:1px solid var(--line);border-radius:20px;padding:22px}.label{color:var(--muted);font-size:13px;font-weight:800}.name{margin:4px 0 0;font-size:34px;font-weight:900}.role{margin-top:8px;color:var(--muted)}.total{font-size:36px;font-weight:950;margin-top:5px}
-.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px}.metric{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}.metric .value{font-size:22px;font-weight:900;margin-top:4px}
-table{width:100%;border-collapse:collapse;margin-top:18px;font-size:15px}th,td{padding:13px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);text-align:left;font-size:12px;letter-spacing:.04em;text-transform:uppercase}td:last-child,th:last-child{text-align:right}.amount{font-weight:850}.muted{color:var(--muted)}.accent{color:var(--accent-dark)}.note-list{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:8px}.note-list li{background:var(--soft);border-radius:14px;padding:12px 14px;color:#5f554a}.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:24px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
-@media(max-width:760px){main{width:min(100% - 20px,960px);padding-top:16px}.statement{border-radius:22px}.brand-row,.person{grid-template-columns:1fr;display:grid}.meta{text-align:left}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}table{font-size:14px}}@media print{body{background:#fff}main{width:100%;padding:0}.statement{border:none;border-radius:0;box-shadow:none}}`;
+  return settlementRecipientCss();
 }
 
 function rows(wb, name) {
