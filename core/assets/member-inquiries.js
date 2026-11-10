@@ -55,8 +55,9 @@ function showRow(row, events) {
   $("plan").value = row.review?.plan || ""; $("member-reply").value = row.review?.memberReply || ""; $("internal-note").value = row.review?.internalNote || "";
   $("decision-reason").value = ""; $("completion-note").value = ""; $("completion-evidence").value = ""; $("action-message").textContent = "";
   $("assignment").hidden = !access.manager || row.status === "completed";
-  $("assignee").replaceChildren(...access.assignees.map(person => { const option = node("option", person.name); option.value = person.staffId; return option; }));
-  if (row.assignedStaffId) $("assignee").value = row.assignedStaffId;
+  const placeholder = node("option", access.assignees.length ? "담당자를 선택해 주세요" : "선택 가능한 재직 직원이 없습니다"); placeholder.value = "";
+  $("assignee").replaceChildren(placeholder, ...access.assignees.map(person => { const option = node("option", person.name); option.value = person.staffId; return option; }));
+  $("assignee").value = access.assignees.some(person => person.staffId === row.assignedStaffId) ? row.assignedStaffId : "";
   $("decision-panel").hidden = !access.manager || row.status !== "awaiting_approval";
   $("review-hash").textContent = row.reviewHash ? `현재 처리안: ${row.reviewHash.slice(0, 16)} · 수정번호 ${row.revision}` : "";
   applyEditScope();
@@ -70,11 +71,16 @@ function applyEditScope() {
   $("edit-scope").textContent = editable ? "담당 문의를 검토하고 관리자에게 처리안 승인을 요청할 수 있습니다." : current.status === "completed" ? "완료 기록은 열람만 가능합니다." : current.assignedStaffId ? "전체 스태프가 열람할 수 있으며, 검토·처리는 담당자와 관리자가 진행합니다." : "미배정 문의입니다. 내 담당으로 접수한 뒤 검토해 주세요.";
   $("review-form").querySelectorAll("input,textarea,select,button").forEach(el => el.disabled = !editable);
   $("completion-panel").hidden = current.status !== "approved" || !editable;
+  $("assignee").disabled = pending || !access.assignees.length;
+  $("assign").disabled = pending || !$("assignee").value;
 }
 async function open(id) {
   if (pending) return;
   const ticket = ++generation; message("문의 상세를 조회하고 있습니다."); $("request-detail").hidden = true;
-  try { const result = await call({ action: "get", id }); if (ticket === generation) { showRow(result.row, result.events); message(""); } }
+  try {
+    const [result, freshAccess] = await Promise.all([call({ action: "get", id }), access.manager ? call({ action: "access" }) : Promise.resolve(access)]);
+    if (ticket === generation) { access = freshAccess; showRow(result.row, result.events); message(""); }
+  }
   catch (error) { if (ticket === generation) message(error.message || "문의 상세를 조회하지 못했습니다."); }
 }
 function formChanged() { return current && (current.review?.plan || "") !== $("plan").value.trim() || current && (current.review?.memberReply || "") !== $("member-reply").value.trim() || current && (current.review?.internalNote || "") !== $("internal-note").value.trim() || current && current.review?.policyFit !== $("policy-fit").value || current && current.review?.resolutionKind !== $("resolution-kind").value; }
@@ -95,6 +101,7 @@ $("reject").addEventListener("click", () => mutate("reject", { reason: $("decisi
 $("request-info").addEventListener("click", () => mutate("needs_information", { reason: $("decision-reason").value }));
 $("claim").addEventListener("click", () => mutate("claim"));
 $("assign").addEventListener("click", () => mutate("assign", { assignedStaffId: $("assignee").value }));
+$("assignee").addEventListener("change", applyEditScope);
 $("complete").addEventListener("click", () => mutate("complete", { completionNote: $("completion-note").value, evidence: $("completion-evidence").value }));
 $("status-filter").addEventListener("change", renderList); $("load-more").addEventListener("click", () => list(true));
 $("refresh-list").addEventListener("click", async () => { await list(); if (current) await open(current.id); });

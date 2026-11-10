@@ -45,3 +45,6 @@ archive-codex-operator*.json
 notion*.env
 notion*.token
 *.enc
+
+# Synthetic inquiry-assignee browser checks.
+/output/playwright/member-inquiry-assignees/

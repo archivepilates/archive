@@ -1,5 +1,5 @@
 import { memberInquiryContract as contract } from "./contract";
-import { assertActor, assertRead, hash, InquiryError, manager, transition, validateSubmission } from "./policy";
+import { assertActor, assertAssignee, assertRead, hash, InquiryError, manager, transition, validateSubmission } from "./policy";
 import type { Actor, InquiryRow } from "./policy";
 
 type Dependencies = { db: any; now?: () => number };
@@ -46,7 +46,7 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
       if (assigned) {
         const actor = staff?.data();
         if (!actor || actor.staffId !== assigned) throw new InquiryError(503, "담당자 설정 확인이 필요합니다.");
-        assertActor(actor);
+        assertAssignee(actor);
       }
       const at = new Date(clock).toISOString(), expiresAt = new Date(clock + contract.retentionDays * 86400000);
       const row = { ...payload, id, studioId: contract.studioId, status: "received", revision: 1,
@@ -84,9 +84,10 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
     if (input.action === "access") {
       const eligible = manager(actor) ? await db.collection("staffs").where("studioId", "==", actor.studioId).where("active", "==", true).limit(200).get() : null;
       return { ok: true, manager: manager(actor), staffId: actor.staffId, name: actor.name,
-        assignees: eligible ? eligible.docs.map((doc: any) => doc.data()).filter((item: Actor) => {
-          try { assertActor(item); return true; } catch { return false; }
-        }).map((item: Actor) => ({ staffId: item.staffId, name: item.name })) : [] };
+        assignees: eligible ? eligible.docs.filter((doc: any) => {
+          const item = doc.data();
+          try { assertAssignee(item); return doc.id === item.staffId; } catch { return false; }
+        }).map((doc: any) => { const item = doc.data(); return { staffId: item.staffId, name: item.name }; }) : [] };
     }
     if (input.action === "list") {
       let query = requests().where("studioId", "==", actor.studioId);
@@ -137,7 +138,7 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
         if (input.expectedRevision !== row.revision || row.status === "completed") throw new InquiryError(409, "현재 문의 상태를 다시 조회해 주세요.");
         const target = (await tx.get(db.collection("staffs").doc(input.assignedStaffId))).data();
         if (!target || target.staffId !== input.assignedStaffId) throw new InquiryError(400, "담당자를 확인해 주세요.");
-        assertActor(target);
+        assertAssignee(target);
         patch = { assignedStaffId: target.staffId, assignedStaffName: target.name, revision: row.revision + 1,
           updatedAt: new Date(now()).toISOString() };
       } else patch = transition(row, actor, input, new Date(now()).toISOString());

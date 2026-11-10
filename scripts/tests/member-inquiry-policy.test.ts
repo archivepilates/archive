@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  assertActor, assertRead, fixedException, InquiryError, planHash,
+  assertActor, assertAssignee, assertRead, fixedException, InquiryError, planHash,
   transition, validateSubmission, type Actor, type InquiryRow,
 } from "../../firebase/kangsain-functions/functions/src/memberInquiries/policy";
-import { memberInquiryContract as contract } from "../../firebase/packages/contracts/lib/member-inquiries";
+import { memberInquiryContract as contract } from "../../firebase/packages/contracts/src/member-inquiries";
 
 const NOW = "2026-11-09T13:00:00.000Z";
 const owner: Actor = { staffId: "manager-1", name: "테스트관리자", studioId: "5330", role: "manager", active: true };
-const worker: Actor = { staffId: "worker-1", name: "테스트직원", studioId: "5330", role: "instructor", active: true };
+const worker: Actor = { staffId: "worker-1", name: "테스트직원", studioId: "5330", role: "instructor", active: true,
+  employmentStatus: "current", employmentSource: "studiomate_staff_tab_browser_scan" };
 const categoryAnswers: Record<string, Record<string, unknown>> = {
   renewal: { lesson: "그룹레슨", start: "현재 수강권 종료 후" },
   booking: { request: "수업 취소", mode: "자유예약" },
@@ -125,6 +126,53 @@ for (const actor of [
   { ...worker, role: "member" }, { ...worker, studioId: "another-studio" },
   { ...worker, staffId: "" }, { ...owner, active: false },
 ]) test(`actor fails closed: ${JSON.stringify(actor)}`, () => rejects(403, () => assertActor(actor)));
+
+test("assignee requires canonical current instructor employment but preserves legacy operator compatibility", () => {
+  for (const actor of [worker, { ...worker, memberInquiryAccess: false }, owner, { ...owner, role: "owner" },
+    { ...owner, employmentStatus: "current" }, { ...owner, role: "owner", employmentStatus: "current" }])
+    assert.doesNotThrow(() => assertAssignee(actor));
+});
+
+for (const role of ["instructor", "manager", "owner"]) {
+  for (const employmentStatus of ["retired", "inactive", "unknown", ""]) {
+    test(`assignee rejects explicit ${employmentStatus || "empty"} employment for ${role} despite active account`, () => {
+      const actor = { ...worker, role, employmentStatus };
+      assert.doesNotThrow(() => assertActor(actor));
+      rejects(403, () => assertAssignee(actor));
+    });
+  }
+}
+
+for (const [name, patch] of Object.entries({
+  missingStatus: { employmentStatus: undefined }, missingSource: { employmentSource: undefined },
+  invalidSource: { employmentSource: "excel_import" }, emptySource: { employmentSource: "" },
+  disabled: { active: false }, foreign: { studioId: "another-studio" },
+  invalidRole: { role: "viewer" }, missingIdentity: { staffId: "" },
+})) {
+  test(`assignee rejects ${name}`, () => rejects(403, () => assertAssignee({ ...worker, ...patch })));
+}
+
+test("historic retired assignee remains readable without changing its saved assignment", () => {
+  const retired = { ...worker, employmentStatus: "retired" };
+  const source = row("renewal", { assignedStaffName: retired.name });
+  const before = structuredClone(source);
+  for (const actor of [worker, retired, owner]) assert.doesNotThrow(() => assertRead(actor, source));
+  rejects(403, () => assertAssignee(retired));
+  assert.deepEqual(source, before);
+});
+
+for (const actor of [
+  { ...worker, employmentStatus: "retired" }, { ...worker, employmentStatus: undefined },
+  { ...worker, employmentSource: undefined }, { ...worker, employmentSource: "excel_import" },
+  { ...owner, employmentStatus: "retired" }, { ...owner, role: "owner", employmentStatus: "retired" },
+]) {
+  test(`claim rejects ineligible assignee ${actor.role}/${actor.employmentStatus}/${actor.employmentSource}`, () => {
+    const source = row("renewal", { assignedStaffId: "", status: "received" });
+    const before = structuredClone(source);
+    rejects(403, () => transition(source, actor, { action: "claim", expectedRevision: 1 }, NOW));
+    assert.deepEqual(source, before);
+  });
+}
 
 test("read-all permission does not let an instructor review or claim another employee's inquiry", () => {
   const source = row("renewal", { assignedStaffId: "other-worker" });

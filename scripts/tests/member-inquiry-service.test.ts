@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createInquiryService } from "../../firebase/kangsain-functions/functions/src/memberInquiries/service";
 import { hash, InquiryError, validateSubmission, type Actor } from "../../firebase/kangsain-functions/functions/src/memberInquiries/policy";
-import { memberInquiryContract as contract } from "../../firebase/packages/contracts/lib/member-inquiries";
+import { memberInquiryContract as contract } from "../../firebase/packages/contracts/src/member-inquiries";
 
 const NOW = Date.parse("2026-11-09T13:00:00.000Z");
 const manager: Actor = { staffId: "manager-1", name: "테스트관리자", studioId: "5330", role: "manager", active: true };
-const worker: Actor = { staffId: "worker-1", name: "테스트직원", studioId: "5330", role: "instructor", active: true };
+const worker: Actor = { staffId: "worker-1", name: "테스트직원", studioId: "5330", role: "instructor", active: true,
+  employmentStatus: "current", employmentSource: "studiomate_staff_tab_browser_scan" };
 const copy = <T>(value: T): T => value === undefined ? value : structuredClone(value);
 
 function submission(index = 1, patch: Record<string, unknown> = {}): any {
@@ -163,13 +164,17 @@ test("phone and IP rate limits are durable transaction counters", async () => {
   }
 });
 
-test("default assignee must exist and have an active staff role in the correct studio", async () => {
+test("default assignee must exist and have canonical current employment in the correct studio before any write", async () => {
   for (const target of [null, { ...worker, staffId: "wrong" }, { ...worker, active: false },
-    { ...worker, role: "viewer" }, { ...worker, studioId: "other" }]) {
+    { ...worker, role: "viewer" }, { ...worker, studioId: "other" },
+    { ...worker, employmentStatus: "retired" }, { ...worker, employmentStatus: undefined },
+    { ...worker, employmentSource: undefined }, { ...worker, employmentSource: "excel_import" }]) {
     const { db, service } = fixture();
     if (target === null) db.rows.delete(`staffs/${worker.staffId}`); else db.seed(`staffs/${worker.staffId}`, target);
+    const before = copy([...db.rows]);
     await assert.rejects(service.submit(submission(), "synthetic-ip"), (error: unknown) => error instanceof InquiryError && [403, 503].includes(error.status));
     assert.equal(db.committedWrites.length, 0);
+    assert.deepEqual([...db.rows], before);
   }
 });
 test("default active instructor assignment does not require the retired inquiry-access flag", async () => {
@@ -178,6 +183,110 @@ test("default active instructor assignment does not require the retired inquiry-
   const result = await service.submit(submission(), "synthetic-ip");
   assert.equal(db.rows.get(requestPath(result.receiptId)).assignedStaffId, worker.staffId);
 });
+
+test("assignee picker hides retired active accounts, unverified employment, disabled, foreign and mismatched identities", async () => {
+  const { db, service } = fixture();
+  const candidates = [
+    { ...worker, staffId: "retired", employmentStatus: "retired" },
+    { ...worker, staffId: "missing-status", employmentStatus: undefined },
+    { ...worker, staffId: "missing-source", employmentSource: undefined },
+    { ...worker, staffId: "invalid-source", employmentSource: "excel_import" },
+    { ...worker, staffId: "disabled", active: false },
+    { ...worker, staffId: "foreign", studioId: "other" },
+    { ...worker, staffId: "viewer", role: "viewer" },
+    { ...manager, staffId: "retired-manager", employmentStatus: "retired" },
+    { ...manager, staffId: "retired-owner", role: "owner", employmentStatus: "retired" },
+    manager, { ...manager, staffId: "owner-1", role: "owner" },
+  ];
+  for (const candidate of candidates) db.seed(`staffs/${candidate.staffId}`, candidate);
+  db.seed("staffs/mismatched-document", { ...worker, staffId: "unrelated-id" });
+  const before = copy([...db.rows]);
+  const result = await service.staff(manager, { action: "access" });
+  assert.deepEqual(result.assignees, [worker, manager, candidates.at(-1)!].map(({ staffId, name }) => ({ staffId, name })));
+  assert.deepEqual([...db.rows], before);
+  assert.equal(db.committedWrites.length, 0);
+});
+
+for (const role of ["manager", "owner"]) {
+  test(`legacy ${role} without employment fields remains eligible for default assignment, manual assignment and claim`, async () => {
+    const { db, service } = fixture({ defaultAssignees: { renewal: manager.staffId } });
+    const operator = { ...manager, role };
+    db.seed(`staffs/${operator.staffId}`, operator);
+    const { receiptId: id } = await service.submit(submission(), "synthetic-ip");
+    assert.equal(db.rows.get(requestPath(id)).assignedStaffId, operator.staffId);
+    await service.staff(manager, { action: "assign", id, assignedStaffId: worker.staffId, expectedRevision: 1, commandId: commandId(1) });
+    await service.staff(manager, { action: "assign", id, assignedStaffId: operator.staffId, expectedRevision: 2, commandId: commandId(2) });
+    assert.equal(db.rows.get(requestPath(id)).assignedStaffId, operator.staffId);
+    assert.equal((await service.staff(operator, { action: "claim", id, expectedRevision: 3, commandId: commandId(3) })).revision, 4);
+    assert.deepEqual(db.rows.get(`staffs/${operator.staffId}`), operator);
+    assert.equal(db.committedWrites.some(write => write.path.startsWith("staffs/")), false);
+  });
+}
+
+for (const [name, patch] of Object.entries({
+  retired: { employmentStatus: "retired" }, missingStatus: { employmentStatus: undefined },
+  missingSource: { employmentSource: undefined }, invalidSource: { employmentSource: "excel_import" },
+  disabled: { active: false }, foreign: { studioId: "other" }, mismatchedIdentity: { staffId: "different-worker" },
+})) {
+  test(`manual assignment rechecks ${name} drift after picker load without writes or revision changes`, async () => {
+    const { db, service } = fixture();
+    const source = storedRow(1, ""); db.seed(requestPath(source.id), source);
+    assert.deepEqual((await service.staff(manager, { action: "access" })).assignees, [{ staffId: worker.staffId, name: worker.name }]);
+    db.seed(`staffs/${worker.staffId}`, { ...worker, ...patch });
+    const before = copy([...db.rows]);
+    await rejects(name === "mismatchedIdentity" ? 400 : 403, () => service.staff(manager, { action: "assign", id: source.id,
+      assignedStaffId: worker.staffId, expectedRevision: source.revision, commandId: commandId(1) }));
+    assert.deepEqual([...db.rows], before);
+    assert.equal(db.rows.get(requestPath(source.id)).revision, source.revision);
+    assert.equal(db.committedWrites.length, 0);
+  });
+}
+
+test("historic retired assignment remains visible and intact until a manager reassigns to a current instructor", async () => {
+  const { db, service } = fixture();
+  const retired = { ...worker, employmentStatus: "retired" };
+  const current = { ...worker, staffId: "current-worker", name: "현재테스트직원" };
+  db.seed(`staffs/${retired.staffId}`, retired); db.seed(`staffs/${current.staffId}`, current);
+  const source = storedRow(1); db.seed(requestPath(source.id), source);
+  const eventPath = `${requestPath(source.id)}/${contract.events}/r000001`;
+  const event = { action: "created", revision: 1, actor: retired.staffId, expiresAt: source.expiresAt };
+  db.seed(eventPath, event);
+  const before = copy([...db.rows]);
+  const access = await service.staff(manager, { action: "access" });
+  assert.deepEqual(access.assignees, [{ staffId: current.staffId, name: current.name }]);
+  for (const actor of [manager, current, retired]) {
+    const detail = await service.staff(actor, { action: "get", id: source.id });
+    assert.equal(detail.row.assignedStaffId, retired.staffId);
+    assert.equal(detail.row.assignedStaffName, retired.name);
+    assert.equal(detail.events[0].actor, retired.staffId);
+    assert.equal((await service.staff(actor, { action: "list" })).rows[0].assignedStaffName, retired.name);
+  }
+  assert.deepEqual([...db.rows], before); assert.equal(db.committedWrites.length, 0);
+  assert.equal((await service.staff(manager, { action: "assign", id: source.id, assignedStaffId: current.staffId,
+    expectedRevision: 1, commandId: commandId(1) })).revision, 2);
+  assert.deepEqual(db.rows.get(requestPath(source.id)), { ...source, assignedStaffId: current.staffId,
+    assignedStaffName: current.name, revision: 2, updatedAt: new Date(NOW).toISOString() });
+  assert.deepEqual(db.rows.get(eventPath), event);
+  assert.deepEqual(db.rows.get(`staffs/${retired.staffId}`), retired);
+  assert.deepEqual(db.rows.get(`staffs/${current.staffId}`), current);
+  assert.equal(db.committedWrites.length, 3);
+  assert.ok(db.committedWrites.every(write => write.path.startsWith(requestPath(source.id))));
+});
+
+for (const actor of [
+  { ...worker, employmentStatus: "retired" }, { ...worker, employmentStatus: undefined },
+  { ...worker, employmentSource: undefined }, { ...worker, employmentSource: "excel_import" },
+  { ...manager, employmentStatus: "retired" }, { ...manager, role: "owner", employmentStatus: "retired" },
+]) {
+  test(`claim rejects ${actor.role}/${actor.employmentStatus}/${actor.employmentSource} without writes`, async () => {
+    const { db, service } = fixture({}, false);
+    const source = storedRow(1, ""); db.seed(requestPath(source.id), source);
+    const before = copy([...db.rows]);
+    await rejects(403, () => service.staff(actor, { action: "claim", id: source.id, expectedRevision: 1, commandId: commandId(1) }));
+    assert.deepEqual([...db.rows], before);
+    assert.equal(db.committedWrites.length, 0);
+  });
+}
 
 test("active staff lists every same-studio inquiry before pagination, regardless of assignment", async () => {
   const { db, service } = fixture();

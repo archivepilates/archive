@@ -5,7 +5,7 @@ import type { InquiryStatus } from "./contract";
 export class InquiryError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
-export type Actor = { staffId: string; name: string; studioId: string; role: string; active: boolean; memberInquiryAccess?: boolean };
+export type Actor = { staffId: string; name: string; studioId: string; role: string; active: boolean; memberInquiryAccess?: boolean; employmentStatus?: string; employmentSource?: string };
 export type InquiryRow = Record<string, any> & { id: string; studioId: string; revision: number; status: InquiryStatus };
 function canonical(value: any): any {
   if (Array.isArray(value)) return value.map(canonical);
@@ -18,6 +18,14 @@ export function assertActor(actor: Actor): void {
   if (!actor.active || actor.studioId !== contract.studioId || !actor.staffId ||
     (!manager(actor) && actor.role !== "instructor"))
     throw new InquiryError(403, "현재 스태프 권한이 필요합니다.");
+}
+export function assertAssignee(actor: Actor): void {
+  assertActor(actor);
+  // Account activation is not employment; operators without a native staff record retain access.
+  if (actor.role === "instructor"
+    ? actor.employmentStatus !== "current" || actor.employmentSource !== "studiomate_staff_tab_browser_scan"
+    : actor.employmentStatus !== undefined && actor.employmentStatus !== "current")
+    throw new InquiryError(403, "현재 재직 중인 담당자를 선택해 주세요.");
 }
 export function assertRead(actor: Actor, row: InquiryRow): void {
   assertActor(actor);
@@ -92,6 +100,7 @@ export function transition(row: InquiryRow, actor: Actor, input: any, now: strin
   if (row.status === "completed") throw new InquiryError(409, "완료된 문의는 수정할 수 없습니다.");
   const base: Record<string, any> = { revision: row.revision + 1, updatedAt: now };
   if (input.action === "claim") {
+    assertAssignee(actor);
     if (row.assignedStaffId && row.assignedStaffId !== actor.staffId && !manager(actor)) throw new InquiryError(403, "담당 문의만 처리할 수 있습니다.");
     return { ...base, assignedStaffId: actor.staffId, assignedStaffName: actor.name, status: row.status === "received" ? "in_review" : row.status };
   }
