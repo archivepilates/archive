@@ -15,7 +15,7 @@ const TARGETS={
     '/assets/member-inquiries.css':'f6b9246431ca0e7cca46d632adcdc19cb6d748cedebf6bd73e56192715642681',
     [NEW]:'3f88c8b36e84dace42d4b67bb37f10c019041ab4a038c163b89af5f2f43d6d00',
     '/inquiries/index.html':'84f809e3d0f4362759014b3c865e1499322261b7fe03598f8afdd27f9deda961',
-    '/rules/index.html':'e4faf2669451786a4294af14f4cc3225897ff8c05e647ebfab633d8562cbc6a6',
+    '/rules/index.html':'3fdcaf62c55427d5f16e3c62ec65c2efcaf32868f0c5b3a65d0d05b86ceb7677',
   }},
   help:{site:'archive-pilates-help',directory:'help',origins:['https://help.archivepilates.com','https://archive-pilates-help.web.app'],sources:{
     '/assets/app.js':'1396f5a85319069d2a875082e7a840d90db2f1c3df1bbaa60e4ce26f3bbedb84',
