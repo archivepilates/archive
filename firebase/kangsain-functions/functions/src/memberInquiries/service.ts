@@ -1,15 +1,24 @@
 import { memberInquiryContract as contract } from "./contract";
-import { assertActor, assertAssignee, assertRead, hash, InquiryError, manager, transition, validateSubmission } from "./policy";
+import { assertActor, assertAssignee, assertRead, hash, InquiryError, manager, text, transition, validateSubmission } from "./policy";
 import type { Actor, InquiryRow } from "./policy";
+import {guidanceEvidence} from './guidance';
+import {readInquiryMemberContext} from './memberContext';
 
 type Dependencies = { db: any; now?: () => number };
 const requestId = (key: string) => "mi_" + hash(["member_inquiry_v1", key]).slice(0, 32);
 const validId = (value: unknown): value is string => typeof value === "string" && /^mi_[a-f0-9]{32}$/.test(value);
 const mask = (phone: string) => phone.slice(0, 3) + "-****-" + phone.slice(-4);
 const expireMillis = (value: any) => value?.toMillis?.() ?? (value instanceof Date ? value.getTime() : Date.parse(value));
+const contactRecorded = (row: any) => Boolean(row.reviewHash&&row.notification?.reviewHash===row.reviewHash&&['manual_contact_recorded','not_required'].includes(row.notification.outcome));
 
 export function createInquiryService({ db, now = Date.now }: Dependencies) {
   const requests = () => db.collection(contract.requests);
+  async function assignmentIssue(staffId: string) {
+    if(!staffId)return null;
+    const doc=await db.collection('staffs').doc(staffId).get(),target=doc.data();
+    try { if(!target||target.staffId!==staffId) return 'not_current_staff'; assertAssignee(target); return null; }
+    catch { return 'not_current_staff'; }
+  }
   function readable(actor: Actor, row: InquiryRow) {
     assertRead(actor, row);
     if (!Number.isFinite(expireMillis(row.expiresAt)) || expireMillis(row.expiresAt) <= now())
@@ -53,7 +62,8 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
         identityStatus: "unverified", source: "member_help_form", payloadHash,
         assignedStaffId: assigned, assignedStaffName: staff?.data()?.name || "",
         createdAt: at, updatedAt: at, expiresAt, review: null, reviewHash: null, approval: null,
-        completion: null, memberNotificationStatus: "not_sent_by_system", externalExecutionAuthorized: false };
+        completion: null, execution: null, notification: null, workflowVersion:2, policyGuidance:guidanceEvidence(payload.category,payload.answers),
+        memberNotificationStatus: "not_sent_by_system", externalExecutionAuthorized: false };
       tx.create(ref, row);
       tx.create(ref.collection(contract.events).doc("r000001"), { revision: 1, action: "received", at,
         actor: "member_form", source: "unverified_member_claim", policyVersion: contract.policyVersion, expiresAt });
@@ -79,11 +89,12 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
   }
   async function staff(actor: Actor, input: any) {
     assertActor(actor);
-    await settings();
+    const config = await settings();
     if (!input || typeof input.action !== "string") throw new InquiryError(400, "처리 내용을 확인해 주세요.");
     if (input.action === "access") {
       const eligible = manager(actor) ? await db.collection("staffs").where("studioId", "==", actor.studioId).where("active", "==", true).limit(200).get() : null;
       return { ok: true, manager: manager(actor), staffId: actor.staffId, name: actor.name,
+        responseDelayHours:[24,48].includes(config.responseDelayHours)?config.responseDelayHours:null,
         assignees: eligible ? eligible.docs.filter((doc: any) => {
           const item = doc.data();
           try { assertAssignee(item); return doc.id === item.staffId; } catch { return false; }
@@ -105,20 +116,24 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
         row.studioId === actor.studioId && expireMillis(row.expiresAt) > now());
       const last = snapshot.docs.at(-1);
       const nextCursor = snapshot.size === 100 && last ? last.id : null;
+      const staffIds=[...new Set(rows.map((row:any)=>row.assignedStaffId).filter(Boolean))] as string[];
+      const issues=new Map(await Promise.all(staffIds.map(async id=>[id,await assignmentIssue(id)] as const)));
       return { ok: true, rows: rows.map((row: any) => ({ id: row.id, category: row.category, memberName: row.memberName,
         maskedPhone: mask(row.memberPhone), status: row.status, revision: row.revision, assignedStaffName: row.assignedStaffName,
+        assignedStaffId:row.assignedStaffId,assignmentIssue:issues.get(row.assignedStaffId)||null,contactRecorded:contactRecorded(row),
         createdAt: row.createdAt, updatedAt: row.updatedAt })), nextCursor,
         coverage: { scanned: snapshot.size, limited: snapshot.size === 100,
           note: "같은 지점의 전체 문의를 최신순 100건씩 조회" } };
     }
     if (!validId(input.id)) throw new InquiryError(400, "문의번호를 확인해 주세요.");
     const ref = requests().doc(input.id);
-    if (input.action === "get") {
+    if (input.action === "get" || input.action === "context") {
       const snap = await ref.get();
       if (!snap.exists) throw new InquiryError(404, "문의 내역을 찾을 수 없습니다.");
       const row = snap.data(); readable(actor, row);
+      if(input.action==='context')return {ok:true,context:await readInquiryMemberContext(db,row,now())};
       const events = await ref.collection(contract.events).orderBy("revision", "desc").limit(50).get();
-      return { ok: true, row: { ...row, expiresAt: new Date(expireMillis(row.expiresAt)).toISOString() },
+      return { ok: true, row: { ...row, contactRecorded:contactRecorded(row),assignmentIssue:await assignmentIssue(row.assignedStaffId),expiresAt: new Date(expireMillis(row.expiresAt)).toISOString() },
         events: events.docs.map((doc: any) => { const event = doc.data(); return { ...event, expiresAt: new Date(expireMillis(event.expiresAt)).toISOString() }; }) };
     }
     if (typeof input.commandId !== "string" || !/^[a-f0-9]{48}$/.test(input.commandId)) throw new InquiryError(400, "작업 식별값을 확인해 주세요.");
@@ -139,7 +154,9 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
         const target = (await tx.get(db.collection("staffs").doc(input.assignedStaffId))).data();
         if (!target || target.staffId !== input.assignedStaffId) throw new InquiryError(400, "담당자를 확인해 주세요.");
         assertAssignee(target);
+        const assignmentReason=text(input.assignmentReason??'',500,Boolean(row.assignedStaffId&&row.assignedStaffId!==target.staffId));
         patch = { assignedStaffId: target.staffId, assignedStaffName: target.name, revision: row.revision + 1,
+          handoffReason:assignmentReason,
           updatedAt: new Date(now()).toISOString() };
       } else patch = transition(row, actor, input, new Date(now()).toISOString());
       const result = { ok: true, id: row.id, revision: patch.revision, status: patch.status || row.status };
@@ -147,6 +164,8 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
       tx.create(ref.collection(contract.events).doc("r" + String(patch.revision).padStart(6, "0")), {
         action: input.action, revision: patch.revision, actor: actor.staffId, actorName: actor.name, at: patch.updatedAt,
         previousStatus: row.status, status: result.status, reviewHash: patch.reviewHash || row.reviewHash || null,
+        ...(input.action==='assign'||input.action==='claim'?{assignment:{fromStaffId:row.assignedStaffId||'',fromName:row.assignedStaffName||'',toStaffId:patch.assignedStaffId,toName:patch.assignedStaffName,reason:patch.handoffReason||''}}:{}),
+        ...(patch.execution?{execution:patch.execution}:{}),...(patch.notification?{notification:patch.notification}:{}),
         decision: patch.approval || null, expiresAt: row.expiresAt });
       tx.create(command, { inputHash: commandHash, result, at: patch.updatedAt, expiresAt: row.expiresAt });
       return result;

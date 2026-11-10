@@ -39,6 +39,19 @@ function approved(source: InquiryRow = reviewed()): InquiryRow {
   return { ...source, ...transition(source, owner, { action: "approve", expectedRevision: source.revision,
     expectedReviewHash: source.reviewHash, reason: fixedException(source) ? "예외 상담안 검토" : "" }, NOW) } as InquiryRow;
 }
+function executionInput(source: InquiryRow, overrides: Record<string, unknown> = {}): any {
+  return { action: "record_execution", expectedRevision: source.revision, expectedReviewHash: source.reviewHash,
+    executionNote: "Manual processing checked", executionEvidence: "Synthetic processing record", ...overrides };
+}
+function notificationInput(source: InquiryRow, overrides: Record<string, unknown> = {}): any {
+  return { action: "record_notification", expectedRevision: source.revision, expectedReviewHash: source.reviewHash,
+    notificationOutcome: "manual_contact_recorded", notificationChannel: "phone",
+    notificationNote: "Manual contact checked", notificationEvidence: "Synthetic contact record", ...overrides };
+}
+function evidenced(source: InquiryRow = approved()): InquiryRow {
+  const executed = { ...source, ...transition(source, worker, executionInput(source), NOW) } as InquiryRow;
+  return { ...executed, ...transition(executed, worker, notificationInput(executed), NOW) } as InquiryRow;
+}
 function rejects(status: number, action: () => unknown): void {
   assert.throws(action, (error: unknown) => error instanceof InquiryError && error.status === status);
 }
@@ -180,7 +193,19 @@ test("read-all permission does not let an instructor review or claim another emp
   rejects(403, () => transition(source, worker, reviewInput(), NOW));
   rejects(403, () => transition(source, worker, { action: "claim", expectedRevision: 1 }, NOW));
   assert.equal(transition(source, owner, reviewInput(), NOW).status, "awaiting_approval");
-  assert.equal(transition(source, owner, { action: "claim", expectedRevision: 1 }, NOW).assignedStaffId, owner.staffId);
+  assert.equal(transition(source, owner, { action: "claim", expectedRevision: 1, assignmentReason: "Manager handoff" }, NOW).assignedStaffId, owner.staffId);
+});
+test("claim requires a bounded handoff reason only when changing an existing assignee", () => {
+  const source = row();
+  const before = structuredClone(source);
+  for (const assignmentReason of [undefined, "", "  ", "x".repeat(501)])
+    rejects(400, () => transition(source, owner, { action: "claim", expectedRevision: 1, assignmentReason }, NOW));
+  const next = transition(source, owner, { action: "claim", expectedRevision: 1, assignmentReason: "  Manager handoff  " }, NOW);
+  assert.equal(next.handoffReason, "Manager handoff");
+  assert.equal(transition(source, owner, { action: "claim", expectedRevision: 1, assignmentReason: "x".repeat(500) }, NOW).handoffReason.length, 500);
+  assert.equal(transition(source, worker, { action: "claim", expectedRevision: 1 }, NOW).handoffReason, "");
+  assert.equal(transition(row("renewal", { assignedStaffId: "" }), owner, { action: "claim", expectedRevision: 1 }, NOW).handoffReason, "");
+  assert.deepEqual(source, before);
 });
 test("an instructor can claim an unassigned inquiry before reviewing it", () => {
   const source = row("renewal", { assignedStaffId: "", status: "received" });
@@ -191,12 +216,14 @@ test("an instructor can claim an unassigned inquiry before reviewing it", () => 
   assert.equal(transition(claimed, worker, reviewInput({ expectedRevision: claimed.revision }), NOW).status, "awaiting_approval");
 });
 
-test("review binds the full plan and clears previous approval/completion", () => {
-  const source = approved();
+test("review binds the full plan and clears previous approval, execution, notification and completion", () => {
+  const source = evidenced();
   const next = transition(source, worker, reviewInput({ expectedRevision: source.revision, plan: "수정한 상담안" }), NOW);
   assert.equal(next.status, "awaiting_approval");
   assert.equal(next.approval, null);
   assert.equal(next.completion, null);
+  assert.equal(next.execution, null);
+  assert.equal(next.notification, null);
   assert.notEqual(next.reviewHash, source.reviewHash);
   assert.equal(next.reviewHash, planHash(source, next.review));
   assert.equal(source.status, "approved");
@@ -279,8 +306,8 @@ test("approval rejects a review from a superseded policy version even if its has
   rejects(409, () => transition(source, owner, { action: "approve", expectedRevision: source.revision, expectedReviewHash: source.reviewHash }, NOW));
 });
 
-test("completion requires current manager approval and a recorded manual verification", () => {
-  const source = approved();
+test("completion requires current manager approval and both recorded manual verifications", () => {
+  const source = evidenced();
   const input = { action: "complete", expectedRevision: source.revision, expectedReviewHash: source.reviewHash,
     completionNote: "상담 결과를 확인했습니다.", evidence: "합성 테스트 확인 기록" };
   const next = transition(source, worker, input, NOW);
@@ -295,7 +322,7 @@ test("completion requires current manager approval and a recorded manual verific
   rejects(400, () => transition(source, worker, { ...input, completionNote: " " }, NOW));
 });
 test("read-all permission does not authorize completing another assignee's approved inquiry", () => {
-  const source = { ...approved(), assignedStaffId: "other-worker" } as InquiryRow;
+  const source = { ...evidenced(), assignedStaffId: "other-worker" } as InquiryRow;
   const input = { action: "complete", expectedRevision: source.revision, expectedReviewHash: source.reviewHash,
     completionNote: "상담 결과 확인", evidence: "합성 테스트 기록" };
   assert.doesNotThrow(() => assertRead(worker, source));
@@ -303,9 +330,81 @@ test("read-all permission does not authorize completing another assignee's appro
   assert.equal(transition(source, owner, input, NOW).status, "completed");
 });
 test("completed inquiries reject every mutating policy transition", () => {
-  const source = approved();
+  const source = evidenced();
   const completed = { ...source, ...transition(source, worker, { action: "complete", expectedRevision: source.revision,
     expectedReviewHash: source.reviewHash, completionNote: "완료 확인", evidence: "합성 확인 기록" }, NOW) } as InquiryRow;
-  for (const action of ["claim", "review", "approve", "reject", "needs_information", "complete"])
+  for (const action of ["claim", "review", "approve", "reject", "needs_information", "record_execution", "record_notification", "complete"])
     rejects(409, () => transition(completed, owner, { ...reviewInput(), action, expectedRevision: completed.revision, expectedReviewHash: completed.reviewHash }, NOW));
+});
+
+for (const [action, inputFor, fields] of [
+  ["record_execution", executionInput, ["executionNote", "executionEvidence"]],
+  ["record_notification", notificationInput, ["notificationNote", "notificationEvidence"]],
+] as const) {
+  test(`${action} requires current approval, canonical revision/hash and assignee permission`, () => {
+    const source = approved();
+    const before = structuredClone(source);
+    for (const bad of [reviewed(), { ...source, approval: null },
+      { ...source, approval: { ...source.approval, reviewHash: "foreign-review" } },
+      { ...source, review: { ...source.review, plan: "Changed plan" } }])
+      rejects(409, () => transition(bad as InquiryRow, worker, inputFor(bad as InquiryRow), NOW));
+    for (const expectedRevision of [undefined, source.revision - 1, 1.5])
+      rejects(409, () => transition(source, worker, inputFor(source, { expectedRevision }), NOW));
+    for (const expectedReviewHash of [undefined, "stale-hash", reviewed(row("renewal", { id: "mi_" + "c".repeat(32) })).reviewHash])
+      rejects(409, () => transition(source, worker, inputFor(source, { expectedReviewHash }), NOW));
+    rejects(403, () => transition(source, { ...worker, staffId: "other-worker" }, inputFor(source), NOW));
+    rejects(403, () => transition(source, { ...owner, studioId: "other" }, inputFor(source), NOW));
+    assert.deepEqual(source, before);
+  });
+  test(`${action} rejects missing, blank and oversized note or evidence`, () => {
+    const source = approved();
+    for (const [index, field] of fields.entries())
+      for (const value of [undefined, "", "  ", "x".repeat(index === 0 ? 1501 : 501)])
+        rejects(400, () => transition(source, worker, inputFor(source, { [field]: value }), NOW));
+  });
+}
+
+test("execution and notification records are manual evidence, not external execution or provider proof", () => {
+  const source = approved();
+  const executed = transition(source, worker, executionInput(source), NOW);
+  assert.deepEqual(executed.execution, { by: worker.staffId, at: NOW, reviewHash: source.reviewHash,
+    note: "Manual processing checked", evidence: "Synthetic processing record", recordedManually: true, externalChangeVerifiedBySystem: false });
+  for (const notificationChannel of ["phone", "kakao", "sms", "onsite"])
+    assert.deepEqual(transition(source, worker, notificationInput(source, { notificationChannel }), NOW).notification,
+      { by: worker.staffId, at: NOW, reviewHash: source.reviewHash, outcome: "manual_contact_recorded", channel: notificationChannel,
+        note: "Manual contact checked", evidence: "Synthetic contact record", recordedManually: true, providerSendVerified: false });
+  assert.equal(transition(source, worker, notificationInput(source, {
+    notificationOutcome: "not_required", notificationChannel: "none" }), NOW).notification.providerSendVerified, false);
+});
+
+test("notification outcome and channel combinations fail closed", () => {
+  const source = approved();
+  for (const patch of [{ notificationOutcome: "not_required", notificationChannel: "phone" },
+    { notificationOutcome: "manual_contact_recorded", notificationChannel: "none" },
+    { notificationOutcome: "sent" }, { notificationChannel: "email" },
+    { notificationOutcome: undefined }, { notificationChannel: undefined }])
+    rejects(400, () => transition(source, worker, notificationInput(source, patch), NOW));
+});
+
+test("completion rejects missing, stale or foreign execution and notification evidence", () => {
+  const source = evidenced();
+  const foreign = evidenced(approved(reviewed(row("renewal", { id: "mi_" + "c".repeat(32) }))));
+  for (const field of ["execution", "notification"])
+    for (const value of [null, undefined, { ...source[field], reviewHash: "stale-hash" }, foreign[field]]) {
+      const bad = { ...source, [field]: value } as InquiryRow;
+      rejects(409, () => transition(bad, worker, { action: "complete", expectedRevision: bad.revision,
+        expectedReviewHash: bad.reviewHash, completionNote: "Manual completion", evidence: "Synthetic record" }, NOW));
+    }
+});
+
+test("a changed review and fresh approval never reuse previous manual evidence", () => {
+  const source = evidenced();
+  const next = reviewed(source, { plan: "Replacement plan" });
+  const reapproved = approved(next);
+  assert.notEqual(reapproved.reviewHash, source.reviewHash);
+  assert.equal(reapproved.execution, null);
+  assert.equal(reapproved.notification, null);
+  rejects(409, () => transition(reapproved, worker, { action: "complete", expectedRevision: reapproved.revision,
+    expectedReviewHash: reapproved.reviewHash, completionNote: "Manual completion", evidence: "Synthetic record" }, NOW));
+  assert.equal(evidenced(reapproved).execution.reviewHash, reapproved.reviewHash);
 });

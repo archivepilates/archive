@@ -93,6 +93,11 @@ export function fixedException(row: InquiryRow): boolean {
 export function planHash(row: InquiryRow, review: any): string {
   return hash([contract.policyVersion, row.id, row.category, row.answers, row.details, row.memberName, row.memberPhone, review]);
 }
+function assertCurrentApproval(row: InquiryRow, input: any): void {
+  if(row.status!=='approved'||row.approval?.decision!=='approve'||row.approval.reviewHash!==row.reviewHash||
+    input.expectedReviewHash!==row.reviewHash||planHash(row,row.review)!==row.reviewHash)
+    throw new InquiryError(409,'현재 처리안의 관리자 승인이 필요합니다.');
+}
 export function transition(row: InquiryRow, actor: Actor, input: any, now: string): Record<string, any> {
   assertRead(actor, row);
   if (!Number.isInteger(input.expectedRevision) || input.expectedRevision !== row.revision)
@@ -102,7 +107,8 @@ export function transition(row: InquiryRow, actor: Actor, input: any, now: strin
   if (input.action === "claim") {
     assertAssignee(actor);
     if (row.assignedStaffId && row.assignedStaffId !== actor.staffId && !manager(actor)) throw new InquiryError(403, "담당 문의만 처리할 수 있습니다.");
-    return { ...base, assignedStaffId: actor.staffId, assignedStaffName: actor.name, status: row.status === "received" ? "in_review" : row.status };
+    const handoffReason=text(input.assignmentReason??'',500,Boolean(row.assignedStaffId&&row.assignedStaffId!==actor.staffId));
+    return { ...base, handoffReason, assignedStaffId: actor.staffId, assignedStaffName: actor.name, status: row.status === "received" ? "in_review" : row.status };
   }
   if (!manager(actor) && row.assignedStaffId !== actor.staffId)
     throw new InquiryError(403, "먼저 담당자로 지정한 문의만 처리할 수 있습니다.");
@@ -117,7 +123,7 @@ export function transition(row: InquiryRow, actor: Actor, input: any, now: strin
       internalNote: text(input.internalNote ?? "", 1000), policyVersion: contract.policyVersion };
     return { ...base, status: "awaiting_approval", assignedStaffId: row.assignedStaffId || actor.staffId,
       assignedStaffName: row.assignedStaffName || actor.name, review, reviewHash: planHash(row, review),
-      reviewedBy: actor.staffId, reviewedAt: now, approval: null, completion: null };
+      reviewedBy: actor.staffId, reviewedAt: now, approval: null, completion: null, execution:null, notification:null };
   }
   if (["approve", "reject", "needs_information"].includes(input.action)) {
     if (!manager(actor)) throw new InquiryError(403, "관리자만 승인할 수 있습니다.");
@@ -129,10 +135,26 @@ export function transition(row: InquiryRow, actor: Actor, input: any, now: strin
       approval: { decision: input.action, reviewHash: row.reviewHash, by: actor.staffId, name: actor.name, at: now, reason,
         scope: "inquiry_plan_only", externalExecutionAuthorized: false }, completion: null };
   }
+  if(input.action==='record_execution'){
+    assertCurrentApproval(row,input);
+    return {...base,execution:{by:actor.staffId,at:now,reviewHash:row.reviewHash,
+      note:text(input.executionNote,1500,true),evidence:text(input.executionEvidence,500,true),
+      recordedManually:true,externalChangeVerifiedBySystem:false}};
+  }
+  if(input.action==='record_notification'){
+    assertCurrentApproval(row,input);
+    const outcome=input.notificationOutcome,channel=input.notificationChannel;
+    if(!['manual_contact_recorded','not_required'].includes(outcome)||
+      (outcome==='not_required'?channel!=='none':!['phone','kakao','sms','onsite'].includes(channel)))
+      throw new InquiryError(400,'안내 기록 구분과 방법을 확인해 주세요.');
+    return {...base,notification:{by:actor.staffId,at:now,reviewHash:row.reviewHash,outcome,channel,
+      note:text(input.notificationNote,1500,true),evidence:text(input.notificationEvidence,500,true),
+      recordedManually:true,providerSendVerified:false}};
+  }
   if (input.action === "complete") {
-    if (row.status !== "approved" || row.approval?.decision !== "approve" || row.approval.reviewHash !== row.reviewHash ||
-      input.expectedReviewHash !== row.reviewHash || planHash(row, row.review) !== row.reviewHash)
-      throw new InquiryError(409, "현재 처리안의 관리자 승인이 필요합니다.");
+    assertCurrentApproval(row,input);
+    if(!row.execution||row.execution.reviewHash!==row.reviewHash||!row.notification||row.notification.reviewHash!==row.reviewHash)
+      throw new InquiryError(409,'실제 처리 확인과 회원 안내 기록을 각각 먼저 남겨 주세요.');
     return { ...base, status: "completed", completion: { by: actor.staffId, at: now,
       note: text(input.completionNote, 1500, true), evidence: text(input.evidence, 500, true),
       recordedManually: true, providerSendVerified: false }, memberNotificationStatus: "not_sent_by_system" };

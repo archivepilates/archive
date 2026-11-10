@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import {buildInquiryGuidance} from './build-member-inquiry-guidance.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export function buildMemberInquiryContract({ check = false } = {}) {
@@ -29,6 +30,7 @@ export function buildMemberInquiryContract({ check = false } = {}) {
       fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, text);
     }
   }
+  buildInquiryGuidance({check});
   return Object.keys(outputs);
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

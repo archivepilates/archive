@@ -1,1 +1,97 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>회원 문의 접수함 · ARCHIVE PILATES OPS</title><link rel="icon" href="../favicon.ico?v=20261011"><link rel="icon" href="../icons/favicon-32.png?v=20261011"><link rel="apple-touch-icon" href="../icons/apple-touch-icon.png?v=20261011"><link rel="manifest" href="../site.webmanifest?v=20261011"><link rel="stylesheet" href="../assets/member-inquiries.css"><script src="../firebase-config.js"></script><script type="module" src="../assets/member-inquiries.js"></script></head><body><header><a class="brand" href="../"><img src="../icons/archive-pilates-icon-192.png" alt="" width="36" height="36">ARCHIVE PILATES OPS</a><nav><a href="../">CORE 홈</a><button id="logout" type="button" hidden>로그아웃</button></nav></header><main><div class="intro"><div><p class="eyebrow">MEMBER CARE</p><h1>회원 문의 접수함</h1><p>회원의 요청부터 검토, 관리자 승인까지 한곳에서 확인합니다.</p></div><span id="session-label" class="badge">권한 확인 중</span></div><p id="global-message" role="status">로그인을 확인하고 있습니다.</p><section id="login-needed" hidden><h2>CORE 로그인이 필요합니다</h2><p>기존 CORE 계정으로 로그인한 뒤 이 접수함으로 돌아와 주세요.</p><a class="button" href="../">CORE에서 로그인</a><button id="retry-auth" type="button" class="secondary">다시 확인</button></section><div id="workspace" hidden><div class="toolbar"><label for="status-filter">표시할 상태<select id="status-filter"><option value="all">전체</option><option value="received">새 접수</option><option value="in_review">직원 검토 중</option><option value="awaiting_approval">관리자 승인 대기</option><option value="approved">승인 · 수동 처리 대기</option><option value="needs_information">추가 확인 필요</option><option value="rejected">반려</option><option value="completed">처리 완료 기록</option></select></label><button id="refresh-list" type="button" class="secondary">새로 조회</button></div><p id="coverage" class="muted"></p><div class="work-grid"><section class="panel queue-panel" aria-label="접수 목록"><div id="request-list"></div><button id="load-more" type="button" class="secondary" hidden>이전 접수 더 보기</button></section><section class="panel" aria-labelledby="detail-title"><h2 id="detail-title" tabindex="-1">문의를 선택해 주세요</h2><div id="request-detail" hidden><p id="detail-status" class="badge"></p><p class="notice">회원이 기입한 정보이며 본인 확인 전입니다. 승인만으로 예약·수강권 변경 또는 회원 발송이 실행되지 않습니다.</p><dl id="member-request"></dl><p id="edit-scope" class="muted"></p><button id="claim" type="button" class="secondary" hidden>내 담당으로 접수하기</button><div id="assignment" hidden><label for="assignee">담당자</label><select id="assignee"></select><button id="assign" type="button" class="secondary">담당자 지정</button></div><form id="review-form"><h3>직원 검토 · 처리안</h3><label for="policy-fit">규정 판단</label><select id="policy-fit"><option value="insufficient">추가 확인 필요</option><option value="within_policy">규정 내</option><option value="exception">예외 검토</option></select><label for="resolution-kind">처리 유형</label><select id="resolution-kind"><option value="guidance">상담·규정 안내</option><option value="manual_processing">직원 수동 처리</option><option value="exception_review">관리자 예외 검토</option></select><label for="plan">승인받을 구체적인 처리안</label><textarea id="plan" required maxlength="2000" placeholder="대상·희망 일정·적용 규정·변경 전후와 확인할 내용을 적어주세요."></textarea><label for="member-reply">회원에게 안내할 답변안</label><textarea id="member-reply" required maxlength="1500"></textarea><label for="internal-note">직원 내부 메모 · 선택</label><textarea id="internal-note" maxlength="1000"></textarea><button type="submit" id="submit-review">관리자 검토 요청</button></form><section id="decision-panel" hidden><h3>관리자 결정</h3><p>현재 표시된 처리안과 답변안에 대해서만 결정합니다. 수정하면 이전 승인을 다시 사용할 수 없습니다.</p><p id="review-hash" class="muted"></p><label for="decision-reason">결정 사유 · 예외 승인/반려/추가 확인 시 필수</label><textarea id="decision-reason" maxlength="1000"></textarea><div class="actions"><button type="button" id="approve">처리안 승인</button><button type="button" id="request-info" class="secondary">추가 확인 요청</button><button type="button" id="reject" class="secondary">반려</button></div></section><section id="completion-panel" hidden><h3>수동 처리 결과 기록</h3><p>승인된 범위에서 실제로 처리·확인한 결과만 기록해 주세요. 이 버튼은 회원에게 알림을 보내지 않습니다.</p><label for="completion-note">처리·확인 내용</label><textarea id="completion-note" maxlength="1500"></textarea><label for="completion-evidence">확인한 원본 기록 번호 또는 증빙 위치</label><input id="completion-evidence" maxlength="500"><button id="complete" type="button">확인한 처리 결과 기록</button></section><section><h3>처리 이력</h3><ol id="event-list"></ol></section><p id="action-message" role="status"></p></div></section></div></div></main></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+  <title>회원 문의 접수함 · ARCHIVE PILATES OPS</title>
+  <link rel="icon" href="../favicon.ico?v=20261011"><link rel="icon" href="../icons/favicon-32.png?v=20261011"><link rel="apple-touch-icon" href="../icons/apple-touch-icon.png?v=20261011"><link rel="manifest" href="../site.webmanifest?v=20261011">
+  <link rel="stylesheet" href="../assets/member-inquiries.css"><script src="../firebase-config.js"></script><script type="module" src="../assets/member-inquiries.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="../"><img src="../icons/archive-pilates-icon-192.png" alt="" width="36" height="36">ARCHIVE PILATES OPS</a><nav aria-label="계정"><a href="../">CORE 홈</a><button id="logout" type="button" hidden>로그아웃</button></nav></header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">MEMBER CARE</p><h1>회원 문의 접수함</h1></div><span id="session-label" class="badge">권한 확인 중</span></div>
+    <p id="global-message" role="status">로그인을 확인하고 있습니다.</p>
+    <section id="login-needed" hidden><h2>CORE 로그인이 필요합니다</h2><p>기존 CORE 계정으로 로그인한 뒤 이 접수함으로 돌아와 주세요.</p><a class="button" href="../">CORE에서 로그인</a><button id="retry-auth" type="button" class="secondary">다시 확인</button></section>
+    <div id="workspace" hidden>
+      <div class="toolbar">
+        <label for="work-filter">업무 구분<select id="work-filter"><option value="all">전체</option><option value="unassigned">미배정</option><option value="awaiting_approval">승인 대기</option><option value="reassignment">재배정 확인</option></select></label>
+        <label for="status-filter">표시할 상태<select id="status-filter"><option value="all">전체</option><option value="received">새 접수</option><option value="in_review">직원 검토 중</option><option value="awaiting_approval">관리자 승인 대기</option><option value="approved">승인 · 수동 처리 대기</option><option value="needs_information">추가 확인 필요</option><option value="rejected">반려</option><option value="completed">처리 완료 기록</option></select></label>
+        <label for="order-filter">접수 순서<select id="order-filter"><option value="oldest">오래된 순</option><option value="newest">최신순</option></select></label>
+        <button id="refresh-list" type="button" class="secondary">새로 조회</button>
+      </div>
+      <p id="coverage" class="muted"></p><p id="work-counts" class="muted" role="status"></p>
+      <div class="work-grid">
+        <section class="queue-panel" aria-label="접수 목록"><div id="request-list"></div><button id="load-more" type="button" class="secondary" hidden>이전 접수 더 보기</button></section>
+        <section class="detail-panel" aria-labelledby="detail-title">
+          <h2 id="detail-title" tabindex="-1">문의를 선택해 주세요</h2>
+          <div id="request-detail" hidden>
+            <p id="detail-status" class="badge"></p><p class="notice">회원이 기입한 정보이며 본인 확인 전입니다. 승인만으로 예약·수강권 변경 또는 회원 발송이 실행되지 않습니다.</p>
+            <dl id="member-request"></dl>
+            <section class="detail-section" aria-labelledby="context-title">
+              <div class="section-heading"><h3 id="context-title">회원 저장자료</h3><button id="load-context" type="button" class="secondary">저장자료 조회</button></div>
+              <p class="muted">CORE 저장자료이며 StudioMate 실시간 조회나 본인 확인 결과가 아닙니다.</p>
+              <div id="member-context" aria-live="polite"></div>
+            </section>
+            <p id="edit-scope" class="muted"></p><button id="claim" type="button" class="secondary" hidden>내 담당으로 접수하기</button>
+            <div id="assignment" class="detail-section" hidden>
+              <label for="assignee">담당자</label><select id="assignee"></select><p id="assignment-warning" class="muted"></p>
+              <label for="assignment-reason">배정·재배정 사유 <span id="assignment-required">· 선택</span></label>
+              <input id="assignment-reason" maxlength="500" placeholder="담당 변경이 필요한 이유를 적어주세요.">
+              <button id="assign" type="button" class="secondary">담당자 지정</button>
+            </div>
+            <section class="detail-section" aria-labelledby="guidance-title">
+              <h3 id="guidance-title">선택 내용에 맞는 규정</h3><p id="guidance-version" class="muted"></p><ul id="guidance-rules"></ul>
+              <button id="preview-guidance" type="button" class="secondary">처리안·답변안 초안 보기</button>
+              <div id="guidance-preview" hidden>
+                <h4>처리안 초안</h4><p id="preview-plan" class="preserve-lines"></p><h4>답변안 초안</h4><p id="preview-reply" class="preserve-lines"></p>
+                <button id="apply-guidance" type="button" class="secondary">초안을 입력란에 적용</button>
+              </div>
+            </section>
+            <form id="review-form">
+              <h3>직원 검토 · 처리안</h3>
+              <label for="policy-fit">규정 판단</label><select id="policy-fit"><option value="insufficient">추가 확인 필요</option><option value="within_policy">규정 내</option><option value="exception">예외 검토</option></select>
+              <label for="resolution-kind">처리 유형</label><select id="resolution-kind"><option value="guidance">상담·규정 안내</option><option value="manual_processing">직원 수동 처리</option><option value="exception_review">관리자 예외 검토</option></select>
+              <label for="plan">승인받을 구체적인 처리안</label><textarea id="plan" required maxlength="2000" placeholder="대상·희망 일정·적용 규정·변경 전후와 확인할 내용을 적어주세요."></textarea>
+              <label for="member-reply">회원에게 안내할 답변안</label><textarea id="member-reply" required maxlength="1500"></textarea>
+              <label for="internal-note">직원 내부 메모 · 선택</label><textarea id="internal-note" maxlength="1000"></textarea>
+              <button type="submit" id="submit-review">관리자 검토 요청</button>
+            </form>
+            <section id="decision-panel" class="detail-section" hidden>
+              <h3>관리자 결정</h3><p>현재 표시된 처리안과 답변안에 대해서만 결정합니다. 수정하면 이전 승인을 다시 사용할 수 없습니다.</p><p id="review-hash" class="muted"></p>
+              <label for="decision-reason">결정 사유 · 예외 승인/반려/추가 확인 시 필수</label><textarea id="decision-reason" maxlength="1000"></textarea>
+              <div class="actions"><button type="button" id="approve">처리안 승인</button><button type="button" id="request-info" class="secondary">추가 확인 요청</button><button type="button" id="reject" class="secondary">반려</button></div>
+            </section>
+            <section id="execution-panel" class="detail-section" hidden>
+              <h3>승인 후 · 실제 작업 기록</h3><p class="muted">직원이 직접 처리·확인한 내용을 수동으로 기록합니다. 시스템이 외부 예약·수강권 변경을 실행하거나 검증한 결과가 아닙니다.</p><p id="execution-state" class="muted"></p>
+              <form id="execution-form">
+                <label for="execution-note">실제 작업 또는 수동 확인 내용</label><textarea id="execution-note" required maxlength="1500"></textarea>
+                <label for="execution-evidence">확인한 원본 기록 번호 또는 증빙 위치</label><input id="execution-evidence" required maxlength="500">
+                <button id="record-execution" type="submit">작업·확인 기록 저장</button>
+              </form>
+            </section>
+            <section id="notification-panel" class="detail-section" hidden>
+              <h3>승인 후 · 수동 연락 기록</h3><p id="notification-state" class="muted"></p>
+              <form id="notification-form">
+                <label for="notification-outcome">연락 결과</label><select id="notification-outcome"><option value="manual_contact_recorded">직원이 직접 연락함</option><option value="not_required">연락 불필요</option></select>
+                <label for="notification-channel">연락 방법</label><select id="notification-channel"><option value="phone">전화</option><option value="kakao">카카오톡</option><option value="sms">문자</option><option value="onsite">현장</option><option value="none">없음</option></select>
+                <label for="notification-note">연락 내용 또는 연락 불필요 사유</label><textarea id="notification-note" required maxlength="1500"></textarea>
+                <label for="notification-evidence">연락 기록 번호 또는 확인 근거</label><input id="notification-evidence" required maxlength="500">
+                <p class="muted">직원의 수동 기록입니다. 메시지 발송이나 제공업체 전달·수신 확인이 아닙니다.</p>
+                <button id="record-notification" type="submit">수동 연락 결과 저장</button>
+              </form>
+            </section>
+            <section id="completion-panel" class="detail-section" hidden>
+              <h3>최종 완료 기록</h3><p id="completion-state" class="muted"></p>
+              <label for="completion-note">처리·확인 내용</label><textarea id="completion-note" maxlength="1500"></textarea>
+              <label for="completion-evidence">확인한 원본 기록 번호 또는 증빙 위치</label><input id="completion-evidence" maxlength="500">
+              <button id="complete" type="button">확인한 처리 결과 기록</button>
+            </section>
+            <section class="detail-section"><h3>처리 이력</h3><ol id="event-list"></ol></section>
+            <p id="action-message" role="status"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

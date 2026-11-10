@@ -48,3 +48,5 @@ notion*.token
 
 # Synthetic inquiry-assignee browser checks.
 /output/playwright/member-inquiry-assignees/
+/output/playwright/member-inquiry-guidance/
+/output/playwright/member-inquiry-workflow/

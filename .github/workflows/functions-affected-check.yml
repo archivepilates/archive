@@ -68,6 +68,12 @@ jobs:
       - name: Install Functions dependencies
         run: npm --prefix firebase/kangsain-functions/functions ci
 
+      - name: Test member inquiry rules, assignments and manual completion boundaries
+        run: |
+          node scripts/build-member-inquiry-contract.mjs --check
+          node --test scripts/tests/member-inquiry-build.test.mjs scripts/tests/member-inquiry-assignees-release.test.mjs scripts/tests/member-inquiry-workflow-release.test.mjs
+          firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/member-inquiry-*.test.ts
+
       - name: Test holding browser callback serialization
         run: node --test scripts/tests/holding-reader-serialization.test.mjs
 

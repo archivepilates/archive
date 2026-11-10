@@ -71,7 +71,9 @@
 
       <section class="flow-panel" id="detail-screen" aria-labelledby="category-title" hidden>
         <div class="panel-heading"><p class="eyebrow">TELL US A LITTLE</p><h2 id="category-title" tabindex="-1"></h2><p>해당하는 보기를 골라 주세요.<br>잘 모르겠다면 상담으로 넘길 수 있어요.</p></div>
+        <div id="guidance-resolution" class="note" hidden><h3 tabindex="-1">안내를 확인했어요</h3><p>문의는 접수되지 않았으며 예약·수강권도 변경되지 않았어요. 상담이 필요하면 선택한 내용으로 이어서 접수할 수 있어요.</p><button id="guidance-continue" type="button">선택한 내용으로 문의하기</button><button id="guidance-home" class="secondary" type="button">처음으로</button></div>
         <form id="detail-form">
+          <section class="note policy-note" aria-label="선택한 문의의 관련 규정"><span class="note-mark" aria-hidden="true">i</span><div><b>문의 전 확인해 주세요</b><p id="policy-text"></p><ul id="guidance-rules" aria-live="polite"></ul><a id="policy-link" target="_blank" rel="noopener">규정 자세히 보기 <span aria-hidden="true">↗</span></a><p><button id="guidance-resolved" class="secondary" type="button">안내로 해결됐어요</button></p></div></section>
           <div id="choice-fields"></div>
           <details class="optional-note">
             <summary>추가로 전할 내용이 있어요 <span>선택</span></summary>
@@ -79,7 +81,6 @@
             <textarea id="details" name="details" maxlength="200" placeholder="200자 이내로 간단히 적어주세요."></textarea>
             <small>민감한 증빙은 담당자의 별도 안내를 받아 전달해 주세요.</small>
           </details>
-          <div class="note policy-note"><span class="note-mark" aria-hidden="true">i</span><div><b>관련 안내</b><p id="policy-text"></p><a id="policy-link" target="_blank" rel="noopener">규정 자세히 보기 <span aria-hidden="true">↗</span></a></div></div>
           <p class="policy-reminder" id="policy-reminder">신청 내용은 담당자 확인 후 안내드립니다.</p>
           <p class="error" id="detail-error" role="alert"></p>
           <div class="flow-actions"><button class="secondary" id="back-categories" type="button"><span aria-hidden="true">←</span> 다시 선택</button><button type="submit">다음 · 회원 정보 <span aria-hidden="true">→</span></button></div>

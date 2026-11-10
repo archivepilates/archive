@@ -3,6 +3,7 @@ import test from "node:test";
 import { createInquiryService } from "../../firebase/kangsain-functions/functions/src/memberInquiries/service";
 import { hash, InquiryError, validateSubmission, type Actor } from "../../firebase/kangsain-functions/functions/src/memberInquiries/policy";
 import { memberInquiryContract as contract } from "../../firebase/packages/contracts/src/member-inquiries";
+import guidance from "../../firebase/kangsain-functions/functions/src/memberInquiries/guidance.json";
 
 const NOW = Date.parse("2026-11-09T13:00:00.000Z");
 const manager: Actor = { staffId: "manager-1", name: "테스트관리자", studioId: "5330", role: "manager", active: true };
@@ -55,7 +56,7 @@ class FakeDb {
     this.queries.push({ path: ref.path, filters: copy(ref.filters), order: ref.order, after: ref.after, max: ref.max });
     let docs = [...source.keys()].filter(path => path.startsWith(`${ref.path}/`) && path.slice(ref.path.length + 1).split("/").length === 1)
       .map(path => this.snapshot(path, source));
-    docs = docs.filter(doc => ref.filters.every(([field, op, value]) => { assert.equal(op, "=="); return doc.data()?.[field] === value; }));
+    docs = docs.filter(doc => ref.filters.every(([field, op, value]) => { assert(["==","in"].includes(op)); return op==='in'?(value as unknown[]).includes(doc.data()?.[field]):doc.data()?.[field] === value; }));
     if (ref.order) {
       const [field, direction] = ref.order;
       docs.sort((a, b) => {
@@ -115,6 +116,22 @@ async function rejects(status: number, action: () => Promise<unknown>) {
   await assert.rejects(action(), (error: unknown) => error instanceof InquiryError && error.status === status);
 }
 const commandId = (index: number) => index.toString(16).padStart(48, "0");
+function evidenceCommand(row: any, action: "record_execution" | "record_notification", index: number, patch: Record<string, unknown> = {}): any {
+  return { action, id: row.id, commandId: commandId(index), expectedRevision: row.revision, expectedReviewHash: row.reviewHash,
+    ...(action === "record_execution" ? { executionNote: "Manual processing checked", executionEvidence: "Synthetic processing record" } :
+      { notificationOutcome: "manual_contact_recorded", notificationChannel: "phone",
+        notificationNote: "Manual contact checked", notificationEvidence: "Synthetic contact record" }), ...patch };
+}
+async function approvedFixture() {
+  const result = fixture();
+  const { db, service } = result;
+  const { receiptId: id } = await service.submit(submission(), "synthetic-ip");
+  await service.staff(worker, { action: "review", id, commandId: commandId(1), expectedRevision: 1,
+    resolutionKind: "guidance", policyFit: "within_policy", plan: "Synthetic plan", memberReply: "Synthetic reply" });
+  await service.staff(manager, { action: "approve", id, commandId: commandId(2), expectedRevision: 2,
+    expectedReviewHash: db.rows.get(requestPath(id)).reviewHash });
+  return { ...result, id, current: () => db.rows.get(requestPath(id)) };
+}
 
 for (const [name, settings] of Object.entries({ missing: null, disabled: { enabled: false }, unpromoted: { promotionApproved: false }, privacyUnapproved: { privacyApproved: false }, retentionUnready: { retentionReady: false },
   oldPolicy: { policyVersion: "old" }, oldPrivacy: { privacyVersion: "old" }, retention: { retentionDays: 1 }, studio: { studioId: "other" } })) {
@@ -214,8 +231,8 @@ for (const role of ["manager", "owner"]) {
     db.seed(`staffs/${operator.staffId}`, operator);
     const { receiptId: id } = await service.submit(submission(), "synthetic-ip");
     assert.equal(db.rows.get(requestPath(id)).assignedStaffId, operator.staffId);
-    await service.staff(manager, { action: "assign", id, assignedStaffId: worker.staffId, expectedRevision: 1, commandId: commandId(1) });
-    await service.staff(manager, { action: "assign", id, assignedStaffId: operator.staffId, expectedRevision: 2, commandId: commandId(2) });
+    await service.staff(manager, { action: "assign", id, assignedStaffId: worker.staffId, assignmentReason: "Instructor handoff", expectedRevision: 1, commandId: commandId(1) });
+    await service.staff(manager, { action: "assign", id, assignedStaffId: operator.staffId, assignmentReason: "Operator handoff", expectedRevision: 2, commandId: commandId(2) });
     assert.equal(db.rows.get(requestPath(id)).assignedStaffId, operator.staffId);
     assert.equal((await service.staff(operator, { action: "claim", id, expectedRevision: 3, commandId: commandId(3) })).revision, 4);
     assert.deepEqual(db.rows.get(`staffs/${operator.staffId}`), operator);
@@ -263,9 +280,9 @@ test("historic retired assignment remains visible and intact until a manager rea
   }
   assert.deepEqual([...db.rows], before); assert.equal(db.committedWrites.length, 0);
   assert.equal((await service.staff(manager, { action: "assign", id: source.id, assignedStaffId: current.staffId,
-    expectedRevision: 1, commandId: commandId(1) })).revision, 2);
+    assignmentReason: "Current instructor handoff", expectedRevision: 1, commandId: commandId(1) })).revision, 2);
   assert.deepEqual(db.rows.get(requestPath(source.id)), { ...source, assignedStaffId: current.staffId,
-    assignedStaffName: current.name, revision: 2, updatedAt: new Date(NOW).toISOString() });
+    assignedStaffName: current.name, handoffReason: "Current instructor handoff", revision: 2, updatedAt: new Date(NOW).toISOString() });
   assert.deepEqual(db.rows.get(eventPath), event);
   assert.deepEqual(db.rows.get(`staffs/${retired.staffId}`), retired);
   assert.deepEqual(db.rows.get(`staffs/${current.staffId}`), current);
@@ -365,15 +382,19 @@ test("review, administrator approval and manual completion atomically record seq
   assert.equal(db.rows.get(requestPath(id)).revision, 2);
   assert.equal((await service.staff(manager, approve)).revision, 3);
   assert.equal(db.rows.get(requestPath(id)).approval.externalExecutionAuthorized, false);
-  assert.equal((await service.staff(worker, { action: "complete", id, commandId: commandId(3), expectedRevision: 3,
+  await service.staff(worker, evidenceCommand(db.rows.get(requestPath(id)), "record_execution", 3));
+  await service.staff(worker, evidenceCommand(db.rows.get(requestPath(id)), "record_notification", 4));
+  assert.equal((await service.staff(worker, { action: "complete", id, commandId: commandId(5), expectedRevision: 5,
     expectedReviewHash: reviewHash, completionNote: "상담안 전달을 직접 확인", evidence: "합성 테스트 확인 기록" })).status, "completed");
   const current = db.rows.get(requestPath(id));
-  assert.equal(current.revision, 4); assert.equal(current.memberNotificationStatus, "not_sent_by_system");
+  assert.equal(current.revision, 6); assert.equal(current.memberNotificationStatus, "not_sent_by_system");
   assert.equal(current.completion.providerSendVerified, false);
   const events = [...db.rows.keys()].filter(path => path.startsWith(`${requestPath(id)}/${contract.events}/`));
   const commands = [...db.rows.keys()].filter(path => path.startsWith(`${requestPath(id)}/${contract.commands}/`));
-  assert.equal(events.length, 4); assert.equal(commands.length, 3);
-  assert.deepEqual(events.map(path => db.rows.get(path).revision).sort(), [1, 2, 3, 4]);
+  assert.equal(events.length, 6); assert.equal(commands.length, 5);
+  assert.deepEqual(events.map(path => db.rows.get(path).revision).sort(), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(db.rows.get(`${requestPath(id)}/${contract.events}/r000004`).execution, current.execution);
+  assert.deepEqual(db.rows.get(`${requestPath(id)}/${contract.events}/r000005`).notification, current.notification);
 });
 
 test("an active employee can claim an unassigned inquiry, while reading another assignee does not grant mutation permission", async () => {
@@ -428,4 +449,227 @@ test("public lookup is bounded to thirty confirmations per IP window without wri
   assert.equal(db.committedWrites.length, count);
   const path = `${contract.limits}/${hash(["lookup", "lookup-ip", Math.floor(NOW / 900000)])}`;
   assert.equal(db.rows.get(path).count, 30);
+});
+
+test('member context uses the same staff, studio and retention guards before source reads and cannot mutate',async()=>{
+  const {db,service}=fixture();const source=storedRow(700);db.seed(requestPath(source.id),source);
+  db.seed('memberProfiles/native',{studioId:'5330',name:source.memberName,phone:source.memberPhone,memberId:'native',activeTickets:[],syncedAt:new Date(NOW)});
+  const before=copy([...db.rows]);
+  const result=await service.staff(worker,{action:'context',id:source.id});assert.equal(result.context.status,'unique_stored_match');
+  assert.deepEqual([...db.rows],before);assert.equal(db.committedWrites.length,0);
+  for(const actor of [{...worker,active:false},{...worker,studioId:'other'},{...worker,role:'viewer'}])await rejects(403,()=>service.staff(actor,{action:'context',id:source.id}));
+  const expired=storedRow(701,worker.staffId,{expiresAt:new Date(NOW)});db.seed(requestPath(expired.id),expired);
+  const reads=db.reads.filter(item=>item==='memberProfiles').length;
+  await rejects(404,()=>service.staff(worker,{action:'context',id:expired.id}));
+  const foreign=storedRow(702,worker.staffId,{studioId:'other'});db.seed(requestPath(foreign.id),foreign);
+  await rejects(403,()=>service.staff(worker,{action:'context',id:foreign.id}));
+  assert.equal(db.reads.filter(item=>item==='memberProfiles').length,reads);
+});
+
+test("public submission snapshots curated guidance and starts with no execution or notification authority", async () => {
+  const { db, service } = fixture();
+  const input = submission();
+  const { receiptId: id } = await service.submit(input, "synthetic-ip");
+  const row = db.rows.get(requestPath(id));
+  assert.deepEqual(row.policyGuidance, { version: guidance.version,
+    ruleIds: guidance.rules.filter(rule => rule.category === input.category && Object.entries(rule.when || {}).every(([key, value]) =>
+      Array.isArray(input.answers[key]) ? input.answers[key].includes(value) : input.answers[key] === value)).map(rule => rule.id),
+    source: "curated_existing_notion_rules", basis:'server_rules_at_receipt',memberReadVerified:false,automaticDecision: false });
+  assert.ok(row.policyGuidance.ruleIds.length > 0);
+  assert.equal(row.workflowVersion, 2);
+  for (const field of ["review", "reviewHash", "approval", "execution", "notification", "completion"]) assert.equal(row[field], null);
+  assert.equal(row.externalExecutionAuthorized, false);
+  assert.equal(row.memberNotificationStatus, "not_sent_by_system");
+  const snapshot = copy(row.policyGuidance);
+  await service.staff(worker, { action: "review", id, expectedRevision: 1, commandId: commandId(1),
+    resolutionKind: "guidance", policyFit: "within_policy", plan: "Synthetic plan", memberReply: "Synthetic reply" });
+  assert.deepEqual(db.rows.get(requestPath(id)).policyGuidance, snapshot);
+});
+
+test("access reports missing or invalid response delay as null without inventing a default", async () => {
+  for (const responseDelayHours of [undefined, null, 0, 12, "24", 24, 48]) {
+    const { db, service } = fixture(responseDelayHours === undefined ? {} : { responseDelayHours });
+    const before = copy([...db.rows]);
+    for (const actor of [worker, manager])
+      assert.equal((await service.staff(actor, { action: "access" })).responseDelayHours,
+        responseDelayHours === 24 || responseDelayHours === 48 ? responseDelayHours : null);
+    assert.deepEqual([...db.rows], before);
+    assert.equal(db.committedWrites.length, 0);
+  }
+});
+
+for (const action of ["assign", "claim"] as const) {
+  test(`${action} requires a bounded reason for reassignment and preserves each audited handoff exactly once`, async () => {
+    const { db, service } = fixture();
+    db.seed(`staffs/${manager.staffId}`, manager);
+    const source = storedRow(1); db.seed(requestPath(source.id), source);
+    const command = { action, id: source.id, assignedStaffId: manager.staffId, expectedRevision: 1, commandId: commandId(1) };
+    for (const assignmentReason of [undefined, "", "  ", "x".repeat(501)]) {
+      const before = copy([...db.rows]);
+      await rejects(400, () => service.staff(manager, { ...command, assignmentReason }));
+      assert.deepEqual([...db.rows], before);
+      assert.equal(db.committedWrites.length, 0);
+    }
+    const first = { ...command, assignmentReason: "  Manager handoff  " };
+    const results = await Promise.all([service.staff(manager, first), service.staff(manager, first)]);
+    assert.equal(results[0].revision, 2); assert.equal(results[1].replayed, true);
+    assert.equal(db.committedWrites.length, 3);
+    const firstEventPath = `${requestPath(source.id)}/${contract.events}/r000002`;
+    const firstEvent = copy(db.rows.get(firstEventPath));
+    assert.deepEqual(firstEvent.assignment, { fromStaffId: worker.staffId, fromName: source.assignedStaffName,
+      toStaffId: manager.staffId, toName: manager.name, reason: "Manager handoff" });
+    await rejects(409, () => service.staff(manager, { ...first, assignmentReason: "Changed reason" }));
+    assert.equal(db.committedWrites.length, 3);
+    await service.staff(manager, { action: "assign", id: source.id, assignedStaffId: worker.staffId,
+      assignmentReason: "Instructor follow-up", expectedRevision: 2, commandId: commandId(2) });
+    assert.deepEqual(db.rows.get(firstEventPath), firstEvent);
+    assert.deepEqual(db.rows.get(`${requestPath(source.id)}/${contract.events}/r000003`).assignment,
+      { fromStaffId: manager.staffId, fromName: manager.name, toStaffId: worker.staffId, toName: worker.name, reason: "Instructor follow-up" });
+    assert.equal(db.rows.get(requestPath(source.id)).handoffReason, "Instructor follow-up");
+    assert.equal(db.committedWrites.length, 6);
+  });
+  test(`${action} accepts an initially blank assignment without a reason`, async () => {
+    const { db, service } = fixture();
+    const source = storedRow(1, "", { assignedStaffName: "" }); db.seed(requestPath(source.id), source);
+    const actor = action === "assign" ? manager : worker;
+    await service.staff(actor, { action, id: source.id, assignedStaffId: worker.staffId,
+      expectedRevision: 1, commandId: commandId(1) });
+    assert.deepEqual(db.rows.get(`${requestPath(source.id)}/${contract.events}/r000002`).assignment,
+      { fromStaffId: "", fromName: "", toStaffId: worker.staffId, toName: worker.name, reason: "" });
+  });
+}
+
+for (const action of ["record_execution", "record_notification"] as const) {
+  test(`${action} is canonical, actor scoped and exactly once including reordered command keys`, async () => {
+    const { db, service, id, current } = await approvedFixture();
+    const command = evidenceCommand(current(), action, 3);
+    const before = db.committedWrites.length;
+    const results = await Promise.all([service.staff(worker, command), service.staff(worker, command)]);
+    assert.equal(results[0].revision, 4); assert.equal(results[1].replayed, true);
+    assert.equal(db.committedWrites.length, before + 3);
+    const reordered = Object.fromEntries(Object.entries(command).reverse());
+    assert.equal((await service.staff(worker, reordered)).replayed, true);
+    const field = action === "record_execution" ? "execution" : "notification";
+    assert.equal(current()[field].recordedManually, true);
+    assert.equal(current()[field].reviewHash, current().reviewHash);
+    assert.equal(current().memberNotificationStatus, "not_sent_by_system");
+    assert.equal(current().externalExecutionAuthorized, false);
+    assert.equal(action === "record_execution" ? current().execution.externalChangeVerifiedBySystem : current().notification.providerSendVerified, false);
+    assert.deepEqual(db.rows.get(`${requestPath(id)}/${contract.events}/r000004`)[field], current()[field]);
+    const snapshot = copy([...db.rows]);
+    await rejects(409, () => service.staff(worker, { ...command,
+      [action === "record_execution" ? "executionEvidence" : "notificationEvidence"]: "Changed evidence" }));
+    await rejects(409, () => service.staff(manager, command));
+    assert.deepEqual([...db.rows], snapshot);
+    assert.equal(db.committedWrites.length, before + 3);
+    assert.equal([...db.rows.keys()].filter(path => path.startsWith(`${requestPath(id)}/${contract.commands}/`)).length, 3);
+  });
+  test(`${action} rejects unapproved, stale, foreign and missing command evidence without writes`, async () => {
+    const { db, service, current } = await approvedFixture();
+    const row = current();
+    const command = evidenceCommand(row, action, 3);
+    const fields = action === "record_execution" ? ["executionNote", "executionEvidence"] : ["notificationNote", "notificationEvidence"];
+    const patches: Array<[number, Record<string, unknown>]> = [
+      [409, { expectedRevision: undefined }], [409, { expectedRevision: row.revision - 1 }],
+      [409, { expectedReviewHash: undefined }], [409, { expectedReviewHash: "foreign-review" }],
+      [400, { commandId: undefined }], [400, { commandId: "invalid" }],
+      ...fields.flatMap(field => [undefined, "", "  ", "x".repeat(field.endsWith("Note") ? 1501 : 501)]
+        .map(value => [400, { [field]: value }] as [number, Record<string, unknown>])),
+    ];
+    if (action === "record_notification") patches.push(
+      [400, { notificationOutcome: "not_required", notificationChannel: "phone" }],
+      [400, { notificationOutcome: "manual_contact_recorded", notificationChannel: "none" }]);
+    const before = copy([...db.rows]), writes = db.committedWrites.length;
+    for (const [status, patch] of patches) await rejects(status, () => service.staff(worker, { ...command, ...patch }));
+    for (const actor of [{ ...worker, staffId: "other-worker" }, { ...manager, studioId: "other" }])
+      await rejects(403, () => service.staff(actor, command));
+    assert.deepEqual([...db.rows], before); assert.equal(db.committedWrites.length, writes);
+    for (const patch of [{ status: "awaiting_approval", approval: null }, { approval: { ...row.approval, reviewHash: "foreign-review" } }]) {
+      db.seed(requestPath(row.id), { ...row, ...patch });
+      const snapshot = copy([...db.rows]);
+      await rejects(409, () => service.staff(worker, command));
+      assert.deepEqual([...db.rows], snapshot); assert.equal(db.committedWrites.length, writes);
+    }
+  });
+  test(`${action} transaction failure rolls back row, audit event and command together`, async () => {
+    const { db, service, current } = await approvedFixture();
+    const before = copy([...db.rows]), writes = db.committedWrites.length;
+    db.failStage = 3;
+    await assert.rejects(service.staff(worker, evidenceCommand(current(), action, 3)), /synthetic transaction failure/);
+    assert.deepEqual([...db.rows], before); assert.equal(db.committedWrites.length, writes);
+  });
+}
+
+test("completion requires both current records, survives exact replay and cannot use another inquiry's evidence", async () => {
+  const { db, service, id, current } = await approvedFixture();
+  const complete = (index: number) => ({ action: "complete", id, expectedRevision: current().revision,
+    expectedReviewHash: current().reviewHash, commandId: commandId(index), completionNote: "Manual completion", evidence: "Synthetic verification" });
+  const expectBlocked = async () => {
+    const before = copy([...db.rows]), writes = db.committedWrites.length;
+    await rejects(409, () => service.staff(worker, complete(9)));
+    assert.deepEqual([...db.rows], before); assert.equal(db.committedWrites.length, writes);
+  };
+  await expectBlocked();
+  await service.staff(worker, evidenceCommand(current(), "record_execution", 3));
+  await expectBlocked();
+  await service.staff(worker, evidenceCommand(current(), "record_notification", 4,
+    { notificationOutcome: "not_required", notificationChannel: "none" }));
+  const valid = copy(current());
+  for (const field of ["execution", "notification"])
+    for (const value of [null, { ...valid[field], reviewHash: "superseded-review" }, { ...valid[field], reviewHash: hash(["other-inquiry", id]) }]) {
+      db.seed(requestPath(id), { ...valid, [field]: value });
+      await expectBlocked();
+    }
+  db.seed(requestPath(id), valid);
+  const command = complete(5), writes = db.committedWrites.length;
+  const results = await Promise.all([service.staff(worker, command), service.staff(worker, command)]);
+  assert.equal(results[0].status, "completed"); assert.equal(results[1].replayed, true);
+  assert.equal(current().revision, 6); assert.equal(current().completion.providerSendVerified, false);
+  assert.equal(db.committedWrites.length, writes + 3);
+  const snapshot = copy([...db.rows]);
+  await rejects(409, () => service.staff(worker, { ...command, evidence: "Changed completion evidence" }));
+  for (const action of ["assign", "claim", "review", "approve", "record_execution", "record_notification", "complete"])
+    await rejects(409, () => service.staff(manager, { ...command, action, assignedStaffId: worker.staffId,
+      expectedRevision: current().revision, commandId: commandId(10) }));
+  assert.deepEqual([...db.rows], snapshot); assert.equal(db.committedWrites.length, writes + 3);
+});
+
+test("new review and approval clear prior evidence but preserve immutable event history and replay results", async () => {
+  const { db, service, id, current } = await approvedFixture();
+  const execution = evidenceCommand(current(), "record_execution", 3);
+  await service.staff(worker, execution);
+  await service.staff(worker, evidenceCommand(current(), "record_notification", 4));
+  const oldHash = current().reviewHash;
+  const oldEvent = copy(db.rows.get(`${requestPath(id)}/${contract.events}/r000004`));
+  await service.staff(worker, { action: "review", id, commandId: commandId(5), expectedRevision: 5,
+    resolutionKind: "guidance", policyFit: "within_policy", plan: "Replacement plan", memberReply: "Replacement reply" });
+  for (const field of ["approval", "execution", "notification", "completion"]) assert.equal(current()[field], null);
+  assert.notEqual(current().reviewHash, oldHash);
+  await service.staff(manager, { action: "approve", id, commandId: commandId(6), expectedRevision: 6,
+    expectedReviewHash: current().reviewHash });
+  const before = copy([...db.rows]), writes = db.committedWrites.length;
+  await rejects(409, () => service.staff(worker, { action: "complete", id, commandId: commandId(7), expectedRevision: 7,
+    expectedReviewHash: current().reviewHash, completionNote: "Manual completion", evidence: "Synthetic record" }));
+  await rejects(409, () => service.staff(worker, { ...execution, commandId: commandId(8), expectedRevision: 7 }));
+  assert.equal((await service.staff(worker, execution)).replayed, true);
+  assert.deepEqual([...db.rows], before); assert.equal(db.committedWrites.length, writes);
+  assert.deepEqual(db.rows.get(`${requestPath(id)}/${contract.events}/r000004`), oldEvent);
+  await service.staff(worker, evidenceCommand(current(), "record_execution", 9));
+  await service.staff(worker, evidenceCommand(current(), "record_notification", 10));
+  assert.equal(current().execution.reviewHash, current().reviewHash);
+  assert.equal(current().notification.reviewHash, current().reviewHash);
+});
+
+test("completed historical inquiries without new evidence remain readable and are never backfilled", async () => {
+  const { db, service } = fixture();
+  const source = storedRow(1, worker.staffId, { status: "completed", completion: { recordedManually: true, providerSendVerified: false } });
+  db.seed(requestPath(source.id), source);
+  const before = copy([...db.rows]);
+  for (const actor of [worker, manager]) {
+    const result = await service.staff(actor, { action: "get", id: source.id });
+    assert.equal(result.row.status, "completed");
+    assert.equal(result.row.execution, undefined); assert.equal(result.row.notification, undefined);
+    assert.equal((await service.staff(actor, { action: "list" })).rows[0].status, "completed");
+  }
+  assert.deepEqual([...db.rows], before); assert.equal(db.committedWrites.length, 0);
 });

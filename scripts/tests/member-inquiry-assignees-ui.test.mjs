@@ -9,8 +9,9 @@ test('current assignees refresh on detail open; historical assignments are never
   try {
     const html = fs.readFileSync('core/inquiries/index.html','utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link\b[^>]*>/g,'');
     const css = fs.readFileSync('core/assets/member-inquiries.css','utf8');
-    const source = fs.readFileSync('core/assets/member-inquiries.js','utf8')
-      .replace(/^import .*\n/, '').replace('initCoreNavigationDocument();','')
+    const icons = fs.readFileSync('core/assets/ui-icons.js','utf8').replace('export function uiIcon','function uiIcon');
+    const source = icons+'\n'+fs.readFileSync('core/assets/member-inquiries.js','utf8')
+      .replace(/^import .*\n/gm, '').replace('initCoreNavigationDocument();','')
       .replace(/initialize\(\)\.catch\([\s\S]*$/, '');
     for (const width of [320,390,768,1366]) {
       const page = await browser.newPage({viewport:{width,height:950}});
@@ -32,6 +33,8 @@ test('current assignees refresh on detail open; historical assignments are never
         assert.equal(await page.locator('#assign').isDisabled(),true);
         assert((await page.locator('#member-request').textContent()).includes('기존 담당자'));
         await page.locator('#assignee').selectOption('current');
+        assert.equal(await page.locator('#assign').isDisabled(),true);
+        await page.locator('#assignment-reason').fill('재직 담당자 인계');
         assert.equal(await page.locator('#assign').isEnabled(),true);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),false);
         await page.evaluate(() => window.emptySynthetic());
