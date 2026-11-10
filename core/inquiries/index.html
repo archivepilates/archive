@@ -28,9 +28,14 @@
             <p id="detail-status" class="badge"></p><p class="notice">회원이 기입한 정보이며 본인 확인 전입니다. 승인만으로 예약·수강권 변경 또는 회원 발송이 실행되지 않습니다.</p>
             <dl id="member-request"></dl>
             <section class="detail-section" aria-labelledby="context-title">
-              <div class="section-heading"><h3 id="context-title">회원 저장자료</h3><button id="load-context" type="button" class="secondary">저장자료 조회</button></div>
-              <p class="muted">CORE 저장자료이며 StudioMate 실시간 조회나 본인 확인 결과가 아닙니다.</p>
-              <div id="member-context" aria-live="polite"></div>
+              <h3 id="context-title">회원 정보 확인</h3>
+              <a id="open-studiomate-member" class="button" target="_blank" rel="noopener noreferrer" hidden>StudioMate 회원 열기</a>
+              <p id="member-link-state" class="muted" role="status"></p>
+              <details id="stored-context-panel"><summary>CORE 저장자료 · 보조 조회</summary>
+                <p class="muted">동기화된 참고자료이며 StudioMate 실시간 조회나 본인 확인 결과가 아닙니다.</p>
+                <button id="load-context" type="button" class="secondary">저장자료 조회</button>
+                <div id="member-context" aria-live="polite"></div>
+              </details>
             </section>
             <p id="edit-scope" class="muted"></p><button id="claim" type="button" class="secondary" hidden>내 담당으로 접수하기</button>
             <div id="assignment" class="detail-section" hidden>

@@ -7,7 +7,7 @@ const iso = (value: any): string | null => {
 const count = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const clean = (value: unknown) => typeof value === 'string' ? value.slice(0,200) : '';
 
-export async function readInquiryMemberContext(db: any, row: Record<string, any>, now: number) {
+export async function readInquiryMemberContext(db: any, row: Record<string, any>, now: number, profileOnly = false) {
   const result: Record<string,any> = {status:'not_found',source:'memberProfiles',observedAt:new Date(now).toISOString(),
     tickets:[],holds:[],bookings:[],coverage:{profilesLimited:false,bookingsLimited:false},
     note:'CORE 저장 원본의 일치 결과이며 본인 확인이나 StudioMate 실시간 조회가 아닙니다. 실제 처리 전 원본을 재확인하세요.'};
@@ -46,6 +46,13 @@ export async function readInquiryMemberContext(db: any, row: Record<string, any>
     availableFrom:iso(ticket.availableFrom),expiresAt:iso(ticket.expiresAt)});
   result.status='unique_stored_match';
   result.profile={memberId,name:clean(profile.name),memberGrade:clean(profile.memberGrade),maskedPhone:normalized.slice(0,3)+'-****-'+normalized.slice(-4),syncedAt:iso(profile.syncedAt||profile.sourceUpdatedAt)};
+  if(profileOnly){
+    const valid=(value:any)=>typeof value==='number'?Number.isSafeInteger(value)&&value>0:typeof value==='string'&&/^[1-9]\d{0,15}$/.test(value);
+    const explicit=profile.studiomateMemberId;
+    const ids=[explicit,profile.memberId,memberId].filter(valid).map(String);
+    result.nativeMemberId=(explicit!=null&&!valid(explicit))||new Set(ids).size!==1?null:ids[0];
+    return result;
+  }
   result.tickets=(Array.isArray(profile.activeTickets)?profile.activeTickets:[]).slice(0,30).map(mapTicket);
   result.holds=(Array.isArray(profile.ticketStatusSummary?.holdingTickets)?profile.ticketStatusSummary.holdingTickets:[]).slice(0,30).map(mapTicket);
   const ids=[...new Set([memberId,profile.memberId,profile.studiomateMemberId].filter(value=>typeof value==='string'||typeof value==='number').map(String))];
@@ -61,4 +68,11 @@ export async function readInquiryMemberContext(db: any, row: Record<string, any>
   result.bookings=[...unique.values()].sort((a,b)=>(b.lectureDate+b.startTime).localeCompare(a.lectureDate+a.startTime)).slice(0,30);
   result.coverage.displayedBookings=result.bookings.length;
   return result;
+}
+
+export async function readInquiryMemberLink(db:any,row:Record<string,any>,now:number){
+  const context=await readInquiryMemberContext(db,row,now,true);
+  const status=context.status==='unique_stored_match'?(context.nativeMemberId?'ready':'incomplete'):context.status;
+  return {status,source:'memberProfiles',observedAt:context.observedAt,
+    ...(status==='ready'?{url:`https://arcpilates.studiomate.kr/users/detail?id=${context.nativeMemberId}`,syncedAt:context.profile.syncedAt}:{})};
 }

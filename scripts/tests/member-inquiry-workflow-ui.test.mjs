@@ -42,6 +42,7 @@ test('operator queue, stored context, draft application and separate completion 
         await page.evaluate(()=>window.synthetic.show({status:'approved',reviewHash:'h',execution:{reviewHash:'h',note:'확인'},notification:{reviewHash:'h',outcome:'not_required',channel:'none'},review:{plan:'승인 처리안',memberReply:'승인 답변',policyFit:'within_policy',resolutionKind:'guidance'}}));
         assert(await page.locator('#complete').isEnabled());
         await page.evaluate(()=>window.synthetic.readonly());assert(await page.locator('#submit-review').isDisabled());
+        await page.locator('#stored-context-panel summary').click();
         await page.locator('#load-context').click();await page.getByText('저장자료 1건 일치 · 본인 확인 전',{exact:true}).waitFor();
         assert((await page.locator('#member-context').textContent()).includes('잔여 확인 불가'));
         assert((await page.locator('#member-context').textContent()).includes('예약 검색 범위 제한'));

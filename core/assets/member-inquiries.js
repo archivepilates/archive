@@ -23,6 +23,7 @@ function clearPrivate() {
   for (const id of ["request-list", "member-request", "event-list", "member-context", "guidance-rules"]) $(id).replaceChildren();
   for (const id of ["preview-plan", "preview-reply", "action-message", "coverage", "work-counts", "assignment-warning", "execution-state", "notification-state", "completion-state", "review-hash"]) $(id).textContent = "";
   draftFields.forEach(id => $(id).value = ""); $("guidance-preview").hidden = true;
+  renderMemberLink(null);
 }
 async function call(data) {
   if (!runtime?.authClient.currentUser) throw new Error("로그인이 필요합니다.");
@@ -122,6 +123,14 @@ function applyPreview() {
   applyEditScope(); $("plan").focus();
 }
 function contextCount(value) { return typeof value === "number" && Number.isFinite(value) ? String(value) : "확인 불가"; }
+function renderMemberLink(link) {
+  const anchor = $("open-studiomate-member"); anchor.hidden = true; anchor.removeAttribute("href");
+  const states = { ambiguous: "회원 연결 확인 필요 · 일치 원본이 중복되거나 서로 다릅니다.", not_found: "회원 연결 확인 필요 · 일치하는 원본 회원이 없습니다.", incomplete: "회원 연결 확인 필요 · 원본 회원 ID가 불충분합니다.", unavailable: "회원 연결을 조회하지 못했습니다. 잠시 후 문의를 새로 조회해 주세요." };
+  if (link?.status === "ready" && typeof link.url === "string" && /^https:\/\/arcpilates\.studiomate\.kr\/users\/detail\?id=[1-9]\d{0,15}$/.test(link.url)) {
+    anchor.href = link.url; anchor.hidden = false;
+    $("member-link-state").textContent = "이름·전체 연락처가 일치하는 저장 원본의 회원입니다. 새 탭에서 열리며 StudioMate 로그인이 필요할 수 있습니다. 실제 처리 전 회원 정보를 확인해 주세요.";
+  } else $("member-link-state").textContent = states[link?.status] || "회원 연결 확인 필요 · 확인된 StudioMate 회원 링크가 없습니다.";
+}
 function renderContext(context) {
   const target = $("member-context"); target.replaceChildren();
   const states = { unique_stored_match: "저장자료 1건 일치 · 본인 확인 전", not_found: "일치 저장자료 없음", ambiguous: "저장자료 중복·모호 · 확인 필요", incomplete: "저장자료 불충분 · 확인 필요" };
@@ -156,6 +165,7 @@ async function loadContext() {
 }
 function showRow(row, events) {
   current = row; contextRequest++; contextLoading = false; $("member-context").replaceChildren();
+  $("stored-context-panel").open = false; renderMemberLink(row.memberLink);
   const index = rows.findIndex(item => item.id === row.id);
   if (index >= 0) rows[index] = { ...rows[index], ...row };
   $("request-detail").hidden = false; $("detail-title").textContent = schema.categories[row.category]?.title || "회원 문의";
@@ -317,7 +327,7 @@ async function initialize() {
   runtime = sharedNavigationRuntime() || { auth, authClient: auth.getAuth(client), functionsClient: functions.getFunctions(client, config.functionsRegion), httpsCallable: functions.httpsCallable };
   runtime.auth.onAuthStateChanged(runtime.authClient, authenticate);
 }
-for (const [id, icon] of [["refresh-list", "refresh-cw"], ["load-context", "search"], ["preview-guidance", "file-text"], ["apply-guidance", "notebook-pen"], ["assign", "user-round"], ["record-execution", "clipboard-check"], ["record-notification", "messages-square"]]) {
+for (const [id, icon] of [["refresh-list", "refresh-cw"], ["open-studiomate-member", "user-round"], ["load-context", "search"], ["preview-guidance", "file-text"], ["apply-guidance", "notebook-pen"], ["assign", "user-round"], ["record-execution", "clipboard-check"], ["record-notification", "messages-square"]]) {
   const element = $(id), label = element.textContent; element.innerHTML = uiIcon(icon); element.append(node("span", label)); element.title = label;
 }
 initialize().catch(() => { clearPrivate(); message("접수함 연결을 확인하지 못했습니다. 새로고침해 주세요."); });

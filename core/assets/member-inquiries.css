@@ -3,3 +3,4 @@
 @media(min-width:900px){.work-grid{grid-template-columns:minmax(260px,.8fr) minmax(0,1.5fr)}.detail-panel{border-top:0;border-left:1px solid var(--line);padding:0 0 0 24px}}
 @media(max-width:390px){header{gap:10px}.brand{font-size:.75rem}h1{font-size:1.6rem}.toolbar label{flex-basis:100%}.section-heading{align-items:flex-start}.section-heading button{width:100%}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+#stored-context-panel{margin-top:16px}#stored-context-panel>summary{min-height:44px;padding:10px 0;cursor:pointer;font-size:.9rem;color:var(--muted)}#open-studiomate-member{min-height:44px}#member-link-state{font-size:.85rem}

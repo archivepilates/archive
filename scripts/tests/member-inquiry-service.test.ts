@@ -466,6 +466,26 @@ test('member context uses the same staff, studio and retention guards before sou
   assert.equal(db.reads.filter(item=>item==='memberProfiles').length,reads);
 });
 
+test('staff detail resolves a native member link without booking reads or record mutations',async()=>{
+  const {db,service}=fixture();const source=storedRow(710);db.seed(requestPath(source.id),source);
+  db.seed('memberProfiles/123',{studioId:'5330',name:source.memberName,phone:source.memberPhone,memberId:'123',studiomateMemberId:123});
+  const before=copy([...db.rows]);const result=await service.staff(worker,{action:'get',id:source.id});
+  assert.equal(result.row.memberLink.status,'ready');assert.equal(result.row.memberLink.url,'https://arcpilates.studiomate.kr/users/detail?id=123');
+  assert.equal(db.reads.includes('bookings'),false);assert.deepEqual([...db.rows],before);assert.equal(db.committedWrites.length,0);
+  const reads=db.reads.filter(item=>item==='memberProfiles').length;
+  for(const actor of [{...worker,active:false},{...worker,studioId:'other'},{...worker,role:'viewer'}])await rejects(403,()=>service.staff(actor,{action:'get',id:source.id}));
+  const expired=storedRow(711,worker.staffId,{expiresAt:new Date(NOW)});db.seed(requestPath(expired.id),expired);
+  await rejects(404,()=>service.staff(worker,{action:'get',id:expired.id}));
+  assert.equal(db.reads.filter(item=>item==='memberProfiles').length,reads);
+});
+
+test('a member-link lookup failure does not block the inquiry or reuse a stored URL',async()=>{
+  const {db,service}=fixture();const source=storedRow(712,worker.staffId,{memberLink:{status:'ready',url:'https://wrong.test'}});db.seed(requestPath(source.id),source);
+  const collection=db.collection.bind(db);db.collection=(path:string)=>{if(path==='memberProfiles')throw Error('Synthetic source outage');return collection(path);};
+  const result=await service.staff(worker,{action:'get',id:source.id});assert.equal(result.row.id,source.id);
+  assert.deepEqual(result.row.memberLink,{status:'unavailable'});assert.equal(db.committedWrites.length,0);
+});
+
 test("public submission snapshots curated guidance and starts with no execution or notification authority", async () => {
   const { db, service } = fixture();
   const input = submission();

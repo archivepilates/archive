@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readInquiryMemberContext} from '../../firebase/kangsain-functions/functions/src/memberInquiries/memberContext';
+import {readInquiryMemberContext,readInquiryMemberLink} from '../../firebase/kangsain-functions/functions/src/memberInquiries/memberContext';
 import {matchingGuidance,guidanceEvidence} from '../../firebase/kangsain-functions/functions/src/memberInquiries/guidance';
 
 const NOW=Date.parse('2026-11-10T00:00:00Z');
@@ -57,6 +57,26 @@ test('bounded coverage is explicit rather than a whole-roster or latest-bookings
 });
 test('invalid submitted identity is incomplete without querying member profiles',async()=>{
   const db=database({});assert.equal((await readInquiryMemberContext(db,{...row,memberPhone:'bad'},NOW)).status,'incomplete');assert.deepEqual(db.reads,[]);
+});
+test('native member links require exact stored identity and do not query bookings or expose contact data',async()=>{
+  for(const [id,extra]of [['123',{memberId:'123'}],['excel_only',{memberId:'excel_only',studiomateMemberId:123}]] as const){
+    const db=database({['memberProfiles/'+id]:{...profile,...extra}}),result=await readInquiryMemberLink(db,row,NOW);
+    assert.equal(result.status,'ready');assert.equal(result.url,'https://arcpilates.studiomate.kr/users/detail?id=123');
+    assert(!db.reads.includes('bookings'));assert(!JSON.stringify(result).includes(row.memberPhone));assert(!('profile'in result));
+  }
+});
+test('missing, conflicting, invalid native IDs, duplicate profiles and cross-member merges cannot produce links',async()=>{
+  for(const profiles of [
+    {'memberProfiles/excel_only':profile},
+    {'memberProfiles/123':{...profile,memberId:'123',studiomateMemberId:124}},
+    {'memberProfiles/123':{...profile,memberId:'123',studiomateMemberId:'123?other=1'}},
+    {'memberProfiles/123':{...profile,memberId:'123',studiomateMemberId:0}},
+    {'memberProfiles/123':{...profile,memberId:'123',studiomateMemberId:Number.MAX_SAFE_INTEGER+1}},
+    {'memberProfiles/123':{...profile,memberId:'123'},'memberProfiles/124':{...profile,memberId:'124'}},
+    {'memberProfiles/123':{...profile,memberId:'123',name:'다른회원'}},
+    {'memberProfiles/123':{...profile,memberId:'123',studioId:'other'}},
+    {'memberProfiles/excel_old':{...profile,canonicalMemberId:'123'},'memberProfiles/123':{...profile,memberId:'123',phone:'01000000001'}},
+  ]){const db=database(profiles),result=await readInquiryMemberLink(db,row,NOW);assert.notEqual(result.status,'ready');assert(!('url'in result));assert(!db.reads.includes('bookings'));}
 });
 test('matched rules change by exact choice, never approve an exception or interpret free text',()=>{
   const ids=(category:string,answers:any)=>matchingGuidance(category,answers).map(rule=>rule.id);

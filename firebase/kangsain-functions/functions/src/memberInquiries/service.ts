@@ -2,7 +2,7 @@ import { memberInquiryContract as contract } from "./contract";
 import { assertActor, assertAssignee, assertRead, hash, InquiryError, manager, text, transition, validateSubmission } from "./policy";
 import type { Actor, InquiryRow } from "./policy";
 import {guidanceEvidence} from './guidance';
-import {readInquiryMemberContext} from './memberContext';
+import {readInquiryMemberContext,readInquiryMemberLink} from './memberContext';
 
 type Dependencies = { db: any; now?: () => number };
 const requestId = (key: string) => "mi_" + hash(["member_inquiry_v1", key]).slice(0, 32);
@@ -132,8 +132,11 @@ export function createInquiryService({ db, now = Date.now }: Dependencies) {
       if (!snap.exists) throw new InquiryError(404, "문의 내역을 찾을 수 없습니다.");
       const row = snap.data(); readable(actor, row);
       if(input.action==='context')return {ok:true,context:await readInquiryMemberContext(db,row,now())};
-      const events = await ref.collection(contract.events).orderBy("revision", "desc").limit(50).get();
-      return { ok: true, row: { ...row, contactRecorded:contactRecorded(row),assignmentIssue:await assignmentIssue(row.assignedStaffId),expiresAt: new Date(expireMillis(row.expiresAt)).toISOString() },
+      const [memberLink,events]=await Promise.all([
+        readInquiryMemberLink(db,row,now()).catch(()=>({status:'unavailable'})),
+        ref.collection(contract.events).orderBy("revision", "desc").limit(50).get(),
+      ]);
+      return { ok: true, row: { ...row, memberLink,contactRecorded:contactRecorded(row),assignmentIssue:await assignmentIssue(row.assignedStaffId),expiresAt: new Date(expireMillis(row.expiresAt)).toISOString() },
         events: events.docs.map((doc: any) => { const event = doc.data(); return { ...event, expiresAt: new Date(expireMillis(event.expiresAt)).toISOString() }; }) };
     }
     if (typeof input.commandId !== "string" || !/^[a-f0-9]{48}$/.test(input.commandId)) throw new InquiryError(400, "작업 식별값을 확인해 주세요.");
