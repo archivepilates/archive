@@ -21,6 +21,7 @@ import { dedupeSettlementSourceRows } from "./lib/monthly-settlement-source.mjs"
 import { readSettlementSheetPointerFile, findSettlementSheetPointer } from "./lib/monthly-settlement-reference-reader.mjs";
 import { prepareMonthlySettlementFinalization, applyMonthlySettlementFinalization } from "./lib/monthly-settlement-finalization.mjs";
 import { renderSettlementRecipientDocument, settlementRecipientCss } from "./lib/settlement-recipient-template.mjs";
+import { buildSettlementClassCounts, reconcileSettlementClassCounts, settlementClassCountPresentation } from "./lib/settlement-class-counts.mjs";
 
 const HOME = os.homedir();
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -92,9 +93,20 @@ async function main() {
   mkdirSync(targetDir, { recursive: true });
   await ensureInputWorkbooks();
   const statement = readStatementWorkbook(statementXlsx);
+  const lessonSource = findMonthlySourceFile('수업매출원본데이터', '수업매출_현황', monthDateRange(ym));
+  if (!lessonSource) throw new Error('SETTLEMENT_CLASS_COUNTS_SOURCE_MISSING');
+  const classCounts = buildSettlementClassCounts(readWorkbookObjects(lessonSource).map(row => mapRawLessonRow(row, path.basename(lessonSource))), ym);
+  for (const instructor of statement.instructors)
+    instructor.classCounts = reconcileSettlementClassCounts(classCounts.get(instructor.name), instructor);
   const previous = readPreviousSummary(rootDir, ym);
   const operation = existsSync(settlementXlsx) ? readOperationWorkbook(settlementXlsx) : null;
   const summary = buildSummary(statement.instructors, previous?.totalPayout || 0, operation);
+  summary.groupTotal = statement.instructors.reduce((sum, row) => sum + row.classCounts.totalGroupSessions, 0);
+  summary.privateTotal = statement.instructors.reduce((sum, row) => sum + row.classCounts.privateSessions, 0);
+  summary.totalClassCount = summary.groupTotal + summary.privateTotal;
+  summary.ordinaryGroupTotal = statement.instructors.reduce((sum, row) => sum + row.classCounts.groupSessions, 0);
+  summary.lessonTotal = statement.instructors.reduce((sum, row) => sum + row.classCounts.lessonSessions, 0);
+  summary.privateSettlementUnits = statement.instructors.reduce((sum, row) => sum + row.classCounts.privateSettlementUnits, 0);
   const files = [];
   for (const instructor of statement.instructors) {
     const html = renderInstructorHtml({ ym, instructor, generatedAt: new Date() });
@@ -312,6 +324,7 @@ function mapRawLessonRow(row, sourceFileName) {
   const instructorName = clean(row["수업 강사"] || row["강사"]);
   return {
     sourceFileName,
+    classId: clean(row.classId),
     classDate,
     weekday: clean(row["요일"]) || getWeekdayKorean(classDate),
     classTime,
@@ -955,8 +968,8 @@ function renderIndexHtml({ ym, summary, files, generatedAt }) {
   <p class="muted">강사별 전달용 HTML 파일 인덱스입니다. 생성일 ${formatDate(generatedAt)}</p>
   <section class="summary">
     <div class="summary-card"><span class="label">총 지급 합계</span><b>${formatWon(summary.totalPayout)}</b><span class="sub ${diffClass}">전월대비 ${direction} ${formatWon(Math.abs(summary.diffFromPrevious))}</span></div>
-    <div class="summary-card"><span class="label">그룹수업 합계</span><b>${formatCount(summary.groupTotal)}회</b><span class="sub">그룹 보수 ${formatWon(summary.groupPay)}</span></div>
-    <div class="summary-card"><span class="label">프라이빗 수업 합계</span><b>${formatCount(summary.privateTotal)}회</b><span class="sub">프라이빗 보수 ${formatWon(summary.privatePay)}</span></div>
+    <div class="summary-card"><span class="label">그룹수업 합계</span><b>${formatCount(summary.groupTotal)}회</b><span class="sub">일반 그룹 ${formatCount(summary.ordinaryGroupTotal)}회 · 강사레슨 ${formatCount(summary.lessonTotal)}회<br>그룹 보수 ${formatWon(summary.groupPay)}</span></div>
+    <div class="summary-card"><span class="label">프라이빗 수업 합계</span><b>${formatCount(summary.privateTotal)}회</b><span class="sub">회원별 정산 ${formatCount(summary.privateSettlementUnits)}건<br>프라이빗 보수 ${formatWon(summary.privatePay)}</span></div>
     <div class="summary-card"><span class="label">총수업 수</span><b>${formatCount(summary.totalClassCount)}회</b><span class="sub">그룹 + 프라이빗</span></div>
     <div class="summary-card"><span class="label">월 그룹 평균</span><b>${formatNumber(summary.monthlyGroupAverage, 2)}명</b><span class="sub">출석 인원 기준</span></div>
   </section>
@@ -971,11 +984,11 @@ function renderIndexHtml({ ym, summary, files, generatedAt }) {
 
 function renderInstructorHtml({ ym, instructor, generatedAt }) {
   const displayRole = instructorRole(instructor.name, instructor.role);
-  const totalClassCount = number(instructor.groupCount) + number(instructor.privateCount) + number(instructor.lessonCount);
+  const classes = settlementClassCountPresentation(instructor.classCounts);
   const adjustmentRows = parseAdjustmentRows(instructor);
   const rows = [
-    detailRow("그룹 보수", `${formatCount(instructor.groupCount)}회 · 평균 ${formatNumber(instructor.groupAverage, 2)}명`, instructor.groupPay),
-    detailRow("프라이빗 보수", `${formatCount(instructor.privateCount)}회`, instructor.privatePay),
+    detailRow("일반 그룹 보수", `${formatCount(instructor.groupCount)}회 · 평균 ${formatNumber(instructor.groupAverage, 2)}명`, instructor.groupPay),
+    detailRow("프라이빗 보수", classes.privateDetail, instructor.privatePay),
     ...adjustmentRows,
     detailRow("세전 보수총액", "3.3% 공제 전 기준", instructor.pretaxPay),
     detailRow("소득세 3%", "원천징수", instructor.incomeTax),
@@ -987,12 +1000,12 @@ function renderInstructorHtml({ ym, instructor, generatedAt }) {
   if (instructor.combinedPayout) rows.push(detailRow("실지급 합산", "프리랜서 지급액 + 정규직 실지급", instructor.combinedPayout, true));
   return renderSettlementRecipientDocument({
     month: ym, name: instructor.name, role: displayRole,
-    issuedAt: formatDate(generatedAt), totalClasses: formatCount(totalClassCount),
+    issuedAt: formatDate(generatedAt), totalClasses: classes.totalClasses,
     payout: formatWon(instructor.finalPayout),
     payoutDescription: instructor.combinedPayout ? '실지급 합산' : '지급액',
     metrics: [
-      { label: '그룹', value: `${formatCount(instructor.groupCount)}회` },
-      { label: '프라이빗', value: `${formatCount(instructor.privateCount)}회` },
+      classes.groupMetric,
+      classes.privateMetric,
       { label: '그룹 평균', value: `${formatNumber(instructor.groupAverage, 2)}명` },
       { label: '세전 보수', value: formatWon(instructor.pretaxPay) },
     ],

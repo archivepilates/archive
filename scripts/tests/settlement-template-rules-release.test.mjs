@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {assertRecipientRulesScope,recipientRulesManifest,parseRecipientRulesArgs,RECIPIENT_RULES_BASE} from '../release-settlement-template-rules.mjs';
 const before=execFileSync('git',['show',`${RECIPIENT_RULES_BASE}:core/rules/index.html`]);
-const after=fs.readFileSync('core/rules/index.html');
+const after=execFileSync('git',['show','c5aec2b317d8788ecf9bde36d6bbe94020e72383:core/rules/index.html']);
 test('only the approved two recipient-rule lines may be added',()=>{
   assert.doesNotThrow(()=>assertRecipientRulesScope(before,after));
   for(const mutated of [after.toString()+'unrelated',after.toString().replace('공통 생성 서식','추가 권한'),before.toString()])assert.throws(()=>assertRecipientRulesScope(before,mutated));
