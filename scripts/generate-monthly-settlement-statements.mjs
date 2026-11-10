@@ -20,8 +20,10 @@ import { summarizeCurrentSettlementOperation } from "./lib/monthly-settlement-op
 import { dedupeSettlementSourceRows } from "./lib/monthly-settlement-source.mjs";
 import { readSettlementSheetPointerFile, findSettlementSheetPointer } from "./lib/monthly-settlement-reference-reader.mjs";
 import { prepareMonthlySettlementFinalization, applyMonthlySettlementFinalization } from "./lib/monthly-settlement-finalization.mjs";
-import { renderSettlementRecipientDocument, settlementRecipientCss } from "./lib/settlement-recipient-template.mjs";
+import { settlementRecipientCss } from "./lib/settlement-recipient-template.mjs";
+import { renderStandardPayrollDocument, PAYROLL_TERMS } from "./lib/settlement-payroll-presentation.mjs";
 import { buildSettlementClassCounts, reconcileSettlementClassCounts, settlementClassCountPresentation } from "./lib/settlement-class-counts.mjs";
+import { buildSettlementPayoutIndex, readSettlementPayoutComponents, renderSettlementPayoutIndex, settlementPayoutIndexCss, PAYOUT_EXCLUDED_OWNER_NAME } from "./lib/settlement-payout-index.mjs";
 
 const HOME = os.homedir();
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,6 +109,7 @@ async function main() {
   summary.ordinaryGroupTotal = statement.instructors.reduce((sum, row) => sum + row.classCounts.groupSessions, 0);
   summary.lessonTotal = statement.instructors.reduce((sum, row) => sum + row.classCounts.lessonSessions, 0);
   summary.privateSettlementUnits = statement.instructors.reduce((sum, row) => sum + row.classCounts.privateSettlementUnits, 0);
+  const payoutIndex = buildSettlementPayoutIndex(statement.instructors, ym);
   const files = [];
   for (const instructor of statement.instructors) {
     const html = renderInstructorHtml({ ym, instructor, generatedAt: new Date() });
@@ -115,7 +118,7 @@ async function main() {
     if (apply) writeFileSync(outputPath, html);
     files.push({ name: instructor.name, fileName, payout: instructor.finalPayout });
   }
-  const indexHtml = renderIndexHtml({ ym, summary, files, generatedAt: new Date() });
+  const indexHtml = renderIndexHtml({ ym, summary, files, payoutIndex, generatedAt: new Date() });
   const indexPath = path.join(targetDir, `아카이브 정산명세서 ${ym}_INDEX.html`);
   if (apply) writeFileSync(indexPath, indexHtml);
 
@@ -858,6 +861,10 @@ function readStatementWorkbook(filePath) {
       const freelancerPayoutIndex = hasLessonCountColumn ? 15 : 14;
       const combinedPayoutIndex = hasLessonCountColumn ? 16 : 15;
       const regularPayoutIndex = hasLessonCountColumn ? 17 : 16;
+      readSettlementPayoutComponents({regular:row[regularPayoutIndex],freelance:row[freelancerPayoutIndex],
+        combined:row[combinedPayoutIndex],adjustmentText:clean(row[adjustmentTextIndex]),
+        columnsPresent:[regularPayoutIndex,freelancerPayoutIndex,combinedPayoutIndex]
+          .every(index => ledger.slice(0,4).some(header => clean(header[index])))});
       const name = clean(row[1]);
       const base = infoByName.get(name) || { name, role: clean(row[2]) };
       const freelancerPayout = money(row[freelancerPayoutIndex]);
@@ -883,6 +890,7 @@ function readStatementWorkbook(filePath) {
         combinedPayout,
         regularPayout,
         finalPayout,
+        payoutSourceVerified: true,
       };
     });
   return { instructors };
@@ -950,10 +958,8 @@ function buildSummary(instructors, previousTotalPayout, operation) {
   };
 }
 
-function renderIndexHtml({ ym, summary, files, generatedAt }) {
+function renderIndexHtml({ ym, summary, files, payoutIndex, generatedAt }) {
   const title = `${formatYm(ym)} 정산명세서`;
-  const direction = summary.diffFromPrevious >= 0 ? "증가" : "감소";
-  const diffClass = summary.diffFromPrevious >= 0 ? "up" : "down";
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -965,9 +971,11 @@ function renderIndexHtml({ ym, summary, files, generatedAt }) {
 <body><main><article class="statement">
   <div class="eyebrow">ARCHIVE PILATES</div>
   <h1>${escapeHtml(title)}</h1>
-  <p class="muted">강사별 전달용 HTML 파일 인덱스입니다. 생성일 ${formatDate(generatedAt)}</p>
+  <p class="muted">${escapeHtml(title)} · 생성일 ${formatDate(generatedAt)}</p>
+  <style>${settlementPayoutIndexCss()}</style>
+  ${renderSettlementPayoutIndex(payoutIndex)}
+  <h2 class="section-title">수업 실적 참고 (사업주 포함)</h2>
   <section class="summary">
-    <div class="summary-card"><span class="label">총 지급 합계</span><b>${formatWon(summary.totalPayout)}</b><span class="sub ${diffClass}">전월대비 ${direction} ${formatWon(Math.abs(summary.diffFromPrevious))}</span></div>
     <div class="summary-card"><span class="label">그룹수업 합계</span><b>${formatCount(summary.groupTotal)}회</b><span class="sub">일반 그룹 ${formatCount(summary.ordinaryGroupTotal)}회 · 강사레슨 ${formatCount(summary.lessonTotal)}회<br>그룹 보수 ${formatWon(summary.groupPay)}</span></div>
     <div class="summary-card"><span class="label">프라이빗 수업 합계</span><b>${formatCount(summary.privateTotal)}회</b><span class="sub">회원별 정산 ${formatCount(summary.privateSettlementUnits)}건<br>프라이빗 보수 ${formatWon(summary.privatePay)}</span></div>
     <div class="summary-card"><span class="label">총수업 수</span><b>${formatCount(summary.totalClassCount)}회</b><span class="sub">그룹 + 프라이빗</span></div>
@@ -976,7 +984,7 @@ function renderIndexHtml({ ym, summary, files, generatedAt }) {
   <h2 class="section-title">강사별 명세서</h2>
   <section class="cards">
     ${files
-      .map((file) => `<a class="card" href="${encodeURI(file.fileName)}"><strong>${escapeHtml(file.name)}</strong><span>${formatWon(file.payout)}</span></a>`)
+      .map((file) => `<a class="card" href="${encodeURI(file.fileName)}"><strong>${escapeHtml(file.name)}</strong><span>${file.name.normalize('NFC') === PAYOUT_EXCLUDED_OWNER_NAME ? '사업주 · 송금 제외' : formatWon(file.payout)}</span></a>`)
       .join("")}
   </section>
 </article></main></body></html>`;
@@ -987,39 +995,42 @@ function renderInstructorHtml({ ym, instructor, generatedAt }) {
   const classes = settlementClassCountPresentation(instructor.classCounts);
   const adjustmentRows = parseAdjustmentRows(instructor);
   const rows = [
-    detailRow("일반 그룹 보수", `${formatCount(instructor.groupCount)}회 · 평균 ${formatNumber(instructor.groupAverage, 2)}명`, instructor.groupPay),
-    detailRow("프라이빗 보수", classes.privateDetail, instructor.privatePay),
+    payrollRow("일반 그룹 보수", `${formatCount(instructor.groupCount)}회 · 평균 ${formatNumber(instructor.groupAverage, 2)}명`, instructor.groupPay),
+    payrollRow("프라이빗 보수", classes.privateDetail, instructor.privatePay),
     ...adjustmentRows,
-    detailRow("세전 보수총액", "3.3% 공제 전 기준", instructor.pretaxPay),
-    detailRow("소득세 3%", "원천징수", instructor.incomeTax),
-    detailRow("주민세 0.3%", "원천징수", instructor.localTax),
-    detailRow("공제 합계", "소득세 + 주민세", instructor.deductionTotal),
-    detailRow("프리랜서 지급액", "세전 보수총액 - 공제 합계", instructor.freelancerPayout, true),
+    payrollRow(PAYROLL_TERMS.freelanceGross, "원천징수 전", instructor.pretaxPay),
+    payrollRow(PAYROLL_TERMS.freelanceIncomeTax, "원천징수", instructor.incomeTax),
+    payrollRow(PAYROLL_TERMS.freelanceLocalTax, "원천징수", instructor.localTax),
+    payrollRow(PAYROLL_TERMS.freelanceDeductions, "소득세 + 지방소득세", instructor.deductionTotal),
+    payrollRow(PAYROLL_TERMS.freelanceNet, "보수총액 - 원천징수 합계", instructor.freelancerPayout, true),
   ];
-  if (instructor.regularPayout) rows.push(detailRow("정규직 실지급", "급여 지급분", instructor.regularPayout));
-  if (instructor.combinedPayout) rows.push(detailRow("실지급 합산", "프리랜서 지급액 + 정규직 실지급", instructor.combinedPayout, true));
-  return renderSettlementRecipientDocument({
+  const regularRows = instructor.regularPayout ? [payrollRow(PAYROLL_TERMS.regularNet, "", instructor.regularPayout, true)] : [];
+  const payoutRows = [
+    ...regularRows,
+    payrollRow(PAYROLL_TERMS.freelanceNet, "", instructor.freelancerPayout),
+    payrollRow(PAYROLL_TERMS.total, "", instructor.finalPayout, true),
+  ];
+  return renderStandardPayrollDocument({
     month: ym, name: instructor.name, role: displayRole,
     issuedAt: formatDate(generatedAt), totalClasses: classes.totalClasses,
     payout: formatWon(instructor.finalPayout),
-    payoutDescription: instructor.combinedPayout ? '실지급 합산' : '지급액',
+    regularRows, freelanceRows: rows, payoutRows,
     metrics: [
       classes.groupMetric,
       classes.privateMetric,
       { label: '그룹 평균', value: `${formatNumber(instructor.groupAverage, 2)}명` },
-      { label: '세전 보수', value: formatWon(instructor.pretaxPay) },
+      { label: PAYROLL_TERMS.freelanceGross, value: formatWon(instructor.pretaxPay) },
     ],
-    sections: [{ html: `<table aria-label="정산 상세"><thead><tr><th>항목</th><th>금액</th></tr></thead><tbody>${rows.join('')}</tbody></table>` }],
     notes: [
-      instructor.combinedPayout ? '프리랜서 수업 보수와 정규직 실지급을 합산해 최종 지급 기준액을 표시했습니다.' : '세전 보수총액에서 원천징수 3.3%를 반영해 지급액을 표시했습니다.',
+      instructor.combinedPayout ? '급여 실지급액과 프리랜서 실지급액을 구분하여 합산합니다.' : '프리랜서 보수총액에서 원천징수를 반영한 실지급액입니다.',
       ...(instructor.bank ? [`지급 계좌: ${instructor.bank} · ${String(instructor.account || '')} · ${instructor.accountHolder || instructor.name}`] : []),
       '본 명세서는 ARCHIVE PILATES 내부 정산 기준에 따라 작성되었습니다.',
     ],
   });
 }
 
-function detailRow(label, sub, value, accent = false) {
-  return `<tr><td><strong>${escapeHtml(label)}</strong><br><span class="muted">${escapeHtml(sub)}</span></td><td class="amount ${accent ? "accent" : ""}">${formatWon(value)}</td></tr>`;
+function payrollRow(label, description, value, highlight = false) {
+  return { label, description, value: formatWon(value), highlight };
 }
 
 function parseAdjustmentRows(instructor) {
@@ -1028,9 +1039,9 @@ function parseAdjustmentRows(instructor) {
   const rows = [];
   const salary = text.match(/정규직급여\s*\(([-,\d]+)\)/);
   const lesson = text.match(/강사\s*레슨\s*([-,\d]+)/);
-  if (salary) rows.push(detailRow("정규직 급여 공제", "프리랜서 수업 보수에서 차감", -Math.abs(money(salary[1]))));
-  if (lesson) rows.push(detailRow("강사 레슨 조정", "정산 조정 반영", money(lesson[1])));
-  if (!rows.length) rows.push(detailRow("조정금액", "계약 조건에 따른 보수 조정", instructor.adjustmentAmount));
+  if (salary) rows.push(payrollRow("정규직 급여 반영액", "프리랜서 보수 산정 시 반영", -Math.abs(money(salary[1]))));
+  if (lesson) rows.push(payrollRow("강사레슨 보수", "기존 정산 반영액", money(lesson[1])));
+  if (!rows.length) rows.push(payrollRow("조정금액", "계약 조건에 따른 보수 조정", instructor.adjustmentAmount));
   return rows;
 }
 

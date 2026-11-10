@@ -18,7 +18,7 @@ export function renderSettlementRecipientDocument({month, name, role='강사', i
 <title>ARCHIVE PILATES 정산명세서 ${escape(month)} ${escape(name)}</title><style>${settlementRecipientCss()}</style></head><body><main>
 <article class="statement" data-settlement-template="${SETTLEMENT_TEMPLATE}">
 <header class="brand-row"><div><img class="brand-mark" src="${settlementLogoDataUrl}" alt="ARCHIVE PILATES 공식 로고" width="62" height="62"><div class="eyebrow" style="margin-top:18px">ARCHIVE PILATES</div><h1>정산명세서</h1></div>
-<div class="meta"><strong>${monthLabel} 정산</strong>${issuedAt ? `작성일 ${escape(issuedAt)}<br>` : ''}${payday}<br>전달용 HTML</div></header>
+<div class="meta"><strong>${monthLabel} 정산</strong>${issuedAt ? `작성일 ${escape(issuedAt)}<br>` : ''}${payday}</div></header>
 <section class="person"><div class="panel"><div class="label">${escape(role)}</div><div class="name">${escape(name)}</div><div class="role">총 수업 ${escape(totalClasses)}회</div></div>
 <div class="panel"><div class="label">${escape(payoutLabel)}</div><div class="total">${escape(payout)}</div><div class="role">${escape(payoutDescription)}</div></div></section>
 <section class="grid">${metrics.map(m=>`<div class="metric"><div class="label">${escape(m.label)}</div><div class="value${String(m.value).endsWith('원') ? ' money' : ''}">${escape(m.value)}</div>${(m.details || []).map(detail=>`<div class="metric-detail">${escape(detail)}</div>`).join('')}</div>`).join('')}</section>

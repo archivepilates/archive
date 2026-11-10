@@ -43,7 +43,7 @@ test('invalid month or missing summary fields cannot create a misleading stateme
 });
 test('monthly runner uses common presentation and does not print raw adjustment notes',()=>{
   const source=readFileSync(new URL('../generate-monthly-settlement-statements.mjs',import.meta.url),'utf8');
-  assert(source.includes('return renderSettlementRecipientDocument({'));
+  assert(source.includes('return renderStandardPayrollDocument({'));
   assert(!source.includes('<div class="brand-mark">AP</div>'));
-  assert(source.includes('detailRow("조정금액", "계약 조건에 따른 보수 조정", instructor.adjustmentAmount)'));
+  assert(source.includes('payrollRow("조정금액", "계약 조건에 따른 보수 조정", instructor.adjustmentAmount)'));
 });
