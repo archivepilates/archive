@@ -33,7 +33,7 @@ function timestamp(value) {
   return time;
 }
 
-function validateApproval(approval, current) {
+export function validatePretransportRecoveryApproval(approval, current) {
   if (!object(approval) || Object.keys(approval).length !== APPROVAL_FIELDS.length
     || APPROVAL_FIELDS.some(field => !Object.hasOwn(approval, field)) || approval.version !== VERSION
     || typeof approval.approvalRef !== 'string' || !/^call_[A-Za-z0-9_]{1,160}$/.test(approval.approvalRef)
@@ -41,7 +41,11 @@ function validateApproval(approval, current) {
   key(approval.originalKey); key(approval.originalDigest);
   const start = timestamp(approval.approvedAt), end = timestamp(approval.expiresAt);
   if (end <= start || end - start > DAY) fail('approval interval must be positive and at most 24h');
-  if (current !== undefined && (current < start || current >= end)) fail('approval not active or expired');
+  if (current !== undefined && (!Number.isFinite(current) || current < start || current >= end)) fail('approval not active or expired');
+  const target = evaluateClassCancellation({date: approval.date, startTime: approval.startTime,
+    staffName: 'Approval schema', lessonType: '\uadf8\ub8f9', category: '\uadf8\ub8f9', title: 'Approval schema', room: ''});
+  if (target.status !== 'enforce' || target.rule !== 'previous_day_21'
+    || target.expectedDeadline !== approval.expectedDeadline) fail('valid weekend date/time/deadline target required');
 }
 
 function validateParent(parent, approval) {
@@ -113,7 +117,7 @@ async function validateResolution(resolution, parent, recoveryLedger, originalKe
   const child = await recoveryLedger.read(resolution.childKey);
   if (!object(child) || fingerprintClassCorrectionRecord(child) !== resolution.childDigest) fail('resolution child reference mismatch');
   const approval = child.approval;
-  validateApproval(approval); validateParent(parent, approval);
+  validatePretransportRecoveryApproval(approval); validateParent(parent, approval);
   if (approval.originalKey !== originalKey || approval.originalDigest !== resolution.originalDigest
     || approval.approvalRef !== resolution.approvalRef || fingerprintClassCorrectionRecord(approval) !== resolution.approvalDigest
     || recoveryKeyFor(approval) !== resolution.childKey) fail('resolution approval reference mismatch');
@@ -142,7 +146,7 @@ export async function createApprovedPretransportRecovery({baseLedger, recoveryLe
     lastTime = ms; return ms;
   };
   const parentFor = async () => {
-    validateApproval(approval, time());
+    validatePretransportRecoveryApproval(approval, time());
     const parent = await baseLedger.read(approval.originalKey);
     validateParent(parent, approval);
     return parent;

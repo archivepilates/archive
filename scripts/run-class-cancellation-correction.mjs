@@ -9,7 +9,7 @@ import {acquireStudioMateBrowserLock} from './lib/studiomate-browser-lock.mjs';
 import {createClassCancellationBrowser} from './lib/class-cancellation-native-browser.mjs';
 import {createClassCorrectionLedger, privateDirectory, savePrivateJson} from './lib/class-cancellation-correction-ledger.mjs';
 import {runClassCancellationCorrection} from './lib/class-cancellation-correction-worker.mjs';
-import {createApprovedPretransportRecovery, withResolvedPretransportRecoveries} from './lib/class-cancellation-pretransport-recovery.mjs';
+import {createApprovedPretransportRecovery, withResolvedPretransportRecoveries, validatePretransportRecoveryApproval} from './lib/class-cancellation-pretransport-recovery.mjs';
 import {evaluateClassCancellation} from './lib/class-cancellation-policy.mjs';
 
 export function correctionHorizon(now = new Date()) {
@@ -25,6 +25,13 @@ export function shouldRunClassCorrection({apply, download, scheduledRun, notific
     && ['download', 'memberProfiles', 'reservations'].every(name => steps.some(s => s.name === name && s.exitCode === 0 && s.stdoutOk !== false)));
 }
 
+export function validateClassCorrectionOptions({apply, preview, recover, approval}) {
+  if ([apply, preview, recover].some(value => typeof value !== 'boolean') || preview && apply
+    || recover && (!apply || preview || !approval || typeof approval !== 'object' || Array.isArray(approval))
+    || !recover && approval !== undefined) throw Error('Explicit recovery mode and valid bound approval required');
+  if (recover) validatePretransportRecoveryApproval(approval);
+}
+
 export async function notifyClassCorrectionReview(result, root, reportPath, send) {
   if (!result.reviewCount && result.status !== 'review' || result.status === 'deferred') return 'not_needed';
   const keys = (result.details || []).filter(d => d.status === 'review').map(d => d.key || String(d.reason || '').split('\n')[0].replace(/\d/g, '')).sort();
@@ -32,8 +39,8 @@ export async function notifyClassCorrectionReview(result, root, reportPath, send
   const intent = path.join(root, 'state/class-cancellation/alerts', hash + '.json');
   try {await savePrivateJson(intent, {eventId: hash, status: 'intent', reportPath, at: new Date().toISOString()});}
   catch (e) {if (e.code === 'EEXIST') return 'already_reported_or_unknown'; throw e;}
-  const receipt = await send({eventId: `class-cancellation-${hash}`, subject: '[주말 수업 취소마감][확인필요] 자동교정 검증 보류',
-    body: `전체 수업 원본 또는 교정 결과가 검증되지 않아 해당 단계가 보류됐습니다.\n검토 ${result.reviewCount || 1}건, 검증된 수정 ${result.correctedCount || 0}건입니다.\n기존 회원·예약 수집과는 별개이며 불명확한 수정은 재실행하지 않습니다.\n비공개 실행기록: ${reportPath}\nCORE: https://core.archivepilates.com/rules/#class-cancellation-policy\n다음 조치: 원본과 canonical claim을 대조하고, 이미 접수됐거나 불명확한 건은 재시도하지 마세요.`});
+  const receipt = await send({eventId: hash, subject: '[주말 수업 취소마감][확인필요] 자동교정 검증 보류',
+    body: `전체 수업 원본 또는 교정 결과가 검증되지 않아 해당 단계가 보류됐습니다.\n검토 ${result.reviewCount || 1}건, 검증된 수정 ${result.correctedCount || 0}건입니다.\n기존 회원·예약 수집과는 별개이며 불명확한 수정은 재실행하지 않습니다.\n비공개 실행기록: ${reportPath}\nCORE: https://core.archivepilates.com/rules/#class-cancellation-guard-20261113\n다음 조치: 원본과 canonical claim을 대조하고, 이미 접수됐거나 불명확한 건은 재시도하지 마세요.`});
   await savePrivateJson(intent, {eventId: hash, status: receipt ? 'sent' : 'unknown', reportPath, at: new Date().toISOString()}, {replace: true});
   return receipt ? 'sent' : 'unknown';
 }
@@ -72,7 +79,9 @@ export async function verifyNativeCorrectionDrafts(adapter, horizon) {
   return {ok: true, status: 'success', previewCount, correctedCount: 0, reviewCount: 0, nativeWriteCount: 0, sourceCount: before.total};
 }
 
-export async function runNativeClassCorrection({apply = false, notify = false, preview = false, approval, root = path.join(os.homedir(), 'ArchiveIN/automation'), now = () => new Date()} = {}) {
+export async function runNativeClassCorrection({apply = false, notify = false, preview = false, recover = false, approval, root = path.join(os.homedir(), 'ArchiveIN/automation'), now = () => new Date()} = {}) {
+  validateClassCorrectionOptions({apply, preview, recover, approval});
+  if (recover) validatePretransportRecoveryApproval(approval, now().getTime());
   const reportDir = path.join(root, 'reports/class-cancellation', randomUUID());
   await privateDirectory(reportDir);
   let release, context, result;
@@ -86,7 +95,7 @@ export async function runNativeClassCorrection({apply = false, notify = false, p
     const baseLedger = createClassCorrectionLedger(path.join(root, 'state/class-cancellation/jobs'));
     const recoveryLedger = createClassCorrectionLedger(path.join(root, 'state/class-cancellation/recoveries'));
     const resolutionDirectory = path.join(root, 'state/class-cancellation/resolutions');
-    const recovery = approval ? await createApprovedPretransportRecovery({baseLedger, recoveryLedger, resolutionDirectory, approval, now}) : null;
+    const recovery = recover ? await createApprovedPretransportRecovery({baseLedger, recoveryLedger, resolutionDirectory, approval, now}) : null;
     const ledger = recovery?.ledger || withResolvedPretransportRecoveries({baseLedger, recoveryLedger, resolutionDirectory});
     result = preview ? await verifyNativeCorrectionDrafts(adapter, correctionHorizon(now())) : await runClassCancellationCorrection({adapter, ledger, now, ...correctionHorizon(now()), maxCorrections: recovery ? 1 : 6, apply,
       ...(recovery ? {onlyKeys: [recovery.targetKey]} : {})});
@@ -103,10 +112,11 @@ export async function runNativeClassCorrection({apply = false, notify = false, p
     if (closed) await release?.();
   }
   const reportPath = path.join(reportDir, 'result.json');
+  result.scope = recover ? 'operator_single_approved_class' : preview ? 'native_drafts_only' : 'future_weekend_classes';
   await savePrivateJson(reportPath, {...result, apply, finishedAt: new Date().toISOString()});
   const attentionEmail = notify && apply ? await notifyClassCorrectionReview(result, root, reportPath, sendAttention).catch(() => 'unknown') : 'not_requested';
   // Native rows and raw diagnostics stay in the private receipt, never in the shared sync log.
-  return {ok: result.ok || result.reviewCount === 0 && !result.cleanup, status: result.status, cause: result.cause, checkedCount: result.checkedCount ?? 0, mismatchCount: result.mismatchCount ?? 0, correctedCount: result.correctedCount ?? 0, reviewCount: result.reviewCount ?? (result.ok ? 0 : 1), deferredCount: result.deferredCount ?? 0, previewCount: result.previewCount, nativeWriteCount: result.nativeWriteCount, operatorRecoveryVerified: result.operatorRecoveryVerified === true, reportPath, attentionEmail, cleanup: result.cleanup ?? 'closed'};
+  return {ok: result.ok || result.reviewCount === 0 && !result.cleanup, scope: result.scope, status: result.status, cause: result.cause, checkedCount: result.checkedCount ?? 0, mismatchCount: result.mismatchCount ?? 0, correctedCount: result.correctedCount ?? 0, reviewCount: result.reviewCount ?? (result.ok ? 0 : 1), deferredCount: result.deferredCount ?? 0, previewCount: result.previewCount, nativeWriteCount: result.nativeWriteCount, operatorRecoveryVerified: result.operatorRecoveryVerified === true, reportPath, attentionEmail, cleanup: result.cleanup ?? 'closed'};
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
@@ -120,7 +130,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       if (!s.isFile() || s.isSymbolicLink() || s.uid !== process.getuid() || (s.mode & 0o777) !== 0o600) throw Error('Owned 0600 approval file required');
       approval = JSON.parse(await fs.readFile(args[2], 'utf8'));
     }
-    const result = await runNativeClassCorrection({apply: recoveryMode || args[0] === '--apply', preview: args[0] === '--verify-drafts', notify: args.includes('--scheduled-run'), approval});
+    const result = await runNativeClassCorrection({apply: recoveryMode || args[0] === '--apply', preview: args[0] === '--verify-drafts', recover: recoveryMode, notify: args.includes('--scheduled-run'), approval});
     console.log(JSON.stringify(result)); if (!result.ok) process.exitCode = 1;
   }
 }

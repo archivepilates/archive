@@ -5,12 +5,40 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import {correctionHorizon, shouldRunClassCorrection, notifyClassCorrectionReview} from '../run-class-cancellation-correction.mjs';
+import {correctionHorizon, shouldRunClassCorrection, notifyClassCorrectionReview, validateClassCorrectionOptions, runNativeClassCorrection} from '../run-class-cancellation-correction.mjs';
 import {nativeClassCells, nativeDateTime, classCorrectionTransportAllowed, forwardNativeClassMutation, waitForNativeClassCount} from '../lib/class-cancellation-native-browser.mjs';
+import {reportMessageId} from '../../firebase/kangsain-functions/macmini-studiomate/automation-report-delivery.mjs';
 
 test('horizon follows KST today through next calendar month, including December', () => {
   assert.deepEqual(correctionHorizon(new Date('2026-11-13T11:00:00Z')), {from: '2026-11-13', through: '2026-12-31'});
   assert.deepEqual(correctionHorizon(new Date('2026-12-31T15:01:00Z')), {from: '2027-01-01', through: '2027-02-28'});
+});
+
+test('invalid recovery approval never falls through into ordinary apply or starts a browser', async () => {
+  for (const approval of [undefined, null, false, 0, '', [], 'not-an-approval']) {
+    await assert.rejects(runNativeClassCorrection({apply: true, recover: true, approval}), /Explicit recovery mode/);
+  }
+  for (const approval of [null, false, 0, '', {}]) {
+    assert.throws(() => validateClassCorrectionOptions({apply: true, preview: false, recover: false, approval}), /Explicit recovery mode/);
+  }
+  for (const approval of [{}, {version: 'invalid'}, {date: '2026-12-05'}]) {
+    await assert.rejects(runNativeClassCorrection({apply: true, recover: true, approval}), /Pretransport recovery/);
+  }
+  assert.doesNotThrow(() => validateClassCorrectionOptions({apply: true, preview: false, recover: false, approval: undefined}));
+});
+
+test('malformed target or inactive recovery approval rejects before any browser setup', async () => {
+  const approval = {version: 'class_cancellation_pretransport_recovery_v1', approvalRef: 'call_test',
+    originalKey: 'a'.repeat(64), originalDigest: 'b'.repeat(64), approvedAt: '2026-11-13T10:00:00+09:00',
+    expiresAt: '2026-11-13T12:00:00+09:00', proof: 'before_submit_blocked_transport_gate_never_armed',
+    date: '2026-12-05', startTime: '09:00', expectedDeadline: '2026-12-04 21:00:00'};
+  assert.doesNotThrow(() => validateClassCorrectionOptions({apply: true, preview: false, recover: true, approval}));
+  for (const patch of [{date: '2026-02-30'}, {date: '2026-12-07'}, {startTime: '99:00'}, {expectedDeadline: 'wrong'}]) {
+    await assert.rejects(runNativeClassCorrection({apply: true, recover: true, approval: {...approval, ...patch}}), /Pretransport recovery/);
+  }
+  for (const now of [() => new Date('2026-11-13T13:00:00+09:00'), () => new Date(NaN)]) {
+    await assert.rejects(runNativeClassCorrection({apply: true, recover: true, approval, now}), /approval not active or expired/);
+  }
 });
 
 test('only scheduled successful full native imports invoke correction, never notification/manual imports', () => {
@@ -78,7 +106,11 @@ test('native mutation forwards one UI request only, rejects redirects without fo
 test('internal review mail is one-shot per incident; deferred and uncertain receipts never resend', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'class-alert-'));
   let calls = 0;
-  const send = async value => {calls++; assert.match(value.subject, /^\[주말 수업 취소마감\]\[확인필요\]/); return false;};
+  const send = async value => {
+    calls++; assert.match(value.subject, /^\[주말 수업 취소마감\]\[확인필요\]/);
+    assert.equal(reportMessageId(value.eventId), `automation-${value.eventId}@archivepilates.com`);
+    assert.match(value.body, /#class-cancellation-guard-20261113/); return false;
+  };
   try {
     const result = {status: 'review', reviewCount: 1, details: [{status: 'review', key: 'a'.repeat(64), reason: 'unknown'}]};
     assert.equal(await notifyClassCorrectionReview(result, root, '/private/report.json', send), 'unknown');
