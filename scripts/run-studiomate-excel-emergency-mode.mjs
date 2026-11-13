@@ -8,6 +8,7 @@ import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
 import { membershipContractDiscoveryWarning } from "./lib/studiomate-membership-contract-observer.mjs";
 import { acquireStudioMateSyncRun } from "./lib/studiomate-sync-run-lock.mjs";
+import { shouldRunClassCorrection } from "./run-class-cancellation-correction.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -173,8 +174,12 @@ if (apply && download && !downloadFailedWithoutMember && !notificationRefresh) {
   }
 }
 
-// Staff roster refresh is a sidecar, not evidence of member/reservation import success.
-const sidecars = new Set(["staffEmployment", "holdingSource"]);
+if (shouldRunClassCorrection({apply, download, scheduledRun, notificationRefresh, steps})) {
+  steps.push(runStep("classCancellationCorrection", ["scripts/run-class-cancellation-correction.mjs", "--apply", "--scheduled-run"]));
+}
+
+// Sidecars are not evidence of member/reservation import success.
+const sidecars = new Set(["staffEmployment", "holdingSource", "classCancellationCorrection"]);
 const failed = steps.filter((step) => !sidecars.has(step.name) && step.exitCode && step.exitCode !== 0);
 const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed ||
   (sidecars.has(step.name) && step.exitCode !== 0));
