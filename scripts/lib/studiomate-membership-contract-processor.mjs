@@ -279,6 +279,8 @@ export function firestoreJournal(db, recoveryApproval = null, now = Date.now) {
         const snap = await tx.get(ref);
         if (snap.exists) {
           const data = snap.data();
+          if (recoveryApproval?.policy === "operator_exact_purchase_contract_recovery_v1")
+            return { status: "rejected", reason: "purchase_recovery_existing_job_no_replay" };
           const closed = data.operatorReviewDisposition;
           if (closed?.schemaVersion === 1 && closed.policy === "operator_contract_review_closed_v1" &&
             closed.status === "excluded" && closed.noReplay === true && closed.sendAllowed === false &&

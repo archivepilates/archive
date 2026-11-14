@@ -23,4 +23,5 @@ export const {
   baselineDiff,
   evaluateMembershipContractEligibility,
   evaluateApprovedOctoberRenewalRecovery,
+  evaluateApprovedPurchaseContractRecovery,
 } = policy;

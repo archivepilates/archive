@@ -2,6 +2,7 @@ import {
   evaluateMembershipContractEligibility,
   membershipContractJobKey,
   evaluateApprovedOctoberRenewalRecovery,
+  evaluateApprovedPurchaseContractRecovery,
   isExcludedMembershipContractProductTitle,
 } from "./studiomate-membership-contract-policy.mjs";
 
@@ -11,6 +12,8 @@ const nativeId = (value) => /^[1-9]\d{0,63}$/.test(String(value ?? ""));
 const HISTORICAL_REGULAR_PRODUCT_IDS = new Set([
   "194834", "203252", "268320", "338610", "375406", "412181", "211940",
   "216386", "249896", "249897", "258773", "336809", "434225",
+  // Paid native histories revalidated on 2026-11-14; prior-purchase evidence only.
+  "364319", "388592", "412180",
 ]);
 const REGULAR_CONTRACT_TITLES = new Set([
   "\uC544\uCE74\uC774\uBE0C \uD68C\uC6D0\uAC00\uC785",
@@ -114,6 +117,23 @@ export function selectNativeMembershipContractCandidate({
   )
     return review("invalid_native_selection_policy");
 
+  if (!recoveryApproval) {
+    const unregistered = ticketRead.tickets.filter(ticket => {
+      const title = String(ticket.title || "").normalize("NFKC").replace(/\s+/g, "");
+      return (
+      !regularProductIds.includes(ticket.productId) && !HISTORICAL_REGULAR_PRODUCT_IDS.has(ticket.productId)
+      && !isExcludedMembershipContractProductTitle(title)
+      && /그룹|프라이빗|듀엣|트리플|블랙프라이데이/.test(title)
+      && !/강사|체험|야외|OT|오티/i.test(title)
+      && /(?:[2-9]|\d{2,})회|\d+(?:주|개월|일)/.test(title)
+      && Date.parse(ticket.issuedAt) > Date.parse(previousDownloadedAt)
+      && Date.parse(ticket.issuedAt) <= Date.parse(issuanceWindowEndAt));
+    });
+    if (unregistered.length) return review("unregistered_regular_product_requires_review", {
+      productIds: [...new Set(unregistered.map(ticket => ticket.productId))],
+    });
+  }
+
   const allRegular = ticketRead.tickets.filter((ticket) =>
     regularProductIds.includes(ticket.productId) && !isExcludedMembershipContractProductTitle(ticket.title),
   );
@@ -146,6 +166,22 @@ export function selectNativeMembershipContractCandidate({
     });
 
   const ticket = candidates[0];
+  if (recoveryApproval?.policy === "operator_exact_purchase_contract_recovery_v1") {
+    const uncertain = contractHistory.records.some(contract => {
+      if (contract.ticket?.userTicketId === ticket.userTicketId) return true;
+      if (contract.categoryId !== 1 || nativeId(contract.ticket?.userTicketId)) return false;
+      const prior = contract.ticket;
+      if (!prior || !nativeId(prior.productId)) return true;
+      if (prior.productId !== ticket.productId) return false;
+      const dates = [prior.availabilityStartAt, prior.expireAt, ticket.availabilityStartAt, ticket.expireAt];
+      if (dates.some(value => !/^\d{4}-\d{2}-\d{2}$/.test(value || "")
+        || !Number.isFinite(Date.parse(value + "T00:00:00.000Z"))
+        || new Date(value + "T00:00:00.000Z").toISOString().slice(0, 10) !== value)
+        || prior.availabilityStartAt > prior.expireAt || ticket.availabilityStartAt > ticket.expireAt) return true;
+      return prior.availabilityStartAt <= ticket.expireAt && ticket.availabilityStartAt <= prior.expireAt;
+    });
+    if (uncertain) return review("existing_or_ambiguous_contract_for_purchase");
+  }
   const contracts = contractHistory.records.map((contract) => {
     const regular = contract.categoryId === 1 && REGULAR_CONTRACT_TITLES.has(contract.title);
     return {
@@ -220,7 +256,9 @@ export function selectNativeMembershipContractCandidate({
     },
   };
   const decision = recoveryApproval
-    ? evaluateApprovedOctoberRenewalRecovery(selectionInput, recoveryApproval)
+    ? (recoveryApproval.policy === "operator_exact_purchase_contract_recovery_v1"
+      ? evaluateApprovedPurchaseContractRecovery(selectionInput, recoveryApproval)
+      : evaluateApprovedOctoberRenewalRecovery(selectionInput, recoveryApproval))
     : evaluateMembershipContractEligibility(selectionInput);
   if (decision.status === "ignored")
     return {

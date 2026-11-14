@@ -145,6 +145,25 @@ export function evaluateMembershipContractEligibility(input: any = {}) {
   return evaluate(input, false);
 }
 
+/** Explicit purchase-scoped recovery only; never an automatic discovery policy. */
+export function evaluateApprovedPurchaseContractRecovery(input: any, approval: any) {
+  const now = instant(input?.now), issued = instant(input?.ticket?.issuedAt);
+  const approved = instant(approval?.approvedAt), expires = instant(approval?.expiresAt);
+  const start = instant(approval?.purchaseStartAt), end = instant(approval?.purchaseEndAt);
+  const reject = () => ({ status: "review", reasons: ["invalid_purchase_recovery_approval"],
+    eligibleForDetection: false, action: null, jobKey: null, sendAllowed: false });
+  if (approval?.policy !== "operator_exact_purchase_contract_recovery_v1" || !text(approval.reference)
+    || approval.memberId !== input?.member?.memberId || approval.userTicketId !== input?.ticket?.userTicketId
+    || approval.productId !== input?.ticket?.productId || approval.issuedAt !== input?.ticket?.issuedAt
+    || approval.sourceComplete !== true || !Number.isSafeInteger(approval.sourceRow) || approval.sourceRow < 2
+    || ![approval.sourceSha256, approval.manifestSha256].every(x => typeof x === "string" && /^[a-f0-9]{64}$/.test(x))
+    || ![now, issued, approved, expires, start, end].every(Number.isFinite)
+    || approved > now || expires <= now || expires <= approved || expires - approved > 86400_000
+    || start >= end || end - start > 62 * 86400_000 || issued < start || issued >= end || issued > approved)
+    return reject();
+  return evaluate(input, true);
+}
+
 /** One-off October operator recovery, never used by the periodic detector. */
 export function evaluateApprovedOctoberRenewalRecovery(input: any, approval: any) {
   const nowMs = instant(input?.now);
