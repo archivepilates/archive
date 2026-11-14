@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CORE-CHART-REPAIR-20261114-01 결과</title>
 <style>*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#20262b;font:16px/1.7 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:28px 20px 60px}h1{font-size:25px;line-height:1.4}h2{font-size:19px;margin-top:32px}table{width:100%;border-collapse:collapse;background:white}td,th{padding:12px;text-align:left;border-bottom:1px solid #dce0e3;overflow-wrap:anywhere}code{overflow-wrap:anywhere}p,li{max-width:78ch}.status{border-left:4px solid #26755d;padding:12px 16px;background:#e9f4ee}.pending{border-left-color:#b17925;background:#fff3db}@media(max-width:540px){main{padding:20px 12px}h1{font-size:21px}td,th{padding:8px;font-size:14px}}@media print{body{background:white}main{padding:0}}</style>
-<main><h1>CORE-CHART-REPAIR-20261114-01 결과</h1><p>ARCHIVE PILATES OPS · 2026.11.14 · 최종 원본 재조회 18:23 KST / 보존 비교 18:24 KST</p>
+<main><h1>CORE-CHART-REPAIR-20261114-01 결과</h1><p>ARCHIVE PILATES OPS · 2026.11.14 · 복구 원본 재조회 18:23 KST / 배포 후 최종 상태 확인 19:16 KST</p>
 <p class="status"><strong>지정 2건의 원본 신원 연결 오류를 복구했습니다.</strong> 두 기록은 작성된 차트의 유실이 아니라 미제출 준비 기록이었습니다. 정상 제출대기로 유지하며 제출 완료·Notion 동기화 성공으로 표시하지 않았습니다.</p>
 <table><thead><tr><th>기록</th><th>수업</th><th>수정 전 → 확인 후</th></tr></thead><tbody>
 <tr><td><code>plc_283112173</code></td><td>11/17 11:00</td><td>신원 검증 실패 → pending / awaiting_submission</td></tr>
@@ -17,5 +17,6 @@
 <ul><li>기록 변경: <code>syncprivatelessonnotionfromrecord-00029-coj</code></li><li>요청 변경: <code>syncprivatelessonnotionfromrequest-00029-mur</code></li><li>기존 야간 복구: <code>scheduledsyncprivatelessonnotionprojections-00032-naz</code></li></ul>
 <p>각 리비전 Ready·트래픽 100% 및 각 함수의 실제 배포 소스 2개 파일 해시가 검증 코드와 일치함을 확인했습니다. 기존 22:20 Asia/Seoul 일정은 ENABLED로 유지했습니다. 맥미니 관제 실행기는 같은 커밋으로 반영했으며 재시작·수동 점검은 하지 않았습니다. Eventarc 필터 순서와 Cloud Run 짧은 리비전명 표현 차이는 값 검증을 유지한 읽기 전용 어댑터 보완 및 4개 합성 테스트로 확인했습니다.</p>
 <p>배포 후 두 차트·요청·예약의 원본 해시는 배포 전과 일치하며 정상 제출대기를 유지합니다. 회원 발송, Notion 생성·수정, 수동 관제 해제는 없었습니다. 실제 향후 제출 처리와 다음 정기 점검 결과는 아직 관찰하지 않았습니다.</p>
-<p class="status pending" id="deployment-closeout">Functions 3개와 기존 관제 반영 확인 완료. CORE 운영규칙 단일 파일 공개와 최종 Git·CI 확인은 릴리스 마감 단계에서 기록합니다.</p>
+<p class="status" id="deployment-closeout"><strong>Functions 3개·맥미니 기존 관제·CORE 운영규칙 반영 완료.</strong> CORE 버전 <code>68c435fed139ec18</code>, 릴리스 <code>1794651306091000</code>에서 운영규칙 파일만 교체했습니다. 나머지 69개 파일·Hosting 설정·이전 버전은 보존됐고 두 운영 주소의 HTML 해시가 일치합니다. 규칙 소스는 <code>3f3bf63d</code>이며 실제 기능 소스는 <code>922d4c84</code>와 동일합니다.</p>
+<p>관제 일정 파일은 배포 전 해시와 일치합니다. 운영 중인 3개 리비전의 시작 이후 ERROR 로그는 조회 시점까지 없었습니다. 이는 향후 제출·정기 업무의 성공을 의미하지 않습니다. 마지막 원본 확인에서도 두 기록은 정상 제출대기, 기존 관제 항목은 open입니다. 수동 처리나 관제 해제를 하지 않았습니다.</p>
 <p>작업 소유 브라우저는 종료했고 공유 프로필 잠금은 남아 있지 않습니다. 감사 근거는 보존했습니다.</p></main></html>

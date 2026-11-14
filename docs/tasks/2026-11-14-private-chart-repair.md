@@ -24,6 +24,17 @@
 - Derived Alimtalk catalog source fingerprints/reference lines were regenerated because the chart source changed; structured comparison verified no message policy/row semantics changed. This derived metadata is source bookkeeping, not a new member send or template change, and is not part of the one-file Hosting publication.
 - One-off recovery/audit helpers are retained as historical task source with explicit apply/intent guards; no operational import, LaunchAgent, scheduler or hook calls them.
 
+## Deployment Closeout
+
+- CORE rules-only publication from source `3f3bf63d4e038743c0b81624a591ec267d4a15cb`: site archive-pilates-core, version `68c435fed139ec18`, release `1794651306091000`, 2026-11-14 19:15:06 KST. Only `/rules/index.html` changed; 69 other files, Hosting config and prior version verified unchanged. Both canonical/web.app URLs matched raw SHA256 `7dacf59c81869bbc37cb7661f2510661cf57c1ea9cab94fbfa584f67917f6725`.
+- Final exact chart read at 19:16:28 KST again matched the original post-repair record hashes; both pending/awaiting_submission, no pages/submissions added. The existing health action finding remained open; no manual resolution occurred.
+- Daily and weekly health LaunchAgent files matched their pre-release hashes. No scheduler edit/restart, source repair/projection replay, member send, Notion mutation, permission/security change, payment/refund or reservation mutation was performed by this release.
+- Verification totals: original 339 regressions rerun by independent reviewer, 9 manifest-release guard tests, 4 readback adapter tests, 72 existing hardening tests, all five codebase builds/type checks, export boundaries (110 exports), Hosting/data-source/rollback guards passed. CI evidence is recorded against the actual tested source commits, not inferred from deployment output.
+- Final release-source CI at `3f3bf63d`: Functions Affected Check run `43584314897` SUCCESS; CORE MCP Check run `43584313420` SUCCESS. The final closeout commit changes only this task record and HTML report; Functions, health runtime and published rule bytes are unchanged and must not be redeployed.
+- Public rule layout smoke used a fresh, read-only anonymous browser and closed it. The rule HTML/hash/text were present and page widths had no horizontal overflow at 320/390/768/1440, but the authenticated panel was hidden in the anonymous session; this is not an authenticated visual-workflow verification. No new UI controls were introduced.
+- Small task source archives, checksums and baseline/release receipts are retained privately as deployment evidence. No original/user file was removed and no disk-space recovery is claimed. No task-owned browser, shared StudioMate profile lock or deployment process should remain after final process/session check.
+- No further approval is needed for this completed scoped release. Genuine future submission and the next scheduled health reconciliation remain unobserved business outcomes, not unfinished deployment steps. Do not create another monitor or manually invoke either workflow to manufacture that proof.
+
 ## Progress
 
 - Previous read-only diagnosis found empty future preparation records for November 17 and 20, with missing native-member pointer on their shared temporary profile. These observations require fresh confirmation before mutations.
