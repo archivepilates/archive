@@ -25,6 +25,15 @@ export class PrivateNotionAwaitingSubmission extends Error {
 
 export const PRIVATE_NOTION_IDENTITY_MISMATCH = "Notion 회원 폴더 자동 연결 확인 필요: 회원·강사·제출 원본 신원이 일치하지 않습니다.";
 
+export function assertPrivateNotionSourceIdentity(record: any, request: any): void {
+  const phone = (value: unknown) => String(value || "").replace(/\D/g, "").replace(/^82(?=10)/, "0");
+  if (!record?.recordId || record.studioId !== "5330" || request?.studioId !== "5330" ||
+    !["requestId", "memberId", "staffId", "bookingId"].every(key =>
+      Boolean(record[key]) && String(record[key]) === String(request[key])) ||
+    !/^01[016789]\d{7,8}$/.test(phone(record.memberPhone)) ||
+    phone(record.memberPhone) !== phone(request.memberPhone)) throw new Error(PRIVATE_NOTION_IDENTITY_MISMATCH);
+}
+
 export function privateNotionCanSkipCancelled(record: any, request?: any): boolean {
   if (!record || !request || !record.cancelledAt || request.status !== "cancelled" ||
     !request.cancelledAt || record.studioId !== "5330" || request.studioId !== "5330" ||
@@ -73,6 +82,15 @@ export function privateNotionDeferredVersion(record: any, request: any): string 
   };
   // Include identity/source changes that do not alter the rendered Notion page.
   return stableHash({ record: source(record), request: source(request) });
+}
+
+export function privateNotionIdentityVersion(record: any, request: any): string {
+  const identity = (doc: any) => Object.fromEntries([
+    "recordId", "requestId", "studioId", "memberId", "staffId", "bookingId", "memberPhone",
+    "staffName", "cancelledAt", "status", "preStatus", "postStatus",
+  ].map((key) => [key, doc?.[key] ?? null]));
+  // Rendering alone cannot attest that the same member, booking and eligibility still own it.
+  return stableHash({ record: identity(record), request: identity(request) });
 }
 
 export interface PrivateNotionSource {

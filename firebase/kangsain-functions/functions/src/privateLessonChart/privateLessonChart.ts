@@ -41,7 +41,9 @@ import {
   PRIVATE_NOTION_DEBOUNCE_MS,
   PrivateNotionAwaitingSubmission,
   assertPrivateNotionPageOwner,
+  assertPrivateNotionSourceIdentity,
   privateNotionHasSubmittedContent,
+  privateNotionIdentityVersion,
   privateNotionSourceChanged,
   reconcilePrivateNotionPages,
   runPrivateNotionProjection,
@@ -2038,6 +2040,7 @@ async function syncPrivateLessonChartRecordToNotion(
   checkpoint: (page: Partial<PrivateNotionState>) => Promise<void>,
 ): Promise<PrivateNotionState> {
   try {
+    assertPrivateNotionSourceIdentity(record, chartRequest);
     const reportCanBeExposed = canExposePrivateLessonReport(record);
     // Links are prepared by report generation, never by a display-only worker.
     const recordForNotion = {
@@ -2075,6 +2078,7 @@ export function privateLessonNotionProjectionVersion(
   chartRequest: PrivateLessonChartRequestDoc,
 ): string {
   return stableHash({
+    identityVersion: privateNotionIdentityVersion(record, chartRequest),
     title: notionSessionTitle(record, chartRequest),
     children: notionInstructorChartChildren(record, chartRequest),
   }).slice(0, 24);

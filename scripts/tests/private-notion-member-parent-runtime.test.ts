@@ -105,6 +105,26 @@ test("empty shell defers before a member-folder claim or provider call and submi
   assert.equal(f.calls.filter((call) => call === "POST pages").length, 1);
 });
 
+test("temporary empty identity must resolve to a native ID before normal awaiting deferral", async () => {
+  const f = fixture(), shell = f.seed("excel_synthetic", "temporary-shell");
+  Object.assign(shell.record, { gptStatus: "waiting_post", preSubmittedAt: null, postSubmittedAt: null,
+    notionSync: { status: "failed", error: "identity mismatch" } });
+  Object.assign(shell.request, { preStatus: "pending", postStatus: "pending" });
+  await assert.rejects(f.ensure(shell.record, shell.request), (error: unknown) =>
+    !(error instanceof PrivateNotionAwaitingSubmission) && /신원이/.test(String(error)));
+  assert.equal(f.calls.length, 0);
+  assert.equal([...f.docs.keys()].filter(key => key.startsWith("sync/")).length, 0);
+  f.docs.get("member/excel_synthetic").studiomateMemberId = "100";
+  await assert.rejects(f.ensure(shell.record, shell.request), PrivateNotionAwaitingSubmission);
+  assert.equal(f.calls.length, 0);
+  assert.equal([...f.docs.keys()].filter(key => key.startsWith("sync/")).length, 0);
+  assert.equal(shell.record.postSubmittedAt, null);
+  shell.request.bookingId = "different-booking";
+  await assert.rejects(f.ensure(shell.record, shell.request), (error: unknown) =>
+    !(error instanceof PrivateNotionAwaitingSubmission));
+  assert.equal(f.calls.length, 0);
+});
+
 test("empty shell still reuses a ready verified parent instead of deferring", async () => {
   const f = fixture(), first = f.seed("100", "submitted");
   await f.ensure(first.record, first.request);

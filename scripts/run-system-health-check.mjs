@@ -871,11 +871,13 @@ async function checkNotionSync() {
     const coverage = queryCoverage({ size: docs.length, limit: 250, error: queryError });
     const states = docs.map((doc) => ({ doc, ...classifyNotionDocument(doc.data, { nowMs: now.getTime(), staleMinutes: input.staleMinutes }) }));
     const issues = states.filter((row) => row.needsAttention);
+    const withinGrace = states.filter((row) => row.state === "within_grace");
     const attention = notionAttentionSummary(states);
     checked.push({ id: `notion:${input.collection}`, sample: docs.length, coverage, staleMinutes: input.staleMinutes,
       aliasesExcluded: states.filter((row) => row.state === "alias").length,
       awaitingSubmission: states.filter((row) => row.state === "awaiting_submission").length,
       cancelledWithoutSubmission: states.filter((row) => row.state === "cancelled_without_submission").length,
+      withinGrace: withinGrace.length,
       overduePending: states.filter((row) => row.state === "overdue_pending").length,
       overdueFailed: states.filter((row) => row.state === "overdue_failed").length,
       unknownTimestamp: states.filter((row) => row.state === "timestamp_unavailable").length,
@@ -883,7 +885,8 @@ async function checkNotionSync() {
       issueRefs: attention.sourceIds.map((id) => `${input.collection}/${id}`),
     });
     const checkKey = `notion:${input.collection}:sync`;
-    if (coverage.complete && !issues.length) completedChecks.add(checkKey);
+    // Grace suppresses new alerts; a refreshed retry timestamp is not recovery evidence.
+    if (coverage.complete && !issues.length && !withinGrace.length) completedChecks.add(checkKey);
     reportQueueCoverage({ ...input, area: "notion", checkKey: `notion:${input.collection}:coverage` }, { notion: coverage });
     if (issues.length) addFinding({
       checkKey,

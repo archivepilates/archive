@@ -292,8 +292,8 @@ test("capped and permission-failed queue reads preserve prior age, failure and c
   assert.equal(resolves(coverage, await queueAudit()), true);
 });
 
-async function notionAudit(rows, error = null) {
-  const globals = findingHarness({ classifyNotionDocument, notionAttentionSummary, queryCoverage, db: { collection: (collection) => ({
+async function notionAudit(rows, error = null, { auditNow = now, collectionName = "privateLessonChartRecords" } = {}) {
+  const globals = findingHarness({ now: auditNow, classifyNotionDocument, notionAttentionSummary, queryCoverage, db: { collection: (collection) => ({
     where(field, op, statuses) {
       assert.equal(field, "notionSync.status");
       assert.equal(op, "in");
@@ -302,8 +302,9 @@ async function notionAudit(rows, error = null) {
     },
     limit(limit) { assert.equal(limit, 250); return this; },
     async get() {
-      if (collection === "privateLessonChartRecords" && error) throw error;
-      return { docs: collection === "privateLessonChartRecords" ? rows.map((data, index) => ({ id: String(index), data: () => data })) : [] };
+      if (collection === collectionName && error) throw error;
+      return { docs: collection === collectionName ? rows.filter((data) => ["pending", "failed"].includes(data.notionSync?.status))
+        .map((data, index) => ({ id: String(index), data: () => data })) : [] };
     },
   }) } });
   await runnerFunction("checkNotionSync", globals)();
@@ -327,6 +328,120 @@ test("Notion stable findings resolve for fully verified aliases, never a capped 
   const healthy = await notionAudit([...Array(6).fill(alias), ...Array(2).fill({ ...alias, notionSync: { status: "failed" } })]);
   assert.equal(resolves(prior, healthy), true);
   assert.equal(resolves(coverage, healthy), true);
+});
+
+// Exercise both real persistence paths against synthetic in-memory collections only.
+function notionFindingStore() {
+  const rows = new Map();
+  const snapshot = (ref) => ({ ref, id: ref.id, exists: rows.has(ref.path), data: () => rows.get(ref.path) });
+  const apply = (ref, data) => rows.set(ref.path, { ...rows.get(ref.path), ...data });
+  const db = {
+    collection(name) {
+      assert.ok(["systemHealthFindings", "codexActionQueue", "systemHealthRuns"].includes(name));
+      const filters = [];
+      return {
+        doc(id) {
+          const ref = { id, path: `${name}/${id}` };
+          return { ...ref, get: async () => snapshot(ref), set: async (data) => apply(ref, data) };
+        },
+        where(field, op, value) { filters.push((data) => op === "in" ? value.includes(data[field]) : data[field] === value); return this; },
+        limit() { return this; },
+        async get() {
+          return { docs: [...rows].filter(([key, data]) => key.startsWith(`${name}/`) && filters.every((filter) => filter(data)))
+            .map(([key]) => snapshot({ id: key.split("/")[1], path: key })) };
+        },
+      };
+    },
+    batch() {
+      const writes = [];
+      return { set: (ref, data) => writes.push([ref, data]), commit: async () => { for (const [ref, data] of writes) apply(ref, data); } };
+    },
+  };
+  return {
+    rows,
+    async persist(audit) {
+      const globals = { ...audit, db, READ_ONLY: false, NO_EMAIL: true,
+        FieldValue: { serverTimestamp: () => "synthetic-timestamp" },
+        canResolveHealthFinding, needsCodexAction: (finding) => finding.severity === "action_required",
+        effectiveSeverityRank: (finding, ranks) => ranks[finding.severity],
+        writeFileSync() {}, recordAutomationStatus: async () => {},
+        sendAttentionEmail: () => assert.fail("Email is prohibited in synthetic tests"),
+      };
+      globals.syncCodexActionQueue = runnerFunction("syncCodexActionQueue", globals);
+      await runnerFunction("writeResults", globals)();
+    },
+    finding: (id) => rows.get(`systemHealthFindings/${id}`),
+    queue: (id) => rows.get(`codexActionQueue/${id}`),
+  };
+}
+
+test("fresh Notion failures retain initial grace without opening incidents or proving recovery", async () => {
+  for (const collectionName of ["privateLessonChartRecords", "privateSurveyResponses"]) {
+    const audit = await notionAudit([{ notionSync: { status: "failed", failedAt: now, error: "synthetic failure" } }], null, { collectionName });
+    assert.equal(audit.findings.length, 0);
+    assert.equal(audit.completedChecks.has(`notion:${collectionName}:sync`), false);
+    assert.equal(audit.checked.find((item) => item.id === `notion:${collectionName}`).withinGrace, 1);
+    const store = notionFindingStore();
+    await store.persist(audit);
+    assert.equal([...store.rows.keys()].some((key) => /^(systemHealthFindings|codexActionQueue)\//.test(key)), false);
+  }
+});
+
+test("refreshed failed and pending retries cannot resolve either existing Notion incident store", async () => {
+  for (const collectionName of ["privateLessonChartRecords", "privateSurveyResponses"]) {
+    const prior = (await notionAudit([{ notionSync: { status: "failed", failedAt: new Date(0) } }], null, { collectionName })).findings[0];
+    for (const [status, timestamp] of [["failed", "failedAt"], ["failed", "attemptedAt"], ["pending", "pendingAt"], ["pending", "attemptedAt"]]) {
+      for (const queueStatus of ["open", "in_progress", "blocked"]) {
+        const store = notionFindingStore();
+        store.rows.set(`systemHealthFindings/${prior.findingId}`, { ...prior, status: "open" });
+        store.rows.set(`codexActionQueue/${prior.findingId}`, { ...prior, queueId: prior.findingId, source: "system-health-check", status: queueStatus });
+        for (const minutesAgo of [5, 0]) {
+          const audit = await notionAudit([{ notionSync: { status, [timestamp]: new Date(now.getTime() - minutesAgo * 60000), error: "synthetic retry" } }], null, { collectionName });
+          assert.equal(audit.findings.length, 0);
+          assert.equal(resolves(prior, audit), false);
+          await store.persist(audit);
+          assert.equal(store.finding(prior.findingId).status, "open");
+          assert.equal(store.queue(prior.findingId).status, queueStatus);
+          assert.equal(store.finding(prior.findingId).resolvedAt, undefined);
+          assert.equal(store.queue(prior.findingId).resolvedAt, undefined);
+        }
+      }
+    }
+  }
+});
+
+test("verified or explicitly deferred Notion recovery closes both stores and genuine recurrence reopens them", async () => {
+  const failed = { notionSync: { status: "failed", failedAt: new Date(0), error: "synthetic failure" } };
+  const deferred = { gptStatus: "waiting_post", notionSync: { status: "pending", error: "", deferredVersion: "synthetic-digest" } };
+  const recoveries = [
+    [{ notionSync: { status: "synced", syncedAt: now } }],
+    [{ ...deferred, notionSync: { ...deferred.notionSync, deferredReason: "awaiting_submission" } }],
+    [{ ...deferred, cancelledAt: now, notionSync: { ...deferred.notionSync, deferredReason: "cancelled_without_submission" } }],
+  ];
+  for (const rows of recoveries) {
+    const store = notionFindingStore();
+    const initial = await notionAudit([failed]);
+    const prior = initial.findings[0];
+    await store.persist(initial);
+    assert.equal(store.finding(prior.findingId).status, "open");
+    assert.equal(store.queue(prior.findingId).status, "open");
+    const firstSeenAt = store.queue(prior.findingId).firstSeenAt;
+    const recovered = await notionAudit(rows);
+    assert.equal(resolves(prior, recovered), true);
+    await store.persist(recovered);
+    assert.equal(store.finding(prior.findingId).status, "resolved");
+    assert.equal(store.queue(prior.findingId).status, "resolved");
+    const fresh = { notionSync: { status: "failed", failedAt: now, error: "synthetic recurrence" } };
+    await store.persist(await notionAudit([fresh]));
+    assert.equal(store.finding(prior.findingId).status, "resolved");
+    assert.equal(store.queue(prior.findingId).status, "resolved");
+    const recurrence = await notionAudit([fresh], null, { auditNow: new Date(now.getTime() + 61 * 60000) });
+    assert.equal(recurrence.findings[0].findingId, prior.findingId);
+    await store.persist(recurrence);
+    assert.equal(store.finding(prior.findingId).status, "open");
+    assert.equal(store.queue(prior.findingId).status, "open");
+    assert.equal(store.queue(prior.findingId).firstSeenAt, firstSeenAt);
+  }
 });
 
 async function cloudAudit({ deniedCode, partial = false, noBackup = false, newSchedule = false } = {}) {

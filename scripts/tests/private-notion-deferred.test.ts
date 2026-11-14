@@ -7,6 +7,8 @@ import { createRequire } from "node:module";
 import {
   PRIVATE_NOTION_LEASE_MS, PrivateNotionAwaitingSubmission, privateNotionCanAwaitSubmission,
   privateNotionDeferredVersion, privateNotionHasSubmittedContent, privateNotionSourceChanged,
+  privateNotionIdentityVersion,
+  assertPrivateNotionSourceIdentity,
   runPrivateNotionProjection, type PrivateNotionState,
 } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionSync";
 
@@ -21,15 +23,57 @@ function adapter(name: string, globals: Record<string, unknown> = {}) {
   const code = ts.transpileModule(declaration.getText(tree).replace(/^export /, ""), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  return vm.runInNewContext(`${code}\n${name}`, { PrivateNotionAwaitingSubmission, ...globals });
+  return vm.runInNewContext(`${code}\n${name}`, { PrivateNotionAwaitingSubmission, privateNotionIdentityVersion, assertPrivateNotionSourceIdentity, ...globals });
 }
+
+const projectionVersion = adapter("privateLessonNotionProjectionVersion", {
+  stableHash: (value: unknown) => JSON.stringify(value),
+  notionSessionTitle: () => "same-title", notionInstructorChartChildren: () => [],
+});
+
+for (const key of ["memberId", "staffId", "bookingId", "studioId", "memberPhone", "requestId", "status", "cancelledAt"]) {
+  test(`identity-only ${key} changes wake the real request handler despite unchanged rendered content`, async () => {
+    const h = harness();
+    const before = structuredClone(h.row.request);
+    h.row.request[key] = "changed";
+    assert.notEqual(projectionVersion(h.row.record, before), projectionVersion(h.row.record, h.row.request));
+    let calls = 0;
+    const handler = adapter("syncPrivateNotionOnRequestWrite", {
+      privateNotionSourceChanged, privateNotionHasSubmittedContent,
+      refs: { privateLessonChartRecord: () => ({ get: async () => ({ data: () => h.row.record }) }) },
+      privateLessonNotionProjectionVersion: projectionVersion,
+      PRIVATE_NOTION_DEBOUNCE_MS: 0, setTimeout: (fn: () => void) => fn(),
+      syncPrivateNotionByRecordId: async () => { calls++; },
+    });
+    await handler({ params: { requestId: "synthetic" }, data: { before: { data: () => before }, after: { data: () => h.row.request } } });
+    assert.equal(calls, 1);
+  });
+}
+
+test("identity digest changes invalidate failed and synced fast paths; metadata-only writes stay inert", async () => {
+  for (const status of ["synced", "failed"] as const) {
+    const h = harness();
+    const version = (source: any) => projectionVersion(source.record, source.request);
+    const prior = version(h.row);
+    h.row.record.notionSync = { status, sourceVersion: prior, attemptedVersion: prior };
+    const before = structuredClone(h.row.request);
+    h.row.request.updatedAt = "metadata-only";
+    assert.equal(version(h.row), prior);
+    assert.equal(privateNotionSourceChanged(before, h.row.request), false);
+    h.row.request.bookingId = "other-booking";
+    let checked = 0;
+    assert.equal(await h.run({ version, project: async () => { checked++; throw Error("identity mismatch"); } }), "failed");
+    assert.equal(checked, 1);
+    assert.equal(await h.run({ version }), "skipped");
+  }
+});
 
 function harness() {
   let time = Date.parse("2026-11-02T00:00:00Z");
-  const record: any = { recordId: "synthetic", requestId: "synthetic", memberId: "100", staffId: "200",
+  const record: any = { recordId: "synthetic", requestId: "synthetic", memberId: "100", staffId: "200", studioId: "5330", memberPhone: "01000000001",
     bookingId: "synthetic", gptStatus: "waiting_post", preSubmittedAt: null, postSubmittedAt: null,
     notionSync: { status: "pending" } };
-  const request: any = { requestId: "synthetic", memberId: "100", staffId: "200", bookingId: "synthetic",
+  const request: any = { requestId: "synthetic", memberId: "100", staffId: "200", bookingId: "synthetic", studioId: "5330", memberPhone: "01000000001",
     lessonDate: "2099-01-01", status: "pending", preStatus: "pending", postStatus: "pending" };
   const row: any = { record, request };
   let calls = 0, writes = 0;
@@ -239,6 +283,38 @@ test("real projection adapter stamps failedAt and propagates typed waiting witho
   assert.equal(failed.syncedAt, undefined);
   failure = new PrivateNotionAwaitingSubmission();
   await assert.rejects(project(h.row.record, h.row.request, async () => {}), PrivateNotionAwaitingSubmission);
+});
+
+for (const key of ["memberId", "staffId", "bookingId", "requestId", "studioId", "memberPhone"]) {
+  test(`existing page cannot bypass ${key} request-source verification`, async () => {
+    const h = harness();
+    h.row.record.notionSync.instructorPageId = "existing-page";
+    h.row.request[key] = "other-source";
+    let calls = 0;
+    const project = adapter("syncPrivateLessonChartRecordToNotion", {
+      canExposePrivateLessonReport: () => false, privateLessonNotionProjectionVersion: projectionVersion,
+      syncInstructorMemberChartPage: async () => { calls++; return { pageId: "existing-page" }; },
+      errorMessage: (error: Error) => error.message,
+    });
+    const state = await project(h.row.record, h.row.request, async () => {});
+    assert.equal(state.status, "failed");
+    assert.match(state.error, /신원이/);
+    assert.equal(calls, 0);
+  });
+}
+
+test("matching temporary source IDs with an existing parent keep the original reuse policy", async () => {
+  const h = harness();
+  h.row.record.memberId = h.row.request.memberId = "excel_synthetic";
+  h.row.record.notionSync.instructorPageId = "existing-page";
+  let calls = 0;
+  const project = adapter("syncPrivateLessonChartRecordToNotion", {
+    canExposePrivateLessonReport: () => false, privateLessonNotionProjectionVersion: projectionVersion,
+    syncInstructorMemberChartPage: async () => { calls++; return { pageId: "existing-page" }; },
+    errorMessage: (error: Error) => error.message,
+  });
+  assert.equal((await project(h.row.record, h.row.request, async () => {})).status, "synced");
+  assert.equal(calls, 1);
 });
 
 test("known session and parent pages keep their sync path; unknown create is not replayed", async () => {

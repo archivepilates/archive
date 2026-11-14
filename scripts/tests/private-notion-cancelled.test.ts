@@ -6,6 +6,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import {
   PRIVATE_NOTION_IDENTITY_MISMATCH, privateNotionCanSkipCancelled,
+  assertPrivateNotionSourceIdentity,
   PrivateNotionAwaitingSubmission, privateNotionSourceChanged, runPrivateNotionProjection,
 } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionSync";
 import { privateNotionMemberIdentity } from "../../firebase/kangsain-functions/functions/src/privateLessonChart/privateLessonNotionMemberPage";
@@ -70,7 +71,7 @@ test("actual projection adapter keeps cancellation guards and resumes only after
   const profile = { memberId: "1", name: "Synthetic", phone: "01000000001", studioId: "5330" };
   const staff = { staffId: "2", studioId: "5330", active: true, name: "Synthetic", role: "instructor" };
   const project = vm.runInNewContext(`${code}\nsyncPrivateLessonChartRecordToNotion`, {
-    PrivateNotionAwaitingSubmission, canExposePrivateLessonReport: () => false,
+    PrivateNotionAwaitingSubmission, assertPrivateNotionSourceIdentity, canExposePrivateLessonReport: () => false,
     privateLessonNotionProjectionVersion: () => "presentation",
     errorMessage: (error: Error) => error.message,
     syncInstructorMemberChartPage: async (record: any, request: any) => {

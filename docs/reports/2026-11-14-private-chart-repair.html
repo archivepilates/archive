@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CORE-CHART-REPAIR-20261114-01 결과</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#20262b;font:16px/1.7 system-ui,sans-serif}main{max-width:960px;margin:auto;padding:28px 20px 60px}h1{font-size:25px;line-height:1.4}h2{font-size:19px;margin-top:32px}table{width:100%;border-collapse:collapse;background:white}td,th{padding:12px;text-align:left;border-bottom:1px solid #dce0e3;overflow-wrap:anywhere}code{overflow-wrap:anywhere}p,li{max-width:78ch}.status{border-left:4px solid #26755d;padding:12px 16px;background:#e9f4ee}.pending{border-left-color:#b17925;background:#fff3db}@media(max-width:540px){main{padding:20px 12px}h1{font-size:21px}td,th{padding:8px;font-size:14px}}@media print{body{background:white}main{padding:0}}</style>
+<main><h1>CORE-CHART-REPAIR-20261114-01 결과</h1><p>ARCHIVE PILATES OPS · 2026.11.14 · 최종 원본 재조회 18:23 KST / 보존 비교 18:24 KST</p>
+<p class="status"><strong>지정 2건의 원본 신원 연결 오류를 복구했습니다.</strong> 두 기록은 작성된 차트의 유실이 아니라 미제출 준비 기록이었습니다. 정상 제출대기로 유지하며 제출 완료·Notion 동기화 성공으로 표시하지 않았습니다.</p>
+<table><thead><tr><th>기록</th><th>수업</th><th>수정 전 → 확인 후</th></tr></thead><tbody>
+<tr><td><code>plc_283112173</code></td><td>11/17 11:00</td><td>신원 검증 실패 → pending / awaiting_submission</td></tr>
+<tr><td><code>plc_283112178</code></td><td>11/20 12:00</td><td>신원 검증 실패 → pending / awaiting_submission</td></tr></tbody></table>
+<h2>원본과 실제 변경</h2><p>StudioMate의 이름·전체 연락처 유일 일치와 예약 2건의 담당 강사·일시·현재 예약 상태를 재확인했습니다. 조회는 2페이지 순회와 재조회가 완료된 시간 구간의 증거이며 원자적 단일시점 스냅샷은 아닙니다. CORE 차트·요청·예약과 대조한 뒤 기존 임시 프로필의 원본 회원번호 포인터만 연결했습니다. 기존 조회 작업에는 완료 근거와 이전 상태를 보존했습니다.</p>
+<p>기존 운영 처리기를 각 기록에 한 번 실행해 제출대기임을 재확인했습니다. 원본 업무 내용·요청·예약은 해시가 일치했고 기존 실패 시각도 유지됐습니다. 실제 Notion 강사 루트 29개 하위 폴더와 원본 연결 기록을 대조해 해당 회원의 폴더 후보·차트·선점이 없음을 확인했습니다. 복구 후 루트 해시가 그대로이며 페이지 생성·수정은 없었습니다.</p>
+<p>비공개 감사 기록: <code>workLanes/private-chart-repair-20261114/reports/source-repair</code>, <code>projection-result</code>. 개인정보·토큰·원문 답변은 이 보고서에 포함하지 않습니다.</p>
+<h2>재발방지 코드</h2><ul><li>차트 투영 지문에 회원·강사·예약·요청·취소 등 신원/자격 상태를 포함해 화면 내용이 같아도 변경 시 재검증합니다.</li><li>기존 페이지를 재사용할 때도 요청과 기록의 식별자·센터·전체 연락처가 다르면 외부 쓰기 전에 차단합니다. 기존 폴더 재사용 정책과 신규 폴더 생성의 엄격한 원본번호 검증은 유지합니다.</li><li>재시도 직후 유예 상태는 신규 알림을 잠시 억제할 뿐 기존 장애가 복구됐다는 근거로 사용하지 않습니다.</li><li>수정 파일: <code>privateLessonChart.ts</code>, <code>privateLessonNotionSync.ts</code>, <code>run-system-health-check.mjs</code>, 관련 회귀 테스트, 범위 한정 감사·복구·검증 스크립트, 작업 기록과 CORE 운영규칙 로컬 초안.</li></ul>
+<h2>검증과 운영 경계</h2><p><strong>회귀 테스트 339개 통과, 실패·생략 0개.</strong> 임시 신원·미제출·취소·기존 페이지·불명확 생성·동시 실행·멱등성·요청 신원 변경·실패 유지·복구·재발을 합성 자료로 검증했습니다. Functions 타입 검사와 스크립트 구문 검사, diff 공백 검사가 통과했습니다. 실제 새 제출 시험은 하지 않았습니다.</p>
+<p>전체 pending/failed 차트 조회는 상한 미도달로 완료됐고 현재 조치 필요·유예 미분류 건은 0건입니다. 기존 관제 항목은 아직 open이며 수동으로 해제하지 않았습니다. 다음 기존 정기 점검에서 자체 재대조해야 합니다. 집계 0건만으로 복구 완료를 판단하지 않고 각 원본과 Notion을 별도로 확인했습니다.</p>
+<p class="status pending"><strong>재발방지 코드·CORE 규칙은 로컬 검증 완료, 미배포·미커밋입니다.</strong> 운영 데이터 2건의 복구와 코드 배포는 별개입니다. 배포·문자·메일·결제·환불·권한 변경·예약 변경·새 감시 작업은 수행하지 않았습니다. 다음 단계는 별도 승인 후 검토된 코드의 커밋·승격·배포·실운영 검증·푸시입니다.</p>
+<p>작업 소유 브라우저는 종료했고 공유 프로필 잠금은 남아 있지 않습니다. 감사 근거는 보존했습니다.</p></main></html>
