@@ -4,7 +4,7 @@
 
 - Reconcile and minimally repair only `privateLessonChartRecords/plc_283112173` and `privateLessonChartRecords/plc_283112178`, with canonical request/booking/member identity and actual Notion evidence.
 - Preserve original content, IDs, request state, failure history and uncertain transport claims. Do not manufacture submissions, replay uncertain operations or create duplicate pages.
-- Approved: necessary source repair for these records, related prevention code and regression verification. Not approved: deployment, push, external mail/SMS, payment/refund or permission changes.
+- Initial approval covered source repair, related prevention code and regression verification. Subsequent explicit approval added the scoped deployment/commit/push recorded below. External mail/SMS, payment/refund, permissions and repair replay remain excluded.
 - Worktree: private-chart-repair-20261114; branch: codex/mini/private-chart-repair-20261114. Existing worktree was clean on continuation.
 
 ## Deployment Approval And Completion Gate
@@ -13,7 +13,7 @@
 - Approval includes necessary scoped commit/push/main promotion and official release verification. It does NOT authorize repeating either chart repair/projection, changing other business data, Notion writes, member messages, mail, IAM/security changes, schedulers or manual health-finding resolution.
 - Separate one-off audit/repair/verification scripts from operational release paths. Preserve the previous private audit and never rerun the apply script.
 - Completion: review current remote/runtime/live versions; rerun related regression/type checks; deploy only necessary exports and CORE rules via existing guarded release routes; verify actual source/revisions and runtime hash; read both chart states without invoking projection; record CI/Git/release state and future-submission/next-health-check observation limits.
-- Deployment execution: starting; no deployment attempt recorded yet. Read this section again before final response.
+- Deployment execution: complete and independently verified; see Deployment Closeout. Read this section again before final response.
 - Subsequent execution receipt supersedes the initial state: commit `922d4c849dd9a6cf386fad617674211a86b815a4` promoted to origin/main and clean release checkout. CI 43583642770 (Functions) and 43583642749 (CORE MCP) passed. Official exact-export Firebase dry-run passed before the single apply request.
 - Three Functions successfully updated at 10:10 UTC: record `syncprivatelessonnotionfromrecord-00029-coj`, request `syncprivatelessonnotionfromrequest-00029-mur`, nightly `scheduledsyncprivatelessonnotionprojections-00032-naz`. Fresh Cloud Run readback confirmed ready revision and 100% traffic for each. Downloaded immutable provider sources for each function matched both changed TS files exactly; deployment hash `1138c34d7db70372f9561e3cec5cc5cc174b903a`.
 - Post-deploy readback at 10:12 UTC: both chart/request/booking hashes byte-identical to pre-deploy; still awaiting_submission, no pages/lease/submission added. Existing 22:20 Asia/Seoul scheduler ENABLED, exact target/settings preserved. All unrelated Functions source/revision/update-time/settings unchanged.
@@ -47,16 +47,16 @@
 1. Fresh exact identity, booking/request/submission/cancellation and actual Notion comparison for each record.
 2. Only evidence-backed minimal changes, with private before/after audit and independent readback; preserve business content and historical failure evidence.
 3. Focused regression tests for temporary identity, empty/cancelled requests, identity-only changes, idempotency, failure persistence, real recovery and recurrence.
-4. Report each record separately, code/commit/test state, pending deployment and any approval/blocker. Do not claim submitted content restored when none exists.
+4. Report each record separately, code/commit/test/deployment state and any approval/blocker. Do not claim submitted content restored when none exists.
 5. Re-read this document after context transitions and before final response. Keep unrelated referral work out of this task.
 
 ## Operational State
 
 - Source repair: native full-phone/name unique match, both booked private lessons and instructor verified at 09:20 UTC. Notion root live REST traversal found 29 child folders, no exact member candidate, no source-linked page or binding. Private audit retained outside Git.
 - At 09:21 UTC, guarded transaction linked only the existing profile pointer and completed the existing lookup with prior state retained in a private audit. Existing operational projection handler processed the exact two records once, both returned pending/awaiting_submission; no provider calls or page creation. Original business/request/booking hashes and failedAt were preserved.
-- Prevention code: identity-aware fingerprint, pre-projection request/source identity guard (including known-page paths), and retry-grace recovery guard added locally. No temporary identity checks weakened, no new lookup scheduler or page-creation policy.
-- CORE rule update: local draft added to the existing health rules section; not published because deployment is explicitly outside approval.
-- Deployment/commit/push: not performed.
+- Prevention code: identity-aware fingerprint, pre-projection request/source identity guard (including known-page paths), and retry-grace recovery guard deployed from `922d4c84`. No temporary identity checks weakened, no new lookup scheduler or page-creation policy.
+- CORE rule update: published from `3f3bf63d` in version `68c435fed139ec18`; both operating domains independently hash-verified.
+- Deployment/commit/push: complete; source branch, origin/main, release checkout and runtime aligned. Final closeout commits are documentation-only and require no repeated Functions/Hosting deploy.
 
 ## Independent Verification
 
@@ -70,6 +70,6 @@
 ## Release Boundary And Remaining Work
 
 - Only the existing source profile pointer, lookup receipt, two records' Notion processing metadata and task audit were changed operationally. No new native profile, chart content, Notion page, provider message, permission or reservation mutation occurred.
-- Prevention source, regression tests and CORE rule draft are local/uncommitted. Runtime remains at `cc52e05f7cc53a02ca87d922324b885ea9d5986a`; no integration/runtime refresh, deploy, restart, commit or push was performed.
-- Approval needed only for a subsequent reviewed commit/promotion/deploy/push of the prevention code and CORE rules. A genuine future instructor submission must still pass normal identity/ownership/provider verification; this repair does not claim that future content has been projected.
+- Prevention source, tests and operating rule are committed/pushed and released; runtime adopted the source without restart or manual processing. The original pre-release runtime base `cc52e05f` is retained in the baseline receipt, not the current runtime version.
+- No deployment approval remains pending. A genuine future instructor submission must still pass normal identity/ownership/provider verification; this release does not claim that future content has been projected. The next scheduled health-finding reconciliation is likewise unobserved and was not manually invoked.
 - Existing reviewer performed final read-only code review after the known-page guard: no remaining actionable gap, 93 focused tests independently passed. Main retained final 339-test result and type-check result. No new analysis task was created.
