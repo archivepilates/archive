@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { matchesPreviousFunctionConfiguration, servesExpectedChartRevision } from './lib/private-chart-release-verification.mjs';
 
 const phase = process.argv[2];
 assert.ok(['before', 'after'].includes(phase) && process.argv.length === 3);
@@ -29,14 +30,15 @@ try {
     assert.ok(!page.unreachable?.length);
     rows.push(...page.functions); cursor = page.nextPageToken;
   } while (cursor);
+  const configuration = f => ({ eventTrigger: f.eventTrigger, serviceAccountEmail: f.serviceConfig.serviceAccountEmail,
+    secrets: f.serviceConfig.secretEnvironmentVariables, environment: f.serviceConfig.environmentVariables,
+    timeout: f.serviceConfig.timeoutSeconds, memory: f.serviceConfig.availableMemory,
+    maxInstances: f.serviceConfig.maxInstanceCount, concurrency: f.serviceConfig.maxInstanceRequestConcurrency,
+    ingressSettings: f.serviceConfig.ingressSettings });
   const functions = rows.map(f => ({ name: f.name.split('/').at(-1), state: f.state, updateTime: f.updateTime,
     revision: f.serviceConfig.revision, service: f.serviceConfig.service, source: f.buildConfig.source,
     deploymentHash: f.labels?.['firebase-functions-hash'],
-    configurationHash: hash({ eventTrigger: f.eventTrigger, serviceAccountEmail: f.serviceConfig.serviceAccountEmail,
-      secrets: f.serviceConfig.secretEnvironmentVariables, environment: f.serviceConfig.environmentVariables,
-      timeout: f.serviceConfig.timeoutSeconds, memory: f.serviceConfig.availableMemory,
-      maxInstances: f.serviceConfig.maxInstanceCount, concurrency: f.serviceConfig.maxInstanceRequestConcurrency,
-      ingressSettings: f.serviceConfig.ingressSettings }) })).sort((a, b) => a.name.localeCompare(b.name));
+    configurationHash: hash(configuration(f)) })).sort((a, b) => a.name.localeCompare(b.name));
   const targets = names.map(name => { const row = functions.find(f => f.name === name); assert.ok(row); return row; });
   const chartIds = ['plc_283112173', 'plc_283112178'];
   const records = [];
@@ -56,14 +58,22 @@ try {
     const before = JSON.parse(fs.readFileSync(path.join(dir, 'before.json'), 'utf8'));
     assert.equal(hash(records), hash(before.records), 'Chart/request/booking changed during deployment');
     assert.equal(hash(schedulerState), hash(before.scheduler), 'Scheduler settings changed');
-    assert.deepEqual(functions.filter(f => !names.includes(f.name)), before.functions.filter(f => !names.includes(f.name)), 'Unrelated function changed');
+    const orderOnly = [];
+    for (const current of functions) {
+      const old = before.functions.find(f => f.name === current.name);
+      assert.ok(old, 'Unexpected added function');
+      const raw = rows.find(f => f.name.endsWith('/' + current.name));
+      assert.ok(matchesPreviousFunctionConfiguration(old.configurationHash, configuration(raw)), 'Function settings changed: ' + current.name);
+      if (old.configurationHash !== current.configurationHash) orderOnly.push(current.name);
+      if (!names.includes(current.name)) assert.equal(hash({ ...current, configurationHash: old.configurationHash }), hash(old), 'Unrelated function changed: ' + current.name);
+    }
+    assert.equal(functions.length, before.functions.length, 'Function count changed');
+    result.eventFilterOrderOnly = orderOnly;
     for (const target of targets) {
       const old = before.targets.find(f => f.name === target.name);
       assert.equal(target.state, 'ACTIVE'); assert.notEqual(target.revision, old.revision);
-      assert.equal(target.configurationHash, old.configurationHash, 'Function settings changed');
       const service = await get('https://run.googleapis.com/v2/' + target.service);
-      assert.ok(service.latestReadyRevision.endsWith('/' + target.revision), 'Serving revision not ready');
-      assert.ok(service.trafficStatuses?.some(t => t.revision.endsWith('/' + target.revision) && t.percent === 100), 'Serving revision traffic mismatch');
+      assert.ok(servesExpectedChartRevision(service, target.revision), 'Serving revision/traffic mismatch');
     }
     result.deployedSources = [];
     for (const target of targets) {

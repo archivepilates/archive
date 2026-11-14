@@ -172,7 +172,7 @@ jobs:
       - name: Test chart identity revalidation and verified recovery boundaries
         run: |
           firebase/kangsain-functions/functions/node_modules/.bin/tsx --test scripts/tests/private-notion-deferred.test.ts scripts/tests/private-notion-cancelled.test.ts
-          node --test scripts/tests/system-health-current-state.test.mjs scripts/tests/system-health-queue-policy.test.mjs scripts/tests/private-chart-member-link-repair.test.mjs scripts/tests/private-chart-rules-release.test.mjs
+          node --test scripts/tests/system-health-current-state.test.mjs scripts/tests/system-health-queue-policy.test.mjs scripts/tests/private-chart-member-link-repair.test.mjs scripts/tests/private-chart-rules-release.test.mjs scripts/tests/private-chart-release-verification.test.mjs
 
       - name: Validate live rollback guards
         run: npm run validate:live-release-rollback-guards
