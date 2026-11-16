@@ -20,3 +20,11 @@
 - Full Node 22 checks passed: 1,354 membership/native contract tests, 629 welcome tests and 250 reminder tests; zero failures/skips. TypeScript no-emit, CORE Hosting/catalog validation and live-release rollback guards passed. The actual-source rules release scope/argument probes passed nine cases without network/writes.
 - The isolated new-rule fixture passed 320/390/768/1440 widths with no horizontal overflow and verified browser closure. This is a static text-layout check, not authenticated production UI or member authentication proof.
 - Two bounded auxiliary-review requests returned acknowledgments only, with no substantive evidence. They were closed and are not counted as independent review. Main-thread source/diff review and source-level regression checks own the release decision.
+
+## Released
+
+- Implementation `03933610d4a54bfc8950104dd75e8f4128e59e32` pushed to main and the feature branch. Clean main release checkout and active runtime adopted that commit; all 14 changed file hashes match, and the actual runtime's pure signer-name tests passed. No worker restart or manual candidate/completion run was performed.
+- GitHub CORE MCP Check `43797288999` and Functions Affected Check `43797288937` succeeded. Affected Functions detection returned no codebases; no Functions were redeployed.
+- CORE rules-only Hosting version `752d8aff7a40090b` independently verified at `2026-11-16T03:20:58.413Z`; both CORE domains return source SHA-256 `5ffbd82707b4b46c68c0811f8b59670de9f9c08709340c82ca45190227477dac`. Other 69 live files, Hosting configuration and prior version are verified unchanged.
+- Existing member records, native contracts, signatures, provider requests, canonical jobs/claims and settings were not migrated/reset. The rollout changes future writing behavior, not already-issued contracts. Native new-contract creation and member authentication after this release remain untested because this task authorizes no test contract or member-facing dispatch.
+- Task-owned browsers are closed; small source, QA and deployment evidence are retained privately. No disposable large intermediate requires deletion. Operator summary: `docs/reports/2026-11-16-contract-signer-name.html`.
