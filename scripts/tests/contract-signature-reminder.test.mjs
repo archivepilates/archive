@@ -12,6 +12,7 @@ import {
 import { assertContractReminderSmsResponse } from "../lib/contract-signature-reminder-browser.mjs";
 import { MEMBER_SMS_PROVIDER_POLICY, memberSmsReceiptFields, acceptedMemberSmsMarker } from "../lib/member-sms-solapi.mjs";
 import { MemberDispatchDeferredError } from "../lib/member-dispatch-window.mjs";
+import { CONTRACT_SIGNER_NAME_POLICY } from "../lib/studiomate-membership-contract-signer-name.mjs";
 
 const ID = "a".repeat(64);
 const NOW = "2026-10-20T01:00:00.000Z";
@@ -28,6 +29,33 @@ before(() => {
   globalThis.fetch = () => { throw new Error("External network is forbidden in reminder unit tests"); };
 });
 after(() => { globalThis.fetch = originalFetch; });
+
+test("digit-free signer reminders retain exact suffixed member identity", () => {
+  const source = sourceFixture();source.memberName = "Synthetic Member2";
+  source.contractSignerName = "Synthetic Member";source.contractSignerNamePolicy = CONTRACT_SIGNER_NAME_POLICY;
+  const before = structuredClone(source), plan = planContractSignatureReminder(source, ID, new Date(NOW));
+  assert.equal(plan.status, "ready");assert.ok(plan.smsMessage.includes("Synthetic Member님"));
+  assert.equal(plan.smsMessage.includes("Synthetic Member2"), false);
+  const live = liveFixture(source);live.contract.memberName = "Synthetic Member";live.dom.memberName = "Synthetic Member";
+  assert.doesNotThrow(() => assertContractReminderLive(source, plan, live, new Date(NOW)));
+  assert.deepEqual(source, before);
+  for (const mutate of [x => {x.memberResult.member.name = "Synthetic Member3";}, x => {x.memberResult.member.memberId = "999";}, x => {x.memberResult.member.phone = "01011111111";}, x => {x.contract.memberName = "Synthetic Member2";}, x => {x.dom.memberName = "Other Member";}]) {
+    const changed = structuredClone(live);mutate(changed);
+    assert.throws(() => assertContractReminderLive(source, plan, changed, new Date(NOW)));
+  }
+});
+
+test("legacy suffixed reminder names remain bound to the original issued contract", () => {
+  const source = sourceFixture();source.memberName = "Synthetic Member2";source.lastObservation.memberName = source.memberName;
+  const plan = planContractSignatureReminder(source, ID, new Date(NOW));
+  assert.equal(plan.status, "ready");assert.ok(plan.smsMessage.includes("Synthetic Member2"));
+  assert.doesNotThrow(() => assertContractReminderLive(source, plan, liveFixture(source), new Date(NOW)));
+});
+
+test("tampered signer metadata never authorizes a reminder", () => {
+  const source = sourceFixture();source.contractSignerName = "Other Member";source.contractSignerNamePolicy = CONTRACT_SIGNER_NAME_POLICY;
+  assert.equal(planContractSignatureReminder(source, ID, new Date(NOW)).reason, "invalid_contract_signer_name_binding");
+});
 
 function sourceFixture(id = ID) {
   const memberId = "101", userTicketId = "202";

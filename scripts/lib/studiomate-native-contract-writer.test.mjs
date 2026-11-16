@@ -366,6 +366,50 @@ function operatorTestFixture() {
   return input;
 }
 
+test("first and renewal payloads strip management suffixes only from contract names", () => {
+  for (const action of ["first_purchase_contract", "renewal_purchase_confirmation"]) {
+    const input = fixture(action);input.member.name = "Synthetic Member2";
+    const before = structuredClone(input), payload = buildStudioMateJoinContractPayload(input);
+    assert.equal(payload.contractor_name, "Synthetic Member");
+    assert.equal(payload.basic.required.name, "Synthetic Member");
+    assert.equal(payload.contractor_member_id, Number(input.member.memberId));
+    assert.equal(payload.contractor_mobile, input.member.phone);
+    assert.deepEqual(input, before);
+    const original = buildStudioMateJoinContractPayload({ ...input, member: { ...input.member, name: "Synthetic Member" } });
+    assert.deepEqual(payload, original);
+  }
+});
+
+test("normalized signer survives native creation and prepared-request validation", async () => {
+  const input = fixture("renewal_purchase_confirmation");input.member.name = "Synthetic Member2";
+  const before = structuredClone(input), events = [];let sent = false;
+  const result = await executeStudioMateMembershipContract({ ...input, journal: claimedJournal(events),
+    api: {
+      get: async () => nativeContract(input, sent ? "waiting" : "draft"),
+      post: async (url, body) => {
+        events.push(["post", url, body]);
+        if (url === "/v2/staff/contract/join") {assert.equal(body.contractor_name, "Synthetic Member");return {id:CONTRACT_ID};}
+        if (url === `/v2/staff/contract/signature/request/${CONTRACT_ID}`)
+          return {contract_id_hash:CONTRACT_ID,contractor_name:"Synthetic Member",contract_link:`https://sign.studiomate.kr/${CONTRACT_ID}`};
+        assert.equal(url, `/v2/staff/contract/signature/request/sms/${CONTRACT_ID}`);
+        assert.equal(body.message.includes("Synthetic Member2"), false);assert.ok(body.message.includes("Synthetic Member"));
+        sent = true;return {};
+      },
+    },
+  });
+  assert.equal(result.status, "waiting");assert.equal(events.filter(e=>e[0]==="post").length,3);
+  assert.deepEqual(input, before);
+});
+
+test("a suffix-policy change never replays an existing mismatched payload", async () => {
+  const input = fixture();input.member.name = "Synthetic Member2";
+  const result = await executeStudioMateMembershipContract({ ...input,
+    journal: {claim:async()=>({status:"resume",stage:"created",contractId:CONTRACT_ID,payloadHash:"old-original-payload"}),stage:()=>assert.fail("no journal rewrite")},
+    api: {get:()=>assert.fail("no native rewrite"),post:()=>assert.fail("no creation or resend")},
+  });
+  assert.equal(result.reason, "claimed_payload_mismatch");
+});
+
 test("operator test has a deterministic label without changing native purchase facts or consent", () => {
   const input = operatorTestFixture();
   const before = structuredClone(input);

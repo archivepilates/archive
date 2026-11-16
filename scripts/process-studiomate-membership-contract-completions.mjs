@@ -37,6 +37,7 @@ import {
 import { processContractSignatureReminder,planContractSignatureReminder,assertContractReminderLive,contractReminderDiagnosticText } from "./lib/contract-signature-reminder.mjs";
 import { sendMemberSms } from "./lib/member-sms-solapi.mjs";
 import { assertContractReminderDispatchAllowed } from "./lib/contract-signature-reminder-window.mjs";
+import { assertMembershipContractSignerReadback } from "./lib/studiomate-membership-contract-signer-name.mjs";
 
 const args = process.argv.slice(2);
 let requestedContractId = "";
@@ -166,6 +167,7 @@ try {
         readStudioMateContract(api, doc.id),
         readExactStudioMateMember(api, source.binding.memberPhone),
       ]);
+      assertMembershipContractSignerReadback(source, { member: memberResult.member, contract: providerContract, dom: observed });
       const ticketRead =
         memberResult.status === "verified"
           ? await readStudioMateUserTickets(api, memberResult.member.memberId)

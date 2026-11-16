@@ -13,6 +13,7 @@ import { buildStudioMateJoinContractPayload, executeStudioMateMembershipContract
 import { firestoreJournal, persistStudioMateMembershipContractSource } from "./lib/studiomate-membership-contract-processor.mjs";
 import { verifyStudioMateOfficialSeal } from "./lib/studiomate-membership-contract-seal.mjs";
 import { memberDispatchWindow } from "./lib/member-dispatch-window.mjs";
+import { membershipContractSignerName } from "./lib/studiomate-membership-contract-signer-name.mjs";
 
 // Explicit operator-only recovery. This command is not a scheduler entry point.
 const args = process.argv.slice(2);
@@ -126,7 +127,8 @@ try {
         result.providerStatus = detail.providerStatus;
         result.memberSignaturePresent = detail.memberSignaturePresent;
         result.verifiedAt = new Date().toISOString();
-        if (!testOnly) await persistStudioMateMembershipContractSource({ db, contractId: outcome.contractId, member, ticket, selection, template: loaded.template });
+        if (!testOnly) await persistStudioMateMembershipContractSource({ db, contractId: outcome.contractId, member, ticket, selection, template: loaded.template,
+          ...(outcome.status !== "existing" ? { contractSignerName: membershipContractSignerName(member.name) } : {}) });
         await db.doc(`workLanes/october-renewal-recovery/reports/${selection.jobKey}`).set({ ...result, sourceSha256, operatorTest: testOnly, updatedAt: new Date() });
       }
     } catch (error) { result.status = "review"; result.reason = String(error.message).replace(/010[\d-]{8,}/g, "[redacted]"); }

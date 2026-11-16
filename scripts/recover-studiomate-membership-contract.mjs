@@ -13,6 +13,7 @@ import { firestoreJournal, persistStudioMateMembershipContractSource } from "./l
 import { verifyStudioMateOfficialSeal } from "./lib/studiomate-membership-contract-seal.mjs";
 import { CONTRACT_SEAL_UPLOAD_POLICY } from "./lib/studiomate-contract-seal-upload.mjs";
 import { validateContractCreationVerification } from "./lib/studiomate-contract-creation-proof.mjs";
+import { membershipContractSignerName } from "./lib/studiomate-membership-contract-signer-name.mjs";
 
 // Explicit operator recovery only; never invoked by a scheduler or the Excel runner.
 const args = process.argv.slice(2);
@@ -108,7 +109,8 @@ try {
       template: loaded.template, terms: loaded.terms, authorizeDispatch });
     if (["waiting", "signed"].includes(outcome.status)) {
       await persistStudioMateMembershipContractSource({ db, contractId: outcome.contractId, member, ticket,
-        selection: selected.selection, template: loaded.template });
+        selection: selected.selection, template: loaded.template,
+        ...(outcome.status !== "existing" ? { contractSignerName: membershipContractSignerName(member.name) } : {}) });
     }
     console.log(JSON.stringify({ memberId: member.memberId, userTicketId: ticket.userTicketId, jobKey: selected.selection.jobKey, ...outcome }));
     if (!["waiting", "signed"].includes(outcome.status)) process.exitCode = 1;

@@ -7,6 +7,7 @@ import { verifyStudioMateOfficialSeal } from "./studiomate-membership-contract-s
 import { uploadStudioMateCenterSeal } from "./studiomate-contract-seal-upload.mjs";
 import { sanitizeContractDiagnostic } from "./studiomate-contract-diagnostics.mjs";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
+import { membershipContractSignerName } from "./studiomate-membership-contract-signer-name.mjs";
 
 export const MEMBERSHIP_CONTRACT_TEMPLATES = Object.freeze({
   first_purchase_contract: Object.freeze({
@@ -117,6 +118,7 @@ export function buildStudioMateJoinContractPayload(input) {
       throw new Error("Operator test requires exactly one active 구매조건 상세 field");
     purchaseDetails[0].val = OPERATOR_TEST_PURCHASE_DETAILS;
   }
+  const signerName = membershipContractSignerName(member.name);
   const payload = {
     category_id: 1,
     sign_type: 1,
@@ -125,11 +127,11 @@ export function buildStudioMateJoinContractPayload(input) {
     sign_expiration_period: selection.signExpirationDays,
     title: operatorTestApproval === undefined ? expectedTemplate.title : "(테스트) 아카이브 재등록",
     contractor_member_id: Number(member.memberId),
-    contractor_name: member.name,
+    contractor_name: signerName,
     contractor_mobile: member.phone,
     basic: {
       required: {
-        name: member.name,
+        name: signerName,
         mobile: member.phone,
         gender: member.gender,
         birthday: member.birthday,
@@ -437,7 +439,7 @@ export async function executeStudioMateMembershipContract({
           requestPayload = buildStudioMateSignatureRequestPayload({
             prepared,
             contractId,
-            memberName: member.name,
+            memberName: payload.basic.required.name,
           });
         } catch {
           await journal.stage(selection.jobKey, "review", {
@@ -450,7 +452,7 @@ export async function executeStudioMateMembershipContract({
             contractId,
           };
         }
-        preparedPayload = JSON.stringify({ contract_id_hash: contractId, contractor_name: member.name,
+        preparedPayload = JSON.stringify({ contract_id_hash: contractId, contractor_name: payload.basic.required.name,
           studio_name: "ARCHIVE PILATES", contract_link: `https://sign.studiomate.kr/${contractId}`,
           title: requestPayload.title, message: requestPayload.message });
         await journal.stage(selection.jobKey, "signature_prepared", { contractId, preparedPayload, reason: null });
@@ -458,7 +460,7 @@ export async function executeStudioMateMembershipContract({
         postStarted = false;
       }
       const requestPayload = buildStudioMateSignatureRequestPayload({
-        prepared: JSON.parse(preparedPayload), contractId, memberName: member.name,
+        prepared: JSON.parse(preparedPayload), contractId, memberName: payload.basic.required.name,
       });
       let signatureMessageError = false;
       try {

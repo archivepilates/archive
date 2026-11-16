@@ -17,6 +17,7 @@ import { signatureMaintenanceRecovery, signatureRecoverySelectionPolicy } from "
 import { CONTRACT_SEAL_UPLOAD_POLICY } from "./studiomate-contract-seal-upload.mjs";
 import { isContractDiagnostic } from "./studiomate-contract-diagnostics.mjs";
 import { validateContractCreationVerification } from "./studiomate-contract-creation-proof.mjs";
+import { CONTRACT_SIGNER_NAME_POLICY, membershipContractSignerName } from "./studiomate-membership-contract-signer-name.mjs";
 import {
   executeStudioMateMembershipContract,
   buildStudioMateSignatureRequestPayload,
@@ -241,6 +242,7 @@ export async function runStudioMateMembershipContractCandidates({
             ticket: selected.ticket,
             selection: selected.selection,
             template: loaded.template,
+            ...(outcome.status !== "existing" ? { contractSignerName: membershipContractSignerName(memberResult.member.name) } : {}),
           });
           await markHint(db, hint?.hintId, "processed", outcome.reason, {
             contractId: outcome.contractId,
@@ -347,7 +349,10 @@ export async function persistStudioMateMembershipContractSource({
   ticket,
   selection,
   template,
+  contractSignerName,
 }) {
+  if (contractSignerName !== undefined && contractSignerName !== membershipContractSignerName(member.name))
+    throw new Error("contract_signer_name_binding_invalid");
   const checkedAt = new Date().toISOString();
   const readIdentity = {
     verified: true,
@@ -412,6 +417,7 @@ export async function persistStudioMateMembershipContractSource({
       contractId,
       studioId: selection.studioId,
       memberName: member.name,
+      ...(contractSignerName !== undefined ? { contractSignerName, contractSignerNamePolicy: CONTRACT_SIGNER_NAME_POLICY } : {}),
       bindingVerified: true,
       binding,
       selection,

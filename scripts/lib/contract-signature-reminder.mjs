@@ -4,6 +4,7 @@ import { contractReminderDispatchWindow, assertContractReminderDispatchAllowed }
 import { membershipContractObservationHistory } from "./studiomate-membership-contract-completion-state.mjs";
 import { membershipContractJobKey,normalizeMembershipPhone } from "./studiomate-membership-contract-policy.mjs";
 import { membershipContractMemberGradeDecision } from "./studiomate-membership-contract-native-selection.mjs";
+import { storedMembershipContractSignerName } from "./studiomate-membership-contract-signer-name.mjs";
 import { memberSmsReceiptFields } from "./member-sms-solapi.mjs";
 
 export const CONTRACT_REMINDER_POLICY = "contract_signature_reminder_24h_v1";
@@ -59,6 +60,8 @@ export function contractReminderEnabled(config) {
 
 export function planContractSignatureReminder(source, id, now = new Date()) {
   const b = source?.binding, ms = now.getTime(), skip = reason => ({status:"skipped",reason});
+  let signerName;
+  try { signerName = storedMembershipContractSignerName(source); } catch { return skip("invalid_contract_signer_name_binding"); }
   if (!Number.isFinite(ms) || !/^[a-f0-9]{64}$/.test(id || "") || source?.schemaVersion !== 1
     || source.source !== "studiomate_native_contract" || source.studioId !== "5330" || source.contractId !== id
     || source.bindingVerified !== true || b?.verified !== true || b.contractId !== id || b.studioId !== "5330"
@@ -76,7 +79,7 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
     || row.signedDate != null || row.signedDateText != null)) return skip("historical_signature_conflict");
   const sent = history.filter(row => row.schemaVersion === 1 && row.source === "studiomate_contract_dom"
     && row.verified === true && row.complete === true && row.status === "sent" && row.statusText === "요청대기"
-    && row.contractId === id && row.memberName === source.memberName && row.memberPhone === b.memberPhone
+    && row.contractId === id && row.memberName === signerName && row.memberPhone === b.memberPhone
     && row.title === b.title && row.centerSignaturePresent === true && row.memberSignaturePresent === false
     && row.signedDate == null && row.signedDateText == null
     && bindingKeys.every(key => row.bindingIdentity?.[key] === b[key])
@@ -87,7 +90,7 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
   const hour = new Date(ms+9*3600_000).getUTCHours();
   if (hour < 9 || hour >= 20) return skip("outside_send_window");
   const smsTitle = "아카이브필라테스 전자계약서 서명 안내";
-  const smsMessage = `[아카이브필라테스] ${source.memberName}님, 전달드린 전자계약서 서명이 아직 완료되지 않았습니다.\n아래 링크에서 내용을 확인하고 서명해 주세요.\nhttps://sign.studiomate.kr/${id}`;
+  const smsMessage = `[아카이브필라테스] ${signerName}님, 전달드린 전자계약서 서명이 아직 완료되지 않았습니다.\n아래 링크에서 내용을 확인하고 서명해 주세요.\nhttps://sign.studiomate.kr/${id}`;
   const key = `contract_signature_reminder_${id}`;
   const fingerprint = digest([key,source.memberName,Object.fromEntries(Object.entries(b).filter(([key])=>key!=="previousObservations").sort(([a],[b])=>a.localeCompare(b))),firstConfirmedAt,smsTitle,smsMessage]);
   if (source.signatureReminder && source.signatureReminder.fingerprint !== fingerprint) return skip("deferred_reminder_binding_changed");
@@ -97,15 +100,16 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
 
 export function assertContractReminderLive(source, plan, live, now = new Date()) {
   const b = source.binding, c = live?.contract, dom = live?.dom, member = live?.memberResult?.member;
+  const signerName = storedMembershipContractSignerName(source);
   if (dom && dom.centerSignaturePresent !== true) fail("native_contract_center_signature_unverified");
   if (!live || instant(live.checkedAt) > now.getTime() || now.getTime()-instant(live.checkedAt) > 60_000
     || !Number.isFinite(instant(live.checkedAt)) || live.memberResult?.status !== "verified" || live.memberResult.matchCount !== 1
     || member?.memberId !== b.memberId || member.phone !== b.memberPhone || member.name !== source.memberName || member.inactive === true
     || membershipContractMemberGradeDecision(null,member).status !== "eligible"
     || !c?.verified || !c.complete || c.contractId !== plan.contractId || c.studioId !== b.studioId || c.memberId !== b.memberId
-    || c.title !== b.title || c.categoryId !== 1 || c.memberPhone !== b.memberPhone || c.memberName !== source.memberName
+    || c.title !== b.title || c.categoryId !== 1 || c.memberPhone !== b.memberPhone || c.memberName !== signerName
     || !["sent","opened"].includes(c.status) || c.memberSignaturePresent !== false || c.centerSignaturePresent !== true || c.signedAt
-    || dom?.contractId !== plan.contractId || dom.title !== b.title || dom.memberName !== source.memberName || normalizeMembershipPhone(dom.memberPhone) !== b.memberPhone
+    || dom?.contractId !== plan.contractId || dom.title !== b.title || dom.memberName !== signerName || normalizeMembershipPhone(dom.memberPhone) !== b.memberPhone
     || dom.statusText !== "요청대기" || dom.memberSignaturePresent !== false || dom.centerSignaturePresent !== true || dom.signedDateText != null
     || !Number.isFinite(instant(dom.observedAt)) || dom.observedAt > live.checkedAt || now.getTime()-instant(dom.observedAt) > 60_000
     || live.ticketRead?.status !== "verified") fail();

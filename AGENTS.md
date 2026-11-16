@@ -11,6 +11,12 @@
 
 ## Working Guidelines
 
+### Contract Signer Names
+
+- Effective 2026-11-16, new StudioMate membership/renewal contracts omit trailing member-management digits from the signer name only. Preserve native member display names, exact member ID, full-phone uniqueness, purchase IDs and canonical job keys. Never select or merge members by the stripped name.
+- Keep canonical `memberName` as the original display name for profile/welcome verification; store the verified new contract name separately as `contractSignerName` with policy `member_display_numeric_suffix_v1`. Contract preparation/readback and reminders must use the contract name while member identity checks retain the original name. Empty or invalid results block creation.
+- Already-issued contracts without this explicit policy retain their original authentication names. Do not bulk-rename members, reset jobs/claims, alter signed documents, cancel pending requests or resend old contracts as part of this policy rollout. Existing-contract correction requires separately scoped approval and fresh source/duplicate/signature checks.
+
 ### Native Class Creation And Copy Cancellation Guard
 
 - Effective 2026-11-13, Codex native StudioMate class create/copy/edit work must prepare destination-specific cancellation values with `node scripts/studiomate-class-cancellation-guard.mjs plan` before saving. The current native group default is not a weekend policy. Ordinary group Saturday/Sunday and verified holidays close at the previous calendar day 21:00 KST; verified ordinary weekdays retain six hours. Preserve private/instructor/other explicitly excluded categories. Unknown dates/categories/holiday coverage block the operation rather than inheriting a copied value.

@@ -1,7 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { firestoreJournal, runStudioMateMembershipContractCandidates } from './studiomate-membership-contract-processor.mjs';
+import { firestoreJournal, runStudioMateMembershipContractCandidates, persistStudioMateMembershipContractSource } from './studiomate-membership-contract-processor.mjs';
 import { CONTRACT_SEAL_UPLOAD_POLICY } from './studiomate-contract-seal-upload.mjs';
+import { CONTRACT_SIGNER_NAME_POLICY } from './studiomate-membership-contract-signer-name.mjs';
+
+test('new signer metadata preserves canonical display identity and legacy writes stay unmarked', async () => {
+  const rows = [], db = { collection: () => ({ doc: () => ({ set: async value => rows.push(value) }) }) };
+  const member = { name: 'Synthetic Member2', phone: '01000000000' };
+  const input = { db, member, contractId: 'c'.repeat(64), selection: { studioId: '5330', memberId: '101', userTicketId: '202', productId: '303', memberPhone: member.phone, now: '2026-11-16T01:00:00.000Z', action: 'first_purchase_contract', jobKey: 'job' },
+    ticket: { userTicketId: '202', productId: '303', status: 'active', payment: { paidAmount: 100, outstandingAmount: 0, totalAmount: 100 } }, template: { title: 'Synthetic contract' } };
+  await persistStudioMateMembershipContractSource({ ...input, contractSignerName: 'Synthetic Member' });
+  assert.equal(rows[0].memberName, member.name);
+  assert.equal(rows[0].contractSignerName, 'Synthetic Member');
+  assert.equal(rows[0].contractSignerNamePolicy, CONTRACT_SIGNER_NAME_POLICY);
+  assert.equal(rows[0].binding.memberId, '101');
+  assert.equal(rows[0].binding.memberPhone, member.phone);
+  await persistStudioMateMembershipContractSource(input);
+  assert.equal(Object.hasOwn(rows[1], 'contractSignerName'), false);
+  await assert.rejects(persistStudioMateMembershipContractSource({ ...input, contractSignerName: 'Other Member' }), /contract_signer_name_binding_invalid/);
+  assert.equal(rows.length, 2);
+});
 
 const now = () => Date.parse('2026-11-06T01:00:00Z');
 const base = { mode: 'live', sourcePromoted: true, nativeE2eVerified: true, studioId: '5330' };
