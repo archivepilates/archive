@@ -34,10 +34,10 @@ import {
   buildMembershipContractMemberProfilePatch,
   membershipContractFallbackAliasIds,
 } from "./lib/studiomate-membership-contract-member-profile.mjs";
-import { processContractSignatureReminder,planContractSignatureReminder,assertContractReminderLive,contractReminderDiagnosticText } from "./lib/contract-signature-reminder.mjs";
+import { processContractSignatureReminder,planContractSignatureReminder,assertContractReminderLive,contractReminderDiagnosticText,planContractMemberNameReconciliation } from "./lib/contract-signature-reminder.mjs";
 import { sendMemberSms } from "./lib/member-sms-solapi.mjs";
 import { assertContractReminderDispatchAllowed } from "./lib/contract-signature-reminder-window.mjs";
-import { assertMembershipContractSignerReadback } from "./lib/studiomate-membership-contract-signer-name.mjs";
+import { assertMembershipContractSignerReadback,storedMembershipContractMemberName } from "./lib/studiomate-membership-contract-signer-name.mjs";
 
 const args = process.argv.slice(2);
 let requestedContractId = "";
@@ -149,7 +149,7 @@ try {
       ensureStudioMateLoggedIn(target, { headless: true }),
   });
   for (const doc of targets.docs) {
-    const source = doc.data();
+    let source = doc.data();
     if (
       !needsMembershipContractObservation(source, doc.id, config.studioId, { refresh: Boolean(requestedContractId) })
     )
@@ -161,13 +161,13 @@ try {
     let profilePatch = null;
     let fallbackAliasIds = [];
     let reminderReadback = null;
+    let memberNamePatch = null;
     try {
       const [observed, providerContract, memberResult] = await Promise.all([
         readNativeContractPage(page, doc.id),
         readStudioMateContract(api, doc.id),
         readExactStudioMateMember(api, source.binding.memberPhone),
       ]);
-      assertMembershipContractSignerReadback(source, { member: memberResult.member, contract: providerContract, dom: observed });
       const ticketRead =
         memberResult.status === "verified"
           ? await readStudioMateUserTickets(api, memberResult.member.memberId)
@@ -181,9 +181,20 @@ try {
       });
       if (refreshed.status !== "verified")
         throw new Error(refreshed.reason);
+      reminderReadback = {dom:observed,contract:providerContract,memberResult,ticketRead,checkedAt:new Date().toISOString()};
+      if (source.status === "waiting" && ["sent", "opened"].includes(providerContract.status)
+          && providerContract.memberSignaturePresent === false && !providerContract.signedAt
+          && memberResult.member?.name !== storedMembershipContractMemberName(source)) {
+        const job = (await db.doc(`studiomateMembershipContractJobs/${source.binding.selectionJobKey}`).get()).data();
+        const reconciliation = planContractMemberNameReconciliation(source,doc.id,reminderReadback,job);
+        if (reconciliation.status === "ready") {
+          memberNamePatch = reconciliation.patch;
+          source = { ...source, ...memberNamePatch };
+        }
+      }
+      assertMembershipContractSignerReadback(source, { member: memberResult.member, contract: providerContract, dom: observed });
       refreshedReadback = refreshed.nativeReadback;
       refreshedMember = memberResult.member;
-      reminderReadback = {dom:observed,contract:providerContract,memberResult,ticketRead,checkedAt:new Date().toISOString()};
       const contract = {
         ...observed,
         schemaVersion: 1,
@@ -239,7 +250,8 @@ try {
     if (outcome.status === "review") result.review++;
     if (outcome.signatureReceipt) result.signaturesRecorded++;
     result.records.push({ contractId: doc.id, status: outcome.status, reason: outcome.reason,
-      signedAt: outcome.signatureReceipt?.signedAt || null, diagnostic: outcome.diagnostic || null });
+      signedAt: outcome.signatureReceipt?.signedAt || null, diagnostic: outcome.diagnostic || null,
+      ...(memberNamePatch ? {memberNameReconciliation:apply ? "verified_pending_commit" : "verified_no_write"} : {}) });
     if (!apply && outcome.status === "waiting") {
       const plan=planContractSignatureReminder(source,doc.id);
       if (plan.status === "ready") {
@@ -257,11 +269,18 @@ try {
         currentConfig.data()?.sourcePromoted !== true
       )
         throw new Error("Native source/config changed while reading");
+      if (memberNamePatch) {
+        const job = (await tx.get(db.doc(`studiomateMembershipContractJobs/${source.binding.selectionJobKey}`))).data();
+        const reconciliation = planContractMemberNameReconciliation(latest.data(),doc.id,reminderReadback,job);
+        if (reconciliation.status !== "ready" || JSON.stringify(reconciliation.patch) !== JSON.stringify(memberNamePatch))
+          throw new Error("Native member name reconciliation changed while reading");
+      }
       const observations = [...(source.binding.previousObservations || [])];
       if (outcome.observation && observations.length < 100)
         observations.push(outcome.observation);
       const next = membershipContractNextObservation(outcome, source, Date.now());
       tx.update(doc.ref, {
+        ...(memberNamePatch || {}),
         observationStatus: outcome.status,
         observationReason: outcome.reason,
         ...(refreshedReadback ? { nativeReadback: refreshedReadback } : {}),
@@ -329,6 +348,7 @@ try {
         );
       }
     });
+    if (memberNamePatch) result.records.at(-1).memberNameReconciliation = "saved";
     if (sendSignatureReminders && outcome.status === "waiting") {
       const reminder = await processContractSignatureReminder({
         db,source:(await doc.ref.get()).data(),id:doc.id,apply,scheduled:true,

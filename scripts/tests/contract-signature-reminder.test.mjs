@@ -8,11 +8,12 @@ import {
   planContractSignatureReminder,
   processContractSignatureReminder,
   contractReminderDiagnosticText,
+  planContractMemberNameReconciliation,
 } from "../lib/contract-signature-reminder.mjs";
 import { assertContractReminderSmsResponse } from "../lib/contract-signature-reminder-browser.mjs";
 import { MEMBER_SMS_PROVIDER_POLICY, memberSmsReceiptFields, acceptedMemberSmsMarker } from "../lib/member-sms-solapi.mjs";
 import { MemberDispatchDeferredError } from "../lib/member-dispatch-window.mjs";
-import { CONTRACT_SIGNER_NAME_POLICY } from "../lib/studiomate-membership-contract-signer-name.mjs";
+import { CONTRACT_SIGNER_NAME_POLICY, storedMembershipContractMemberName, assertMembershipContractSignerReadback } from "../lib/studiomate-membership-contract-signer-name.mjs";
 
 const ID = "a".repeat(64);
 const NOW = "2026-10-20T01:00:00.000Z";
@@ -251,6 +252,124 @@ function harness({ source = sourceFixture(), browserOptions, readLive, config } 
     },
   };
 }
+
+function renamedMemberFixture() {
+  const source = sourceFixture();
+  const live = liveFixture(source);
+  live.memberResult.member.name = "Synthetic Member2";
+  const job = { jobKey: source.binding.selectionJobKey, stage: "signature_requested",
+    ...Object.fromEntries(["studioId", "memberId", "userTicketId", "productId", "contractId"].map(key => [key, source.binding[key]])) };
+  return { source, live, job };
+}
+
+test("numeric display-name reconciliation preserves original signer, history and reminder fingerprint", () => {
+  const { source, live, job } = renamedMemberFixture(), before = clone(source);
+  assert.throws(() => assertContractReminderLive(source, {contractId: ID}, live, new Date(NOW)));
+  const result = planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW));
+  assert.equal(result.status, "ready");
+  const reconciled = { ...source, ...result.patch };
+  assert.equal(storedMembershipContractMemberName(reconciled), live.memberResult.member.name);
+  assert.doesNotThrow(() => assertContractReminderLive(reconciled, {contractId: ID}, live, new Date(NOW)));
+  const originalPlan = planContractSignatureReminder(source, ID, new Date(NOW));
+  const newPlan = planContractSignatureReminder(reconciled, ID, new Date(NOW));
+  for (const field of ["fingerprint", "key", "smsMessage", "smsTitle", "firstConfirmedAt"])
+    assert.equal(newPlan[field], originalPlan[field], field);
+  assert.notEqual(newPlan.memberNameReadbackDigest, originalPlan.memberNameReadbackDigest);
+  assert.deepEqual(source, before);
+  assert.deepEqual(reconciled.binding, before.binding);
+  assert.equal(reconciled.memberName, before.memberName);
+  assert.equal(Object.hasOwn(reconciled, "contractSignerName"), false);
+  assert.doesNotThrow(() => assertMembershipContractSignerReadback(reconciled, {
+    member:live.memberResult.member, contract:live.contract, dom:live.dom,
+  }));
+  const reordered = clone(reconciled);
+  reordered.memberNameReadback = Object.fromEntries(Object.entries(reordered.memberNameReadback).reverse());
+  assert.equal(planContractSignatureReminder(reordered, ID, new Date(NOW)).memberNameReadbackDigest, newPlan.memberNameReadbackDigest);
+});
+
+for (const field of ["studioId", "memberId", "userTicketId", "productId", "contractId", "selectionJobKey", "selectedAt",
+  "memberPhoneHash", "contractSignerName", "originalMemberName", "currentMemberName", "policy", "checkedAt", "verified", "source"])
+  test(`tampered current-name proof fails closed: ${field}`, () => {
+    const {source, live, job} = renamedMemberFixture();
+    const result = planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW));
+    const reconciled = {...source, ...result.patch};
+    reconciled.memberNameReadback[field] = "invalid";
+    assert.throws(() => storedMembershipContractMemberName(reconciled));
+    assert.notEqual(planContractSignatureReminder(reconciled, ID, new Date(NOW)).status, "ready");
+  });
+
+test("current-name proof cannot authorize an ambiguous, stale, refunded or different native source", () => {
+  for (const mutate of [
+    x => x.live.memberResult.matchCount = 2,
+    x => x.live.memberResult.member.memberId = "999",
+    x => x.live.memberResult.member.phone = "01099999999",
+    x => x.live.memberResult.member.name = "Other Member2",
+    x => x.live.contract.memberName = "Other Member",
+    x => x.live.dom.memberName = "Other Member",
+    x => x.live.contract.status = "signed",
+    x => x.live.contract.memberSignaturePresent = true,
+    x => x.live.ticketRead.tickets[0].refunded = true,
+    x => x.live.checkedAt = "2020-01-01T00:00:00.000Z",
+    x => x.job.memberId = "999",
+    x => x.job.stage = "complete",
+    x => x.source.observationHold = true,
+    x => x.source.lastObservation.status = "signed",
+    x => x.source.signatureReminder = { status: "accepted" },
+    x => x.source.operatorSignatureReRequest = { status: "unknown" },
+  ]) {
+    const fixture = renamedMemberFixture(); mutate(fixture);
+    assert.notEqual(planContractMemberNameReconciliation(fixture.source, ID, fixture.live, fixture.job, new Date(NOW)).status, "ready");
+  }
+});
+
+test("proof removal or replacement during composition blocks before claiming or dispatch", async () => {
+  for (const mutation of [x => delete x.memberNameReadback, x => {x.memberNameReadback.checkedAt = SENT;}]) {
+    const {source, live, job} = renamedMemberFixture();
+    const reconciled = {...source, ...planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW)).patch};
+    let h;
+    h = harness({source: reconciled, readLive: () => clone(live), browserOptions: {beforeConfirm: () => {
+      const latest = h.db.read(CONTRACT); mutation(latest); h.db.replace(CONTRACT, latest);
+    }}});
+    assert.equal((await h.run()).reason, "source_or_claim_unverified");
+    assert.equal(h.browser.sends, 0);
+    assert.equal(h.db.read(CONTRACT).signatureReminder, undefined);
+  }
+});
+
+test("a fresh verified source can recover a transient read review without clearing a hold", () => {
+  const {source,live,job} = renamedMemberFixture();
+  source.observationStatus = "review";
+  source.observationReason = "native_contract_read_failed";
+  assert.equal(planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW)).status, "ready");
+  source.observationHold = true;
+  assert.equal(planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW)).reason, "not_unsigned_waiting");
+  source.observationHold = false;
+  source.observationReason = "signature_conflict";
+  assert.equal(planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW)).reason, "not_unsigned_waiting");
+});
+
+test("preserving an existing claim does not change legacy native observation eligibility", () => {
+  const {source,live,job} = renamedMemberFixture();
+  source.signatureReminder = {status:"accepted",fingerprint:"preserved"};
+  const before = clone(source);
+  assert.equal(planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW)).reason, "existing_reminder_or_rerequest_preserved");
+  assert.doesNotThrow(() => assertMembershipContractSignerReadback(source, {
+    member:live.memberResult.member, contract:live.contract, dom:live.dom,
+  }));
+  assert.deepEqual(source,before);
+});
+
+test("existing accepted and ambiguous claims remain non-replayable after name proof", async () => {
+  for (const status of ["accepted", "attempting", "review", "unknown"]) {
+    const {source, live, job} = renamedMemberFixture();
+    const reconciled = {...source, ...planContractMemberNameReconciliation(source, ID, live, job, new Date(NOW)).patch,
+      signatureReminder: {status, fingerprint: "preserved"}};
+    const h = harness({source: reconciled, readLive: () => assert.fail("must not read native source")});
+    await h.run();
+    assert.equal(h.browser.sends, 0);
+    assert.deepEqual(h.db.read(CONTRACT).signatureReminder, reconciled.signatureReminder);
+  }
+});
 
 test("24-hour threshold uses the first verified sent observation, not creation/update time", () => {
   const source = sourceFixture();

@@ -4,7 +4,7 @@ import { contractReminderDispatchWindow, assertContractReminderDispatchAllowed }
 import { membershipContractObservationHistory } from "./studiomate-membership-contract-completion-state.mjs";
 import { membershipContractJobKey,normalizeMembershipPhone } from "./studiomate-membership-contract-policy.mjs";
 import { membershipContractMemberGradeDecision } from "./studiomate-membership-contract-native-selection.mjs";
-import { storedMembershipContractSignerName } from "./studiomate-membership-contract-signer-name.mjs";
+import { storedMembershipContractSignerName, storedMembershipContractMemberName, buildMembershipContractMemberNameReadback } from "./studiomate-membership-contract-signer-name.mjs";
 import { memberSmsReceiptFields } from "./member-sms-solapi.mjs";
 
 export const CONTRACT_REMINDER_POLICY = "contract_signature_reminder_24h_v1";
@@ -38,6 +38,7 @@ const preclaimDiagnostics = Object.freeze({
   member_sms_input_unverified: "문자 수신자·본문·제목 또는 제공자 입력 한도를 확인하지 못했습니다.",
   native_contract_signature_images_unavailable: "전자계약 직인·서명 이미지 로딩을 확인하지 못했습니다.",
   native_contract_center_signature_unverified: "전자계약 화면에서 센터 직인을 확인하지 못했습니다.",
+  contract_reminder_native_member_name_mismatch: "계약 원장의 회원 표시명과 현재 StudioMate 회원 표시명이 다릅니다. 회원 ID·전체 연락처·계약 실명을 확인해야 합니다.",
   contract_reminder_member_page_not_ready: "문자 작성 전 회원 상세의 이름·전체 연락처 로딩을 확인하지 못했습니다.",
   contract_reminder_member_page_mismatch: "문자 작성 화면과 원본 회원이 일치하지 않습니다.",
   contract_reminder_message_action_unavailable: "회원 상세의 메시지 보내기 버튼을 사용할 수 없습니다.",
@@ -61,7 +62,7 @@ export function contractReminderEnabled(config) {
 export function planContractSignatureReminder(source, id, now = new Date()) {
   const b = source?.binding, ms = now.getTime(), skip = reason => ({status:"skipped",reason});
   let signerName;
-  try { signerName = storedMembershipContractSignerName(source); } catch { return skip("invalid_contract_signer_name_binding"); }
+  try { signerName = storedMembershipContractSignerName(source); storedMembershipContractMemberName(source); } catch { return skip("invalid_contract_signer_name_binding"); }
   if (!Number.isFinite(ms) || !/^[a-f0-9]{64}$/.test(id || "") || source?.schemaVersion !== 1
     || source.source !== "studiomate_native_contract" || source.studioId !== "5330" || source.contractId !== id
     || source.bindingVerified !== true || b?.verified !== true || b.contractId !== id || b.studioId !== "5330"
@@ -95,16 +96,20 @@ export function planContractSignatureReminder(source, id, now = new Date()) {
   const fingerprint = digest([key,source.memberName,Object.fromEntries(Object.entries(b).filter(([key])=>key!=="previousObservations").sort(([a],[b])=>a.localeCompare(b))),firstConfirmedAt,smsTitle,smsMessage]);
   if (source.signatureReminder && source.signatureReminder.fingerprint !== fingerprint) return skip("deferred_reminder_binding_changed");
   return {status:"ready",key,contractId:id,memberId:b.memberId,memberPhone:b.memberPhone,memberName:source.memberName,
-    studioId:b.studioId,firstConfirmedAt,timingBasis:"first_verified_sent_observation",smsTitle,smsMessage,fingerprint};
+    studioId:b.studioId,firstConfirmedAt,timingBasis:"first_verified_sent_observation",smsTitle,smsMessage,fingerprint,
+    memberNameReadbackDigest:digest(source.memberNameReadback == null ? null
+      : Object.fromEntries(Object.entries(source.memberNameReadback).sort(([a],[b])=>a.localeCompare(b))))};
 }
 
 export function assertContractReminderLive(source, plan, live, now = new Date()) {
   const b = source.binding, c = live?.contract, dom = live?.dom, member = live?.memberResult?.member;
   const signerName = storedMembershipContractSignerName(source);
+  const memberName = storedMembershipContractMemberName(source);
   if (dom && dom.centerSignaturePresent !== true) fail("native_contract_center_signature_unverified");
+  if (member && member.name !== memberName) fail("contract_reminder_native_member_name_mismatch");
   if (!live || instant(live.checkedAt) > now.getTime() || now.getTime()-instant(live.checkedAt) > 60_000
     || !Number.isFinite(instant(live.checkedAt)) || live.memberResult?.status !== "verified" || live.memberResult.matchCount !== 1
-    || member?.memberId !== b.memberId || member.phone !== b.memberPhone || member.name !== source.memberName || member.inactive === true
+    || member?.memberId !== b.memberId || member.phone !== b.memberPhone || member.name !== memberName || member.inactive === true
     || membershipContractMemberGradeDecision(null,member).status !== "eligible"
     || !c?.verified || !c.complete || c.contractId !== plan.contractId || c.studioId !== b.studioId || c.memberId !== b.memberId
     || c.title !== b.title || c.categoryId !== 1 || c.memberPhone !== b.memberPhone || c.memberName !== signerName
@@ -121,6 +126,35 @@ export function assertContractReminderLive(source, plan, live, now = new Date())
     || !p?.verified || !p.complete || p.refundedAmount !== 0 || p.totalAmount !== b.expectedTotalAmount
     || !c.ticket || c.ticket.userTicketId !== b.userTicketId || c.ticket.productId !== b.productId
     || c.ticket.amount !== b.expectedPaidAmount || c.ticket.unpaidAmount !== b.expectedOutstandingAmount) fail();
+}
+
+export function planContractMemberNameReconciliation(source, id, live, job, now = new Date()) {
+  const skip = reason => ({ status: "skipped", reason });
+  if (source?.memberNameReadback != null) return skip("member_name_readback_already_recorded");
+  if (source?.signatureReminder != null || source?.operatorSignatureReRequest != null)
+    return skip("existing_reminder_or_rerequest_preserved");
+  const transientReview = source?.observationStatus === "review" && source?.observationReason === "native_contract_read_failed";
+  if (source?.status !== "waiting" || (source?.observationStatus !== "waiting" && !transientReview) || source?.observationHold === true
+      || source?.completion || source?.signatureReceipt || source?.invalidatedCompletion)
+    return skip("not_unsigned_waiting");
+  try {
+    if (membershipContractObservationHistory(source).some(row => ["signed", "cancelled", "expired"].includes(row.status)
+        || row.memberSignaturePresent === true || row.signedDate != null || row.signedDateText != null))
+      return skip("historical_signature_conflict");
+  } catch { return skip("invalid_history"); }
+  const b = source?.binding;
+  if (!b || source.contractId !== id || b.contractId !== id || source.bindingVerified !== true
+      || !job || job.jobKey !== b.selectionJobKey || job.stage !== "signature_requested"
+      || ["studioId", "memberId", "userTicketId", "productId", "contractId"].some(key => job[key] !== b[key]))
+    return skip("selection_job_binding_unverified");
+  if (live?.memberResult?.member?.name === source.memberName) return skip("member_name_unchanged");
+  try {
+    const proof = buildMembershipContractMemberNameReadback(source, live?.memberResult?.member?.name, live?.checkedAt);
+    assertContractReminderLive({ ...source, memberNameReadback: proof }, { contractId: id }, live, now);
+    return { status: "ready", patch: { memberNameReadback: proof } };
+  } catch {
+    return skip("native_member_name_reconciliation_unverified");
+  }
 }
 
 /** One irreversible contract-scoped attempt; neither lost responses nor later runs resend. */
@@ -158,7 +192,9 @@ export async function processContractSignatureReminder({db,source,id,readLive,se
         const latest=(await tx.get(ref)).data(),config=(await tx.get(db.doc("systemSettings/membershipContractAutomation"))).data();
         assertContractReminderDispatchAllowed(now());
         const current=planContractSignatureReminder(latest,id,now());
-        if (!contractReminderEnabled(config) || current.status!=="ready" || current.fingerprint!==plan.fingerprint) fail();
+        if (!contractReminderEnabled(config) || current.status!=="ready" || current.fingerprint!==plan.fingerprint
+            || current.memberNameReadbackDigest!==plan.memberNameReadbackDigest) fail();
+        assertContractReminderLive(latest,current,fresh,now());
         assertContractReminderDispatchAllowed(now());
         attemptedAt = now().toISOString();
         tx.update(ref,{signatureReminder:{policy:CONTRACT_REMINDER_POLICY,key:plan.key,fingerprint:plan.fingerprint,
