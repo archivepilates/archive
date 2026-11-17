@@ -8,6 +8,7 @@ import {
   CONTRACT_NAME_RULES_BASE, CONTRACT_NAME_RULES_BASE_HASH, CONTRACT_NAME_RULE_HASH,
   assertContractNameRulesScope, contractNameRulesManifest, parseContractNameRulesArgs,
   assertContractNameRulesSource, assertContractNameRulesSnapshot, contractNameRulesUploads,
+  assertContractNameDirectoryEntry,
 } from '../release-contract-name-rules.mjs';
 
 // Fixtures are local Git/source bytes only. Never invoke the release runner, credentials or network.
@@ -20,6 +21,15 @@ const originalRule = before.toString().match(rulePattern)[0];
 const reviewedRule = after.toString().match(rulePattern)[0];
 const replace = rule => Buffer.from(before.toString().replace(originalRule, rule));
 const version = 'sites/archive-pilates-core/versions/reviewed-123';
+
+test('shared owned 0755 lock directories need no permission changes; receipts stay private', () => {
+  const stat = {uid:1000,mode:0o755,isDirectory:()=>true,isSymbolicLink:()=>false};
+  assert.doesNotThrow(()=>assertContractNameDirectoryEntry(stat,{uid:1000,leaf:true,privateLeaf:false}));
+  assert.throws(()=>assertContractNameDirectoryEntry(stat,{uid:1000,leaf:true}));
+  assert.doesNotThrow(()=>assertContractNameDirectoryEntry({...stat,mode:0o700},{uid:1000,leaf:true}));
+  for (const change of [{uid:1001},{mode:0o775},{mode:0o777},{isDirectory:()=>false},{isSymbolicLink:()=>true}])
+    assert.throws(()=>assertContractNameDirectoryEntry({...stat,...change},{uid:1000,leaf:true,privateLeaf:false}));
+});
 const files = [{path: '/rules/index.html', hash: 'a'.repeat(64)}, {path: '/index.html', hash: 'b'.repeat(64)},
   {path: '/assets/app.js', hash: 'd'.repeat(64)}, {path: '/release.json', hash: 'e'.repeat(64)}];
 const hash = 'c'.repeat(64);

@@ -60,6 +60,13 @@ export function assertContractNameRulesSource(state, commit) {
   }
 }
 
+export function assertContractNameDirectoryEntry(stat, {uid = process.getuid(), leaf = false, privateLeaf = true} = {}) {
+  if (!stat?.isDirectory() || stat.isSymbolicLink() || stat.uid !== uid || !Number.isInteger(stat.mode)
+    || stat.mode & 0o022 || (leaf && privateLeaf && stat.mode & 0o077)) {
+    throw Error('Owned non-writable directory and private receipt leaf required');
+  }
+}
+
 export function assertContractNameRulesSnapshot(version, files, expectedVersion, manifest, config) {
   if (!exactName(expectedVersion, VERSION) || version?.name !== expectedVersion || version.status !== 'FINALIZED'
     || !config || typeof config !== 'object' || Array.isArray(config)
@@ -173,15 +180,14 @@ export async function releaseContractNameRules(args) {
   await unchanged();
   if (!apply) return evidence;
 
-  const privateDir = directory => {
+  const privateDir = (directory, privateLeaf = true) => {
     fs.mkdirSync(directory, {recursive: true, mode: 0o700});
-    // Refuse redirected receipt/lock parents as well as a publicly readable leaf.
+    // The existing shared lock directory may be readable, but never writable, by others.
     let current = home;
     for (const segment of path.relative(home, directory).split(path.sep)) {
       current = path.join(current, segment);
       const stat = fs.lstatSync(current);
-      if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid()
-        || (current === directory && stat.mode & 0o077)) throw Error('Private owned receipt/lock directory required');
+      assertContractNameDirectoryEntry(stat, {leaf: current === directory, privateLeaf});
     }
   };
   privateDir(dir);
@@ -194,7 +200,7 @@ export async function releaseContractNameRules(args) {
     const tmp = receipt + '.tmp'; writeReceipt(tmp, 'wx'); fs.renameSync(tmp, receipt); syncDir(dir);
   };
   const lockDir = path.join(home, 'ArchiveIN/automation/locks');
-  privateDir(lockDir);
+  privateDir(lockDir, false);
   const lock = path.join(lockDir, `firebase-hosting-${SITE}.lock`), fd = fs.openSync(lock, 'wx', 0o600);
   const lockStat = fs.fstatSync(fd);
   try {
