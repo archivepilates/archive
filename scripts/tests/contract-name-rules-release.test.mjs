@@ -178,7 +178,8 @@ test('offline protocol guard orders clean/fresh checks, exclusive durable intent
   assert.ok(position('evidence.releaseIntentAt') < position('request(`sites/${SITE}/releases?versionName='));
   for (const guard of ['fs.fsyncSync(fd)', "writeReceipt(tmp, 'wx')", 'fs.renameSync(tmp, receipt); syncDir(dir);',
     'firebase-hosting-${SITE}.lock', 'current.ino === lockStat.ino && current.dev === lockStat.dev',
-    'stat.isSymbolicLink()', 'stat.uid !== process.getuid()', 'stat.mode & 0o077',
+    'stat.isSymbolicLink()', 'uid = process.getuid()', 'stat.uid !== uid', 'stat.mode & 0o077', 'stat.mode & 0o022',
+    'assertContractNameDirectoryEntry(stat, {leaf: current === directory, privateLeaf})', 'privateDir(lockDir, false)',
     "git(['fetch', 'origin', 'main'])", "git(['rev-parse', 'FETCH_HEAD']) !== commit",
     "git(['merge-base', '--is-ancestor', CONTRACT_NAME_RULES_BASE, commit])", 'assertContractNameRulesSource',
     "gcloud', ['auth', 'print-access-token', `--account=${ACCOUNT}`]", "stdio: ['ignore', 'pipe', 'pipe']",
