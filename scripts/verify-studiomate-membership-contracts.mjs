@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { evaluateMembershipContractEligibility } from "./lib/studiomate-membership-contract-policy.mjs";
 import { planMembershipContractWelcome } from "./lib/studiomate-membership-welcome.mjs";
 
@@ -9,7 +10,8 @@ if (args.length !== 2 || args[0] !== "--input") {
     "Usage: node scripts/verify-studiomate-membership-contracts.mjs --input <verified-evidence.json>. Read-only; no --apply/send mode.",
   );
 }
-const batch = JSON.parse(await readFile(args[1], "utf8"));
+const batch = JSON.parse(["-", "/dev/stdin"].includes(args[1])
+  ? readFileSync(0, "utf8") : await readFile(args[1], "utf8"));
 if (!Array.isArray(batch) || batch.length > 500)
   throw new Error("Expected at most 500 verified evidence objects");
 const results = batch.map((input, index) => ({

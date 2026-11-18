@@ -402,13 +402,13 @@ test("repeated completion, phone formats and member merge preserve the family in
   assert.equal(assertStaged(input, { ready: true }).intent.dedupeKey, key);
 });
 
-test("contract verification command evaluates welcome without IO side effects", () => {
+for (const inputPath of ["-", "/dev/stdin"]) test(`contract verification command evaluates welcome without IO side effects via ${inputPath}`, () => {
   const input = fixture();
   const { selection, ...welcomeCompletion } = input;
   const command = fileURLToPath(
     new URL("../verify-studiomate-membership-contracts.mjs", import.meta.url),
   );
-  const run = spawnSync(process.execPath, [command, "--input", "/dev/stdin"], {
+  const run = spawnSync(process.execPath, [command, "--input", inputPath], {
     input: JSON.stringify([{ ...selection, welcomeCompletion }]),
     encoding: "utf8",
   });
