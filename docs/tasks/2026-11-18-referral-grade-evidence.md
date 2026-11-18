@@ -1,0 +1,12 @@
+# Native unassigned grade referral reconciliation
+
+- Lane/worktree: `referral-grade-evidence-20261118`, branch `codex/mini/referral-grade-evidence-20261118`.
+- Operator approved correction, regression validation, runtime/CORE rules release, commit/push and verification of the existing single referral receipt. No member grade changes or manual point bypass.
+- Cause: referral assessment required a nonempty grade while the native UI has no ordinary-member grade option and the existing contract selection treats an unassigned grade as ordinary membership. A display fallback is not evidence.
+- Change: the exact-identity native detail reader distinguishes explicitly null `user_grade` from absent, malformed or conflicting metadata. Referral eligibility accepts only the versioned unassigned observation with no conflicting grade. Named grades use the existing contract-selection ordinary-grade allowlist; whitespace cannot bypass trial/instructor/staff exclusions. Unknown names remain review, not an assumed ordinary member.
+- Canonical sources: `studiomateReferralRequests`, lifetime `studiomateReferralPointClaims`, fresh complete applied Excel plus unique exact native identity, purchases/payments/refunds and StudioMate point history. No mirror-authorized awards.
+- Preserve lifetime claim keys, amounts, source freshness, pre-dispatch revalidation, unknown-outcome no-replay, current hourly runner and browser lock. No new scheduler, manual sync, backfill, claim reset or member messages.
+- Files owned: native detail reader and its tests, referral assessment and its tests, this task record, CORE rules referral section and the existing CI regression step.
+- Deployment: pending. Required targets are Mac mini tracked runtime and CORE rules Hosting only; no Functions, member-link Hosting, DNS, IAM or schema migration.
+- Verification: final focused 54 tests and contract/welcome regressions 1,355 + 629 passed. Independent reviewer confirmed alias conflicts, malformed observation and spaced-exclusion gaps were closed, with no must-fix finding. Hosting source and rollback guards passed. Clean main promotion, runtime readback, live CORE rule comparison, CI and current receipt/claim/native point reconciliation remain pending. An unverified actual award remains pending, not completed.
+- Private operational evidence belongs under `~/ArchiveIN/operations/2026-11-18-referral-and-contract-check`, never in Git or public rules.

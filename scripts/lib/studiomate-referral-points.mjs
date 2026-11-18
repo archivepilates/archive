@@ -9,6 +9,7 @@ export const phone = value => typeof value === "string" && /^010\d{8}$/.test(val
   ? value.replace(/[\s-]/g, "") : "";
 const nativeId = value => typeof value === "string" && /^[1-9]\d*$/.test(value);
 const amount = value => Number.isSafeInteger(value) && value >= 0;
+const regularGrades = new Set(["vip", "blue", "인플루언서", "회원", "일반회원", "일반멤버"]);
 
 // One lifetime referral award per native newcomer, regardless of attribution edits,
 // purchase count, policy revisions, retries or transport route.
@@ -42,9 +43,16 @@ export function assessStudioMateReferral({ request, source, policy, now = Date.n
   const joined = Date.parse(newcomer.registeredAt), referred = Date.parse(referrer.registeredAt);
   if (!Number.isFinite(joined) || !Number.isFinite(referred) || joined < startsAt || joined > now || referred >= joined)
     return hold("new_membership_unverified");
-  if (typeof newcomer.memberGrade !== "string" || !newcomer.memberGrade.trim())
+  const gradeReadback = newcomer.memberGradeReadback;
+  const nativeUnassigned = gradeReadback?.source === "native_member_detail_user_grade_v1" &&
+    gradeReadback.status === "unassigned" && (newcomer.memberGrade == null || newcomer.memberGrade === "");
+  if ((Object.hasOwn(newcomer, "memberGradeReadback") && !nativeUnassigned) ||
+      (!nativeUnassigned && (typeof newcomer.memberGrade !== "string" || !newcomer.memberGrade.trim())) ||
+      (gradeReadback?.status === "unassigned" && !nativeUnassigned))
     return hold("member_classification_unverified");
-  if (/(체험|강사|스텝|스태프|직원)/.test(newcomer.memberGrade || "")) return hold("excluded_member");
+  const normalizedGrade = (newcomer.memberGrade || "").replace(/\s+/g, "").toLowerCase();
+  if (/(체험|강사|스텝|스태프|직원)/.test(normalizedGrade)) return hold("excluded_member");
+  if (!nativeUnassigned && !regularGrades.has(normalizedGrade)) return hold("member_classification_unverified");
   if (!purchase || !nativeId(purchase.userTicketId) || purchase.memberId !== newcomer.memberId ||
       purchase.firstQualifyingPurchase !== true || purchase.cancelled !== false || purchase.refunded !== false ||
       !amount(purchase.paidWon) || !amount(purchase.totalWon) || purchase.unpaidWon !== 0 ||

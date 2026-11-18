@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assessStudioMateReferral, digest, executePointAction, phone, referralClaimKey } from "../lib/studiomate-referral-points.mjs";
 import { parsePointSummary } from "../lib/studiomate-point-ui.mjs";
+import { readExactStudioMateMember } from "../lib/studiomate-native-contract-source.mjs";
 
 const now = Date.parse("2026-11-02T11:00:00Z");
 const request = { newMemberName: "테스트 신규", newMemberPhone: "01000000001", referrerName: "테스트 추천", referrerPhone: "01000000002" };
@@ -13,6 +14,46 @@ const source = {
   purchase: { memberId: "1", userTicketId: "11", title: "그룹 50회권", firstQualifyingPurchase: true, cancelled: false, refunded: false, totalWon: 300000, paidWon: 300000, unpaidWon: 0, paidAt: "2026-11-02T02:00:00Z" },
 };
 const decide = patch => assessStudioMateReferral({ request, source, policy, now, ...patch });
+
+test("explicit native unassigned grade qualifies without changing identity or lifetime duplicate key", async () => {
+  const nativeMember = { id: 1, name: request.newMemberName, mobile: request.newMemberPhone,
+    registered_at: "2026-11-02 10:00:00", user_grade: null };
+  const read = await readExactStudioMateMember({ get: async path => path === "/staff/member/1"
+    ? { member: nativeMember } : { members: [nativeMember] } }, request.newMemberPhone);
+  const actual = { ...source, newcomer: read.member };
+  assert.equal(actual.newcomer.memberGrade, undefined);
+  assert.equal(decide({ source: actual }).eligible, true);
+  assert.equal(decide({ source: actual }).claimKey, referralClaimKey("1"));
+  for (const status of ["claimed", "dispatching", "review", "verified"])
+    assert.equal(decide({ source: actual, existingClaim: { status } }).reason, "already_claimed");
+  assert.equal(decide({ source: { ...actual, purchase: { ...actual.purchase, refunded: true } } }).eligible, false);
+  assert.equal(decide({ source: { ...actual, purchase: { ...actual.purchase, paidWon: 299999 } } }).eligible, false);
+});
+
+test("missing, malformed, conflicting or untrusted grade observations do not authorize points", () => {
+  for (const patch of [
+    { memberGrade: undefined }, { memberGrade: "" }, { memberGrade: null },
+    { memberGrade: 1 }, { memberGrade: "   " },
+    { memberGrade: undefined, memberGradeReadback: { status: "unassigned" } },
+    { memberGrade: undefined, memberGradeReadback: { source: "mirror", status: "unassigned" } },
+    { memberGrade: undefined, memberGradeReadback: { source: "native_member_detail_user_grade_v1", status: "unverified" } },
+    { memberGrade: "일반회원", memberGradeReadback: { source: "native_member_detail_user_grade_v1", status: "unverified" } },
+    { memberGrade: "일반회원", memberGradeReadback: { source: "native_member_detail_user_grade_v1", status: "unassigned" } },
+    { memberGradeReadback: "garbage" }, { memberGradeReadback: {} }, { memberGradeReadback: null },
+    { memberGradeReadback: { source: "native_member_detail_user_grade_v1", status: "bogus" } },
+    ...["UNKNOWN", "null", "undefined", "[object Object]"].map(memberGrade => ({ memberGrade })),
+  ]) assert.equal(decide({ source: { ...source, newcomer: { ...source.newcomer, ...patch } } }).eligible, false);
+});
+
+test("trial, instructor and staff native grades remain excluded", async () => {
+  for (const name of ["체험회원", "강사회원", "스텝", "스태프", "직원", "체 험 회 원", "강 사 회 원", "스 태 프"]) {
+    const member = { id: 1, name: request.newMemberName, mobile: request.newMemberPhone,
+      registered_at: "2026-11-02 10:00:00", user_grade: { name } };
+    const read = await readExactStudioMateMember({ get: async path => path === "/staff/member/1"
+      ? { member } : { members: [member] } }, request.newMemberPhone);
+    assert.equal(decide({ source: { ...source, newcomer: read.member } }).eligible, false, name);
+  }
+});
 test("native usage is displayed as a negative counter, not a negative balance", () => {
   assert.deepEqual(parsePointSummary("잔여 포인트\n100P\n적립 포인트\n20,100P\n사용 포인트\n-20,000P"),
     { remaining: 100, earned: 20100, used: 20000 });
@@ -94,6 +135,17 @@ for (const fault of ["unknown", "changed", "noHistory", "wrongIdentity"]) test(`
 test("fresh source must pass twice; stale approval never dispatches", async () => {
   const f = fixture(); let times = 0;
   await assert.rejects(executePointAction({ ...f, revalidate: async () => ++times < 2 })); assert.equal(f.confirms(), 0);
+});
+test("unassigned grade evidence lost at the final gate blocks confirmation and retains the claim", async () => {
+  const f = fixture(); let reads = 0;
+  await assert.rejects(executePointAction({ ...f, revalidate: async () => {
+    const current = { ...source, newcomer: { ...source.newcomer, memberGrade: undefined,
+      ...(++reads === 1 ? { memberGradeReadback: { source: "native_member_detail_user_grade_v1", status: "unassigned" } } : {}) } };
+    return decide({ source: current }).eligible;
+  } }), /source_changed_before_dispatch/);
+  assert.equal(f.confirms(), 0);
+  assert.equal(f.records.get(f.action.key).status, "review");
+  assert.equal((await executePointAction(f)).status, "duplicate");
 });
 test("final gate runs after slow browser confirmation preparation and can stop a newly disabled policy", async () => {
   const f = fixture(); let enabled = true;

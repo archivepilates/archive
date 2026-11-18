@@ -225,7 +225,7 @@ export async function readExactStudioMateMember(api, phone) {
       member: null,
     });
   }
-  const memberGrade = firstText(detail, [
+  const gradeFields = [
     "grade",
     "member_grade",
     "memberGrade",
@@ -233,7 +233,28 @@ export async function readExactStudioMateMember(api, phone) {
     "memberType",
     "등급",
     "회원구분",
-  ]) || cleanText(detail.user_grade?.name);
+  ];
+  const memberGrade = firstText(detail, gradeFields) || cleanText(detail.user_grade?.name);
+  let memberGradeReadback;
+  const aliases = gradeFields.filter(key => detail[key] != null && detail[key] !== "");
+  const aliasValues = aliases.map(key => cleanText(detail[key]));
+  const aliasesVerified = aliases.every(key => typeof detail[key] === "string" && cleanText(detail[key])) &&
+    new Set(aliasValues).size <= 1;
+  // Only explicit native null is evidence of no grade; omission is not.
+  if (Object.hasOwn(detail, "user_grade")) {
+    const unassigned = detail.user_grade === null && aliases.length === 0 &&
+      (!Object.hasOwn(detail, "user_grade_id") || detail.user_grade_id === null);
+    const assigned = record(detail.user_grade) && cleanText(detail.user_grade.name) &&
+      aliasesVerified && aliasValues.every(value => value === cleanText(detail.user_grade.name));
+    if (unassigned || !assigned) {
+      memberGradeReadback = Object.freeze({
+        source: "native_member_detail_user_grade_v1",
+        status: unassigned ? "unassigned" : "unverified",
+      });
+    }
+  } else if (!aliasesVerified) {
+    memberGradeReadback = Object.freeze({ source: "native_member_detail_user_grade_v1", status: "unverified" });
+  }
   const profile = record(detail.profile) ? detail.profile : {};
   const registeredAt = parseStudioMateLocalTime(firstText(detail, [
     "registered_at",
@@ -255,6 +276,7 @@ export async function readExactStudioMateMember(api, phone) {
       ),
       ...(registeredAt ? { registeredAt } : {}),
       ...(memberGrade ? { memberGrade } : {}),
+      ...(memberGradeReadback ? { memberGradeReadback } : {}),
       inactive: detail.inactiveMember === true || row.inactiveMember === true,
       hasAccount:
         detail.has_user_account === true ||

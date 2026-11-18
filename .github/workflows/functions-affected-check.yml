@@ -71,6 +71,11 @@ jobs:
       - name: Install Functions dependencies
         run: npm --prefix firebase/kangsain-functions/functions ci
 
+      - name: Test referral native grade evidence and contract source regressions
+        run: |
+          node --test scripts/tests/studiomate-referral-points.test.mjs scripts/tests/studiomate-referral-worker.test.mjs
+          npm run test:membership-contract
+
       - name: Test member inquiry rules, assignments and manual completion boundaries
         run: |
           node scripts/build-member-inquiry-contract.mjs --check

@@ -15,6 +15,47 @@ const SESSION_HEADERS = Object.freeze({
   "web-version": "synthetic-version",
 });
 
+test("unassigned grade needs an explicit null native field, not missing or malformed metadata", async () => {
+  const read = async fields => {
+    const member = { id: 101, name: "Synthetic Member", mobile: "01012345678", ...fields };
+    return (await readExactStudioMateMember({ get: async path =>
+      path === "/staff/member/101" ? { member } : { members: [member] },
+    }, member.mobile)).member;
+  };
+  for (const fields of [{ user_grade: null }, { user_grade: null, user_grade_id: null }]) {
+    const member = await read(fields);
+    assert.equal(member.memberGrade, undefined);
+    assert.deepEqual(member.memberGradeReadback, {
+      source: "native_member_detail_user_grade_v1", status: "unassigned",
+    });
+  }
+  assert.equal((await read({})).memberGradeReadback, undefined);
+  for (const fields of [
+    { user_grade: undefined }, { user_grade: "" }, { user_grade: {} },
+    { user_grade: false }, { user_grade: 0 }, { user_grade: [] }, { user_grade: "null" },
+    { user_grade: { name: "" } }, { user_grade: { name: 2 } },
+    { user_grade: null, user_grade_id: 123 }, { user_grade: null, grade: "체험회원" },
+    { user_grade: null, member_type: {} },
+    { user_grade: { name: "일반회원" }, grade: "강사회원" },
+    { grade: "일반회원", member_grade: "강사회원" }, { grade: {}, member_grade: "일반회원" },
+  ]) assert.equal((await read(fields)).memberGradeReadback?.status, "unverified", JSON.stringify(fields));
+  for (const user_grade_id of [0, "", "123", false, {}, []])
+    assert.equal((await read({ user_grade: null, user_grade_id })).memberGradeReadback.status, "unverified");
+  for (const key of ["grade", "member_grade", "memberGrade", "member_type", "memberType", "등급", "회원구분"])
+    for (const value of ["일반회원", "체험회원", {}])
+      assert.equal((await read({ user_grade: null, [key]: value })).memberGradeReadback.status, "unverified");
+  for (const name of ["체험회원", "강사회원", "스텝", "VIP", "Blue"]) {
+    const member = await read({ user_grade: { name } });
+    assert.equal(member.memberGrade, name);
+    assert.equal(member.memberGradeReadback, undefined);
+  }
+  const listMember = { id: 101, name: "Synthetic Member", mobile: "01012345678", user_grade: null };
+  const { user_grade, ...detailMember } = listMember;
+  const result = await readExactStudioMateMember({ get: async path => path === "/staff/member/101"
+    ? { member: detailMember } : { members: [listMember] } }, listMember.mobile);
+  assert.equal(result.member.memberGradeReadback, undefined, "list null cannot replace missing detail evidence");
+});
+
 test("parses only strict StudioMate local timestamps as KST instants", () => {
   assert.equal(
     parseStudioMateLocalTime("2026-09-14 12:34:56"),
