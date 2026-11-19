@@ -28,7 +28,7 @@ import {
 } from "./templates";
 import { alimtalkDedupeKey, findCompletedDuplicateForCandidate } from "./dedupe";
 import { instructorLessonManagementNumberFor } from "./instructorLessonManagement";
-import { isInstructorLessonBooking } from "./instructorLessonBookingPolicy";
+import { isInstructorLessonBooking, isTeamInstructorLessonBooking } from "./instructorLessonBookingPolicy";
 import { isOutdoorGroupSurveyBooking } from "../privateSurvey/groupSurveyBookingPolicy";
 import { hasExplicitAlimtalkTestOverride } from "./testRecipients";
 import { automaticMemberExclusionReason, loadActiveStaffPhones } from "./recipientExclusion";
@@ -441,7 +441,9 @@ function instructorLessonMaterialCandidate(
 ): AlimtalkCandidateDoc | null {
   const lecture = lectureIndex.get(booking.lectureId);
   const title = lecture?.title || "";
-  const managementNumber = instructorLessonManagementNumberFor({ title, lessonDate: booking.lectureDate });
+  const managementNumber = instructorLessonManagementNumberFor({
+    title, lessonDate: booking.lectureDate, teamLesson: isTeamInstructorLessonBooking(booking),
+  });
   if (!managementNumber) return null;
   const targetUrl = `https://in.archivepilates.com/method/${encodeURIComponent(managementNumber)}`;
   const shortLinkId = shortLinkIdForTarget("method_material", targetUrl);

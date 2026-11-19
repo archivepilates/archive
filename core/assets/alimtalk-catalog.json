@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyFingerprint": "eb68a0b9458af867b2a195483689c11b7a55142a0a179432e3b056a8fc354508",
+  "policyFingerprint": "dac6b226f2d2b3d6b0b72ab50eab4493fa90f70433bca298d60cf254d8f881e4",
   "sourceMode": "repository_defaults_no_environment_or_live_reads",
   "coverage": {
     "observedAt": "2026-10-12T05:57:20.967Z",
@@ -54,7 +54,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/rebuildAlimtalkCandidates.ts",
-      "sha256": "00cc34c5023ea770aa2f98ce22b326efc8addbbb1eff8b7437844783314af649"
+      "sha256": "25a56980fd7373c5100bc3ebaae420f0dc42be864cc8af531d76f0627265f14b"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/alimtalk/recipientExclusion.ts",
@@ -82,7 +82,7 @@
     },
     {
       "path": "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
-      "sha256": "dd572ed10657cf79da9ab3e5537789dbfb4eeef216ee8c86edcd78f68d4312df"
+      "sha256": "7d6d38671fdd61671db618dc290eee4abe97b1c80c41529b7cf39e79690765c3"
     },
     {
       "path": "firebase/kangsain-functions/functions/src/exports/privateChart.ts",

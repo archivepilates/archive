@@ -147,7 +147,7 @@ export const scheduledAuditAlimtalkProviderLedger = onSchedule(
 export const scheduledCheckInstructorLessonSampleApproval = onSchedule(
   {
     ...alimtalkQueueScheduleOptions,
-    schedule: "30 17 * * *",
+    schedule: "30 13 * * *",
   },
   async () => {
     const result = await remindPendingInstructorLessonApprovals();
@@ -158,7 +158,7 @@ export const scheduledCheckInstructorLessonSampleApproval = onSchedule(
 export const scheduledSendApprovedInstructorLessonAlimtalk = onSchedule(
   {
     ...alimtalkQueueScheduleOptions,
-    schedule: "0 18 * * *",
+    schedule: "0 14 * * *",
   },
   async () => {
     const result = await sendApprovedInstructorLessonAlimtalks();

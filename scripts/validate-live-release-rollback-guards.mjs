@@ -1553,6 +1553,8 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval.ts",
         markers: [
           'const APPROVAL_COLLECTION = "instructorLessonAlimtalkApprovals"',
+          "const LIVE_SEND_HOUR_KST = 14;",
+          "D-1 14:00 KST",
           'status: "sample_unknown"',
           'if (request.method === "GET")',
           'if (request.method !== "POST")',
@@ -1593,9 +1595,10 @@ const guardGroups = [
         file: "firebase/kangsain-functions/functions/src/exports/alimtalk.ts",
         markers: [
           "scheduledCheckInstructorLessonSampleApproval",
-          'schedule: "30 17 * * *"',
+          'schedule: "30 11 * * *"',
+          'schedule: "30 13 * * *"',
           "scheduledSendApprovedInstructorLessonAlimtalk",
-          'schedule: "0 18 * * *"',
+          'schedule: "0 14 * * *"',
           "approveInstructorLessonAlimtalkBatch",
         ],
       },
@@ -1604,7 +1607,7 @@ const guardGroups = [
         markers: [
           "D-1 11:30",
           "POST 요청만 승인으로 기록",
-          "D-1 17:30",
+          "D-1 13:30",
           "승인 전용 경로는 1회만 시도",
           "최신 StudioMate 전체 예약 스냅샷과 현재 예약 상태",
         ],

@@ -47,10 +47,14 @@ const INSTRUCTOR_LESSON_TOPIC_SLUG_BY_DATE: Readonly<Record<string, string>> = {
 export function instructorLessonManagementNumberFor(input: {
   title: string;
   lessonDate: string;
+  teamLesson?: boolean;
 }): string {
   const lessonDate = normalizedLessonDate(input.lessonDate);
   if (!lessonDate) return "";
-  const topicSlug = INSTRUCTOR_LESSON_TOPIC_SLUG_BY_DATE[lessonDate] || instructorLessonTopicSlug(input.title);
+  // A canonical Team pass gets its own date-bound route, not a guessed METHOD topic.
+  const topicSlug = input.teamLesson
+    ? instructorLessonTopicSlug(input.title) || "team"
+    : INSTRUCTOR_LESSON_TOPIC_SLUG_BY_DATE[lessonDate] || instructorLessonTopicSlug(input.title);
   if (!topicSlug) return "";
   const managementNumber = `${topicSlug}-${lessonDate.slice(2).replace(/-/g, "")}`;
   return isValidInstructorLessonManagementNumber(managementNumber) ? managementNumber : "";

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { AlimtalkCandidateDoc } from "../../firebase/kangsain-functions/functions/src/types/models";
 import { genericInstructorLessonQueueBlock } from "../../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonDeliveryGuard";
@@ -139,6 +140,29 @@ test("blocks a persisted V2 candidate from the approved live-send path", () => {
   );
 });
 
+test("source validation binds Team routes to canonical Team booking tickets, not lecture titles", () => {
+  const item = sourcedCandidate();
+  item.payload = { ...item.payload, lessonDate: "2026-11-21", managementNumber: "team-261121" };
+  const booking = {
+    bookingId: "booking-1", lectureId: "lecture-1", studioId: "5330", memberId: item.memberId,
+    memberPhone: item.memberPhone, appStatus: "reserved", lectureDate: "2026-11-21",
+    ticketName: "Team 강사레슨",
+  } as Parameters<typeof instructorLessonCandidateSourceIssue>[1];
+  const lecture = {
+    lectureId: "lecture-1", studioId: "5330", date: "2026-11-21", status: "open", title: "Team A",
+  } as Parameters<typeof instructorLessonCandidateSourceIssue>[2];
+  for (const ticketName of ["Team 강사레슨", "팀 강사레슨"]) {
+    assert.equal(instructorLessonCandidateSourceIssue(item, { ...booking, ticketName } as typeof booking, lecture), "");
+  }
+  for (const ticketName of ["강사레슨 (2T)", "Team 강사레슨 추가", "그룹 10회"]) {
+    assert.notEqual(instructorLessonCandidateSourceIssue(item, { ...booking, ticketName } as typeof booking, lecture), "");
+  }
+  const topicItem = { ...item, payload: { ...item.payload, managementNumber: "support-movement-261121" } };
+  assert.equal(instructorLessonCandidateSourceIssue(topicItem, booking,
+    { ...lecture, title: "support movement" } as typeof lecture), "");
+  assert.notEqual(instructorLessonCandidateSourceIssue(topicItem, booking, lecture), "");
+});
+
 test("recovers only a pre-dispatch block with no delivery evidence", () => {
   assert.equal(
     canRecoverBlockedInstructorLessonSample({ status: "blocked_source_stale" }),
@@ -244,21 +268,24 @@ test("fingerprints the approved V3 contract even when an old candidate document 
   );
 });
 
-test("requires approval before 18:00 KST on the D-1 source date", () => {
+test("requires approval strictly before 14:00 KST on the D-1 source date", () => {
   assert.equal(
     instructorLessonApprovalCutoffIssue(
       "2026-08-28",
-      new Date("2026-08-28T08:59:00Z"),
+      new Date("2026-08-28T04:59:59.999Z"),
     ),
     "",
   );
   assert.match(
     instructorLessonApprovalCutoffIssue(
       "2026-08-28",
-      new Date("2026-08-28T09:00:00Z"),
+      new Date("2026-08-28T05:00:00.000Z"),
     ),
-    /18:00 KST/,
+    /14:00 KST/,
   );
+  for (const time of ["2026-08-28T05:00:00.001Z", "2026-08-28T08:59:59.999Z"]) {
+    assert.match(instructorLessonApprovalCutoffIssue("2026-08-28", new Date(time)), /14:00 KST/);
+  }
   assert.match(
     instructorLessonApprovalCutoffIssue(
       "2026-08-28",
@@ -266,6 +293,28 @@ test("requires approval before 18:00 KST on the D-1 source date", () => {
     ),
     /승인 가능일/,
   );
+});
+
+test("keeps the sample queue at 11:30 and moves only warning/main dispatch to 13:30/14:00 KST", () => {
+  const source = readFileSync(new URL("../../firebase/kangsain-functions/functions/src/exports/alimtalk.ts", import.meta.url), "utf8");
+  for (const [name, schedule, handler] of [
+    ["scheduledQueueAndSendAlimtalkDaily", "30 11 * * *", "queueDailyAlimtalkCandidates"],
+    ["scheduledCheckInstructorLessonSampleApproval", "30 13 * * *", "remindPendingInstructorLessonApprovals"],
+    ["scheduledSendApprovedInstructorLessonAlimtalk", "0 14 * * *", "sendApprovedInstructorLessonAlimtalks"],
+  ]) {
+    const block = source.match(new RegExp(`export const ${name} = onSchedule\\(\\n([\\s\\S]*?)\\n\\);`));
+    assert.ok(block, name);
+    assert.ok(block[1].includes(`schedule: "${schedule}"`), name);
+    assert.ok(block[1].includes(`await ${handler}()`), name);
+    assert.match(block[1], /\.\.\.alimtalk(?:Bulk)?QueueScheduleOptions/);
+  }
+});
+
+test("approval responses, emails and confirmation page consistently name the 14:00 cutoff", () => {
+  const source = readFileSync(new URL("../../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval.ts", import.meta.url), "utf8");
+  assert.match(source, /const LIVE_SEND_HOUR_KST = 14;/);
+  assert.equal(source.match(/14:00/g)?.length, 8);
+  assert.doesNotMatch(source, /18:00/);
 });
 
 test("blocks every generic queue path for instructor lesson material", () => {

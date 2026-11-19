@@ -53,6 +53,20 @@ for (const name of ['processAlimtalkQueue.ts', 'instructorLessonSampleApproval.t
       }
     }
     if (name === 'instructorLessonSampleApproval.ts') {
+      // Normalize only the approved D-1 timing copy; retain all execution-body hashes.
+      for (const [key, count] of [
+        ['instructorLessonApprovalCutoffIssue', 1], ['approveInstructorLessonAlimtalkBatchHandler', 2],
+        ['sendApprovedInstructorLessonAlimtalks', 2], ['sendSampleApprovalEmail', 2], ['approvalConfirmationHtml', 1],
+      ]) {
+        const body = current.get(key);
+        assert.equal(body.split('14:00').length - 1, count, key);
+        current.set(key, body.replaceAll('14:00', '18:00'));
+      }
+      const sourceCheck = current.get('instructorLessonCandidateSourceIssue');
+      const teamCall = 'instructorLessonManagementNumberFor({ title: lecture.title, lessonDate, teamLesson: isTeamInstructorLessonBooking(booking) })';
+      assert.equal(sourceCheck.split(teamCall).length - 1, 1);
+      current.set('instructorLessonCandidateSourceIssue', sourceCheck.replace(teamCall,
+        'instructorLessonManagementNumberFor({ title: lecture.title, lessonDate })'));
       // The already-released preflight recovery changed only these three bodies.
       const reviewedSource = execFileSync('git', ['show', `15ccdd571d27dc96434a5334aba3ed7bd887ab34:${file}`], { cwd: root, encoding: 'utf8' });
       const reviewed = functions(ast(reviewedSource, file));

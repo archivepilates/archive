@@ -12,7 +12,7 @@ import { alimtalkDedupeKey, normalizePhone } from "./dedupe";
 import { targetEligibilityIssue as autoSendabilityIssue, targetDuplicateIssue as findCompletedDuplicateForCandidate } from "./targetValidationChecks";
 import { cancellationBlocksRegistration } from "../instructorLessonRegistration/instructorLessonCancellationPolicy";
 import { instructorLessonManagementNumberFor, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
-import { isInstructorLessonBooking } from "./instructorLessonBookingPolicy";
+import { isInstructorLessonBooking, isTeamInstructorLessonBooking } from "./instructorLessonBookingPolicy";
 import { sendSolapiAlimtalk } from "./processAlimtalkQueue";
 import { alimtalkDedupePolicy, INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE } from "./templates";
 import { primaryAlimtalkTestRecipient } from "./testRecipients";
@@ -25,7 +25,7 @@ import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDefe
 const APPROVAL_COLLECTION = "instructorLessonAlimtalkApprovals";
 const BOOKING_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 const RESERVATION_SNAPSHOT_DOC = "studiomateReservationExcelEmergency";
-const LIVE_SEND_HOUR_KST = 18;
+const LIVE_SEND_HOUR_KST = 14;
 const APPROVAL_FUNCTION_URL =
   process.env.INSTRUCTOR_LESSON_APPROVAL_FUNCTION_URL ||
   `https://${REGION}-archive-pilates.cloudfunctions.net/approveInstructorLessonAlimtalkBatch`;
@@ -134,7 +134,7 @@ export function instructorLessonContentFingerprint(candidate: AlimtalkCandidateD
 export function instructorLessonApprovalCutoffIssue(sourceDate: string, now: Date = new Date()): string {
   const currentDate = kstDate(now);
   if (currentDate !== sourceDate) return `승인 가능일이 아닙니다: ${sourceDate}`;
-  if (kstMinutes(now) >= LIVE_SEND_HOUR_KST * 60) return "D-1 18:00 KST 발송 시각이 지났습니다.";
+  if (kstMinutes(now) >= LIVE_SEND_HOUR_KST * 60) return "D-1 14:00 KST 발송 시각이 지났습니다.";
   return "";
 }
 
@@ -375,7 +375,7 @@ export async function approveInstructorLessonAlimtalkBatchHandler(request: Reque
     return;
   }
   if (approval.status === "approved") {
-    response.status(200).send("이미 승인되었습니다. D-1 18:00 KST에 본 발송됩니다.");
+    response.status(200).send("이미 승인되었습니다. D-1 14:00 KST에 본 발송됩니다.");
     return;
   }
   if (approval.status !== "sample_sent") {
@@ -394,7 +394,7 @@ export async function approveInstructorLessonAlimtalkBatchHandler(request: Reque
   response
     .status(200)
     .send(
-      `ARCHIVE IN 강사레슨 D-1 알림톡 승인 완료\n\n수업일: ${approval.lessonDate}\n대상: ${approval.candidateCount}명\n본 발송: D-1 18:00 KST`,
+      `ARCHIVE IN 강사레슨 D-1 알림톡 승인 완료\n\n수업일: ${approval.lessonDate}\n대상: ${approval.candidateCount}명\n본 발송: D-1 14:00 KST`,
     );
 }
 
@@ -472,7 +472,7 @@ export async function sendApprovedInstructorLessonAlimtalks(
           subject: `[알림톡][긴급] 강사레슨 본 발송 승인 없음 ${approval.lessonDate}`,
           lessonDate: approval.lessonDate,
           managementNumber: approval.managementNumber,
-          issue: "D-1 18:00까지 명시적 승인이 확인되지 않아 본 발송하지 않았습니다.",
+          issue: "D-1 14:00까지 명시적 승인이 확인되지 않아 본 발송하지 않았습니다.",
         });
       }
       summary.blocked += 1;
@@ -530,7 +530,7 @@ export async function sendApprovedInstructorLessonAlimtalks(
           deferredCount: 0,
           dispatchDeferredReason: null,
           nextAllowedAt: null,
-          lastError: priorSent ? null : "18:00 재검증 결과 현재 예약 대상 없음",
+          lastError: priorSent ? null : "14:00 재검증 결과 현재 예약 대상 없음",
           ...(priorSent ? { liveSendCompletedAt: nowTimestamp() } : {}),
           updatedAt: nowTimestamp(),
         },
@@ -964,7 +964,7 @@ export function instructorLessonCandidateSourceIssue(
   if (booking.lectureDate !== lessonDate) return "수업일 불일치";
   if (!lecture || lecture.studioId !== candidate.studioId || lecture.date !== lessonDate
     || lecture.lectureId !== booking.lectureId || lecture.status !== "open") return "현재 수업 원천 확인 필요";
-  if (instructorLessonManagementNumberFor({ title: lecture.title, lessonDate })
+  if (instructorLessonManagementNumberFor({ title: lecture.title, lessonDate, teamLesson: isTeamInstructorLessonBooking(booking) })
     !== normalizeInstructorLessonManagementNumber(String(candidate.payload?.managementNumber || candidate.payload?.materialNumber || ""))) {
     return "현재 수업 관리번호 변경";
   }
@@ -1086,7 +1086,7 @@ async function sendSampleApprovalEmail(
     `대상: ${names}`,
     "",
     "샘플의 문구와 버튼 4개를 확인한 뒤 아래 링크로 승인해주세요.",
-    "승인 전에는 본 발송되지 않으며, 승인 후에도 D-1 18:00 KST에 발송됩니다.",
+    "승인 전에는 본 발송되지 않으며, 승인 후에도 D-1 14:00 KST에 발송됩니다.",
     approvalUrl,
   ].join("\n");
   const htmlBody = [
@@ -1095,7 +1095,7 @@ async function sendSampleApprovalEmail(
     `<h2 style="font-size:22px;margin:8px 0 20px">${escapeHtml(approval.lessonDate)} 강사레슨</h2>`,
     `<p>샘플 수신: <b>${escapeHtml(approval.sampleRecipientName)}</b><br>본 발송 예정: <b>${approval.candidateCount}명</b><br>관리번호: <code>${escapeHtml(approval.managementNumber)}</code></p>`,
     `<p style="color:#555">대상: ${escapeHtml(names)}</p>`,
-    '<p style="margin-top:20px">샘플의 문구와 버튼 4개를 확인한 뒤 승인해주세요. 승인 후에도 D-1 18:00 KST에 발송됩니다.</p>',
+    '<p style="margin-top:20px">샘플의 문구와 버튼 4개를 확인한 뒤 승인해주세요. 승인 후에도 D-1 14:00 KST에 발송됩니다.</p>',
     `<a href="${escapeHtml(approvalUrl)}" style="display:inline-block;margin-top:12px;background:#171717;color:#fff;text-decoration:none;padding:13px 18px;border-radius:6px;font-weight:700">샘플 확인 완료 · 발송 승인</a>`,
     "</div>",
   ].join("");
@@ -1202,7 +1202,7 @@ function approvalConfirmationHtml(approvalId: string, token: string, approval: I
     "<title>강사레슨 알림톡 승인</title></head>",
     '<body style="font-family:Arial,sans-serif;line-height:1.6;color:#171717;max-width:560px;margin:40px auto;padding:20px">',
     '<h1 style="font-size:24px">강사레슨 D-1 알림톡 승인</h1>',
-    `<p>수업일: <b>${escapeHtml(approval.lessonDate)}</b><br>관리번호: <code>${escapeHtml(approval.managementNumber)}</code><br>본 발송 예정: <b>${approval.candidateCount}명</b><br>발송 시각: D-1 18:00 KST</p>`,
+    `<p>수업일: <b>${escapeHtml(approval.lessonDate)}</b><br>관리번호: <code>${escapeHtml(approval.managementNumber)}</code><br>본 발송 예정: <b>${approval.candidateCount}명</b><br>발송 시각: D-1 14:00 KST</p>`,
     '<p style="color:#555">샘플의 문구와 버튼 4개를 직접 확인했다면 아래 버튼으로 승인해주세요. 이 화면을 여는 것만으로는 승인되지 않습니다.</p>',
     `<form method="post" action="${action}">`,
     `<input type="hidden" name="id" value="${escapeHtml(approvalId)}">`,

@@ -6,3 +6,7 @@ export function isInstructorLessonBooking(booking: BookingDoc): boolean {
     /^(I|INSTRUCTOR)$/i.test(String(value || "").trim()) || /강사레슨/i.test(String(value || "")),
   );
 }
+
+export function isTeamInstructorLessonBooking(booking: BookingDoc): boolean {
+  return /^(?:team|팀)강사레슨$/i.test(String(booking.ticketName || "").replace(/\s+/g, ""));
+}

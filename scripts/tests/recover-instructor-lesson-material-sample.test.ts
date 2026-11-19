@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { buildRecoveryPlan, parseRecoveryArgs, assertApplyGate, assertProviderPrecheck, SCOPE, OLD_APPROVAL_IDS,
   type RecoveryInput, type RecoveryPlan } from "../recover-instructor-lesson-material-sample";
 
-const NOW = Date.parse("2026-10-23T05:34:00Z");
+const NOW = Date.parse("2026-10-23T04:34:00Z");
 function fixture(): RecoveryInput {
   const timestamp = { toDate: () => new Date("2026-10-24T04:00:00Z"), toMillis: () => Date.parse("2026-10-24T04:00:00Z") };
   const bookings = ["a", "b"].map((part) => ({ bookingId: `booking-${part}`, lectureId: `lecture-${part}`,
@@ -101,13 +101,15 @@ test("fingerprint changes when source versions change", () => {
   assert.notEqual(buildRecoveryPlan(input, NOW).fingerprint, original.fingerprint);
 });
 
-test("apply requires exact reread count/fingerprint, correct day and before 18:00 KST", () => {
+test("apply requires exact reread count/fingerprint, correct day and before 14:00 KST", () => {
   const result = plan();
   const options = parseRecoveryArgs(["--apply", "--expected-recipients", "1", "--expected-plan", result.fingerprint]);
   assert.doesNotThrow(() => assertApplyGate(options, result, NOW));
   assert.throws(() => assertApplyGate({ ...options, expectedRecipients: 2 }, result, NOW));
   assert.throws(() => assertApplyGate({ ...options, expectedPlan: "stale" }, result, NOW));
-  assert.throws(() => assertApplyGate(options, result, Date.parse("2026-10-23T09:00:00Z")));
+  assert.doesNotThrow(() => assertApplyGate(options, result, Date.parse("2026-10-23T04:59:59.999Z")));
+  assert.throws(() => assertApplyGate(options, result, Date.parse("2026-10-23T05:00:00Z")), /14:00 KST/);
+  assert.throws(() => assertApplyGate(options, result, Date.parse("2026-10-23T05:00:00.001Z")), /14:00 KST/);
   assert.throws(() => assertApplyGate(options, result, Date.parse("2026-10-23T14:00:00Z")));
 });
 

@@ -14,7 +14,7 @@ try {
 }
 const SOURCE_DATE = "2026-10-16";
 const LESSON_DATE = "2026-10-17";
-const NOW = "2026-10-16T09:00:00.000Z";
+const NOW = "2026-10-16T05:00:00.000Z";
 const MANAGEMENT = "support-movement-261017";
 const TEMPLATE = "SYNTHETIC_V3";
 const APPROVALS = "instructorLessonAlimtalkApprovals";
@@ -164,7 +164,7 @@ function candidate(index) {
     attempts: 0, maxAttempts: 2, lastError: null, createdAt: 1, updatedAt: 1 };
 }
 
-function harness({ count = 1, approvals = true, providerError = false, duplicate = "", autoIssue = "" } = {}) {
+function harness({ count = 1, approvals = true, providerError = false, duplicate = "", autoIssue = "", routeResponses = {} } = {}) {
   const candidates = Array.from({ length: count }, (_, index) => candidate(index + 1));
   const approvedIds = candidates.map((item) => item.candidateId);
   const approvalId = `instructor_lesson_${hash.stableHash({ studioId: "5330", sourceDate: SOURCE_DATE, managementNumber: MANAGEMENT }).slice(0, 24)}`;
@@ -231,7 +231,8 @@ function harness({ count = 1, approvals = true, providerError = false, duplicate
       const material = `https://in.archivepilates.com/method/${MANAGEMENT}`;
       assert.ok(url === material || url === `${material}/assignment`, `Unmocked URL: ${url}`);
       routes.push(url);
-      return { ok: true, text: async () => `data-method-date="${LESSON_DATE}" \uc218\uc5c5\uc790\ub8cc\ub294 \uc218\uc5c5 \ub2f9\uc77c 12\uc2dc\uc5d0 \uacf5\uac1c\ub429\ub2c8\ub2e4.` };
+      return { ok: true, text: async () => `data-method-date="${LESSON_DATE}" \uc218\uc5c5\uc790\ub8cc\ub294 \uc218\uc5c5 \ub2f9\uc77c 12\uc2dc\uc5d0 \uacf5\uac1c\ub429\ub2c8\ub2e4.`,
+        ...routeResponses[url === material ? "material" : "assignment"] };
     },
   });
   const approval = { approvalId, studioId: "5330", sourceDate: SOURCE_DATE, lessonDate: LESSON_DATE,
@@ -461,7 +462,7 @@ for (const [field, code] of [["ticketClassType", "I"], ["ticketClassType", "INST
 }
 
 for (const [label, patch] of Object.entries({
-  stale: { updatedAt: "2026-10-15T08:59:59.000Z" },
+  stale: { updatedAt: new Date(Date.parse(NOW) - 24 * 3600_000 - 1000).toISOString() },
   inactive: { active: false },
   "wrong policy": { snapshotPolicy: "unreconciled" },
   "outside range": { dateRange: { startDate: SOURCE_DATE, endDate: SOURCE_DATE } },
@@ -471,6 +472,20 @@ for (const [label, patch] of Object.entries({
     const f = harness(); f.seed(SNAPSHOT, { ...f.get(SNAPSHOT), ...patch });
     assert.equal((await f.run()).blocked, 1);
     assert.equal(f.get(f.approvalPath).status, "blocked_source_stale");
+    assertNoDispatch(f);
+  });
+}
+
+for (const [label, routeResponses] of Object.entries({
+  "missing material": { material: { ok: false, status: 404 } },
+  "missing assignment": { assignment: { ok: false, status: 404 } },
+  "wrong material date": { material: { text: async () => 'data-method-date="2026-10-18"' } },
+  "missing noon release notice": { material: { text: async () => `data-method-date="${LESSON_DATE}"` } },
+})) {
+  test(`${label} blocks the 14:00 dispatch without a provider attempt`, async () => {
+    const f = harness({ routeResponses });
+    assert.equal((await f.run()).blocked, 1);
+    assert.equal(f.get(f.approvalPath).status, "failed");
     assertNoDispatch(f);
   });
 }
