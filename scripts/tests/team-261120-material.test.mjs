@@ -9,15 +9,54 @@ import vm from "node:vm";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const material = path.join(root, "archivein/method/team-261120/index.html");
 const html = fs.readFileSync(material, "utf8");
-const source = fs.readFileSync(path.join(root, "archivein/method/office-worker-syndrome-260228/index.html"), "utf8");
 const access = fs.readFileSync(path.join(root, "archivein/method/assets/method-access.js"), "utf8");
 const title = "ARCHIVE METHOD #1 직장인 증후군 Team | 2026-11-20 | ARCHIVE PILATES";
 const signupUrl = "https://archivepilates.imweb.me/?mode=join&back_url=LzQ4";
-const cooldown = "4발기기 분절 + 다운독";
 const instructors = [
   { name: /^민진T.*(?:Chair|체어)/i, pane: "pane-mj" },
   { name: /^은영T.*(?:Barrel|바렐)/i, pane: "pane-ey" },
 ];
+const expectedNotionSequence = {
+  "pane-mj": [
+    { phase: "Warm-up", moves: [
+      ["Mermaid with Arm Circle"],
+      ["Seated Single-Leg Press"],
+    ] },
+    { phase: "Main", moves: [
+      ["Half-Kneeling Roll Down"],
+      ["Quadruped Leg Reach → Single-Leg Lower & Lift"],
+      ["Side Kick Variation"],
+      ["Teaser"],
+      ["Lunge → Leg Pull Front"],
+      ["Rolling Like a Ball with Pedal Press"],
+      ["Frog Bridge"],
+    ] },
+    { phase: "Cool-down", moves: [
+      ["Leg Pull Back"],
+      ["Wrist Release"],
+      ["Child's Pose with Back Breathing"],
+    ] },
+  ],
+  "pane-ey": [
+    { phase: "Warm-up", moves: [
+      ["Spine Articulation"],
+      ["Tricep Series", "Jump", "Tricep Press"],
+      ["Leg Pull Back"],
+      ["Hip Rolls"],
+      ["Shoulder Bridge"],
+    ] },
+    { phase: "Main", moves: [
+      ["Crab Reach"],
+      ["Roll Back × 5"],
+      ["Single Leg Stretch"],
+      ["Hundred"],
+      ["Prone", "Arm", "Swimming"],
+    ] },
+    { phase: "Cool-down", moves: [
+      ["Side Lying", "Open", "Circles"],
+    ] },
+  ],
+};
 
 test("the page reuses the shared fail-closed access assets without an inline bypass", () => {
   assert.match(html, /<link rel="stylesheet" href="\.\.\/assets\/method-access\.css">/);
@@ -121,7 +160,7 @@ test("local browser renders both instructor tabs and responsive content with the
   }
   async function close(context) { await context.close(); contexts.delete(context); }
   try {
-    await t.test("approved headline, ordered source exercises and conditional video signup", async () => {
+    await t.test("approved headline, exact November 20 Notion sequences and conditional video signup", async () => {
       const context = await contextFor(390, "2026-11-20T12:00:00+09:00");
       const page = await context.newPage();
       await page.goto(url.href);
@@ -136,12 +175,15 @@ test("local browser renders both instructor tabs and responsive content with the
       assert.equal(tabs.length, instructors.length);
       tabs.forEach((tab, index) => assert.match(tab.replace(/\s+/g, " "), instructors[index].name));
 
-      const materialState = await page.evaluate(({ original, panes }) => {
-        const normalize = text => text.normalize("NFC").replace(/★/g, "").replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim();
-        const readPhases = (pane, phases, items, moveName) =>
-          Array.from(pane.querySelectorAll(phases), phase => Array.from(phase.querySelectorAll(items), item =>
-            normalize((moveName && item.querySelector(moveName) || item).textContent)));
-        const february = new DOMParser().parseFromString(original, "text/html");
+      const materialState = await page.evaluate(panes => {
+        const normalize = text => text.normalize("NFC").replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim();
+        const readPhases = pane => Array.from(pane.querySelectorAll(".phase-card"), phase => ({
+          phase: normalize(phase.querySelector(".phase-title > h3").textContent),
+          moves: Array.from(phase.querySelectorAll(".move-list > li"), item => [
+            normalize(item.querySelector(".move-name").textContent),
+            ...Array.from(item.querySelectorAll(".move-steps > p"), step => normalize(step.textContent)),
+          ]),
+        }));
         const sequence = document.getElementById("sequence-title");
         const concept = document.getElementById("concept-title");
         const cta = document.querySelector(".video-cta");
@@ -150,21 +192,17 @@ test("local browser renders both instructor tabs and responsive content with the
           preview: document.body.dataset.methodPreviewCode,
           orderedSections: Boolean(sequence && concept && (sequence.compareDocumentPosition(concept) & Node.DOCUMENT_POSITION_FOLLOWING)),
           theory: concept?.closest("section")?.textContent,
-          original: ["tab-mj", "tab-ey"].map(id => readPhases(february.getElementById(id), ".phase", "ul > li")),
-          current: panes.map(id => readPhases(document.getElementById(id), ".phase-card", "ol > li", ".move-name")),
+          current: Object.fromEntries(panes.map(id => [id, readPhases(document.getElementById(id))])),
           ctaText: cta?.textContent.replace(/\s+/g, " "),
           ctaLinks: Array.from(cta?.querySelectorAll("a[href]") || [], link => link.getAttribute("href")),
           hasOldSurvey: Boolean(document.querySelector('form, .survey, a[href*="docs.google.com/forms"], a[href*="forms.gle/"]')),
         };
-      }, { original: source, panes: instructors.map(({ pane }) => pane) });
+      }, instructors.map(({ pane }) => pane));
       assert.equal(materialState.date, "2026-11-20");
       assert.equal(materialState.preview, "team261120staff");
       assert.equal(materialState.orderedSections, true);
       assert.match(materialState.theory, /장시간\s+좌식\s*생활/);
-      assert.deepEqual(materialState.current.map(phases => phases.map(moves => moves.length)), [[5, 7, 6, 2], [3, 6, 1]]);
-      assert.deepEqual(materialState.original[1].at(-1), ["Quadruped Articulation", "Down Dog", "Alignment Reset"]);
-      materialState.original[1][materialState.original[1].length - 1] = [cooldown];
-      assert.deepEqual(materialState.current, materialState.original);
+      assert.deepEqual(materialState.current, expectedNotionSequence);
       assert.equal(materialState.hasOldSurvey, false);
       assert.match(materialState.ctaText, /영상이\s*제공되는\s*경우.{0,55}내\s*강의실/);
       assert.match(materialState.ctaText, /가입\s*후.{0,25}권한.{0,20}(?:연결|부여)되면/);
