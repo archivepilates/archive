@@ -20,4 +20,6 @@ Before physical migration, the compatible source must be promoted to main and fa
 
 ## Status
 
-Prepared; physical migration and live verification pending. CORE rules and final report will record independently observed completion and any unverified ordinary-run outcomes.
+Physical migration verified at 2026-11-19 16:06 KST. The legacy alias and all 16 protected path identities were preserved; 16 installed LaunchAgents matched the exact structured path rewrite, with unchanged schedules/flags and no forced restarts. All loaded jobs remained present and the long-lived climate receiver retained PID 1508. Referral configuration, the pinned identity registry and SMS configuration were readable after migration. The same service account performed a read-only Firestore request successfully (HTTP 200). No manual queue run, member send or secret-content change occurred.
+
+Validation groups passed: 1,209 contract/strict-consumer/climate tests; 354 source/notification/lock/retention/worker tests; 1,093 communication/cancellation tests; 105 system-health tests. Groups overlap and are not a unique-test total. Native root tests also ran on macOS, including open-descriptor continuity and cross-alias exclusion. CORE Hosting publication, CI completion and ordinary scheduled execution observations are recorded in the final HTML report; path/configuration checks alone are not proof of a new external business transaction.

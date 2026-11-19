@@ -4,7 +4,8 @@ import { parseSourceArgs, validateSourceInventory, sourceRequestKind, selectLate
   baselineSourceJob, verifiedDocumentHref, verifiedSourceRow } from "../read-instructor-signup-enrichment-sources.mjs";
 import { INSTRUCTOR_MEMBER_EFORMSIGN_TEMPLATE_ID as TEMPLATE } from "../lib/instructor-lesson-registration-contract.mjs";
 
-const DIRECTORY = "/Users/archivepilates/ArchiveIN/operations/instructor-signup-enrichment-20261030";
+import { canonicalAutomationPath } from '../lib/archive-automation-paths.mjs';
+const DIRECTORY = canonicalAutomationPath("/Users/archivepilates/ArchiveIN/operations/instructor-signup-enrichment-20261030");
 const COMPANY = "848f6dc7fa024a6cb28a2994c0835e53";
 const LIST = `https://kr-service.eformsign.com/v1.0/companies/${COMPANY}/documents`;
 const id = n => n.toString(16).padStart(32, "0");
