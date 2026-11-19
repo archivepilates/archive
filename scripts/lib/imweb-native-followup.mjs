@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { canonicalAutomationPath } from './archive-automation-paths.mjs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { isLocalImwebWriteQuotaFailure } from './imweb-read-failure.mjs';
@@ -102,11 +103,12 @@ export async function runApprovedImwebWrite({ operation: input, payload, execute
 // active Codex caller owns fresh canonical approval/ledger checks, CUA, domain locks,
 // policy/time gates and external readback. Opaque refs must not contain private data.
 export function createImwebNativeFollowupStore({ directory, io = fs, now = () => new Date().toISOString() }) {
+  directory = canonicalAutomationPath(directory);
   if (typeof directory !== 'string' || !path.isAbsolute(directory) || path.resolve(directory) !== directory) fail('INVALID_DIRECTORY');
   const clock = () => instant(now());
   const filename = key => path.join(directory, `${imwebPayloadDigest(ref(key))}.json`);
-  const lock = path.join(directory, '.native-followup.lock');
   function safeDirectory() {
+    directory = canonicalAutomationPath(directory);
     const stat = io.lstatSync(directory);
     if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || stat.mode & 0o077) fail('UNSAFE_DIRECTORY');
     // Reject symlink ancestors as well as a symlink journal directory.
@@ -116,8 +118,13 @@ export function createImwebNativeFollowupStore({ directory, io = fs, now = () =>
   }
   function locked(action) {
     let fd;
+    let lock;
     try {
-      safeDirectory();
+      try { safeDirectory(); } catch (error) {
+        if (canonicalAutomationPath(directory) === directory) throw error;
+        safeDirectory();
+      }
+      lock = path.join(directory, '.native-followup.lock');
       try { fd = io.openSync(lock, 'wx', 0o600); }
       catch (error) { if (error.code === 'EEXIST') fail('FOLLOWUP_BUSY'); throw error; }
       try { return action(); }

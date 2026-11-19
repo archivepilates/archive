@@ -11,6 +11,12 @@
 
 ## Working Guidelines
 
+### Automation Data Root
+
+- Effective 2026-11-19, the canonical Mac mini automation data root is `~/archive-automation`. The legacy `~/ArchiveIN` path remains an exact compatibility symlink after the verified host migration; do not create a second real directory, duplicate ledgers/profiles, or replace the alias.
+- Use `scripts/lib/archive-automation-paths.mjs` for active local defaults. It supports the real legacy root before migration and verifies the exact top-level alias afterward. Keep explicit environment overrides and nested private-path/security checks intact. Credentials, state, locks, profiles and source files retain their existing identity and permissions.
+- Installed LaunchAgent path values are updated without changing schedules or forcing job restarts. Loaded definitions may retain old text until normal reload; compatibility access is intentional. A path update is not proof of external delivery or a completed business action. See `docs/tasks/2026-11-19-automation-root-migration.md`.
+
 ### Contract Signer Names
 
 - Effective 2026-11-16, new StudioMate membership/renewal contracts omit trailing member-management digits from the signer name only. Preserve native member display names, exact member ID, full-phone uniqueness, purchase IDs and canonical job keys. Never select or merge members by the stripped name.

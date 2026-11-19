@@ -1,7 +1,6 @@
+import { archiveAutomationPath } from './archive-automation-paths.mjs';
 import { mkdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
-import os from 'node:os';
-import path from 'node:path';
 import { observeAutomationRun, automationHealthEventId } from './automation-failure-notifications.mjs';
 import { formatOperationsReport, kstTimestamp } from './operations-email-format.mjs';
 import { recordAutomationStatus } from './archive-core-ops-logging.mjs';
@@ -16,7 +15,7 @@ export async function recordNotificationIngressHealth(db, result, { execute = ex
       : `알림목록 확인 보류 · ${result.code}`,
     warnings: [...(result.ok ? [] : [result.code]), ...(result.continuityLost ? [gapWarning] : [])],
   });
-  const directory = path.join(os.homedir(), 'ArchiveIN/automation/reports/notification-ingress');
+  const directory = archiveAutomationPath('automation/reports/notification-ingress');
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await observeAutomationRun(directory, { ok: result.ok, deferredRead: true,
     errorCode: result.code || '', runFinishedAt: new Date().toISOString() }, event => {
@@ -37,7 +36,7 @@ export async function recordNotificationIngressHealth(db, result, { execute = ex
     const output = execute(process.execPath,
       ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
         cwd: new URL('../../', import.meta.url), encoding: 'utf8', timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, GOOGLE_SERVICE_ACCOUNT_KEY: path.join(os.homedir(), 'ArchiveIN/secrets/google/archive-codex-operator.json'),
+        env: { ...process.env, GOOGLE_SERVICE_ACCOUNT_KEY: archiveAutomationPath('secrets/google/archive-codex-operator.json'),
           AUTOMATION_REPORT_FROM: 'home@archivepilates.com', AUTOMATION_REPORT_TO: 'home@archivepilates.com',
           AUTOMATION_REPORT_EVENT_ID: automationHealthEventId('알림감지', event),
           AUTOMATION_REPORT_RECONCILE_ONLY: event.reconcileOnly ? '1' : '0',

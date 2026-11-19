@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -17,7 +18,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 const args = parseArgs(process.argv.slice(2));
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = String(args["studio-id"] || process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330");
-const DEFAULT_CREDENTIALS = path.join(os.homedir(), "ArchiveIN/secrets/google/archive-codex-operator.json");
+const DEFAULT_CREDENTIALS = archiveAutomationPath("secrets/google/archive-codex-operator.json");
 const NOW = args.now ? new Date(String(args.now)) : new Date();
 const MONTH_END_ONLY = Boolean(args["month-end-only"]);
 const PUBLISH = Boolean(args.publish || args.apply);

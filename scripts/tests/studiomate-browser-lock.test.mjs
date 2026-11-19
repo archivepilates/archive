@@ -187,6 +187,7 @@ function memoryLock({ metadata = null, onMkdir, onRead, onWrite } = {}) {
   const timerScheduled = new Promise((resolve) => { signalTimer = resolve; });
   const acquire = runInNewContext(`${lockSource.replace(/^import .*;\n/gm, "").replace(/^export /gm, "")}\nacquireStudioMateBrowserLock;`, {
     os: { hostname: () => "synthetic-host", homedir: () => "/synthetic-home" },
+    archiveAutomationPath: (...parts) => path.join("/synthetic-home", "archive-automation", ...parts),
     path,
     process: {
       pid: 123,

@@ -1,3 +1,4 @@
+import { archiveAutomationPath } from "./archive-automation-paths.mjs";
 import os from "node:os";
 import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./studiomate-browser-lock.mjs";
@@ -124,7 +125,7 @@ export async function readNativeRefundSource(job, { page, profileDir, headless =
       stage = "공용 브라우저 준비";
       const { chromium } = await import("playwright");
       const directory = profileDir?.startsWith("~/") ? path.join(os.homedir(), profileDir.slice(2))
-        : profileDir || path.join(os.homedir(), "ArchiveIN/automation/browser-profile");
+        : profileDir || archiveAutomationPath("automation/browser-profile");
       context = await chromium.launchPersistentContext(directory, { headless, serviceWorkers: "block" });
       readPage = await context.newPage();
     }

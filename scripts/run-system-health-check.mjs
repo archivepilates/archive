@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationRoot } from "./lib/archive-automation-paths.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -43,8 +44,8 @@ const HOME = os.homedir();
 const ROOT = process.cwd();
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const KEY_FILE =
-  process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(HOME, "ArchiveIN/secrets/google/archive-codex-operator.json");
-const REPORT_DIR = path.join(HOME, "ArchiveIN/automation/reports/system-health-check");
+  process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(archiveAutomationRoot(HOME), "secrets/google/archive-codex-operator.json");
+const REPORT_DIR = path.join(archiveAutomationRoot(HOME), "automation/reports/system-health-check");
 const PLIST_DIR = path.join(HOME, "Library/LaunchAgents");
 const UID = String(process.getuid?.() || execText("id", ["-u"]).trim() || "501");
 const GH = process.env.GH_BIN || "/opt/homebrew/bin/gh";
@@ -84,7 +85,7 @@ const AUTOMATIONS = [
     label: "com.archive.imweb-referral-rewards",
     title: "Imweb friend referral rewards",
     area: "shopping",
-    resultFile: path.join(HOME, "ArchiveIN/automation/referral-production/imweb-referral-worker-status.json"),
+    resultFile: path.join(archiveAutomationRoot(HOME), "automation/referral-production/imweb-referral-worker-status.json"),
     maxAgeMinutes: 20,
     plist: path.join(PLIST_DIR, "com.archive.imweb-referral-rewards.plist"),
     repair: "none",
@@ -94,7 +95,7 @@ const AUTOMATIONS = [
     label: "com.archive.studiomate-excel-emergency-mode",
     title: "StudioMate Excel sync",
     area: "studiomate",
-    reportDir: path.join(HOME, "ArchiveIN/automation/reports/excel-emergency-mode"),
+    reportDir: path.join(archiveAutomationRoot(HOME), "automation/reports/excel-emergency-mode"),
     maxAgeMinutes: 95,
     syncEvidence: true,
     plist: path.join(PLIST_DIR, "com.archive.studiomate-excel-emergency-mode.plist"),
@@ -105,7 +106,7 @@ const AUTOMATIONS = [
     label: "com.archive.archive-dashboard-db-sync",
     title: "ARCHIVE dashboard DB sync",
     area: "settlement",
-    reportDir: path.join(HOME, "ArchiveIN/automation/reports/archive-dashboard-sales-daily"),
+    reportDir: path.join(archiveAutomationRoot(HOME), "automation/reports/archive-dashboard-sales-daily"),
     maxAgeMinutes: 26 * 60,
     syncEvidence: true,
     plist: path.join(PLIST_DIR, "com.archive.archive-dashboard-db-sync.plist"),
@@ -116,7 +117,7 @@ const AUTOMATIONS = [
     label: "com.archive.archivein-admin-emergency-sync",
     title: "Admin emergency sync queue",
     area: "studiomate",
-    reportDir: path.join(HOME, "ArchiveIN/automation/reports/admin-emergency-sync"),
+    reportDir: path.join(archiveAutomationRoot(HOME), "automation/reports/admin-emergency-sync"),
     maxAgeMinutes: 45,
     plist: path.join(PLIST_DIR, "com.archive.archivein-admin-emergency-sync.plist"),
     repair: "bootstrap",
@@ -126,7 +127,7 @@ const AUTOMATIONS = [
     label: "com.archive.studiomate-memo-write-queue",
     title: "StudioMate memo write queue",
     area: "studiomate",
-    runLog: path.join(HOME, "ArchiveIN/emergency/runs/studiomate-memo-write.jsonl"),
+    runLog: path.join(archiveAutomationRoot(HOME), "emergency/runs/studiomate-memo-write.jsonl"),
     maxAgeMinutes: 20,
     plist: path.join(PLIST_DIR, "com.archive.studiomate-memo-write-queue.plist"),
     repair: "bootstrap",
@@ -136,7 +137,7 @@ const AUTOMATIONS = [
     label: "com.archive.eformsign-refund-queue",
     title: "eformsign refund agreement queue",
     area: "refunds",
-    resultFile: path.join(HOME, "ArchiveIN/automation/reports/eformsign-refund-queue/latest.json"),
+    resultFile: path.join(archiveAutomationRoot(HOME), "automation/reports/eformsign-refund-queue/latest.json"),
     maxAgeMinutes: 45,
     plist: path.join(PLIST_DIR, "com.archive.eformsign-refund-queue.plist"),
     repair: "bootstrap",
@@ -146,7 +147,7 @@ const AUTOMATIONS = [
     label: "com.archive.instructor-lesson-registration-queue",
     title: "Instructor lesson registration queue",
     area: "instructor-lessons",
-    resultFile: path.join(HOME, "ArchiveIN/automation/reports/instructor-lesson-registration/latest.json"),
+    resultFile: path.join(archiveAutomationRoot(HOME), "automation/reports/instructor-lesson-registration/latest.json"),
     maxAgeMinutes: 45,
     plist: path.join(PLIST_DIR, "com.archive.instructor-lesson-registration-queue.plist"),
     repair: "bootstrap",
@@ -156,7 +157,7 @@ const AUTOMATIONS = [
     label: "com.archive.eformsign-instructor-member-queue",
     title: "eformsign instructor member queue",
     area: "instructor-lessons",
-    resultFile: path.join(HOME, "ArchiveIN/automation/reports/eformsign-instructor-member/latest.json"),
+    resultFile: path.join(archiveAutomationRoot(HOME), "automation/reports/eformsign-instructor-member/latest.json"),
     maxAgeMinutes: 45,
     plist: path.join(PLIST_DIR, "com.archive.eformsign-instructor-member-queue.plist"),
     repair: "bootstrap",
@@ -166,7 +167,7 @@ const AUTOMATIONS = [
     label: "com.archive.studiomate-refund-sms-queue",
     title: "StudioMate refund SMS queue",
     area: "refunds",
-    resultFile: path.join(HOME, "ArchiveIN/automation/reports/studiomate-refund-sms/latest.json"),
+    resultFile: path.join(archiveAutomationRoot(HOME), "automation/reports/studiomate-refund-sms/latest.json"),
     maxAgeMinutes: 45,
     plist: path.join(PLIST_DIR, "com.archive.studiomate-refund-sms-queue.plist"),
     repair: "bootstrap",
@@ -186,7 +187,7 @@ const AUTOMATIONS = [
     label: "com.archive.monthly-ticket-liability",
     title: "Monthly ticket liability",
     area: "business",
-    resultFile: path.join(HOME, "ArchiveIN/automation/reports/ticket-liability/latest.json"),
+    resultFile: path.join(archiveAutomationRoot(HOME), "automation/reports/ticket-liability/latest.json"),
     maxAgeMinutes: 35 * 24 * 60,
     plist: path.join(PLIST_DIR, "com.archive.monthly-ticket-liability.plist"),
     repair: "none",
@@ -581,7 +582,7 @@ async function checkLaunchAgents() {
       try {
         deferredQueryFailure = deferInstructorOrderHealthFinding(
           JSON.parse(readFileSync(item.resultFile, "utf8")),
-          JSON.parse(readFileSync(path.join(HOME, "ArchiveIN/automation/imweb-instructor-orders", ALERT_STATE_FILE), "utf8")),
+          JSON.parse(readFileSync(path.join(archiveAutomationRoot(HOME), "automation/imweb-instructor-orders", ALERT_STATE_FILE), "utf8")),
         );
       } catch { /* Actual registration failures remain immediately actionable. */ }
     }

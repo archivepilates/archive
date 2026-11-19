@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 
@@ -9,7 +9,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330";
-const REPORT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/member-profile-dedupe");
+const REPORT_DIR = archiveAutomationPath("automation/reports/member-profile-dedupe");
 
 const args = parseArgs(process.argv.slice(2));
 const config = {

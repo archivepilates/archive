@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationRoot } from "./lib/archive-automation-paths.mjs";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, lstatSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -34,7 +35,7 @@ const DEFAULT_ROOT = path.join(
 );
 const DEFAULT_BACKUP_ROOT = path.join(HOME, "Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/월별정산백업");
 const DEFAULT_SETTLEMENT_DRIVE_ROOT = path.dirname(DEFAULT_BACKUP_ROOT);
-const DEFAULT_CREDENTIALS = path.join(HOME, "ArchiveIN/secrets/google/archive-codex-operator.json");
+const DEFAULT_CREDENTIALS = path.join(archiveAutomationRoot(HOME), "secrets/google/archive-codex-operator.json");
 const args = parseArgs(process.argv.slice(2));
 const ym = String(args.month || previousMonthYyyyMm());
 const rootDir = expandHome(String(args.root || process.env.ARCHIVE_MONTHLY_SETTLEMENT_ROOT || DEFAULT_ROOT));

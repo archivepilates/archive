@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
@@ -39,7 +40,7 @@ const apply = args.has("--apply");
 const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
   baseUrl: process.env.STUDIOMATE_WEB_BASE_URL || "https://arcpilates.studiomate.kr",
-  profileDir: expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || "~/ArchiveIN/automation/browser-profile"),
+  profileDir: expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || archiveAutomationPath("automation/browser-profile")),
   headless: process.env.HEADLESS !== "false",
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",
   limit: Math.max(1, Number(valueArg("--limit") || process.env.INSTRUCTOR_LESSON_REGISTRATION_LIMIT || "1")),
@@ -47,11 +48,11 @@ const config = {
   simulateNewMemberTest: args.has("--simulate-new-member-test"),
   runLogPath: expandHome(
     process.env.INSTRUCTOR_LESSON_REGISTRATION_RUN_LOG
-      || "~/ArchiveIN/automation/runs/instructor-lesson-registration.jsonl",
+      || archiveAutomationPath("automation/runs/instructor-lesson-registration.jsonl"),
   ),
   lastResultPath: expandHome(
     process.env.INSTRUCTOR_LESSON_REGISTRATION_LAST_RESULT
-      || "~/ArchiveIN/automation/reports/instructor-lesson-registration/latest.json",
+      || archiveAutomationPath("automation/reports/instructor-lesson-registration/latest.json"),
   ),
 };
 

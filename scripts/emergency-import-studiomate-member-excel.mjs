@@ -1,8 +1,8 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import path from "node:path";
 import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
 import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs";
@@ -30,8 +30,8 @@ const PYTHON =
   process.env.ARCHIVEIN_PYTHON ||
   "/Users/archivepilates/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3";
 const MEMBER_EXPORT_ROOTS = [
-  "/Users/archivepilates/ArchiveIN/emergency/archive/member",
-  "/Users/archivepilates/ArchiveIN/emergency/downloads",
+  archiveAutomationPath("emergency/archive/member"),
+  archiveAutomationPath("emergency/downloads"),
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터",
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/회원원본데이터",
 ];

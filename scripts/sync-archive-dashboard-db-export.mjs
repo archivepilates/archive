@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationRoot } from "./lib/archive-automation-paths.mjs";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,8 +19,8 @@ import {
 } from "./dashboard-export-utils.mjs";
 
 const HOME = os.homedir();
-const DEFAULT_CREDENTIALS = path.join(HOME, "ArchiveIN/secrets/google/archive-codex-operator.json");
-const REPORT_DIR = path.join(HOME, "ArchiveIN/automation/reports/archive-dashboard-db-sync");
+const DEFAULT_CREDENTIALS = path.join(archiveAutomationRoot(HOME), "secrets/google/archive-codex-operator.json");
+const REPORT_DIR = path.join(archiveAutomationRoot(HOME), "automation/reports/archive-dashboard-db-sync");
 const DEFAULT_DASHBOARD_DB_SPREADSHEET_ID = "1yEU2lDM_hTKQ-qT8UNj1PsiL7fsBwAgkzsKOzfXVsKg";
 
 const args = parseArgs(process.argv.slice(2));

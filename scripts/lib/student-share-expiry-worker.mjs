@@ -1,5 +1,5 @@
+import { archiveAutomationPath } from './archive-automation-paths.mjs';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { readStudentShareLedgers, validatedShareEntries, STUDENT_SHARE_SOURCES } from './imweb-student-share-policy.mjs';
@@ -7,7 +7,7 @@ import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { runStudentShareAccess } from '../e261017-access.mjs';
 import { sendAutomationHealthEmail } from './automation-failure-notifications.mjs';
 
-export const EXPIRY_WORKER_DIR = path.join(os.homedir(), 'ArchiveIN/automation/student-share-expiry');
+export const EXPIRY_WORKER_DIR = archiveAutomationPath('automation/student-share-expiry');
 export const EXPIRY_WORKER_POLICY = 'student-share-expiry-worker-v1';
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const HOUR = 3600000;

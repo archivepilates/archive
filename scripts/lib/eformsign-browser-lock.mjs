@@ -1,8 +1,9 @@
+import { archiveAutomationPath } from "./archive-automation-paths.mjs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const DEFAULT_LOCK_PATH = "~/ArchiveIN/automation/locks/eformsign-browser-profile.lock";
+const DEFAULT_LOCK_PATH = archiveAutomationPath("automation/locks/eformsign-browser-profile.lock");
 const DEFAULT_STALE_MS = 30 * 60 * 1000;
 const DEFAULT_WAIT_MS = 5 * 60 * 1000;
 const POLL_MS = 2000;

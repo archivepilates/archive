@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -13,7 +14,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const NODE = process.execPath;
-const REPORT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/admin-emergency-sync");
+const REPORT_DIR = archiveAutomationPath("automation/reports/admin-emergency-sync");
 const MAX_REQUESTS = Number(process.env.ADMIN_EMERGENCY_SYNC_MAX_REQUESTS || "1");
 const SUPPORTED_REQUEST_MODES = new Set([
   "emergency_excel",

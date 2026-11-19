@@ -1,8 +1,8 @@
+import { archiveAutomationPath } from './archive-automation-paths.mjs';
 import { lstat, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { randomUUID, createHash } from 'node:crypto';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import os from 'node:os';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 import { TRANSIENT_READ_CODE, sanitizeImwebFailureDetails } from './imweb-read-failure.mjs';
 import { formatOperationsReport, kstTimestamp } from './operations-email-format.mjs';
@@ -50,7 +50,7 @@ export function sendAutomationHealthEmail({ area, title, link }, event, { execut
   const output = execute(process.execPath, ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
     cwd: new URL('../../', import.meta.url), encoding: 'utf8', timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env,
-      GOOGLE_SERVICE_ACCOUNT_KEY: path.join(os.homedir(), 'ArchiveIN/secrets/google/archive-codex-operator.json'),
+      GOOGLE_SERVICE_ACCOUNT_KEY: archiveAutomationPath('secrets/google/archive-codex-operator.json'),
       AUTOMATION_REPORT_FROM: 'home@archivepilates.com', AUTOMATION_REPORT_TO: 'home@archivepilates.com',
       AUTOMATION_REPORT_EVENT_ID: eventId,
       AUTOMATION_REPORT_RECONCILE_ONLY: event.reconcileOnly ? '1' : '0',

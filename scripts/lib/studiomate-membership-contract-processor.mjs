@@ -1,5 +1,4 @@
-import os from "node:os";
-import path from "node:path";
+import { archiveAutomationPath } from "./archive-automation-paths.mjs";
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./member-dispatch-window.mjs";
 import { acquireStudioMateBrowserLock } from "./studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./studiomate-login.mjs";
@@ -107,7 +106,7 @@ export async function runStudioMateMembershipContractCandidates({
     });
     const { chromium } = await import("playwright");
     context = await chromium.launchPersistentContext(
-      path.join(os.homedir(), "ArchiveIN/automation/browser-profile"),
+      archiveAutomationPath("automation/browser-profile"),
       { headless: true },
     );
     const page = context.pages()[0] || (await context.newPage());

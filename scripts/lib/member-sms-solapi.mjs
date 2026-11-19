@@ -1,12 +1,11 @@
+import { archiveAutomationPath } from './archive-automation-paths.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync, lstatSync } from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { assertMemberDispatchAllowed } from './member-dispatch-window.mjs';
 import { makeLessonVideoSolapiRequest } from './lesson-video-notice-solapi.mjs';
 
 export const MEMBER_SMS_PROVIDER_POLICY = 'solapi_direct_sms_v1';
-export const MEMBER_SMS_CONFIG_PATH = path.join(os.homedir(), 'ArchiveIN/automation/config/member-sms-solapi.json');
+export const MEMBER_SMS_CONFIG_PATH = archiveAutomationPath('automation/config/member-sms-solapi.json');
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const messageId = value => typeof value === 'string' && /^M[A-Za-z0-9]{20,80}$/.test(value);
 const groupId = value => typeof value === 'string' && /^G[A-Za-z0-9]{20,80}$/.test(value);

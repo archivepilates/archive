@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, lstat, mkdir, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { archiveAutomationPath, canonicalAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { acquireEformsignBrowserLock } from "./lib/eformsign-browser-lock.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { captureStudioMateNativeApiClient, readExactStudioMateMember } from "./lib/studiomate-native-contract-source.mjs";
@@ -17,8 +18,8 @@ const API = "https://kr-service.eformsign.com";
 const LIST = `/v1.0/companies/${COMPANY}/documents`;
 const LIST_URL = `${WEB}/eform/document/document_list.html?mode=ai`;
 const VIEW_FLAGS = Object.freeze({ mode: "ai", viewFlag: "true", is_preview: "true" });
-const DIRECTORY = "/Users/archivepilates/ArchiveIN/operations/instructor-signup-enrichment-20261030";
-const AUTOMATION = "/Users/archivepilates/ArchiveIN/automation";
+const DIRECTORY = archiveAutomationPath("operations/instructor-signup-enrichment-20261030");
+const AUTOMATION = archiveAutomationPath("automation");
 const digest = value => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
 const idValid = value => typeof value === "string" && /^[a-f0-9]{32}$/.test(value);
 const hashValid = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
@@ -31,7 +32,7 @@ export function parseSourceArgs(args) {
   const inventory = args.filter(arg => arg.startsWith("--inventory="));
   const limits = args.filter(arg => arg.startsWith("--limit="));
   requireProof(inventory.length === 1 && limits.length <= 1 && inventory.length + limits.length === args.length, "ARGUMENTS_INVALID");
-  const file = inventory[0].slice(12), rawLimit = limits[0]?.slice(8) ?? "200";
+  const file = canonicalAutomationPath(inventory[0].slice(12)), rawLimit = limits[0]?.slice(8) ?? "200";
   requireProof(path.isAbsolute(file) && path.resolve(file) === file && file.startsWith(`${DIRECTORY}/`)
     && /^[1-9]\d{0,2}$/.test(rawLimit) && Number(rawLimit) <= 200, "ARGUMENTS_INVALID");
   return { inventoryPath: file, limit: Number(rawLimit) };

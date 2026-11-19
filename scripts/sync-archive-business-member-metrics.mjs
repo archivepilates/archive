@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { googleAccessToken, parseArgs, quotedRange, sheetsRequest } from "./dashboard-export-utils.mjs";
@@ -10,7 +10,7 @@ import { collectMetricRows, freshMetricRows, mergeMetricRows, metricMonths, tick
 const DOCUMENT = "https://firestore.googleapis.com/v1/projects/archive-pilates/databases/(default)/documents/dashboardSnapshots/current";
 const SPREADSHEET = "1yEU2lDM_hTKQ-qT8UNj1PsiL7fsBwAgkzsKOzfXVsKg";
 const SHEET = "월별 유효회원";
-const REPORT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/business-member-metrics");
+const REPORT_DIR = archiveAutomationPath("automation/reports/business-member-metrics");
 
 export async function patchMemberMetrics({ token, rows, now, source, read = readSnapshot, request = fetch }) {
   const fields = ["월별회원지표", "memberMetricsUpdatedAt", "memberMetricsSource"];
@@ -63,7 +63,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const now = new Date().toISOString();
   const currentMonth = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 7);
-  const credentialsPath = String(args.credentials || process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(os.homedir(), "ArchiveIN/secrets/google/archive-codex-operator.json"));
+  const credentialsPath = String(args.credentials || process.env.GOOGLE_APPLICATION_CREDENTIALS || archiveAutomationPath("secrets/google/archive-codex-operator.json"));
   const token = await googleAccessToken({ credentialsPath, scopes: ["https://www.googleapis.com/auth/datastore"], delegated: false });
   const current = await readSnapshot(token);
   const requested = String(args.months || args.month || "").split(",").filter(Boolean);

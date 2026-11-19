@@ -6,6 +6,7 @@ import {
   enqueueNotificationRefresh, acknowledgeNotificationRefresh, preserveNotificationContactPlans,
 } from '../lib/studiomate-notification-ingress.mjs';
 import { acquireStudioMateSyncRun } from '../lib/studiomate-sync-run-lock.mjs';
+import { archiveAutomationPath } from '../lib/archive-automation-paths.mjs';
 
 const NOW = Date.UTC(2026, 9, 20, 3);
 const hint = (title = '예약', body = 'synthetic booking A') => notificationHint({ title, body });
@@ -655,7 +656,7 @@ test('sync-run acquisition uses the dedicated non-waiting lock and returns its e
   let releaseCount = 0;
   const release = async () => { releaseCount++; };
   const result = await acquireStudioMateSyncRun({ acquire: async options => { calls.push(options); return release; } });
-  assert.deepEqual(calls, [{ lockPath: '~/ArchiveIN/automation/locks/studiomate-excel-sync-run.lock', owner: 'studiomate-excel-sync-run', waitMs: 0 }]);
+  assert.deepEqual(calls, [{ lockPath: archiveAutomationPath('automation/locks/studiomate-excel-sync-run.lock'), owner: 'studiomate-excel-sync-run', waitMs: 0 }]);
   assert.equal(result.acquired, true);
   assert.equal(result.release, release);
   assert.equal(releaseCount, 0);

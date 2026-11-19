@@ -1,3 +1,4 @@
+import { archiveAutomationPath } from './archive-automation-paths.mjs';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import os from 'node:os';
@@ -264,7 +265,7 @@ export async function importInstructorOrder(db, order, { apply = false, now = ne
 export async function syncImwebInstructorOrders(db, { apply = false, orderNo = '', force = false, read = imwebOrderRead,
   recordStatus = recordAutomationStatus, attention = notifyAttention,
   notify = event => sendAutomationHealthEmail(emailContext, event),
-  stateDir = path.join(os.homedir(), 'ArchiveIN/automation/imweb-instructor-orders') } = {}) {
+  stateDir = archiveAutomationPath('automation/imweb-instructor-orders') } = {}) {
   if (!apply) {
     const orders = orderNo ? [readImwebOrder(orderNo, read)] : readRecentImwebOrders(read);
     const items = [];
@@ -349,7 +350,7 @@ async function notifyAttention(stateDir, detail) {
   try {
     execFileSync(process.execPath, ['firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs'], {
       cwd: root, timeout: 45000, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, GOOGLE_SERVICE_ACCOUNT_KEY: path.join(os.homedir(), 'ArchiveIN/secrets/google/archive-codex-operator.json'),
+      env: { ...process.env, GOOGLE_SERVICE_ACCOUNT_KEY: archiveAutomationPath('secrets/google/archive-codex-operator.json'),
         AUTOMATION_REPORT_FROM: 'home@archivepilates.com', AUTOMATION_REPORT_TO: 'home@archivepilates.com',
         AUTOMATION_REPORT_SUBJECT: report.subject, AUTOMATION_REPORT_LABEL: '자동화 확인필요',
         AUTOMATION_REPORT_BODY: report.body,

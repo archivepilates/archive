@@ -1,3 +1,4 @@
+import { archiveAutomationPath } from "./archive-automation-paths.mjs";
 import { execFile } from "node:child_process";
 import { createSign } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -6,7 +7,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_PROJECT_ID = "archive-pilates";
-const DEFAULT_CREDENTIALS_PATH = "/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json";
+const DEFAULT_CREDENTIALS_PATH = archiveAutomationPath("secrets/google/archive-codex-operator.json");
 const LOGIN_SECRET_NAMES = ["STUDIOMATE_LOGIN_ID", "MANAGER_LOGIN_ID"];
 const PASSWORD_SECRET_NAMES = ["STUDIOMATE_LOGIN_PASSWORD", "MANAGER_LOGIN_PASSWORD"];
 

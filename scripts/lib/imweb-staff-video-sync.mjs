@@ -1,3 +1,4 @@
+import { archiveAutomationPath } from './archive-automation-paths.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,8 +15,8 @@ import { assertCommonStaffAcl } from './imweb-staff-common-acl.mjs';
 import { commonStaffAccess } from './imweb-staff-common-config.mjs';
 
 export const STAFF_VIDEO_POLICY = 'imweb-staff-video-v1';
-export const STAFF_VIDEO_DIR = path.join(os.homedir(), 'ArchiveIN/automation/imweb-staff-video');
-export const MEMBER_GROUP_LOCK = path.join(os.homedir(), 'ArchiveIN/automation/locks/imweb-member-groups.lock');
+export const STAFF_VIDEO_DIR = archiveAutomationPath('automation/imweb-staff-video');
+export const MEMBER_GROUP_LOCK = archiveAutomationPath('automation/locks/imweb-member-groups.lock');
 export const STAFF_VIDEO_LOCK_BUSY = 'IMWEB_MEMBER_GROUPS_BUSY';
 const stamp = () => new Date().toISOString();
 const sameGroups = (a,b) => isDeepStrictEqual([...a].sort(),[...b].sort());

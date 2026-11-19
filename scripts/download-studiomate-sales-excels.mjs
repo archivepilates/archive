@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath, archiveAutomationRoot } from "./lib/archive-automation-paths.mjs";
 import crypto from "node:crypto";
 import { createSign } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -25,7 +26,7 @@ const DRIVE_ROOT = path.join(
   HOME,
   "Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산",
 );
-const DEFAULT_CREDENTIALS = path.join(HOME, "ArchiveIN/secrets/google/archive-codex-operator.json");
+const DEFAULT_CREDENTIALS = path.join(archiveAutomationRoot(HOME), "secrets/google/archive-codex-operator.json");
 const DEFAULT_PYTHON = path.join(
   HOME,
   ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
@@ -33,8 +34,8 @@ const DEFAULT_PYTHON = path.join(
 
 const config = {
   baseUrl: env("STUDIOMATE_BASE_URL", "https://arcpilates.studiomate.kr"),
-  profileDir: expandHome(env("STUDIOMATE_SALES_PROFILE_DIR", "~/ArchiveIN/automation/browser-profile")),
-  downloadDir: expandHome(env("STUDIOMATE_SALES_DOWNLOAD_DIR", "~/ArchiveIN/automation/downloads/sales")),
+  profileDir: expandHome(env("STUDIOMATE_SALES_PROFILE_DIR", archiveAutomationPath("automation/browser-profile"))),
+  downloadDir: expandHome(env("STUDIOMATE_SALES_DOWNLOAD_DIR", archiveAutomationPath("automation/downloads/sales"))),
   driveRoot: expandHome(env("ARCHIVE_SETTLEMENT_DRIVE_ROOT", DRIVE_ROOT)),
   credentialsPath: expandHome(env("GOOGLE_APPLICATION_CREDENTIALS", DEFAULT_CREDENTIALS)),
   python: expandHome(env("PYTHON", DEFAULT_PYTHON)),

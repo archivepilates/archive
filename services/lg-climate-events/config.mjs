@@ -1,11 +1,12 @@
+import { archiveAutomationPath } from '../../scripts/lib/archive-automation-paths.mjs';
 import path from 'node:path';
 import { checkServerIdentity } from 'node:tls';
 
-export const CONFIG_PATH = '/Users/archivepilates/ArchiveIN/secrets/lg/thinq-events.json';
-export const FIREBASE_CREDENTIAL_PATH = '/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json';
-export const LOCK_PATH = '/Users/archivepilates/ArchiveIN/automation/locks/lg-climate-events.lock';
-export const STATE_PATH = '/Users/archivepilates/ArchiveIN/automation/state/lg-climate-events.json';
-export const LOG_PATH = '/Users/archivepilates/ArchiveIN/automation/logs/lg-climate-events.log';
+export const CONFIG_PATH = archiveAutomationPath('secrets/lg/thinq-events.json');
+export const FIREBASE_CREDENTIAL_PATH = archiveAutomationPath('secrets/google/archive-codex-operator.json');
+export const LOCK_PATH = archiveAutomationPath('automation/locks/lg-climate-events.lock');
+export const STATE_PATH = archiveAutomationPath('automation/state/lg-climate-events.json');
+export const LOG_PATH = archiveAutomationPath('automation/logs/lg-climate-events.log');
 export const RUNTIME = '/Users/archivepilates/dev/archive-in-runtime';
 export const NODE = '/opt/homebrew/bin/node';
 export const VERSION = 'lg_climate_events_v1';

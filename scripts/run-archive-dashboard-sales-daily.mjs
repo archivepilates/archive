@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 const args = new Set(process.argv.slice(2));
@@ -13,7 +13,7 @@ const month = valueArg("--month");
 const startDate = valueArg("--start-date");
 const endDate = valueArg("--end-date");
 
-const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/archive-dashboard-sales-daily");
+const reportDir = archiveAutomationPath("automation/reports/archive-dashboard-sales-daily");
 const steps = [];
 
 if (!skipDownload) {

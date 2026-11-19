@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import os from "node:os";
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createHoldingReadbackSession } from "./lib/studiomate-holding-session.mjs";
@@ -23,7 +23,7 @@ try {
   if (stdoutOnly) {
     console.log(JSON.stringify({ ok: true, mode: "read-only-memory", raw, sendAllowed: false }));
   } else {
-    const dir = path.join(os.homedir(), "ArchiveIN/automation/reports/holding-source");
+    const dir = archiveAutomationPath("automation/reports/holding-source");
     await mkdir(dir, { recursive: true, mode: 0o700 });
     const file = path.join(dir, `${memberId}-${normalized.observationFingerprint}.json`);
     await writeFile(file, JSON.stringify(raw, null, 2), { mode: 0o600 });

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
@@ -28,10 +29,10 @@ const args = parseArgs(process.argv.slice(2));
 const apply = Boolean(args.apply);
 const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
-  profileDir: expandHome(process.env.EFORMSIGN_BROWSER_PROFILE_DIR || "~/ArchiveIN/automation/eformsign-browser-profile"),
-  runLogPath: expandHome(process.env.EFORMSIGN_REFUND_RUN_LOG || "~/ArchiveIN/emergency/runs/eformsign-refund.jsonl"),
+  profileDir: expandHome(process.env.EFORMSIGN_BROWSER_PROFILE_DIR || archiveAutomationPath("automation/eformsign-browser-profile")),
+  runLogPath: expandHome(process.env.EFORMSIGN_REFUND_RUN_LOG || archiveAutomationPath("emergency/runs/eformsign-refund.jsonl")),
   lastResultPath: expandHome(
-    process.env.EFORMSIGN_REFUND_LAST_RESULT || "~/ArchiveIN/automation/reports/eformsign-refund-queue/latest.json",
+    process.env.EFORMSIGN_REFUND_LAST_RESULT || archiveAutomationPath("automation/reports/eformsign-refund-queue/latest.json"),
   ),
   headless: process.env.HEADLESS !== "false",
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",

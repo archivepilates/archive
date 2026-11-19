@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from './lib/archive-automation-paths.mjs';
 import { readFile, mkdir, writeFile, rename } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLiveReader } from '../services/archivepilates-mcp/src/live-browser.mjs';
@@ -9,7 +9,7 @@ import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs'
 import { notificationHint, observeNotificationHints, planNotificationRefresh,
   enqueueNotificationRefresh, acknowledgeNotificationRefresh } from './lib/studiomate-notification-ingress.mjs';
 
-const stateDir = path.join(os.homedir(), 'ArchiveIN/automation/state');
+const stateDir = archiveAutomationPath('automation/state');
 const statePath = path.join(stateDir, 'studiomate-notification-ingress.json');
 const require = createRequire(import.meta.url);
 
@@ -18,7 +18,7 @@ export async function observeStudioMateNotifications({ apply = false, forceRead 
   let release, reader, continuityLost = false;
   try {
     try { release = await acquireStudioMateBrowserLock({ owner: 'notification-ingress-state',
-      lockPath: '~/ArchiveIN/automation/locks/studiomate-notification-ingress.lock', waitMs: 0 }); }
+      lockPath: archiveAutomationPath('automation/locks/studiomate-notification-ingress.lock'), waitMs: 0 }); }
     catch (error) {
       if (String(error?.message).includes('profile is locked by')) return { ok: true, status: 'busy' };
       throw error;

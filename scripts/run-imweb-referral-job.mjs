@@ -1,4 +1,4 @@
-import { homedir } from 'node:os';
+import { archiveAutomationPath } from './lib/archive-automation-paths.mjs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { main } from './run-imweb-referral-worker.mjs';
@@ -7,7 +7,7 @@ import { TRANSIENT_READ_CODE } from './lib/imweb-read-failure.mjs';
 
 const emailContext = { area: '친구초대', title: '자동 적립', link: 'https://archivepilates.imweb.me/admin' };
 
-export async function runReferralJob({ directory = join(homedir(), 'ArchiveIN/automation/referral-production'),
+export async function runReferralJob({ directory = archiveAutomationPath('automation/referral-production'),
   run = main, notify = event => sendAutomationHealthEmail(emailContext, event) } = {}) {
   const result = await run(['--config', join(directory, 'config.json'), '--apply']);
   try {

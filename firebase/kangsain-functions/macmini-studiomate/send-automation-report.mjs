@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "../../../scripts/lib/archive-automation-paths.mjs";
 import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -10,7 +11,7 @@ const FROM = process.env.AUTOMATION_REPORT_FROM || "home@archivepilates.com";
 const TO = process.env.AUTOMATION_REPORT_TO || "home@archivepilates.com";
 const SERVICE_ACCOUNT_PATH =
   process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
-  "/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json";
+  archiveAutomationPath("secrets/google/archive-codex-operator.json");
 const subject = process.env.AUTOMATION_REPORT_SUBJECT;
 const body = normalizeOperationsIdentity(process.env.AUTOMATION_REPORT_BODY || '');
 const messageId = reportMessageId(process.env.AUTOMATION_REPORT_EVENT_ID);

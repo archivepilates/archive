@@ -1,3 +1,4 @@
+import { archiveAutomationRoot } from './archive-automation-paths.mjs';
 import { INSTRUCTOR_SIGNATURE_REMINDER_POLICY, planInstructorSignatureReminder } from './instructor-signature-reminder.mjs';
 import { processInstructorSignatureReminder, instructorReminderSelectionResult } from './instructor-signature-reminder-processing.mjs';
 import { readPendingInstructorSignupEvidence } from './instructor-signature-reminder-source.mjs';
@@ -49,7 +50,7 @@ export async function runInstructorSignatureReminder({ db, id, eformPage, apply,
   try {
     release = await acquireStudioMateBrowserLock({ owner: 'instructor-signature-reminder', waitMs: 10000 });
     const { chromium } = await import('playwright');
-    context = await chromium.launchPersistentContext(`${process.env.HOME}/ArchiveIN/automation/browser-profile`, {
+    context = await chromium.launchPersistentContext(`${archiveAutomationRoot(process.env.HOME)}/automation/browser-profile`, {
       headless: true, serviceWorkers: 'block', acceptDownloads: false,
     });
     await context.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort());

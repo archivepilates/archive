@@ -1,8 +1,8 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
@@ -16,15 +16,15 @@ const PYTHON =
   process.env.ARCHIVEIN_PYTHON ||
   "/Users/archivepilates/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3";
 const DELETED_CLASS_EXPORT_ROOTS = [
-  path.join(os.homedir(), "ArchiveIN/emergency/archive/deleted-class"),
-  path.join(os.homedir(), "ArchiveIN/emergency/downloads"),
+  archiveAutomationPath("emergency/archive/deleted-class"),
+  archiveAutomationPath("emergency/downloads"),
 ];
 
 const args = new Set(process.argv.slice(2));
 const fileArg = valueArg("--file");
 const apply = args.has("--apply");
 const requireFile = args.has("--require-file");
-const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/deleted-class-daily");
+const reportDir = archiveAutomationPath("automation/reports/deleted-class-daily");
 
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();

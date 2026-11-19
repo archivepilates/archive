@@ -1,10 +1,9 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import os from "node:os";
-import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { readNativeContractPage } from "./lib/studiomate-native-contract-reader.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
@@ -140,7 +139,7 @@ try {
   });
   const { chromium } = await import("playwright");
   context = await chromium.launchPersistentContext(
-    path.join(os.homedir(), "ArchiveIN/automation/browser-profile"),
+    archiveAutomationPath("automation/browser-profile"),
     { headless: true },
   );
   const page = await context.newPage();

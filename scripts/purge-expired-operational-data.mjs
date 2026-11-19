@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   hasDeletionBlockingReferences,
@@ -16,7 +16,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 
 const APPLY = process.argv.includes("--apply");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
-const REPORT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/operational-data-retention");
+const REPORT_DIR = archiveAutomationPath("automation/reports/operational-data-retention");
 const FieldPath = admin.firestore.FieldPath;
 const Timestamp = admin.firestore.Timestamp;
 

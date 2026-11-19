@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -33,15 +34,15 @@ const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
   baseUrl: process.env.STUDIOMATE_WEB_BASE_URL || "https://arcpilates.studiomate.kr",
   apiBaseUrl: process.env.STUDIOMATE_API_BASE_URL || "https://api.studiomate.kr",
-  profileDir: expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || "~/ArchiveIN/automation/browser-profile"),
-  runLogPath: expandHome(process.env.STUDIOMATE_MEMO_WRITE_RUN_LOG || "~/ArchiveIN/emergency/runs/studiomate-memo-write.jsonl"),
+  profileDir: expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || archiveAutomationPath("automation/browser-profile")),
+  runLogPath: expandHome(process.env.STUDIOMATE_MEMO_WRITE_RUN_LOG || archiveAutomationPath("emergency/runs/studiomate-memo-write.jsonl")),
   headless: process.env.HEADLESS !== "false",
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",
   operatorEmail: process.env.ARCHIVE_OPERATOR_EMAIL || "home@archivepilates.com",
   delegatedUser: process.env.GOOGLE_DELEGATED_USER || "home@archivepilates.com",
   googleCredentialsPath:
     process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-    "/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json",
+    archiveAutomationPath("secrets/google/archive-codex-operator.json"),
 };
 
 if (!admin.apps.length) admin.initializeApp({ projectId: config.projectId });

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import os from "node:os";
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -16,8 +17,8 @@ const snapshotFile = valueArg("--snapshot-file");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
 const BASE_URL = "https://arcpilates.studiomate.kr";
-const PROFILE_DIR = expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || "~/ArchiveIN/automation/browser-profile");
-const REPORT_DIR = expandHome(process.env.STUDIOMATE_STAFF_SCAN_REPORT_DIR || "~/ArchiveIN/automation/reports/studiomate-staff-scan");
+const PROFILE_DIR = expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || archiveAutomationPath("automation/browser-profile"));
+const REPORT_DIR = expandHome(process.env.STUDIOMATE_STAFF_SCAN_REPORT_DIR || archiveAutomationPath("automation/reports/studiomate-staff-scan"));
 const HEADLESS = process.env.HEADLESS !== "false";
 if (PROJECT_ID !== "archive-pilates" || STUDIO_ID !== "5330") throw new Error("Unexpected staff sync project/studio");
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });

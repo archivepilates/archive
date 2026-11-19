@@ -1,7 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { archiveAutomationRoot, canonicalAutomationPath } from "./archive-automation-paths.mjs";
 
 const DELETE_POLICY = "delete_local_excel_after_successful_firestore_apply";
 
@@ -37,7 +38,7 @@ export async function cleanupImportedSourceFiles({
   }
 
   for (const filePath of uniquePaths) {
-    const resolved = path.resolve(filePath);
+    const resolved = canonicalAutomationPath(path.resolve(filePath));
     if (!existsSync(resolved)) {
       result.skipped.push({ path: filePath, reason: "missing" });
       continue;
@@ -60,18 +61,23 @@ export async function cleanupImportedSourceFiles({
   return await recordRetention(db, importId, result);
 }
 
-function isManagedLocalStudioMateExcelPath(filePath) {
-  const resolved = path.resolve(filePath);
-  return managedLocalRoots().some((root) => isInside(resolved, root));
+export function isManagedLocalStudioMateExcelPath(filePath, home = os.homedir()) {
+  const resolved = canonicalAutomationPath(path.resolve(filePath), home);
+  const root = managedLocalRoots(home).find(item => isInside(resolved, item));
+  if (!root) return false;
+  try {
+    // The compatibility alias is allowed, but no nested symlink may escape the managed tree.
+    return lstatSync(resolved).isFile() && realpathSync(resolved) === resolved && realpathSync(root) === root;
+  } catch { return false; }
 }
 
-function managedLocalRoots() {
-  const home = os.homedir();
+function managedLocalRoots(home) {
+  const root = archiveAutomationRoot(home);
   return [
-    path.join(home, "ArchiveIN/emergency/downloads"),
-    path.join(home, "ArchiveIN/emergency/archive"),
-    path.join(home, "ArchiveIN/automation/downloads"),
-    path.join(home, "ArchiveIN/automation/StudioMate Excel Archive"),
+    path.join(root, "emergency/downloads"),
+    path.join(root, "emergency/archive"),
+    path.join(root, "automation/downloads"),
+    path.join(root, "automation/StudioMate Excel Archive"),
   ].map((item) => path.resolve(item));
 }
 

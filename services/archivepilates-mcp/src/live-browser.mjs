@@ -1,5 +1,4 @@
-import os from 'node:os';
-import path from 'node:path';
+import { archiveAutomationPath } from '../../../scripts/lib/archive-automation-paths.mjs';
 import { chromium } from 'playwright';
 import { acquireStudioMateBrowserLock } from '../../../scripts/lib/studiomate-browser-lock.mjs';
 import { OperationError, requireValue } from './errors.mjs';
@@ -10,7 +9,7 @@ import { STUDIO_ORIGIN, clean, assertMemberUrl, extractSearchDom, validateSearch
 export const allowReadRequest = method => ['GET', 'HEAD', 'OPTIONS'].includes(method);
 
 export function createLiveReader({ launch = options => chromium.launchPersistentContext(
-  path.join(os.homedir(), 'ArchiveIN/automation/browser-profile'), options),
+  archiveAutomationPath('automation/browser-profile'), options),
   acquire = acquireStudioMateBrowserLock, budgetMs = 45000, cleanupMs = 5000 } = {}) {
   const active = new Map();
   const pending = new Set();

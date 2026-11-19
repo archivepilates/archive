@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { canonicalAutomationPath } from './lib/archive-automation-paths.mjs';
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readFileSync,
   renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, parse, resolve } from 'node:path';
@@ -137,6 +138,7 @@ function maybeStat(filename) {
 }
 
 function privateDirectory(directory) {
+  directory = canonicalAutomationPath(directory);
   absolutePath(directory);
   let current = parse(directory).root;
   // Check every component, not only the final parent; e.g. macOS /var aliases
@@ -153,6 +155,7 @@ function privateDirectory(directory) {
 }
 
 function privateFile(filename, { missing = false } = {}) {
+  filename = canonicalAutomationPath(filename);
   absolutePath(filename);
   privateDirectory(dirname(filename));
   const entry = maybeStat(filename);
@@ -164,6 +167,8 @@ function privateFile(filename, { missing = false } = {}) {
 }
 
 function runtimePaths(config, configPath, { init = false } = {}) {
+  config = { ...config, ledgerPath: canonicalAutomationPath(config.ledgerPath), backupDir: canonicalAutomationPath(config.backupDir) };
+  configPath = canonicalAutomationPath(configPath);
   privateDirectory(config.backupDir);
   privateDirectory(dirname(config.ledgerPath));
   const paths = { ledgerPath: config.ledgerPath, backupDir: config.backupDir,
@@ -178,13 +183,15 @@ function runtimePaths(config, configPath, { init = false } = {}) {
 }
 
 export function loadConfig(configPath, options = {}) {
+  configPath = canonicalAutomationPath(configPath);
   const entry = privateFile(configPath);
   requireValue(entry.size > 0 && entry.size <= 65536, 'INVALID_CONFIG');
   let fd;
   try {
     fd = openSync(configPath, constants.O_RDONLY | constants.O_NOFOLLOW);
     requireValue(sameFile(entry, fstatSync(fd)), 'UNSAFE_FILE');
-    const config = validateConfig(JSON.parse(readFileSync(fd, 'utf8')), options);
+    const raw = validateConfig(JSON.parse(readFileSync(fd, 'utf8')), options);
+    const config = validateConfig({ ...raw, ledgerPath: canonicalAutomationPath(raw.ledgerPath), backupDir: canonicalAutomationPath(raw.backupDir) }, options);
     runtimePaths(config, configPath);
     return config;
   } catch (error) {
@@ -304,6 +311,7 @@ export async function main(argv = [], dependencies = {}) {
   try {
     report.startedAt = isoTime(clock());
     const options = parseArgs(argv);
+    for (const key of ['configPath', 'ledgerPath', 'backupDir']) options[key] = canonicalAutomationPath(options[key]);
     if (!options.configPath) {
       report.summary = aggregate(await runWorker());
     } else {

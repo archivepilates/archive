@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -20,7 +21,7 @@ const admin = require("../firebase/kangsain-functions/functions/node_modules/fir
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || process.env.MANAGER_STUDIO_ID || "5330";
-const DEFAULT_OUT_DIR = path.join(os.homedir(), "ArchiveIN/automation/reports/private-session-ledger");
+const DEFAULT_OUT_DIR = archiveAutomationPath("automation/reports/private-session-ledger");
 
 const args = parseArgs(process.argv.slice(2));
 const memberIds = cleanString(args["member-ids"] || "")

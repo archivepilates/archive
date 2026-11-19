@@ -1,8 +1,8 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { qualityIssuesFromSummary, recordDataQualityIssues, recordSourceImport } from "./lib/archive-core-ops-logging.mjs";
@@ -17,8 +17,8 @@ const PYTHON =
   process.env.ARCHIVEIN_PYTHON ||
   "/Users/archivepilates/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3";
 const RESERVATION_EXPORT_ROOTS = [
-  path.join(os.homedir(), "ArchiveIN/emergency/downloads"),
-  path.join(os.homedir(), "ArchiveIN/automation/downloads"),
+  archiveAutomationPath("emergency/downloads"),
+  archiveAutomationPath("automation/downloads"),
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업예약내역",
   "/Users/archivepilates/Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산/수업예약내역",
 ];
@@ -39,7 +39,7 @@ const startDateArg = valueArg("--start-date");
 const endDateArg = valueArg("--end-date");
 const missingPolicy = valueArg("--missing-policy") || "mark";
 const maxWrites = Number(valueArg("--max-writes") || process.env.ARCHIVEIN_EMERGENCY_MAX_WRITES || "10000");
-const reportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
+const reportDir = archiveAutomationPath("automation/reports/excel-emergency-mode");
 
 if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();

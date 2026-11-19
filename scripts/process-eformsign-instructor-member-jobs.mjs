@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { randomUUID, createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -40,14 +41,14 @@ const reminderReportScript = fileURLToPath(new URL("../firebase/kangsain-functio
 const apply = Boolean(args.apply);
 const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
-  profileDir: expandHome(process.env.EFORMSIGN_BROWSER_PROFILE_DIR || "~/ArchiveIN/automation/eformsign-browser-profile"),
+  profileDir: expandHome(process.env.EFORMSIGN_BROWSER_PROFILE_DIR || archiveAutomationPath("automation/eformsign-browser-profile")),
   runLogPath: expandHome(
     process.env.EFORMSIGN_INSTRUCTOR_MEMBER_RUN_LOG
-      || "~/ArchiveIN/automation/runs/eformsign-instructor-member.jsonl",
+      || archiveAutomationPath("automation/runs/eformsign-instructor-member.jsonl"),
   ),
   lastResultPath: expandHome(
     process.env.EFORMSIGN_INSTRUCTOR_MEMBER_LAST_RESULT
-      || "~/ArchiveIN/automation/reports/eformsign-instructor-member/latest.json",
+      || archiveAutomationPath("automation/reports/eformsign-instructor-member/latest.json"),
   ),
   headless: process.env.HEADLESS !== "false",
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",
@@ -845,7 +846,7 @@ async function verifyCompletedOrderContact(page, ref, job, fields) {
     releaseMemberLock = await acquireStudioMateBrowserLock({ owner: 'signup-order-contact-verification' });
     const { chromium } = await import('playwright');
     memberContext = await chromium.launchPersistentContext(
-      expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || '~/ArchiveIN/automation/browser-profile'),
+      expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || archiveAutomationPath('automation/browser-profile')),
       { headless: config.headless });
     member = await readSignupMemberIdentity(await memberContext.newPage(), job);
   } finally {

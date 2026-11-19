@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationRoot } from "./lib/archive-automation-paths.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash, createSign } from "node:crypto";
 import {
@@ -20,7 +21,7 @@ import path from "node:path";
 
 const HOME = os.homedir();
 const DEFAULT_DASHBOARD_SPREADSHEET_ID = "1yEU2lDM_hTKQ-qT8UNj1PsiL7fsBwAgkzsKOzfXVsKg";
-const DEFAULT_CREDENTIALS = path.join(HOME, "ArchiveIN/secrets/google/archive-codex-operator.json");
+const DEFAULT_CREDENTIALS = path.join(archiveAutomationRoot(HOME), "secrets/google/archive-codex-operator.json");
 const DEFAULT_DRIVE_ROOT = path.join(
   HOME,
   "Library/CloudStorage/GoogleDrive-home@archivepilates.com/내 드라이브/아카이브 정산",
@@ -29,8 +30,8 @@ const DEFAULT_PYTHON = path.join(
   HOME,
   ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
 );
-const REPORT_DIR = path.join(HOME, "ArchiveIN/automation/reports/archive-dashboard-db-sync");
-const EXCEL_CACHE_DIR = path.join(HOME, "ArchiveIN/automation/cache/archive-dashboard-excels");
+const REPORT_DIR = path.join(archiveAutomationRoot(HOME), "automation/reports/archive-dashboard-db-sync");
+const EXCEL_CACHE_DIR = path.join(archiveAutomationRoot(HOME), "automation/cache/archive-dashboard-excels");
 
 const args = parseArgs(process.argv.slice(2));
 const config = {

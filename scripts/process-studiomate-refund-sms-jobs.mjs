@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
@@ -23,10 +24,10 @@ const apply = Boolean(args.apply);
 const config = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates",
   baseUrl: process.env.STUDIOMATE_WEB_BASE_URL || "https://arcpilates.studiomate.kr",
-  profileDir: expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || "~/ArchiveIN/automation/browser-profile"),
-  runLogPath: expandHome(process.env.STUDIOMATE_REFUND_SMS_RUN_LOG || "~/ArchiveIN/emergency/runs/studiomate-refund-sms.jsonl"),
+  profileDir: expandHome(process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || archiveAutomationPath("automation/browser-profile")),
+  runLogPath: expandHome(process.env.STUDIOMATE_REFUND_SMS_RUN_LOG || archiveAutomationPath("emergency/runs/studiomate-refund-sms.jsonl")),
   lastResultPath: expandHome(
-    process.env.STUDIOMATE_REFUND_SMS_LAST_RESULT || "~/ArchiveIN/automation/reports/studiomate-refund-sms/latest.json",
+    process.env.STUDIOMATE_REFUND_SMS_LAST_RESULT || archiveAutomationPath("automation/reports/studiomate-refund-sms/latest.json"),
   ),
   headless: process.env.HEADLESS !== "false",
   waitForLogin: process.env.WAIT_FOR_LOGIN === "true",

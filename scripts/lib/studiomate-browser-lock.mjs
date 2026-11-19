@@ -1,9 +1,10 @@
+import { archiveAutomationPath } from "./archive-automation-paths.mjs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-const DEFAULT_LOCK_PATH = "~/ArchiveIN/automation/locks/studiomate-browser-profile.lock";
+const DEFAULT_LOCK_PATH = archiveAutomationPath("automation/locks/studiomate-browser-profile.lock");
 const DEFAULT_STALE_MS = 45 * 60 * 1000;
 const DEFAULT_WAIT_MS = 30 * 60 * 1000;
 const POLL_MS = 2500;

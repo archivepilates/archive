@@ -1,12 +1,11 @@
-import os from "node:os";
-import path from "node:path";
+import { archiveAutomationPath } from "./archive-automation-paths.mjs";
 import { acquireStudioMateBrowserLock } from "./studiomate-browser-lock.mjs";
 
 const aborted = signal => { if (signal?.aborted) throw signal.reason || new Error("studiomate_browser_stopped"); };
 
 // One owner per batch. Other processes remain serialized by the existing profile lock.
 export function createStudioMateBrowserSession({ signal, waitMs = 15_000,
-  profile = process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || path.join(os.homedir(), "ArchiveIN/automation/browser-profile"),
+  profile = process.env.STUDIOMATE_EMERGENCY_PROFILE_DIR || archiveAutomationPath("automation/browser-profile"),
   headless = process.env.HEADLESS !== "false", acquire = acquireStudioMateBrowserLock,
   launch = async (directory, options) => (await import("playwright")).chromium.launchPersistentContext(directory, options),
 } = {}) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
@@ -30,8 +30,8 @@ const reservationFile = valueArg("--reservation-file");
 const memberFile = valueArg("--member-file");
 const requestedStartDate = valueArg("--start-date");
 const requestedEndDate = valueArg("--end-date");
-const normalReportDir = path.join(os.homedir(), "ArchiveIN/automation/reports/excel-emergency-mode");
-const reportDir = notificationRefresh ? path.join(os.homedir(), "ArchiveIN/automation/reports/notification-refresh") : normalReportDir;
+const normalReportDir = archiveAutomationPath("automation/reports/excel-emergency-mode");
+const reportDir = notificationRefresh ? archiveAutomationPath("automation/reports/notification-refresh") : normalReportDir;
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "archive-pilates";
 const STUDIO_ID = process.env.STUDIOMATE_STUDIO_ID || "5330";
 

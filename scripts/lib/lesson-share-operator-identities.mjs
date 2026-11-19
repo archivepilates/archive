@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import os from 'node:os';
+import { archiveAutomationPath, canonicalAutomationPath } from './archive-automation-paths.mjs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { matchLessonShareMember as matchOriginal } from './lesson-share-261024.mjs';
@@ -54,7 +54,8 @@ function privateStat(stat, directory = false) {
       : stat.isFile() && stat.nlink === 1 && stat.size <= MAX_BYTES), 'Unsafe operator identity file or parent');
 }
 
-export function readOperatorIdentities(file = path.join(os.homedir(), 'ArchiveIN/automation/imweb-lesson-identities/approved.json')) {
+export function readOperatorIdentities(file = archiveAutomationPath('automation/imweb-lesson-identities/approved.json')) {
+  file = canonicalAutomationPath(file);
   requireThat(typeof file === 'string' && path.isAbsolute(file) && path.resolve(file) === file, 'Invalid operator identity path');
   const parent = path.dirname(file);
   let current = path.parse(parent).root, parentStat, before;

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
@@ -17,10 +18,10 @@ const requestedEndDate = valueArg("--end-date");
 
 const config = {
   baseUrl: env("STUDIOMATE_BASE_URL", "https://arcpilates.studiomate.kr"),
-  profileDir: expandHome(env("STUDIOMATE_EMERGENCY_PROFILE_DIR", "~/ArchiveIN/automation/browser-profile")),
-  downloadDir: expandHome(env("STUDIOMATE_EMERGENCY_DOWNLOAD_DIR", "~/ArchiveIN/emergency/downloads")),
-  archiveRoot: expandHome(env("STUDIOMATE_EMERGENCY_ARCHIVE_DIR", "~/ArchiveIN/emergency/archive")),
-  runLogPath: expandHome(env("STUDIOMATE_EMERGENCY_RUN_LOG", "~/ArchiveIN/emergency/runs.jsonl")),
+  profileDir: expandHome(env("STUDIOMATE_EMERGENCY_PROFILE_DIR", archiveAutomationPath("automation/browser-profile"))),
+  downloadDir: expandHome(env("STUDIOMATE_EMERGENCY_DOWNLOAD_DIR", archiveAutomationPath("emergency/downloads"))),
+  archiveRoot: expandHome(env("STUDIOMATE_EMERGENCY_ARCHIVE_DIR", archiveAutomationPath("emergency/archive"))),
+  runLogPath: expandHome(env("STUDIOMATE_EMERGENCY_RUN_LOG", archiveAutomationPath("emergency/runs.jsonl"))),
   headless: env("HEADLESS", "true") !== "false",
   waitForLogin: env("WAIT_FOR_LOGIN", "false") === "true",
   python: env(

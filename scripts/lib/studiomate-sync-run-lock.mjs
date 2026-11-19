@@ -1,9 +1,10 @@
+import { archiveAutomationPath } from './archive-automation-paths.mjs';
 import { acquireStudioMateBrowserLock } from './studiomate-browser-lock.mjs';
 
 export async function acquireStudioMateSyncRun({ acquire = acquireStudioMateBrowserLock, waitMs = 0 } = {}) {
   try {
     return { acquired: true, release: await acquire({
-      lockPath: '~/ArchiveIN/automation/locks/studiomate-excel-sync-run.lock',
+      lockPath: archiveAutomationPath('automation/locks/studiomate-excel-sync-run.lock'),
       owner: 'studiomate-excel-sync-run', waitMs,
     }) };
   } catch (error) {

@@ -1,4 +1,4 @@
-import os from 'node:os';
+import { archiveAutomationPath } from './lib/archive-automation-paths.mjs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {randomUUID, createHash} from 'node:crypto';
@@ -79,16 +79,16 @@ export async function verifyNativeCorrectionDrafts(adapter, horizon) {
   return {ok: true, status: 'success', previewCount, correctedCount: 0, reviewCount: 0, nativeWriteCount: 0, sourceCount: before.total};
 }
 
-export async function runNativeClassCorrection({apply = false, notify = false, preview = false, recover = false, approval, root = path.join(os.homedir(), 'ArchiveIN/automation'), now = () => new Date()} = {}) {
+export async function runNativeClassCorrection({apply = false, notify = false, preview = false, recover = false, approval, root = archiveAutomationPath('automation'), now = () => new Date()} = {}) {
   validateClassCorrectionOptions({apply, preview, recover, approval});
   if (recover) validatePretransportRecoveryApproval(approval, now().getTime());
   const reportDir = path.join(root, 'reports/class-cancellation', randomUUID());
   await privateDirectory(reportDir);
   let release, context, result;
   try {
-    release = await acquireStudioMateBrowserLock({owner: 'class-cancellation-correction', lockPath: path.join(os.homedir(), 'ArchiveIN/automation/locks/studiomate-browser-profile.lock'), waitMs: 15000});
+    release = await acquireStudioMateBrowserLock({owner: 'class-cancellation-correction', lockPath: archiveAutomationPath('automation/locks/studiomate-browser-profile.lock'), waitMs: 15000});
     const {chromium} = await import('playwright');
-    context = await chromium.launchPersistentContext(path.join(os.homedir(), 'ArchiveIN/automation/browser-profile'), {acceptDownloads: true, headless: true, serviceWorkers: 'block'});
+    context = await chromium.launchPersistentContext(archiveAutomationPath('automation/browser-profile'), {acceptDownloads: true, headless: true, serviceWorkers: 'block'});
     const readPage = await context.newPage(), editPage = await context.newPage();
     const adapter = createClassCancellationBrowser({readPage, editPage, directory: reportDir});
     await adapter.initialize();

@@ -1,3 +1,4 @@
+import { archiveAutomationPath } from './lib/archive-automation-paths.mjs';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { createHash, createSign } from 'node:crypto';
@@ -6,7 +7,7 @@ import { deliverAutomationReport, reportMessageId } from '../firebase/kangsain-f
 
 const require = createRequire(import.meta.url);
 const admin = require('../firebase/kangsain-functions/functions/node_modules/firebase-admin');
-const keyPath = '/Users/archivepilates/ArchiveIN/secrets/google/archive-codex-operator.json';
+const keyPath = archiveAutomationPath('secrets/google/archive-codex-operator.json');
 const channel = 'UCutXw1q-cPB2UbNLnnBMwpw';
 const operator = 'home@archivepilates.com';
 const endpoint = 'https://asia-northeast3-archive-pilates.cloudfunctions.net/approveYoutubeReel';

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { archiveAutomationRoot } from "./lib/archive-automation-paths.mjs";
 import {
   existsSync,
   readFileSync,
@@ -21,14 +22,14 @@ const result = {
   source: "operational_artifact_retention",
   emptyAdminReports: pruneEmptyAdminReports(),
   jsonlCompaction: [
-    compactJsonl(path.join(HOME, "ArchiveIN/emergency/runs/onsite-welcome.jsonl")),
-    compactJsonl(path.join(HOME, "ArchiveIN/emergency/runs/studiomate-memo-write.jsonl")),
+    compactJsonl(path.join(archiveAutomationRoot(HOME), "emergency/runs/onsite-welcome.jsonl")),
+    compactJsonl(path.join(archiveAutomationRoot(HOME), "emergency/runs/studiomate-memo-write.jsonl")),
   ],
   logTrims: [
-    trimLargeLog(path.join(HOME, "ArchiveIN/emergency/logs/archivein-admin-emergency-sync.out.log")),
-    trimLargeLog(path.join(HOME, "ArchiveIN/emergency/logs/onsite-welcome-requests.out.log")),
-    trimLargeLog(path.join(HOME, "ArchiveIN/automation/logs/studiomate-memo-write-queue.out.log")),
-    trimLargeLog(path.join(HOME, "ArchiveIN/emergency/logs/studiomate-excel-emergency-mode.out.log")),
+    trimLargeLog(path.join(archiveAutomationRoot(HOME), "emergency/logs/archivein-admin-emergency-sync.out.log")),
+    trimLargeLog(path.join(archiveAutomationRoot(HOME), "emergency/logs/onsite-welcome-requests.out.log")),
+    trimLargeLog(path.join(archiveAutomationRoot(HOME), "automation/logs/studiomate-memo-write-queue.out.log")),
+    trimLargeLog(path.join(archiveAutomationRoot(HOME), "emergency/logs/studiomate-excel-emergency-mode.out.log")),
   ],
   finishedAt: new Date().toISOString(),
 };
@@ -36,7 +37,7 @@ const result = {
 console.log(JSON.stringify(result, null, 2));
 
 function pruneEmptyAdminReports() {
-  const dir = path.join(HOME, "ArchiveIN/automation/reports/admin-emergency-sync");
+  const dir = path.join(archiveAutomationRoot(HOME), "automation/reports/admin-emergency-sync");
   if (!existsSync(dir)) return { directory: dir, candidates: 0, deleted: 0, bytes: 0 };
   let candidates = 0;
   let deleted = 0;

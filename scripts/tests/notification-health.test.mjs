@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,6 +8,7 @@ import test from 'node:test';
 // Each fixture has a private HOME; reads, database writes and mail are synthetic.
 async function fixture(t, code) {
   const home = await mkdtemp(path.join(os.tmpdir(), 'notification-health-'));
+  await mkdir(path.join(home, 'ArchiveIN'));
   t.after(() => rm(home, { recursive: true, force: true }));
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import assert from 'node:assert/strict';

@@ -1,7 +1,6 @@
+import { archiveAutomationPath } from "./archive-automation-paths.mjs";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import os from "node:os";
-import path from "node:path";
 import { acquireStudioMateBrowserLock } from "./studiomate-browser-lock.mjs";
 import { createInstructorCancellationBrowser } from "./instructor-lesson-cancellation-browser.mjs";
 import { buildInstructorCancellationPlan, assertInstructorCancellationReadback } from "./instructor-lesson-cancellation-contract.mjs";
@@ -143,7 +142,7 @@ async function notifyReview({ jobId, detail, memberId }) {
   try {
     execFileSync(process.execPath, ["firebase/kangsain-functions/macmini-studiomate/send-automation-report.mjs"], {
       cwd: new URL("../../", import.meta.url), timeout: 45000, stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, GOOGLE_SERVICE_ACCOUNT_KEY: path.join(os.homedir(), "ArchiveIN/secrets/google/archive-codex-operator.json"),
+      env: { ...process.env, GOOGLE_SERVICE_ACCOUNT_KEY: archiveAutomationPath("secrets/google/archive-codex-operator.json"),
         AUTOMATION_REPORT_FROM: "home@archivepilates.com", AUTOMATION_REPORT_TO: "home@archivepilates.com",
         AUTOMATION_REPORT_SUBJECT: report.subject, AUTOMATION_REPORT_LABEL: "자동화 확인필요", AUTOMATION_REPORT_BODY: report.body },
     });
