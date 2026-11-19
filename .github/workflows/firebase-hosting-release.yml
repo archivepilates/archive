@@ -1,4 +1,4 @@
-name: Firebase Hosting Release
+name: ARCHIVE PILATES OPS Firebase Hosting Release
 
 on:
   workflow_dispatch:

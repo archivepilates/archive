@@ -493,7 +493,7 @@ const guardGroups = [
       {
         file: ".github/workflows/firebase-hosting-release.yml",
         markers: [
-          "Firebase Hosting Release",
+          "ARCHIVE PILATES OPS Firebase Hosting Release",
           "workflow_dispatch",
           "FIREBASE_SERVICE_ACCOUNT_ARCHIVE_PILATES",
           "validate:live-release-canary",

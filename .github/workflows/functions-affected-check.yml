@@ -1,4 +1,4 @@
-name: ARCHIVE IN Functions Affected Check
+name: ARCHIVE PILATES OPS Functions Affected Check
 
 on:
   pull_request:
@@ -65,7 +65,7 @@ jobs:
         run: npm ci
 
       - name: Validate automation root compatibility and private journals
-        run: node --test scripts/tests/automation-root-migration.test.mjs scripts/tests/imweb-native-followup.test.mjs scripts/tests/imweb-referral-runner.test.mjs
+        run: node --test scripts/tests/automation-root-migration.test.mjs scripts/tests/imweb-native-followup.test.mjs scripts/tests/imweb-referral-runner.test.mjs scripts/tests/github-workflow-display-names.test.mjs
 
       - name: Validate native weekend cancellation guards
         run: node --test scripts/tests/class-cancellation-*.test.mjs scripts/tests/studiomate-class-cancellation-guard.test.mjs scripts/tests/weekend-cancellation-rules-release.test.mjs
@@ -193,7 +193,7 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "### ARCHIVE IN Functions affected check"
+            echo "### ARCHIVE PILATES OPS Functions affected check"
             echo ""
             echo "- Codebases: ${{ steps.affected.outputs.codebases }}"
             echo "- Deploy target: ${{ steps.affected.outputs.deploy_only }}"

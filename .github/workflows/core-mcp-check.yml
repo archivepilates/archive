@@ -1,4 +1,4 @@
-name: CORE MCP Check
+name: ARCHIVE PILATES OPS CORE MCP Check
 on:
   push:
     branches: [main, 'codex/mini/core-ops-mcp-*']
