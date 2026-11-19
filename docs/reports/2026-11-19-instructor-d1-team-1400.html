@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>강사레슨 D-1 통합 적용 · 2026-11-19</title><style>
+*{box-sizing:border-box}body{margin:0;color:#222;background:#fff;font:16px/1.75 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}main{max-width:860px;margin:auto;padding:32px 20px 60px}h1{font-size:26px;line-height:1.4}h2{font-size:19px;margin:30px 0 10px}p,li{overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:left;padding:12px;border-bottom:1px solid #ddd;vertical-align:top}th{background:#f3f4f5}code{font-size:13px;overflow-wrap:anywhere}.muted{color:#666}.notice{border-left:3px solid #b8582b;padding-left:16px}a{color:#185c66}
+</style></head><body><main>
+<p class="muted">ARCHIVE PILATES · 2026년 11월 19일</p><h1>일반·팀 강사레슨 D-1 알림 통합 적용</h1>
+<p><strong>자동화와 CORE 운영규칙 배포·검증 완료.</strong> 실제 알림톡 발송, 보류 건 재시도, 수강생 정보 변경은 실행하지 않았습니다.</p>
+<table><thead><tr><th>시점</th><th>공통 규칙</th></tr></thead><tbody>
+<tr><td>D-1 11:30</td><td>기존 수업자료 안내 v3로 날짜별 샘플 발송</td></tr>
+<tr><td>D-1 13:30</td><td>미승인·실패 여부 점검과 내부 안내</td></tr>
+<tr><td>D-1 14:00</td><td>샘플 성공·사용자 명시적 승인이 확인된 대상만 본 발송</td></tr>
+<tr><td>수업 당일 12:00</td><td>자료 공개 기본값 유지</td></tr></tbody></table>
+<h2>변경 범위</h2><p>실제 예약의 Team 강사레슨·팀 강사레슨 수강권을 판별해 일반 강사레슨과 동일한 승인 경로로 준비합니다. 연속 두 세션은 수강생·수업일·관리번호별로 한 건으로 합칩니다. 영문 주제가 없는 Team 예약은 날짜별 team-YYMMDD 경로를 쓰되, 주제를 추정하지 않습니다.</p>
+<p>예약 취소, 최신 전체 예약 스냅샷, 신원·연락처, 승인된 수신자와 내용 고정, 기존 발송·불명확 결과의 중복 차단, 일반 큐 제외와 회원 연락 가능 시간은 유지했습니다. 새 스케줄러는 추가하지 않았고 예약확정 등 다른 종류의 알림 발송 시각도 변경하지 않았습니다.</p>
+<h2>검증</h2><ul><li>관리번호·Team 후보·샘플 승인·복구·중복 및 제한 발송·주차의 집중 테스트 통과. 두 파일 한정 Hosting 배포 도구 테스트 8/8 통과.</li><li>Functions TypeScript, 5개 분리 코드베이스 빌드, 경계 검증, CORE Hosting 검증과 롤백 방지 검사 통과.</li><li>영향받은 functions-alimtalk 15개와 functions-sync 12개 함수 배포 성공. 다른 3개 코드베이스는 배포하지 않았습니다.</li><li>실제 Scheduler의 11:30·13:30·14:00, Asia/Seoul, ENABLED를 각각 재조회했습니다.</li><li>CORE는 운영규칙·알림톡 설정 목록 두 파일만 변경했습니다. 전체 배포 목록과 설정을 대조해 나머지 68개 자산·이전 버전 보존을 확인했습니다.</li><li>배포 직후 최초 해시 검사는 불일치했지만 재배포 없이 조회만 수행해 17:36:56 KST에 두 도메인의 네 자산 응답·해시 일치를 검증했습니다.</li></ul>
+<h2>남은 회차별 준비</h2><p class="notice">11/20·11/21 Team 수업의 자료·배정 페이지는 이번 확인에서 모두 404였습니다. 캘린더만 존재하는 상태로는 샘플·본 발송을 진행할 수 없습니다. 자료·배정을 준비한 뒤 기존 검증과 샘플 승인이 필요합니다. 오늘 이미 지난 14시는 소급 실행하지 않았습니다.</p>
+<p class="muted">별도 검토 사항: 기존 승인 처리에는 발송 마감 시각과 승인 저장이 정확히 겹칠 때의 상태 경합이 남아 있어, 조건부 저장 보완이 권장됩니다. 이번 시간 변경으로 새로 생긴 문제는 아니며 실제 발송으로 재현하지 않았습니다.</p>
+<h2>배포 기록</h2><p>구현 <code>6b775ad9</code> · 배포 도구 <code>cdbd9372</code><br>CORE 버전 <code>2668c1db0a842bc3</code> · 공개 2026-11-19 17:36 KST</p>
+<p><a href="https://core.archivepilates.com/rules/#instructor-d1-team-1400">CORE 운영규칙</a> · <a href="https://github.com/archivepilates/archive/actions/runs/44487944320">구현 자동검사 통과</a></p>
+</main></body></html>
