@@ -434,7 +434,9 @@ test('CLI read-only main iterates every registered synthetic ledger without savi
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'registered-share-offline-test-'));
   try {
     const files = STUDENT_SHARE_SOURCES.map(source => {
-      const directory = path.join(home, 'Library/Application Support/ARCHIVE PILATES', source.lane);
+      const directory = source.storage === 'automation_operations'
+        ? path.join(home, 'archive-automation/operations', source.lane)
+        : path.join(home, 'Library/Application Support/ARCHIVE PILATES', source.lane);
       fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
       const file = path.join(directory, 'state.json');
       const state = fixture({ source }).s;
