@@ -11,6 +11,7 @@ import { makeManifest, assertManifest } from './release-e261017-classroom.mjs';
 const BASE = 'af06646964c0dff68e44b8eabd09445c88f28630';
 const RECOVERY_BASE = '5c3dcc1a';
 const INTAKE_BASE = '6f6e979c';
+const HISTORY_BASE = 'de5060ef19ade42b858433c55d96655551349b28';
 const SITE = 'archive-pilates-core';
 const ASSET = '/rules/index.html';
 const FILE = 'core/rules/index.html';
@@ -30,16 +31,28 @@ export function assertInstructorIntakeRuleOnly(before, after) {
   if (before.includes('id="instructor-ticket-intake-coverage-policy"') || (after.match(note) || []).length !== 1
     || after.replace(note, '') !== before) throw Error('Only the reviewed instructor intake coverage note may be added.');
 }
+export function assertHistoryRuleOnly(before, after) {
+  const hint = '서버와 클라이언트 모두 회원 검색·수강권·조건별 목록·예약·계약·알림톡·작업 상태 조회 7개만 허용합니다.';
+  const revisedHint = '서버와 클라이언트의 허용 목록에 포함된 도구만 사용할 수 있습니다.';
+  const note = /^ +<div class="rule-note" id="mcp-closed-month-history"><strong>[^<>\r\n]+<\/strong><span>[^<>\r\n]+<\/span><\/div>\n/gm;
+  const section = after.split('id="archivepilates-mcp">')[1]?.split('</section>')[0];
+  if (!before.includes(hint) || before.includes('id="mcp-closed-month-history"') || (after.match(note) || []).length !== 1
+    || !section?.includes('id="mcp-closed-month-history"') || after.replace(note, '') !== before.replace(hint, revisedHint))
+    throw Error('Only the closed-month history rule and its tool-count clarification may change.');
+}
 async function main() {
   const args = process.argv.slice(2), apply = args.includes('--apply');
   const recovery = args.includes('--new-instructor-ticket-recovery');
   const intake = args.includes('--instructor-intake-coverage');
+  const history = args.includes('--supabase-closed-month-history');
   const expected = args.find(a => a.startsWith('--expected-version='))?.slice(19);
-  if (recovery && intake || new Set(args).size !== args.length || args.some(a => a !== '--apply' && a !== '--new-instructor-ticket-recovery' && a !== '--instructor-intake-coverage' && !a.startsWith('--expected-version='))) throw Error('Invalid release arguments');
+  if ([recovery,intake,history].filter(Boolean).length > 1 || new Set(args).size !== args.length || args.some(a =>
+    !['--apply','--new-instructor-ticket-recovery','--instructor-intake-coverage','--supabase-closed-month-history'].includes(a)
+    && !a.startsWith('--expected-version='))) throw Error('Invalid release arguments');
   const git = args => execFileSync('git', args, { encoding: 'utf8' }).trim();
   const commit = git(['rev-parse', 'HEAD']);
-  const source = fs.readFileSync(FILE), baselineBytes = execFileSync('git', ['show', `${intake ? INTAKE_BASE : recovery ? RECOVERY_BASE : BASE}:${FILE}`]);
-  (intake ? assertInstructorIntakeRuleOnly : recovery ? assertNewInstructorRecoveryRuleOnly : assertMcpRuleOnly)(baselineBytes.toString(), source.toString());
+  const source = fs.readFileSync(FILE), baselineBytes = execFileSync('git', ['show', `${history ? HISTORY_BASE : intake ? INTAKE_BASE : recovery ? RECOVERY_BASE : BASE}:${FILE}`]);
+  (history ? assertHistoryRuleOnly : intake ? assertInstructorIntakeRuleOnly : recovery ? assertNewInstructorRecoveryRuleOnly : assertMcpRuleOnly)(baselineBytes.toString(), source.toString());
   const clean = () => {
     if (git(['branch', '--show-current']) !== 'main' || git(['status', '--porcelain'])
       || git(['rev-parse', 'HEAD']) !== commit || git(['rev-parse', 'origin/main']) !== commit) throw Error('Release requires synchronized clean main');
@@ -79,8 +92,9 @@ async function main() {
   const evidence = { site: SITE, sourceCommit: commit, baselineVersion: baseline.name, fileCount: files.length,
     changedPaths: [ASSET], unchangedFileCount: files.length - 1, sourceHash: sha(source), mode: apply ? 'apply' : 'plan' };
   if (!apply) { console.log(JSON.stringify(evidence)); return; }
-  const directory = path.join(os.homedir(), intake ? 'ArchiveIN/operations/november-instructor-confirmation-20261029' : recovery ? 'ArchiveIN/operations/core-meal-lesson-check-20261029' : 'ArchiveIN/operations/core-mcp');
-  const output = path.join(directory, 'hosting-release-20261029.json');
+  const directory = path.join(os.homedir(), history ? 'archive-automation/operations/2026-11-20-supabase-history-pilot'
+    : intake ? 'ArchiveIN/operations/november-instructor-confirmation-20261029' : recovery ? 'ArchiveIN/operations/core-meal-lesson-check-20261029' : 'ArchiveIN/operations/core-mcp');
+  const output = path.join(directory, history ? 'mcp-history-hosting-20261120.json' : 'hosting-release-20261029.json');
   if (fs.existsSync(output)) throw Error('Release evidence exists; reconcile before any retry');
   const lock = path.join(os.homedir(), 'ArchiveIN/automation/locks/firebase-hosting-' + SITE + '.lock');
   const fd = fs.openSync(lock, 'wx', 0o600);

@@ -19,6 +19,7 @@ ARCHIVE PILATES StudioMate 업무를 위한 맥미니 로컬 MCP입니다. 운�
 | `members_get_overview` | 선택 회원의 현재 수강권·등급·실시간 확인시각 |
 | `members_list_expiring` | 기본값은 원본 전체 회원 페이지의 현재 수강권에서 오늘부터 N일 이하 만료 조회. 명시적 snapshot은 저장 목록 |
 | `bookings_list` | 기본값은 선택 회원의 최대 31일 원본 예약·출석·취소 이력. 명시적 snapshot은 저장 원장 |
+| `history_get_member_month` (선택 연결) | StudioMate에서 실시간 선택한 회원 한 명의 Supabase 마감 월 이력 |
 | `contracts_get_progress` | 계약 생성·서명 증거·관측 상태·웰컴 상태 |
 | `messages_get_delivery` | 최대 31일 알림톡 후보·발송 원장, 최종 전달 미확인 구분 |
 | `messages_validate_target` | 정확한 후보 ID의 저장 원장 사전 검증. 발송 허가·승인·큐 접수 아님 |
@@ -68,6 +69,17 @@ ARCHIVE_MCP_OPERATOR_STAFF_ID = "1979746"
 ARCHIVE_MCP_ENABLE_MEMO_WRITES = "false"
 ARCHIVE_MCP_READ_ONLY = "true"
 ```
+
+### Supabase 마감 월 이력 연결
+
+기존 StudioMate 실시간 도구를 교체하지 않습니다. `history_get_member_month`는 활성 운영자 재확인 후, 같은 MCP 연결에서 최근 10분 내 `members_find`로 확인한 정확한 원본 회원 ID와 마감 월만 받습니다. 이름 검색과 연락처 확인은 StudioMate에서만 합니다. Supabase 쿼리는 원본 ID가 아닌 가명 키와 월만 받습니다. 반환값은 적재 당시 이름과 날짜·예약 상태·수업 유형·거래 분류입니다. 연락처·원본 ID·금액은 반환하지 않고 예약·환불·발송 근거로 사용하지 않습니다.
+
+1. 대상은 Free 파일럿 `archive-member-history-pilot`(`vrmtkewdqgcrhpbeijhr`)뿐입니다. 기존 Data API 비활성·RLS를 유지한 채, 별도 승인 후 `sql/history-read-only.sql`을 운영 관리자가 적용합니다. `NOLOGIN` 역할에는 단일 조회 함수 실행권만 부여합니다. 상속된 공개 테이블 권한이 감지되면 전체 변경이 취소됩니다. 기존 권한을 자동 수정하지 않습니다.
+2. 관리자 승인과 지정 계정의 로컬 인증 설정 후에만 이 역할을 로그인 가능하게 합니다. 승인된 로컬 비공개 경로의 0600 일반 파일에 `project`, 대시보드의 정확한 `host`, 전용 `password`, 파일럿 적재와 **동일한** `hmacKey`(64자리 hex), 대시보드 CA의 PEM 문자열 `ca`를 보관합니다. 관리자 비밀번호·JWT·서비스 역할을 대신 쓰거나 TLS 검증을 해제하지 않습니다. PostgreSQL 접속에 쓸 호스트는 프로젝트 Connect 화면에서 확인합니다. 파일은 채팅·Git·공용 클라우드에 저장하지 않습니다.
+3. 동일 경로 뒤에 `.usage.json`을 붙인 0600 파일에 대상 `project`, 실제 사용량 관측 `observedAt`, 청구 기간의 `egressBytes`를 기록합니다. 24시간이 지나거나 4 GB 이상이면 상세 조회가 보류됩니다. 사용량 갱신은 수동이며 주기 작업을 추가하지 않습니다.
+4. `ARCHIVE_MCP_HISTORY_CONFIG`에 위 비공개 파일 경로를 지정하고, MCP 허용 목록에 `history_get_member_month`를 추가합니다. 환경 설정이 없으면 기존 9개 조회 목록을 유지합니다. 새 MCP 연결에서 조회 함수만 성공하고 원본 테이블 및 적재 함수 접근은 거부되는 것을 확인한 후 운영 완료로 표시합니다.
+
+`not_loaded`는 월 자체가 미적재, `no_member_rows`는 적재 월에 해당 회원 행 없음입니다. 구체적 미적재 원인이나 최신 StudioMate 상태는 별도로 확인합니다. 200행을 초과하면 일부 결과를 전체처럼 보여주지 않습니다. 프로젝트·권한·연결 또는 증거 오류에서 기존 StudioMate 저장 자료로 대체하지 않습니다.
 
 ## 메모 승인과 실행 경계
 

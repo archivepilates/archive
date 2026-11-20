@@ -4,6 +4,10 @@ const read = { readOnlyHint: true, destructiveHint: false, idempotentHint: true,
 const tool = (name, description, inputSchema, annotations = read) => ({ name, description, inputSchema, annotations });
 const member = { memberId: string() };
 const querySource = { type: 'string', enum: ['live', 'snapshot'], default: 'live' };
+export const HISTORY_TOOL = tool('history_get_member_month', 'members_find에서 실시간으로 선택한 원본 회원 한 명의 검증 적재 월을 Supabase에서 읽습니다. 구매·환불·수강 스냅샷이며 현재 수강권·예약이나 외부 작업의 근거가 아닙니다. 미적재 월과 내역 없음은 다릅니다.', schema({
+  memberId: { ...string(16), pattern: '^[1-9]\\d{0,15}$' },
+  month: { ...string(7), pattern: '^20\\d{2}-(0[1-9]|1[0-2])$' },
+}));
 export const TOOLS = [
   tool('members_find', '맥미니 StudioMate 화면에서 이름 또는 전체 휴대폰 번호 완전일치 회원을 실시간 검색합니다. 동명이인은 선택이 필요합니다.', schema({ query: string(50) })),
   tool('members_get_overview', '선택 회원의 StudioMate 현재 수강권·등급을 실시간 화면에서 재확인합니다. 잠금·로그인·조회 실패는 저장 자료로 대체하지 않습니다.', schema(member)),
@@ -24,7 +28,7 @@ export const TOOLS = [
 ];
 
 export function validate(name, args) {
-  const definition = TOOLS.find(tool => tool.name === name);
+  const definition = name === HISTORY_TOOL.name ? HISTORY_TOOL : TOOLS.find(tool => tool.name === name);
   if (!definition || !args || typeof args !== 'object' || Array.isArray(args)) return false;
   const { properties, required } = definition.inputSchema;
   return required.every(key => Object.hasOwn(args, key)) && Object.keys(args).every(key => {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { TOOLS, validate } from './catalog.mjs';
+import { HISTORY_TOOL, TOOLS, validate } from './catalog.mjs';
 import { id, text, phone, maskedPhone, millis, iso, requireValue } from './errors.mjs';
 import { selectExpiring } from './ticket-query.mjs';
 import { liveSource, snapshotSource } from './freshness.mjs';
@@ -72,13 +72,14 @@ const statusView = value => ({ recordId: value._id, status: safeState(value.stat
   // Arbitrary error strings can contain health answers, credentials or member content.
   nextAction: value.lastError || value.error ? '원본 업무 화면에서 오류를 확인하세요. 자동 재실행하지 않았습니다.' : null });
 
-export function createService({ store, approvals, staffId, now = Date.now, memoWritesEnabled = false, readOnly = false, liveReader, targetValidator, operationProgressReader }) {
+export function createService({ store, approvals, staffId, now = Date.now, memoWritesEnabled = false, readOnly = false, liveReader, targetValidator, operationProgressReader, historyReader }) {
   const liveSelections = new Map();
-  function rememberSelection(member) {
+  function rememberSelection(member, selectedBySearch = false) {
+    const selectedAt = now(), searchedAt = selectedBySearch ? selectedAt : liveSelections.get(member.memberId)?.searchedAt;
     liveSelections.delete(member.memberId);
     if (liveSelections.size >= 200) liveSelections.delete(liveSelections.keys().next().value);
     liveSelections.set(member.memberId, { memberId: member.memberId, name: member.name,
-      phone: phone(member.phone), selectedAt: now() });
+      phone: phone(member.phone), selectedAt, searchedAt });
   }
   async function expectedMember(memberId) {
     id(memberId);
@@ -155,6 +156,16 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
     requireValue(validate(name, args), 'INVALID_ARGUMENT', '지원하는 도구와 입력 항목을 확인해 주세요.');
     requireValue(!readOnly || !['memos_prepare', 'memos_commit'].includes(name), 'WRITE_DISABLED', '조회 전용 연결에서는 메모 계획·실행을 제공하지 않습니다.');
     const operator = await actor();
+    if (name === 'history_get_member_month') {
+      requireValue(typeof historyReader === 'function', 'SOURCE_UNAVAILABLE', 'Supabase 이력 조회가 연결되지 않았습니다.');
+      const selected = liveSelections.get(args.memberId);
+      const age = now() - selected?.searchedAt;
+      requireValue(age >= 0 && age < 10 * 60000, 'LIVE_SELECTION_REQUIRED',
+        'members_find로 StudioMate 원본 회원을 선택한 후 다시 조회해 주세요.');
+      requireValue(args.month < new Date(now() + 9 * 3600000).toISOString().slice(0, 7), 'INVALID_ARGUMENT',
+        '마감이 끝난 월만 조회할 수 있습니다.');
+      return historyReader(args, { signal });
+    }
     if (name === 'operations_get_progress') {
       try {
         requireValue(typeof operationProgressReader === 'function', 'SOURCE_UNAVAILABLE', progressUnavailable().message);
@@ -213,7 +224,7 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
         'INVALID_ARGUMENT', '이름 또는 전체 휴대폰 번호를 입력해 주세요.');
       if (liveReader) {
         const result = await liveReader.findMembers(isPhone ? phone(query) : query, isPhone, signal);
-        for (const member of result.members) rememberSelection(member);
+        for (const member of result.members) rememberSelection(member, true);
         return { ok: true, members: result.members.map(value => liveMember(value, result.checkedAt)),
           match: 'exact', needsSelection: result.members.length !== 1, liveReadback: true,
           checkedAt: result.checkedAt, elapsedMs: result.elapsedMs, coverage: result.coverage,
@@ -339,5 +350,8 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
         providerStatus: safeState(value.solapiStatus || value.providerStatus), providerStatusCode: value.solapiStatusCode || null })),
       providerLiveChecked: false, note: '후보·큐·발송 원장의 저장 상태입니다. done 또는 메시지 ID만으로 최종 전달 완료를 확정하지 않습니다.' };
   }
-  return { listTools: () => readOnly ? TOOLS.filter(tool => tool.annotations.readOnlyHint) : TOOLS, callTool };
+  return { listTools: () => [
+    ...TOOLS.filter(tool => !readOnly || tool.annotations.readOnlyHint),
+    ...(typeof historyReader === 'function' ? [HISTORY_TOOL] : []),
+  ], callTool };
 }

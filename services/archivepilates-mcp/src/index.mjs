@@ -12,6 +12,7 @@ import { requireValue, safeError } from './errors.mjs';
 import { createLiveReader } from './live-browser.mjs';
 import { createTargetValidator } from './target-validator.mjs';
 import { createOperationProgressReader } from './operation-progress.mjs';
+import { createHistoryReader } from './history-reader.mjs';
 
 let app, server, liveReader;
 let appCleanup;
@@ -35,7 +36,8 @@ try {
   const service = createService({ store: createStore(db, Timestamp), approvals,
     staffId: settings.staffId, memoWritesEnabled: settings.memoWritesEnabled, readOnly: settings.readOnly, liveReader,
     targetValidator: createTargetValidator({ credentialPath: settings.credentialPath }),
-    operationProgressReader: createOperationProgressReader({ credentialPath: settings.credentialPath }) });
+    operationProgressReader: createOperationProgressReader({ credentialPath: settings.credentialPath }),
+    historyReader: settings.historyConfigPath ? createHistoryReader(settings.historyConfigPath) : undefined });
   server = createMcpServer(service);
   let closing = false;
   const shutdown = async () => { if (closing) return; closing = true; await liveReader.close(); await server.close(); await cleanupApp(); };

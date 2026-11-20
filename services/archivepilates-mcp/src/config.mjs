@@ -14,5 +14,6 @@ export function config(env = process.env) {
   return { projectId: 'archive-pilates', staffId: id(env.ARCHIVE_MCP_OPERATOR_STAFF_ID),
     credentialPath: env.GOOGLE_APPLICATION_CREDENTIALS || path.join(os.homedir(), 'ArchiveIN/secrets/google/archive-codex-operator.json'),
     stateDir: env.ARCHIVE_MCP_STATE_DIR || path.join(os.homedir(), 'ArchiveIN/automation/archivepilates-mcp'),
+    historyConfigPath: env.ARCHIVE_MCP_HISTORY_CONFIG || null,
     readOnly, memoWritesEnabled: !readOnly && env.ARCHIVE_MCP_ENABLE_MEMO_WRITES === 'true' };
 }
