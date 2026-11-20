@@ -222,10 +222,10 @@ test("offline actual HTML/renderers/CSS: Team and standard at 320/390/768/1440",
               assert.equal(await page.locator(".instructor-lesson-roster-row").count(), 6);
               assert.equal(await page.locator(".instructor-registration-item").count(), 6);
               assert.equal(await page.locator("[data-confirm-instructor-lesson],[data-instructor-cancel-key]").count(), 0);
-              assert.equal(await page.locator("#instructorLessonScheduleSummary").textContent(), "1개 일정 · 정원 확인 전");
+              assert.equal(await page.locator("#instructorLessonScheduleSummary").textContent(), "1개 일정 · 팀레슨 확정 6명");
               const card = page.locator(".instructor-seat-item");
-              assert.match(await card.innerText(), /접수 인원\s*6/);
-              assert.doesNotMatch(await card.innerText(), /잔여|남은 좌석|마감/);
+              assert.match(await card.innerText(), /확정 6명/);
+              assert.doesNotMatch(await card.innerText(), /정원|잔여|남은 좌석|마감/);
               assert.equal(await card.locator(".instructor-seat-progress").count(), 0);
               for (const id of ["instructorLessonScheduleList", "instructorLessonScheduleDetail", "instructorLessonRegistrationList"]) {
                 assert.equal(await page.locator(`#${id} img,#${id} script`).count(), 0);

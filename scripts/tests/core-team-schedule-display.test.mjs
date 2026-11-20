@@ -17,7 +17,8 @@ const fixture = () => ({items:[],schedule:{items:[
   {date:'2026-11-20',courseKind:'team',lessonTime:'14:00',metadataSource:'registration',capacitySource:'default',
     lessonTopic:'ARCHIVE METHOD #1 직장인 증후군',occupiedCount:6,capacity:10,remainingSeats:4,countSource:'registrations',roster:[]},
   {date:'2026-11-21',startAt:'2026-11-21T13:30:00+09:00',endAt:'2026-11-21T15:20:00+09:00',
-    capacitySource:'lecture',occupiedCount:5,capacity:5,remainingSeats:0,countSource:'tickets',roster:[]},
+    capacitySource:'default',occupiedCount:5,capacity:10,remainingSeats:5,countSource:'bookings',
+    roster:Array.from({length:5},(_,index)=>({memberName:`테스트 회원 ${index+1}`,memberKey:`fixture-${index}`}))},
   ...['2026-11-28','2026-11-29'].map(date => ({date,capacitySource:'lecture',occupiedCount:4,capacity:10,remainingSeats:6,countSource:'tickets',roster:[]})),
 ]}});
 function bootstrap(data) {
@@ -25,9 +26,10 @@ function bootstrap(data) {
     let selectedInstructorLessonDate='2026-11-20',instructorLessonCancellationBusy=false;
     const instructorLessonCancellationReceipts=new Map(),readUnavailable=()=>false,coreHref=p=>'/core/'+p;
     ${code}
-    globalThis.qa={state,render:renderInstructorLessonSchedule,roster:renderInstructorLessonRoster,presentation:instructorLessonSchedulePresentation};`;
+    globalThis.qa={state,render:renderInstructorLessonSchedule,roster:renderInstructorLessonRoster,presentation:instructorLessonSchedulePresentation,
+      select:date=>{selectedInstructorLessonDate=date;renderInstructorLessonSchedule();}};`;
 }
-test('approved dates are display-only, preserve times, capacities and conflict guards',()=>{
+test('team headcounts ignore both default and native capacity without changing the roster source',()=>{
   const elements=new Map(),element=id=>{if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:''});return elements.get(id);};
   const data=fixture(),before=JSON.stringify(data);
   const ctx={document:{getElementById:element,documentElement:{dataset:{coreAccess:'manager'}}}};
@@ -39,11 +41,28 @@ test('approved dates are display-only, preserve times, capacities and conflict g
   assert.match(html,/14:00~15:50/);assert.match(html,/13:30–15:20/);
   assert.match(html,/ARCHIVE METHOD #9 외부피드백2/);
   assert.match(element('instructorLessonScheduleDetail').innerHTML,/팀레슨.*14:00~15:50/);
-  assert.equal(element('instructorLessonScheduleSummary').textContent,'4개 일정 · 잔여 12석 · 팀 1개 정원 확인 전');
+  assert.equal(element('instructorLessonScheduleSummary').textContent,'4개 일정 · 정규 잔여 12석 · 팀레슨 확정 11명');
+  const cards = [...html.matchAll(/<article class="instructor-seat-item is-(team|standard)">([\s\S]*?)<\/article>/g)];
+  for (const [index, count] of [[0,6],[1,5]]) {
+    assert.match(cards[index][2],new RegExp(`확정 ${count}명`));
+    assert.doesNotMatch(cards[index][2],/정원|잔여|남은 좌석|마감|instructor-seat-progress/);
+  }
+  assert.match(cards[2][2],/정원/);
+  assert.match(cards[2][2],/잔여 6석/);
+  ctx.qa.select('2026-11-21');
+  assert.match(element('instructorLessonScheduleDetail').innerHTML,/<h3>[^<]* · 5명<\/h3>/);
+  ctx.qa.select('2026-11-20');
   assert.equal(JSON.stringify(ctx.qa.state.instructorLessonRegistrationDashboard),before);
   assert.equal(ctx.qa.presentation({date:'2026-11-20',startAt:'2026-11-20T15:00:00+09:00'}).timeLabel,'시간 확인 필요');
   assert.equal(ctx.qa.presentation({date:'2027-11-20'}).isTeam,false);
   assert.equal(ctx.qa.presentation({date:'2026-12-01',courseKind:'team'}).isTeam,true);
+  ctx.qa.state.instructorLessonRegistrationDashboard.schedule.items = [{
+    date:'2026-12-01',courseKind:'team',capacitySource:'lecture',capacity:2,occupiedCount:5,remainingSeats:0,overbookedCount:3,roster:[],
+  }];
+  ctx.qa.render();
+  assert.equal(element('instructorLessonScheduleSummary').textContent,'1개 일정 · 팀레슨 확정 5명');
+  assert.doesNotMatch(element('instructorLessonScheduleList').innerHTML,/정원|잔여|남은 좌석|마감|instructor-seat-progress/);
+  ctx.qa.state.instructorLessonRegistrationDashboard.schedule.items = data.schedule.items;
   ctx.qa.state.instructorLessonRegistrationDashboard.schedule.items[0].metadataSource='conflict';
   ctx.qa.render();
   assert.match(element('instructorLessonScheduleDetail').innerHTML,/접수 정보 확인필요/);
@@ -69,8 +88,10 @@ test('actual HTML and CSS: distinct Team cards fit 320/390/768/1440', {timeout:6
       assert.notEqual(layout.cards[0].bg,layout.cards[2].bg);
       assert.deepEqual(layout.cards.flatMap(c=>c.overflow),[],JSON.stringify(layout));
       assert.match(layout.cards[0].text,/팀레슨.*11월 20일/s);assert.match(layout.cards[1].text,/팀레슨.*11월 21일/s);
+      assert.match(layout.cards[1].text,/확정 5명/);
+      assert.doesNotMatch(layout.cards[1].text,/정원|잔여|남은 좌석|마감/);
       assert.match(layout.cards[2].text,/정규레슨/);assert.deepEqual(errors,[]);
-      await page.screenshot({path:new URL(`${width}.png`,output).pathname,fullPage:true});results.push(layout);
+      await page.locator('.instructor-seat-overview').screenshot({path:new URL(`${width}.png`,output).pathname});results.push(layout);
     }finally{await context.close();}
   }}finally{await browser.close();}
   await fs.writeFile(new URL('layout.json',output),JSON.stringify({syntheticOnly:true,results,browserClosed:true},null,2));

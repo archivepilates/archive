@@ -24,6 +24,12 @@ export const MEAL_RELEASE_TARGETS = {
     '/assets/app.js': 'core/assets/app.js', '/assets/interface.css': 'core/assets/interface.css',
     '/rules/index.html': 'core/rules/index.html',
   } },
+  teamHeadcount: { site: 'archive-pilates-core', files: {
+    '/instructor-lessons/index.html': 'core/instructor-lessons/index.html',
+    '/assets/app.js': 'core/assets/app.js',
+    '/assets/alimtalk-catalog.json': 'core/assets/alimtalk-catalog.json',
+    '/rules/index.html': 'core/rules/index.html',
+  } },
   capacityRepairVerification: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
   signupProfileV2: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
   signupProfileV2Verification: { site: 'archive-pilates-core', files: {'/rules/index.html':'core/rules/index.html'} },
@@ -105,6 +111,7 @@ async function main() {
       : target === 'signupProfileV2Verification' ? '1b87cd4be97148abbd3ef06d344e2b86faf8d653'
       : target === 'signupProfileV2' ? 'd50c6830e7ca3fd0a60e8e49f91efd5966113bc5'
       : target === 'capacityRepairVerification' ? '2a88328c68a580b79ad9a5cd593112cdafe35e11'
+      : target === 'teamHeadcount' ? '84761cbaf9e675e57ae3a8c0097775eff01c39a0'
       : target === 'scheduleDisplay' ? 'f356b2dcc3c303c9ea4aabe87a8d29f82aae59fc'
       : target === 'fulfillmentVerification' ? '5869a67ea0b6e94379f1ab4af14354094c1ee4fa'
       : target === 'fulfillment' ? 'e942b7d7e9db39751f50f9a95212a99bf7ca01b6'
@@ -151,7 +158,8 @@ async function main() {
     await unchanged();
     await request(`${version.name}?updateMask=status`, 'PATCH', { status: 'FINALIZED' });
     await unchanged(); evidence.releaseIntentAt = new Date().toISOString(); save();
-    const release = await request(`sites/${selected.site}/releases?versionName=${version.name}`, 'POST', { message: `ARCHIVE PILATES OPS Team intake ${commit.slice(0, 12)}` });
+    const label = target === 'teamHeadcount' ? 'Team confirmed headcount' : 'Team intake';
+    const release = await request(`sites/${selected.site}/releases?versionName=${version.name}`, 'POST', { message: `ARCHIVE PILATES OPS ${label} ${commit.slice(0, 12)}` });
     evidence.releaseName = release.name; save();
     for (const s of sources) {
       const r = await fetch(s.url, { cache: 'no-store' });

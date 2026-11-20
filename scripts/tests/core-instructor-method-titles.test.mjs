@@ -112,8 +112,13 @@ test("schedule uses actual title paragraphs after card heads and preserves seat 
     assert.match(card, new RegExp(`data-instructor-schedule-date="${item.date}"`));
     assert.match(card, /aria-controls="instructorLessonScheduleDetail"/);
     assert.ok(card.includes(`aria-expanded="${item.date === "2026-11-28"}"`));
-    for (const [label, value] of [["예약·접수", item.occupiedCount], ["정원", item.capacity], ["남은 좌석", item.remainingSeats]]) {
-      assert.ok(card.includes(`<small>${label}</small><strong>${value}</strong>`));
+    if (item.date === "2026-11-21") {
+      assert.ok(card.includes(`확정 ${item.occupiedCount}명`));
+      assert.doesNotMatch(card, /정원|잔여|남은 좌석|마감/);
+    } else {
+      for (const [label, value] of [["예약·접수", item.occupiedCount], ["정원", item.capacity], ["남은 좌석", item.remainingSeats]]) {
+        assert.ok(card.includes(`<small>${label}</small><strong>${value}</strong>`));
+      }
     }
     if (titles.has(item.date)) {
       assert.ok(card.includes(`<p class="instructor-seat-method">${titles.get(item.date)}</p>`));
@@ -121,7 +126,7 @@ test("schedule uses actual title paragraphs after card heads and preserves seat 
       assert.ok(card.slice(headEnd).trimStart().startsWith('<p class="instructor-seat-method">'));
     } else assert.doesNotMatch(card, /instructor-seat-method|ARCHIVE METHOD/);
   });
-  assert.equal(a.element("instructorLessonScheduleSummary").textContent, "4개 일정 · 잔여 34석");
+  assert.equal(a.element("instructorLessonScheduleSummary").textContent, "4개 일정 · 정규 잔여 26석 · 팀레슨 확정 2명");
   assert.equal(JSON.stringify(a.data), before, "rendering must not mutate identities/counts");
 });
 

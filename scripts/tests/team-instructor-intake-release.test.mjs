@@ -52,7 +52,7 @@ test('schedule display replaces exactly app, interface CSS and rules', () => {
   assert.throws(() => mealReleaseManifest(files.slice(1),replacements,'scheduleDisplay'));
 });
 test('Team release replaces only four CORE assets and preserves all other paths', () => {
-  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent', 'instructorWaitlist', 'instructorWaitlistVerification', 'instructorSignupBirthDate', 'solapiSms', 'studentShareExpiry', 'signupPostalReadback']);
+  assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS), ['core', 'verification', 'fulfillment', 'fulfillmentVerification', 'scheduleDisplay', 'teamHeadcount', 'capacityRepairVerification', 'signupProfileV2', 'signupProfileV2Verification', 'instructorSignatureReminder', 'coreMcpFastDiscovery', 'privateNotionMemberParent', 'instructorWaitlist', 'instructorWaitlistVerification', 'instructorSignupBirthDate', 'solapiSms', 'studentShareExpiry', 'signupPostalReadback']);
   const expected = ['/instructor-lessons/index.html', '/assets/app.js', '/rules/index.html', '/assets/alimtalk-catalog.json'];
   assert.deepEqual(Object.keys(MEAL_RELEASE_TARGETS.core.files), expected);
   const replacements = Object.fromEntries(expected.map(f => [f, hash]));
@@ -63,6 +63,16 @@ test('Team release replaces only four CORE assets and preserves all other paths'
   assert.throws(() => mealReleaseManifest(files, { ...replacements, '/unrelated.html': hash }, 'core'));
   assert.throws(() => mealReleaseManifest(files.slice(1), replacements, 'core'));
   assert.throws(() => mealReleaseManifest(files, replacements, 'member'));
+});
+test('Team headcount release preserves everything outside the four changed CORE assets', () => {
+  const target = 'teamHeadcount';
+  const expected = MEAL_RELEASE_TARGETS.core.files;
+  assert.deepEqual(MEAL_RELEASE_TARGETS[target], { site: 'archive-pilates-core', files: expected });
+  const replacements = Object.fromEntries(Object.keys(expected).map(path => [path, hash]));
+  const files = [...Object.keys(expected).map(path => ({ path, hash: old })), { path: '/release.json', hash: old }];
+  assert.deepEqual(mealReleaseManifest(files, replacements, target), { ...replacements, '/release.json': old });
+  assert.throws(() => mealReleaseManifest(files, { ...replacements, '/release.json': hash }, target));
+  assert.throws(() => mealReleaseManifest(files.slice(1), replacements, target));
 });
 test('signup profile release changes only the operating rules',()=>{
   assert.deepEqual(MEAL_RELEASE_TARGETS.signupProfileV2.files,{'/rules/index.html':'core/rules/index.html'});

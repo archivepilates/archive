@@ -7718,51 +7718,53 @@ function renderInstructorLessonSchedule(schedule = state.instructorLessonRegistr
     return;
   }
   const items = Array.isArray(schedule?.items) ? schedule.items : [];
-  const unverifiedTeamCount = items.filter((item) => item.courseKind === "team" && item.capacitySource !== "lecture").length;
-  const remainingSeats = items.reduce((sum, item) => sum + (item.courseKind === "team" && item.capacitySource !== "lecture" ? 0 : toNumber(item.remainingSeats)), 0);
-  const remainingLabel = unverifiedTeamCount === items.length ? "정원 확인 전" : `잔여 ${remainingSeats.toLocaleString("ko-KR")}석`;
-  const unverifiedTeamLabel = unverifiedTeamCount && unverifiedTeamCount < items.length ? ` · 팀 ${unverifiedTeamCount}개 정원 확인 전` : "";
-  setText(
-    "instructorLessonScheduleSummary",
-    items.length
-      ? `${items.length.toLocaleString("ko-KR")}개 일정 · ${remainingLabel}${unverifiedTeamLabel}`
-      : "예정 일정 없음",
-  );
+  const cards = items.map((item) => ({ item, ...instructorLessonSchedulePresentation(item) }));
+  const standardCards = cards.filter((card) => !card.isTeam);
+  const teamCards = cards.filter((card) => card.isTeam);
+  const summary = [`${cards.length.toLocaleString("ko-KR")}개 일정`];
+  if (standardCards.length) {
+    const remainingSeats = standardCards.reduce((sum, { item }) => sum + toNumber(item.remainingSeats), 0);
+    summary.push(`${teamCards.length ? "정규 " : ""}잔여 ${remainingSeats.toLocaleString("ko-KR")}석`);
+  }
+  if (teamCards.length) {
+    const confirmedCount = teamCards.reduce((sum, { item }) => sum + Math.max(0, toNumber(item.occupiedCount)), 0);
+    summary.push(`팀레슨 확정 ${confirmedCount.toLocaleString("ko-KR")}명`);
+  }
+  setText("instructorLessonScheduleSummary", cards.length ? summary.join(" · ") : "예정 일정 없음");
   if (!items.length) {
     container.innerHTML = '<div class="empty-state">예정된 강사레슨 접수 또는 예약이 없습니다.</div>';
     renderInstructorLessonRoster(null);
     return;
   }
-  container.innerHTML = items.map((item) => {
-    const presentation = instructorLessonSchedulePresentation(item);
-    const isTeam = presentation.isTeam;
+  container.innerHTML = cards.map(({ item, isTeam, timeLabel }) => {
     const metadataConflict = item.metadataSource === "conflict";
-    const unverifiedTeam = item.courseKind === "team" && item.capacitySource !== "lecture";
-    const occupied = toNumber(item.occupiedCount);
+    const occupied = Math.max(0, toNumber(item.occupiedCount));
     const capacity = Math.max(1, toNumber(item.capacity));
     const remaining = toNumber(item.remainingSeats);
     const overbooked = toNumber(item.overbookedCount);
     const percentage = Math.min(100, Math.round((occupied / capacity) * 100));
-    const tone = unverifiedTeam ? "warn" : overbooked ? "danger" : remaining === 0 ? "good" : remaining <= 2 ? "warn" : "";
-    const seatLabel = unverifiedTeam ? "정원 확인 전" : overbooked ? `정원 초과 ${overbooked}명` : remaining === 0 ? "마감" : `잔여 ${remaining}석`;
+    const tone = isTeam ? (metadataConflict ? "warn" : occupied ? "good" : "")
+      : overbooked ? "danger" : remaining === 0 ? "good" : remaining <= 2 ? "warn" : "";
+    const seatLabel = isTeam ? `확정 ${occupied.toLocaleString("ko-KR")}명`
+      : overbooked ? `정원 초과 ${overbooked}명` : remaining === 0 ? "마감" : `잔여 ${remaining}석`;
     const methodTitle = instructorLessonMethodTitle(item);
     return `
       <article class="instructor-seat-item ${isTeam ? "is-team" : "is-standard"}">
         <div class="instructor-seat-item-head">
           <div>
             <strong>${isTeam ? "팀레슨 · " : "정규레슨 · "}${escapeHtml(instructorLessonScheduleDateLabel(item.date))}</strong>
-            <span>${metadataConflict ? "접수 시간 확인필요" : escapeHtml(presentation.timeLabel)}${item.metadataSource === "registration" ? " · 접수 기준" : ""}</span>
+            <span>${metadataConflict ? "접수 시간 확인필요" : escapeHtml(timeLabel)}${item.metadataSource === "registration" ? " · 접수 기준" : ""}</span>
           </div>
           <span class="pill ${tone}">${escapeHtml(seatLabel)}</span>
         </div>
         ${metadataConflict ? '<p class="instructor-seat-method">접수 정보 확인필요 · 팀레슨 시간·주제 불일치</p>' : methodTitle ? `<p class="instructor-seat-method">${escapeHtml(methodTitle)}</p>` : ""}
-        <div class="instructor-seat-counts">
-          <span><small>${unverifiedTeam ? "접수 인원" : "예약·접수"}</small><strong>${occupied.toLocaleString("ko-KR")}</strong></span>
-          ${unverifiedTeam ? "" : `<span><small>정원</small><strong>${capacity.toLocaleString("ko-KR")}</strong></span>
-          <span><small>남은 좌석</small><strong>${remaining.toLocaleString("ko-KR")}</strong></span>`}
-        </div>
+        ${isTeam ? "" : `<div class="instructor-seat-counts">
+          <span><small>예약·접수</small><strong>${occupied.toLocaleString("ko-KR")}</strong></span>
+          <span><small>정원</small><strong>${capacity.toLocaleString("ko-KR")}</strong></span>
+          <span><small>남은 좌석</small><strong>${remaining.toLocaleString("ko-KR")}</strong></span>
+        </div>`}
         <small class="instructor-seat-waitlist-count">대기 ${Math.max(0, toNumber(item.waitlistCount)).toLocaleString("ko-KR")}명</small>
-        ${unverifiedTeam ? "" : `<div class="instructor-seat-progress" role="img" aria-label="${occupied}명 접수, 정원 ${capacity}명">
+        ${isTeam ? "" : `<div class="instructor-seat-progress" role="img" aria-label="${occupied}명 접수, 정원 ${capacity}명">
           <span style="width:${percentage}%"></span>
         </div>`}
         <small class="instructor-seat-source">${escapeHtml(instructorLessonScheduleSourceLabel(item.countSource, item.confirmedPendingRegistrationCount))}</small>
