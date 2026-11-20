@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { SITE, UNIT, STAFF_GRADE } from './imweb-staff-video-policy.mjs';
 import { LESSON_VIDEO_ELIGIBILITY_POLICY_ID, isRegisteredLessonAttendance } from './lesson-share-registration-policy.mjs';
+import { archiveAutomationRoot } from './archive-automation-paths.mjs';
 
 export const STUDENT_SHARE_DAYS = 40;
 export const STUDENT_SHARE_WINDOW_MS = STUDENT_SHARE_DAYS * 86400000;
@@ -33,8 +34,14 @@ export const D261025_SHARE = Object.freeze({
   revocation: 'd_team_group_only', lane: 'student-share-d-261025',
   lessonIds: Object.freeze(['97177137', '97177166']), lessonDate: '2026-10-25',
 });
+export const TEAM261120_SHARE = Object.freeze({
+  policyId: 'team261120-grant-40d-v1', groupCode: 'g20261120d135a4dabe93a',
+  revocation: 'team261120_group_only', lane: 'student-share-team-261120', storage: 'automation_operations',
+  lessonIds: Object.freeze(['98900618', '98900887']), lessonDate: '2026-11-20',
+});
 export const STUDENT_SHARE_SOURCES = Object.freeze([
   E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE,
+  TEAM261120_SHARE,
 ]);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = () => { throw Error('Student-share evidence missing or inconsistent; no staff group removal'); };
@@ -111,17 +118,43 @@ export function assertSharePolicy(state, source) {
       || (state.unitCode !== undefined && state.unitCode !== UNIT)) fail();
 }
 
-export function readStudentShareLedgers({ root = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES') } = {}) {
-  const parent = fs.lstatSync(root);
-  if (!parent.isDirectory() || parent.isSymbolicLink() || parent.uid !== process.getuid() || (parent.mode & 0o022)) fail();
+function assertShareDirectory(directory, forbiddenMode = 0o077) {
+  const stat = fs.lstatSync(directory);
+  if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & forbiddenMode)) {
+    throw Error('Unsafe share ledger');
+  }
+}
+
+// Resolve existing private directories only; an explicit root remains the test parent override.
+export function studentShareSourceDirectory(source, { root } = {}) {
+  if (!record(source) || typeof source.lane !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(source.lane)
+      || (source.storage !== undefined && source.storage !== 'automation_operations')) {
+    throw Error('Unsupported student-share source path');
+  }
+  let parent;
+  if (root !== undefined) {
+    parent = root;
+    assertShareDirectory(parent, 0o022);
+  } else if (source.storage === 'automation_operations') {
+    const automationRoot = archiveAutomationRoot();
+    assertShareDirectory(automationRoot, 0o022);
+    parent = path.join(automationRoot, 'operations');
+    assertShareDirectory(parent, 0o022);
+  } else {
+    parent = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES');
+    assertShareDirectory(parent, 0o022);
+  }
+  const directory = path.join(parent, source.lane);
+  assertShareDirectory(directory);
+  return directory;
+}
+
+export function readStudentShareLedgers({ root } = {}) {
   return STUDENT_SHARE_SOURCES.map(source => {
-    const directory = path.join(root, source.lane);
+    const directory = studentShareSourceDirectory(source, { root });
     const file = path.join(directory, 'state.json');
-    for (const [name, isDirectory] of [[directory, true], [file, false]]) {
-      const stat = fs.lstatSync(name);
-      if (stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)
-          || (isDirectory ? !stat.isDirectory() : !stat.isFile())) fail();
-    }
+    const stat = fs.lstatSync(file);
+    if (stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077) || !stat.isFile()) fail();
     return { source, state: JSON.parse(fs.readFileSync(file, 'utf8')) };
   });
 }

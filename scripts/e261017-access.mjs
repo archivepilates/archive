@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { isDeepStrictEqual } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -9,7 +8,7 @@ import { STAFF_GRADE, protectedPurchaseGroups } from './lib/imweb-staff-video-po
 import { MEMBER_GROUP_LOCK, staffPages } from './lib/imweb-staff-video-sync.mjs';
 import { acquireStudioMateBrowserLock } from './lib/studiomate-browser-lock.mjs';
 import { E261017_SHARE, STUDENT_SHARE_SOURCES, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, shareInstant,
-  firstVerifiedShareWindow, assertSharePolicy, validatedShareEntries } from './lib/imweb-student-share-policy.mjs';
+  firstVerifiedShareWindow, assertSharePolicy, validatedShareEntries, studentShareSourceDirectory } from './lib/imweb-student-share-policy.mjs';
 
 export const GROUP = E261017_SHARE.groupCode;
 export const POLICY_ID = E261017_SHARE.policyId;
@@ -174,7 +173,7 @@ export async function runStudentShareAccess({ args = [], onResult = () => {} } =
   try {
     const results = [];
     for (const source of STUDENT_SHARE_SOURCES) {
-      const directory = path.join(os.homedir(), 'Library/Application Support/ARCHIVE PILATES', source.lane);
+      const directory = studentShareSourceDirectory(source);
       const file = path.join(directory, 'state.json');
       const lock = path.join(directory, 'run.lock');
       let fd;
