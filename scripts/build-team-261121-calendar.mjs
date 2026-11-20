@@ -13,14 +13,14 @@ export const TEAM_EVENT = Object.freeze({
   uid: "team-261121@archivepilates.com",
   start: "20261121T043000Z",
   end: "20261121T062000Z",
-  composition: "은영쌤 리포머 + 블럭\n민진쌤 바렐 + 스틱",
+  composition: "은영쌤 리포머 + 블럭\n민진쌤 체어",
   sessions: Object.freeze([
     Object.freeze({ lectureId: "98585018", start: "13:30", end: "14:20", room: "리포머",
       teacher: "은영쌤", equipment: "리포머 + 블럭",
       description: "ARCHIVE METHOD #9 외부 피드백2 · 팀 단독 강사레슨 · 은영쌤 리포머+블럭" }),
-    Object.freeze({ lectureId: "98585168", start: "14:30", end: "15:20", room: "바렐",
-      teacher: "민진쌤", equipment: "바렐 + 스틱",
-      description: "ARCHIVE METHOD #9 외부 피드백2 · 팀 단독 강사레슨 · 민진쌤 바렐+스틱" }),
+    Object.freeze({ lectureId: "98585168", start: "14:30", end: "15:20", room: "체어",
+      teacher: "민진쌤", equipment: "체어",
+      description: "ARCHIVE METHOD #9 외부 피드백2 · 팀 단독 강사레슨 · 민진쌤 체어" }),
   ]),
 });
 

@@ -12,15 +12,16 @@ import {
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const unfold = text => text.replace(/\r\n[ \t]/g, "");
-const stamp = "20261029T000000Z";
+const stamp = "20261029T063518Z";
 
-test("immutable Team schedule contains only the independently supplied November 21 lectures", () => {
+test("immutable Team calendar keeps the historical lecture IDs and shows the corrected November 21 schedule", () => {
   assert.equal(TEAM_EVENT.title, "ARCHIVE PILATES Team 강사레슨 · ARCHIVE METHOD #9 외부 피드백2");
-  assert.equal(TEAM_EVENT.composition, "은영쌤 리포머 + 블럭\n민진쌤 바렐 + 스틱");
+  assert.equal(TEAM_EVENT.composition, "은영쌤 리포머 + 블럭\n민진쌤 체어");
   assert.equal(new Date(`${TEAM_EVENT.date}T00:00:00Z`).getUTCDay(), 6);
-  assert.deepEqual(TEAM_EVENT.sessions.map(s => [s.lectureId, s.start, s.end, s.room]), [
-    ["98585018", "13:30", "14:20", "리포머"], ["98585168", "14:30", "15:20", "바렐"],
+  assert.deepEqual(TEAM_EVENT.sessions.map(s => [s.lectureId, s.start, s.end, s.room, s.equipment]), [
+    ["98585018", "13:30", "14:20", "리포머", "리포머 + 블럭"], ["98585168", "14:30", "15:20", "체어", "체어"],
   ]);
+  assert.equal(TEAM_EVENT.sessions[1].description, "ARCHIVE METHOD #9 외부 피드백2 · 팀 단독 강사레슨 · 민진쌤 체어");
   assert.equal(Object.isFrozen(TEAM_EVENT), true);
   assert.equal(Object.isFrozen(TEAM_EVENT.sessions[0]), true);
 });
@@ -31,7 +32,7 @@ test("ICS is one combined UTC event with stable Team UID and public URL", () => 
   for (const line of ["UID:team-261121@archivepilates.com", `DTSTAMP:${stamp}`,
     "DTSTART:20261121T043000Z", "DTEND:20261121T062000Z", `SUMMARY:${TEAM_EVENT.title}`,
     `LOCATION:${icsEscape(TEAM_EVENT.location)}`, "STATUS:CONFIRMED", `URL:${TEAM_EVENT.url}`,
-    "DESCRIPTION:은영쌤 리포머 + 블럭\\n민진쌤 바렐 + 스틱"]) assert.ok(text.includes(`${line}\r\n`), line);
+    "DESCRIPTION:은영쌤 리포머 + 블럭\\n민진쌤 체어"]) assert.ok(text.includes(`${line}\r\n`), line);
   assert.equal(text.startsWith("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"), true);
   assert.equal(text.endsWith("END:VEVENT\r\nEND:VCALENDAR\r\n"), true);
 });
@@ -63,7 +64,8 @@ test("HTML is self-contained, uses official root logo and contains no unrelated 
   assert.match(html, /<link rel="canonical" href="https:\/\/in\.archivepilates\.com\/method\/team-261121\/calendar\/">/);
   assert.doesNotMatch(html, /<script|rel="stylesheet"|@import|#10|11월 28일|notion-261128|외부 피드백3/);
   assert.match(html, /data-lecture-id="98585018"/);
-  assert.match(html, /data-lecture-id="98585168"/);
+  assert.match(html, /data-lecture-id="98585168"[^\n]*<time>14:30<\/time>[^\n]*<time>15:20<\/time>[^\n]*<h3>민진쌤<\/h3><p>체어<\/p><p class="room">체어 룸<\/p>/);
+  assert.doesNotMatch(html, /바렐|스틱/);
 });
 
 test("Google calendar link has identical title, UTC bounds, composition, venue and timezone", () => {
@@ -80,6 +82,7 @@ test("Google calendar link has identical title, UTC bounds, composition, venue a
 test("saved HTML and ICS agree with the static builder without writing during tests", async () => {
   await buildTeamCalendar({ check: true });
   assert.equal(await readFile(path.join(TEAM_CALENDAR_DIR, "index.html"), "utf8"), renderTeamCalendarHtml());
+  assert.equal(await readFile(path.join(TEAM_CALENDAR_DIR, TEAM_EVENT.icsName), "utf8"), renderTeamCalendarIcs(stamp));
 });
 
 for (const width of [320, 390, 768, 1440]) test(`offline responsive calendar, logo, keyboard and ICS download at ${width}px`, async () => {
@@ -137,7 +140,7 @@ for (const width of [320, 390, 768, 1440]) test(`offline responsive calendar, lo
     assert.deepEqual(metrics.overflowing, []);
     assert.ok(metrics.targets.every(target => target.height >= 44 && !target.clipped));
     assert.match(metrics.sessionText[0], /13:30[\s\S]*14:20[\s\S]*은영쌤[\s\S]*리포머 \+ 블럭/);
-    assert.match(metrics.sessionText[1], /14:30[\s\S]*15:20[\s\S]*민진쌤[\s\S]*바렐 \+ 스틱/);
+    assert.match(metrics.sessionText[1], /14:30[\s\S]*15:20[\s\S]*민진쌤\s+체어\s+체어 룸/);
     if (width >= 700) assert.ok(metrics.schedule.x >= metrics.calendar.right);
     else assert.ok(metrics.schedule.y >= metrics.calendar.bottom);
     await page.keyboard.press("Tab");
