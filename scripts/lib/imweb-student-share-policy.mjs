@@ -39,9 +39,14 @@ export const TEAM261120_SHARE = Object.freeze({
   revocation: 'team261120_group_only', lane: 'student-share-team-261120', storage: 'automation_operations',
   lessonIds: Object.freeze(['98900618', '98900887']), lessonDate: '2026-11-20',
 });
+export const TEAM261121_SHARE = Object.freeze({
+  policyId: 'team261121-grant-40d-v1', groupCode: 'g20261121d29fc91c33b12',
+  revocation: 'team261121_group_only', lane: 'student-share-team-261121', storage: 'automation_operations',
+  lessonIds: Object.freeze(['98585018', '98585168']), lessonDate: '2026-11-21',
+});
 export const STUDENT_SHARE_SOURCES = Object.freeze([
   E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE,
-  TEAM261120_SHARE,
+  TEAM261120_SHARE, TEAM261121_SHARE,
 ]);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fail = () => { throw Error('Student-share evidence missing or inconsistent; no staff group removal'); };

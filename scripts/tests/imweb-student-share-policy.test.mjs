@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
-  E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE, TEAM261120_SHARE, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, STUDENT_SHARE_SOURCES,
+  E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE, TEAM261120_SHARE, TEAM261121_SHARE, STUDENT_SHARE_DAYS, STUDENT_SHARE_WINDOW_MS, STUDENT_SHARE_SOURCES,
   firstVerifiedShareWindow, shareInstant, validatedShareEntries, protectedStudentShareGroups,
 } from '../lib/imweb-student-share-policy.mjs';
 import { SITE, UNIT, STAFF_GRADE } from '../lib/imweb-staff-video-policy.mjs';
@@ -156,10 +156,12 @@ const sources = (state, selected = E261017_SHARE) => STUDENT_SHARE_SOURCES.map(s
 const entries = (state, now = NOW) => validatedShareEntries(state, E261017_SHARE, now);
 const protectedGroups = (state, now = NOW, code = MEMBER) => protectedStudentShareGroups(sources(state), code, now);
 
-test('registry preserves the five original forty-day policies and appends the isolated Team policy', () => {
+test('registry preserves the five original forty-day policies and registers both Team cohorts separately', () => {
   const legacy = [E261017_SHARE, A261024_SHARE, B261024_SHARE, C261025_SHARE, D261025_SHARE];
   assert.deepEqual(STUDENT_SHARE_SOURCES.slice(0, 5), legacy);
-  assert.deepEqual(STUDENT_SHARE_SOURCES, [...legacy, TEAM261120_SHARE]);
+  assert.deepEqual(STUDENT_SHARE_SOURCES, [...legacy, TEAM261120_SHARE, TEAM261121_SHARE]);
+  assert.deepEqual(TEAM261121_SHARE.lessonIds, ['98585018', '98585168']);
+  assert.equal(TEAM261121_SHARE.lessonDate, '2026-11-21');
   assert.equal(E261017_SHARE.lane, 'student-share-e-261017');
   assert.equal(E261017_SHARE.policyId, 'e261017-grant-40d-v1');
   assert.equal(GROUP, 'g2026101715ef28611dff4');
@@ -170,10 +172,10 @@ test('registry preserves the five original forty-day policies and appends the is
       revocation: 'b_team_group_only', lane: 'student-share-b-261024', lessonIds: ['97177049', '97177091'], lessonDate: '2026-10-24' },
   ]);
   for (const field of ['policyId', 'groupCode', 'lane', 'revocation']) {
-    assert.equal(new Set(STUDENT_SHARE_SOURCES.map(source => source[field])).size, 6);
+    assert.equal(new Set(STUDENT_SHARE_SOURCES.map(source => source[field])).size, STUDENT_SHARE_SOURCES.length);
   }
   const readerSources = sources(ledger());
-  assert.equal(readerSources.length, 6);
+  assert.equal(readerSources.length, STUDENT_SHARE_SOURCES.length);
   const team = readerSources.find(item => item.source.policyId === TEAM261120_SHARE.policyId);
   assert.deepEqual(team.state, ledger({ manualImmediateGrants: {}, entitlements: {} }, TEAM261120_SHARE));
   assert.equal(validatedShareEntries(team.state, TEAM261120_SHARE, NOW).size, 0);

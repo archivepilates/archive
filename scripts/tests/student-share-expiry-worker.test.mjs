@@ -95,14 +95,14 @@ function noRemoteCalls(f) {
   assert.deepEqual(f.notices, []);
 }
 
-test('expiryPlan accepts all six canonical sources, independently validates fixtures and is order-independent', () => {
+test('expiryPlan accepts the complete canonical source set and is order-independent', () => {
   const rows = ledgers(), before = copyLedgers(rows);
-  assert.equal(rows.length, 6);
+  assert.equal(rows.length, STUDENT_SHARE_SOURCES.length);
   for (const { source, state } of rows) assert.equal(validatedShareEntries(state, source, END_MS).get(MEMBER).adopted, true);
   const plan = expiryPlan(rows, END_MS);
   assert.equal(plan.status, 'due');
-  assert.equal(plan.active, 6);
-  assert.equal(plan.due, 6);
+  assert.equal(plan.active, rows.length);
+  assert.equal(plan.due, rows.length);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
   assert.deepEqual(expiryPlan([...rows].reverse(), END_MS), plan);
   assert.deepEqual(rows, before);
@@ -110,13 +110,13 @@ test('expiryPlan accepts all six canonical sources, independently validates fixt
   const team = withEmptyTeam.find(row => row.source === TEAM261120_SHARE);
   team.state.manualImmediateGrants = {};
   team.state.entitlements = {};
-  assert.equal(withEmptyTeam.length, 6);
+  assert.equal(withEmptyTeam.length, rows.length);
   assert.equal(validatedShareEntries(team.state, TEAM261120_SHARE, END_MS).size, 0);
   assert.deepEqual(withEmptyTeam.slice(0, 5), before.slice(0, 5));
   const emptyTeamPlan = expiryPlan(withEmptyTeam, END_MS);
   assert.equal(emptyTeamPlan.status, 'due');
-  assert.equal(emptyTeamPlan.active, 5);
-  assert.equal(emptyTeamPlan.due, 5);
+  assert.equal(emptyTeamPlan.active, rows.length - 1);
+  assert.equal(emptyTeamPlan.due, rows.length - 1);
 });
 
 test('expiryPlan rejects missing, extra, duplicate, cloned and wrong sources', () => {
@@ -181,9 +181,9 @@ test('expiryPlan is not_due before the earliest expiry and due at the exact equa
   assert.equal(expiryPlan(rows, END_MS - 1).nextExpiryAt, END);
   const boundary = expiryPlan(rows, END_MS);
   assert.equal(boundary.status, 'due');
-  assert.equal(boundary.due, 5);
+  assert.equal(boundary.due, rows.length - 1);
   assert.equal(boundary.nextExpiryAt, iso(END_MS + HOUR));
-  assert.equal(expiryPlan(rows, END_MS + HOUR).due, 6);
+  assert.equal(expiryPlan(rows, END_MS + HOUR).due, rows.length);
   assert.equal(expiryPlan(rows, END_MS + HOUR).nextExpiryAt, null);
   assert.deepEqual(rows, before);
 });
@@ -542,7 +542,7 @@ test('runExpiryWorker processed recovery resets notifiedKey so a separate same-f
   assert.equal((await f.run()).status, 'processed');
   const recovered = f.readState();
   assert.equal(recovered.fingerprint, first.fingerprint);
-  assert.equal(recovered.due, 6);
+  assert.equal(recovered.due, STUDENT_SHARE_SOURCES.length);
   assert.equal(recovered.notifiedKey, undefined);
   assert.equal(recovered.firstFailureAt, undefined);
   assert.equal(recovered.lastErrorKey, null);

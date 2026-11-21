@@ -58,9 +58,12 @@ export function oneFileManifest(files, resource, baseHash, newHash) {
 }
 
 // This store never overwrites an existing intent on entry, nor follows nested symlinks.
-export function privateReleaseStore(target, io = fs) {
+export function privateReleaseStore(target, io = fs, { privateRoot = PRIVATE_ROOT } = {}) {
   if (!Object.hasOwn(RELEASE_TARGETS, target)) throw Error('Unknown store target');
-  const file = path.join(PRIVATE_ROOT, `${target}-release.json`);
+  if (![PRIVATE_ROOT, HOME + '/archive-automation/operations/team-lesson-videos-261121'].includes(privateRoot)) {
+    throw Error('Unknown Team release ledger');
+  }
+  const file = path.join(privateRoot, `${target}-release.json`);
   const lock = path.join(HOME, 'archive-automation/automation/locks', `firebase-hosting-${RELEASE_TARGETS[target].site}.lock`);
   const stat = name => io.lstatSync(name, { throwIfNoEntry: false });
   const directory = (name, create, privateLeaf = false) => {
@@ -82,7 +85,7 @@ export function privateReleaseStore(target, io = fs) {
     return true;
   };
   const read = () => {
-    if (!directory(PRIVATE_ROOT, false, true) || !stat(file)) return null;
+    if (!directory(privateRoot, false, true) || !stat(file)) return null;
     const fd = io.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
     try {
       const info = io.fstatSync(fd);
@@ -94,7 +97,7 @@ export function privateReleaseStore(target, io = fs) {
   };
   const acquire = () => {
     if (archiveAutomationRoot(HOME, io) !== path.join(HOME, 'archive-automation')) throw Error('Canonical automation root required');
-    directory(PRIVATE_ROOT, true, true); directory(path.dirname(lock), true);
+    directory(privateRoot, true, true); directory(path.dirname(lock), true);
     const fd = io.openSync(lock, 'wx', 0o600);
     const { ino, dev } = io.fstatSync(fd);
     const close = () => {
@@ -122,7 +125,7 @@ export function privateReleaseStore(target, io = fs) {
     };
     try {
       save(evidence);
-      const parent = io.openSync(PRIVATE_ROOT, fs.constants.O_RDONLY);
+      const parent = io.openSync(privateRoot, fs.constants.O_RDONLY);
       try { io.fsyncSync(parent); } finally { io.closeSync(parent); }
     } catch (error) { io.closeSync(fd); throw error; }
     return { save, close: () => io.closeSync(fd) };
@@ -139,8 +142,9 @@ export async function releaseTeamClassroom({ args = process.argv.slice(2), root 
     '--require-origin-main', '--require-main-branch'], { cwd: root, stdio: 'pipe', timeout: 120000 }),
   getToken = () => execFileSync('gcloud', ['auth', 'print-access-token', `--account=${ACCOUNT}`],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim(),
-  fetchImpl = fetch, store: suppliedStore,
+  fetchImpl = fetch, store: suppliedStore, lessonLabel = '261120',
 } = {}) {
+  if (!['261120', '261121'].includes(lessonLabel)) throw Error('Unknown Team lesson');
   const { target, baseCommit, apply, expectedVersion } = releaseArguments(args);
   const selected = RELEASE_TARGETS[target], pattern = versionPattern(selected.site);
   const commit = git(['rev-parse', 'HEAD']);
@@ -279,7 +283,7 @@ export async function releaseTeamClassroom({ args = process.argv.slice(2), root 
     let transportError;
     try {
       const result = await request(`sites/${selected.site}/releases?versionName=${created.name}`, 'POST', {
-        message: `Team 261120 ${target} one-file release (${commit.slice(0, 12)})`,
+        message: `Team ${lessonLabel} ${target} one-file release (${commit.slice(0, 12)})`,
       });
       evidence.releaseName = result.name;
     } catch (error) {

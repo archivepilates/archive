@@ -65,7 +65,7 @@ def assert_agreement(cues, segments):
             raise RuntimeError('draft_json_srt_disagreement')
 
 
-def main():
+def main(orthography=(('뒷꿈치', '뒤꿈치'),)):
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['prepare', 'approve'])
     parser.add_argument('key', choices=sorted(KEYS))
@@ -86,9 +86,11 @@ def main():
         validate(cues, row['source']['duration'])
         segments = [item for item in draft['result']['segments'] if item['text'].strip()]
         assert_agreement(cues, segments)
-        corrections = sum(cue.content.count('뒷꿈치') for cue in cues)
+        corrections = 0
         for cue in cues:
-            cue.content = cue.content.replace('뒷꿈치', '뒤꿈치')
+            for original, corrected in orthography:
+                corrections += cue.content.count(original)
+                cue.content = cue.content.replace(original, corrected)
         result = srt.compose(cues).encode('utf8')
         validate(list(srt.parse(result.decode('utf8'))), row['source']['duration'])
         review = {'allowedForServing': False, 'sourceSha256': row['source']['sha256'],

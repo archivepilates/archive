@@ -76,7 +76,7 @@ test('explicit root overrides both storage modes and keeps shared read-only pare
     assert.equal(studentShareSourceDirectory(source, { root: f.override }), path.join(f.override, source.lane));
   }
   const ledgers = readStudentShareLedgers({ root: f.override });
-  assert.equal(ledgers.length, 6);
+  assert.equal(ledgers.length, STUDENT_SHARE_SOURCES.length);
   assert.deepEqual(ledgers.map(item => item.source), STUDENT_SHARE_SOURCES);
   assert.deepEqual(ledgers.map(item => item.state.marker), STUDENT_SHARE_SOURCES.map(() => f.override));
   assert.equal(fs.lstatSync(f.override).mode & 0o777, 0o755);

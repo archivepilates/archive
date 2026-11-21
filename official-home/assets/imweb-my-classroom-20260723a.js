@@ -100,7 +100,8 @@
     {"code":"B261024","path":"/private-lesson-external-feedback2-b-261024","title":"10/24 외부 피드백2 B팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 B 261024 40D","private":true},
     {"code":"C261025","path":"/private-lesson-external-feedback2-c-261025","title":"10/25 외부 피드백2 C팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 C 261025 40D","private":true},
     {"code":"D261025","path":"/private-lesson-external-feedback2-d-261025","title":"10/25 외부 피드백2 D팀 · 수강생 공유","group":"PRIVATE LESSON EXTERNAL FEEDBACK2 D 261025 40D","private":true},
-    {"code":"Team261120","path":"/private-lesson-team-261120","title":"11/20 Team 강사레슨 · 수강생 공유","group":"PRIVATE LESSON TEAM 261120 40D","private":true}
+    {"code":"Team261120","path":"/private-lesson-team-261120","title":"11/20 Team 강사레슨 · 수강생 공유","group":"PRIVATE LESSON TEAM 261120 40D","private":true},
+    {"code":"Team261121","path":"/private-lesson-team-261121","title":"11/21 Team 강사레슨 · 수강생 공유","group":"PRIVATE LESSON TEAM 261121 40D","private":true}
   ]);
   var M={
     "d43dd28704f02dbdf0ff891b31450e359240d62d":"all",

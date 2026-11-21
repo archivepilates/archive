@@ -45,7 +45,9 @@ def japanese(key):
             'ARCHIVE PILATES · 釜山・鳴旨'}
 
 
-def main():
+def main(expected_visibility='unlisted'):
+    if expected_visibility not in ('private', 'unlisted'):
+        raise ValueError('unexpected_caption_visibility')
     parser = argparse.ArgumentParser()
     parser.add_argument('key', choices=list(lesson.FILES))
     args = parser.parse_args()
@@ -75,7 +77,7 @@ def main():
                     raise RuntimeError('caption_original_metadata_changed')
             if sorted(video['snippet'].get('tags', [])) != sorted(row['snippet']['tags']):
                 raise RuntimeError('caption_original_tags_changed')
-            if video['status']['privacyStatus'] != 'unlisted':
+            if video['status']['privacyStatus'] != expected_visibility:
                 raise RuntimeError('student_visibility_changed')
             return video
         video = read()
@@ -142,7 +144,7 @@ def main():
         row['japaneseVerifiedAt'] = time.time()
         lesson.save(state)
         print(json.dumps({'key': args.key, 'koreanCaption': 'serving', 'japaneseMetadata': 'verified',
-                          'originalKoreanMetadataPreserved': True, 'visibility': 'unlisted',
+                          'originalKoreanMetadataPreserved': True, 'visibility': expected_visibility,
                           'reviewScope': review['reviewScope']}, ensure_ascii=False), flush=True)
 
 
