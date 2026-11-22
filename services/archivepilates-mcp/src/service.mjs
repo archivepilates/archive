@@ -162,8 +162,8 @@ export function createService({ store, approvals, staffId, now = Date.now, memoW
       const age = now() - selected?.searchedAt;
       requireValue(age >= 0 && age < 10 * 60000, 'LIVE_SELECTION_REQUIRED',
         'members_find로 StudioMate 원본 회원을 선택한 후 다시 조회해 주세요.');
-      requireValue(args.month < new Date(now() + 9 * 3600000).toISOString().slice(0, 7), 'INVALID_ARGUMENT',
-        '마감이 끝난 월만 조회할 수 있습니다.');
+      requireValue(args.month <= new Date(now() + 9 * 3600000).toISOString().slice(0, 7), 'INVALID_ARGUMENT',
+        '현재 월 또는 과거 월만 조회할 수 있습니다.');
       return historyReader(args, { signal });
     }
     if (name === 'operations_get_progress') {

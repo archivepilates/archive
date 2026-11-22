@@ -4,7 +4,7 @@ const read = { readOnlyHint: true, destructiveHint: false, idempotentHint: true,
 const tool = (name, description, inputSchema, annotations = read) => ({ name, description, inputSchema, annotations });
 const member = { memberId: string() };
 const querySource = { type: 'string', enum: ['live', 'snapshot'], default: 'live' };
-export const HISTORY_TOOL = tool('history_get_member_month', 'members_find에서 실시간으로 선택한 회원 한 명의 저장 이력을 읽습니다. 2026년 10월은 검증된 예약과 연결 발급권만 제공하며 미확인 건·결제·환불은 제외합니다. 부분 스냅샷의 내역 없음은 실제 이력 없음이 아닙니다. 현재 수강권·예약이나 외부 작업의 근거로 쓰지 마세요.', schema({
+export const HISTORY_TOOL = tool('history_get_member_month', 'members_find에서 실시간으로 선택한 회원 한 명의 저장 이력을 읽습니다. 검증된 부분 이력은 예약과 연결 발급권만 제공하며 미확인 건·결제·환불을 제외합니다. 표시한 기간 밖과 내역 없음은 실제 이력 없음을 뜻하지 않습니다. 외부 작업의 근거로 쓰지 마세요.', schema({
   memberId: { ...string(16), pattern: '^[1-9]\\d{0,15}$' },
   month: { ...string(7), pattern: '^20\\d{2}-(0[1-9]|1[0-2])$' },
 }));

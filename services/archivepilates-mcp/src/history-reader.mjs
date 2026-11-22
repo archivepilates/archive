@@ -14,6 +14,7 @@ const bookingTypes = new Set(['group', 'private', 'unknown']);
 const eventTypes = new Set(['payment', 'refund', 'void', 'unknown']);
 const sql = 'SELECT archive_history_ro.mcp_member_month($1::text,$2::date) AS result';
 const octoberSql = 'SELECT archive_history_ro.mcp_october_booking_pass($1::text) AS result';
+const backfillSql = 'SELECT archive_history_ro.mcp_backfill_member_month($1::text,$2::date) AS result';
 const partialMonth = '2026-10';
 const partialScope = 'booking_issued_pass_only';
 const maxRows = 200;
@@ -43,11 +44,11 @@ function connection(config) {
     connectionTimeoutMillis: 4500, statement_timeout: 4500, query_timeout: 5000, application_name: 'archive-history-mcp' };
 }
 
-export function historyResult(value, month, now) {
+export function historyResult(value, month, now, { backfill = false } = {}) {
   const source = { kind: 'supabase_closed_month_snapshot', month, queriedAt: new Date(now).toISOString(),
     liveReadback: false, allowedForExternalActions: false };
   const invalid = () => requireValue(false, 'HISTORY_EVIDENCE_INVALID', '검증된 적재 응답을 확인하지 못했습니다.');
-  const partial = month === partialMonth;
+  const partial = month === partialMonth || backfill;
   const states = partial ? ['not_loaded','partial_no_verified_rows','record_limit','partial_member_found']
     : ['not_loaded','no_member_rows','record_limit','member_found'];
   if (!value || !states.includes(value.state) || value.month !== month
@@ -58,13 +59,21 @@ export function historyResult(value, month, now) {
   const observedAt = typeof value.observedAt === 'string' ? Date.parse(value.observedAt) : NaN;
   const loadedAt = typeof value.loadedAt === 'string' ? Date.parse(value.loadedAt) : NaN;
   const [y, m] = month.split('-').map(Number);
-  if (!(observedAt >= Date.UTC(y, m, 1) - 9 * 3600000 && loadedAt >= observedAt && loadedAt <= now + 60_000)) invalid();
+  const earliestObservation = Date.UTC(y, backfill ? m - 1 : m, 1) - 9 * 3600000;
+  if (!(observedAt >= earliestObservation && loadedAt >= observedAt && loadedAt <= now + 60_000)) invalid();
+  const dayInMonth = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)
+    && day.startsWith(`${month}-`) && Number.isFinite(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day;
+  const { coverageFrom, coverageThrough } = value;
+  if (backfill) {
+    const observedDay = new Date(observedAt + 9 * 3600000).toISOString().slice(0, 10);
+    if (!dayInMonth(coverageFrom) || !dayInMonth(coverageThrough)
+      || coverageFrom > coverageThrough || coverageThrough > observedDay) invalid();
+    Object.assign(source, { coverageFrom, coverageThrough });
+  }
   Object.assign(source, { observedAt: new Date(observedAt).toISOString(), loadedAt: new Date(loadedAt).toISOString() });
   if (value.state === 'no_member_rows' || value.state === 'partial_no_verified_rows')
     return { ok: true, source, status: value.state, history: null };
   requireValue(value.state !== 'record_limit', 'HISTORY_LIMIT', '이 회원의 적재 이력이 조회 한도를 넘었습니다. 일부를 전체처럼 반환하지 않습니다.');
-  const dayInMonth = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)
-    && day.startsWith(`${month}-`) && Number.isFinite(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day;
   if (partial) {
     if (!Array.isArray(value.bookings) || !Array.isArray(value.issuedPasses)
         || !value.bookings.length || !value.issuedPasses.length
@@ -77,7 +86,8 @@ export function historyResult(value, month, now) {
     const used = new Set();
     const bookings = value.bookings.map(row => {
       if (!dayInMonth(row?.day) || !['group','private'].includes(row.type)
-        || !['attendance','absence','noshow','cancel'].includes(row.status) || !refs.has(row.passRef)) invalid();
+        || !(backfill ? statusValues.has(row.status) : ['attendance','absence','noshow','cancel'].includes(row.status))
+        || (backfill && (row.day < coverageFrom || row.day > coverageThrough)) || !refs.has(row.passRef)) invalid();
       used.add(row.passRef);
       return { day: row.day, type: row.type, status: row.status, passRef: row.passRef };
     });
@@ -123,10 +133,18 @@ export function createHistoryReader(configPath, { read = readPrivateJson, Client
         .update(`archive-ops:studiomate:5330:member:${memberId}`).digest('hex');
       await client.connect();
       if (signal?.aborted) throw Error('Canceled');
-      const data = month === partialMonth ? await client.query(octoberSql, [key])
-        : await client.query(sql, [key, `${month}-01`]);
+      const values = [key, `${month}-01`];
+      let backfill = month !== partialMonth;
+      let data = backfill ? await client.query(backfillSql, values) : await client.query(octoberSql, [key]);
       if (signal?.aborted || data.rows.length !== 1) throw Error('Incomplete history response');
-      return historyResult(data.rows[0].result, month, now());
+      const currentMonth = new Date(now() + 9 * 3600000).toISOString().slice(0, 7);
+      if (backfill && month < currentMonth && data.rows[0].result?.state === 'not_loaded') {
+        historyResult(data.rows[0].result, month, now(), { backfill });
+        data = await client.query(sql, values);
+        backfill = false;
+      }
+      if (signal?.aborted || data.rows.length !== 1) throw Error('Incomplete history response');
+      return historyResult(data.rows[0].result, month, now(), { backfill });
     } catch (error) {
       if (['HISTORY_USAGE_HOLD','HISTORY_EVIDENCE_INVALID','HISTORY_LIMIT'].includes(error?.code) && error?.safe === true) throw error;
       requireValue(false, 'SOURCE_UNAVAILABLE', 'Supabase 이력 조회에 실패했습니다. StudioMate 데이터로 대체하지 않았습니다.');

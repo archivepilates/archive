@@ -67,14 +67,15 @@ test('operator role and fresh live member search are required; defaults keep the
   await assert.rejects(service.callTool(name, input), { code: 'LIVE_SELECTION_REQUIRED' });
   await assert.rejects(service.callTool(name, { ...input, memberId: 'excel_fixture' }), { code: 'INVALID_ARGUMENT' });
   await service.callTool('members_find', { query: 'Synthetic Member' });
-  await assert.rejects(service.callTool(name, { ...input, month: '2026-11' }), { code: 'INVALID_ARGUMENT' });
+  await assert.rejects(service.callTool(name, { ...input, month: '2026-12' }), { code: 'INVALID_ARGUMENT' });
   await assert.rejects(service.callTool(name, { ...input, memberId: '123457' }), { code: 'LIVE_SELECTION_REQUIRED' });
   await service.callTool(name, input);
+  await service.callTool(name, { ...input, month: '2026-11' });
   actorIsActive = false;
   await assert.rejects(service.callTool(name, input), { code: 'PERMISSION_DENIED' });
   actorIsActive = true; time += 10 * 60_000;
   await assert.rejects(service.callTool(name, input), { code: 'LIVE_SELECTION_REQUIRED' });
-  assert.equal(reads, 1);
+  assert.equal(reads, 2);
 });
 
 test('reader binds only the HMAC, enforces usage and TLS, closes and redacts failures', async () => {
@@ -94,10 +95,13 @@ test('reader binds only the HMAC, enforces usage and TLS, closes and redacts fai
     async connect() { connects++; }
     async end() { closes++; }
     async query(sql, values) {
-      assert.match(sql, /^SELECT archive_history_ro.mcp_member_month\(\$1::text,\$2::date\)/);
       assert.deepEqual(values, [createHmac('sha256', Buffer.from(hmacKey, 'hex'))
         .update(`archive-ops:studiomate:5330:member:${memberId}`).digest('hex'), '2026-09-01']);
       if (fail) throw Error('sensitive provider failure');
+      if (sql.includes('mcp_backfill_member_month')) return { rows: [{ result: {
+        state: 'not_loaded', month: input.month, scope: 'booking_issued_pass_only',
+      } }] };
+      assert.match(sql, /^SELECT archive_history_ro.mcp_member_month\(\$1::text,\$2::date\)/);
       return { rows: [{ result: history }] };
     }
   }
@@ -113,6 +117,28 @@ test('reader binds only the HMAC, enforces usage and TLS, closes and redacts fai
   config = privateSettings; fail = true;
   await assert.rejects(lookup(input), e => e.code === 'SOURCE_UNAVAILABLE' && !e.message.includes('sensitive'));
   assert.deepEqual([connects, closes], [2, 2]);
+});
+
+test('backfill is partial for both closed and current months, and excludes fields outside the verified scope', () => {
+  const today = Date.parse('2026-11-23T02:00:00Z');
+  for (const [month, from, through] of [['2026-05', '2026-05-28', '2026-05-31'], ['2026-11', '2026-11-01', '2026-11-22']]) {
+    const v = { ...partial, month, coverageFrom: from, coverageThrough: through,
+      observedAt: '2026-11-22T12:00:00Z', loadedAt: '2026-11-22T15:00:00Z',
+      bookings: [{ day: from, type: 'group', status: 'booked', passRef: 1, privateId: 'redact' }],
+      transactionEvents: [{ kind: 'refund' }] };
+    const view = r => historyResult(r, month, today, { backfill: true });
+    const result = view(v);
+    assert.equal(result.source.coverageFrom, from);
+    assert.equal(result.source.coverageThrough, through);
+    assert.equal(result.source.transactionCoverage, 'not_collected');
+    assert.equal(result.source.allowedForExternalActions, false);
+    assert.deepEqual(result.history, { bookings: [{ day: from, type: 'group', status: 'booked', passRef: 1 }],
+      issuedPasses: [{ ref: 1 }] });
+    assert.equal(view({ ...v, state: 'partial_no_verified_rows' }).history, null);
+    assert.throws(() => view({ ...v, coverageFrom: undefined }), { code: 'HISTORY_EVIDENCE_INVALID' });
+    const out = month === '2026-05' ? '2026-05-27' : '2026-11-23';
+    assert.throws(() => view({ ...v, bookings: [{ ...v.bookings[0], day: out }] }), { code: 'HISTORY_EVIDENCE_INVALID' });
+  }
 });
 
 test('October only binds the selected member HMAC to the dedicated function', async () => {

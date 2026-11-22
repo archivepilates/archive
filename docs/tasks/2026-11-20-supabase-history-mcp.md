@@ -24,5 +24,11 @@
 
 ## Verification
 
+### November backfill reader
+
+- The six verified booking/pass batches are read through `sql/history-backfill-read-only.sql` and the existing dedicated member-scoped reader. The opened route lists only accepted records, with explicit date bounds for partial months (including the stored current-month cutoff). October retains its own reader. No batches, holds, raw IDs, names, purchases, or refunds are returned by the new route.
+- Operators must still select one live StudioMate member, and a response stays ineligible for operational actions. Missing data or a partial result cannot prove that an event did not occur. Source policies, member communication and automation schedules are unchanged.
+- The local check then the registered MCP should be tested against actual StudioMate reservation and issued-pass readbacks for the same member. Keep the source evidence and counts privately under the pilot operation folder.
+
 - `node --test tests/history-reader.test.mjs`: actor, exact live identity, month bounds, egress guard, minimized query and response, failure and connection cleanup.
 - `node scripts/verify-history-sql.mjs /path/to/local-history-pilot`: isolated PGlite migration with the existing pilot schema; default permissions, role and ACL failure, and two synthetic same-name members.
