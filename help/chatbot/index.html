@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#fffdfa">
+<meta name="description" content="아카이브필라테스 명지점 수강과 회원 문의 안내 및 접수">
+<link rel="icon" href="/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>상담 도우미 · ARCHIVE PILATES</title>
+<link rel="stylesheet" href="/chatbot/chatbot.css">
+<script src="/chatbot/app.js" type="module"></script>
+<script src="/chatbot/intake-ui.js" type="module"></script>
+</head>
+<body>
+<main>
+  <header><a class="brand" href="/">ARCHIVE PILATES</a><button id="start-intake" type="button">직원에게 문의하기</button></header>
+  <p class="eyebrow">ARCHIVE HELP · 명지점</p>
+  <h1>무엇을 도와드릴까요?</h1>
+  <p class="intro">문의 종류를 고르거나 궁금한 내용을 바로 입력해 주세요.</p>
+  <nav aria-label="상담 유형">
+    <button data-mode="member" type="button" aria-pressed="false">회원이에요</button>
+    <button data-mode="prospect" type="button" aria-pressed="false">처음이에요</button>
+    <button id="refund-intake" type="button">환불 상담</button>
+  </nav>
+  <noscript><p>상담 도우미를 열려면 자바스크립트가 필요해요. <a href="/inquiry/">기존 문의 양식</a>을 이용해 주세요.</p></noscript>
+  <section aria-labelledby="mode-title">
+    <h2 id="mode-title" tabindex="-1">빠른 안내</h2>
+    <p class="small">일반 질문에는 이름·연락처·회원번호를 입력하지 마세요. 직원 문의를 접수할 때만 별도 입력 단계에서 필요한 정보를 받아요.</p>
+    <div id="prompts" class="quick" aria-label="빠른 질문"></div>
+    <div id="conversation" role="log" aria-label="대화" aria-live="polite"></div>
+    <form id="question" hidden>
+      <label for="query">궁금한 내용</label>
+      <div class="input-row"><input id="query" maxlength="160" required autocomplete="off" placeholder="예: 주 2회 정도 다닐 수 있어요"><button type="submit">보내기</button></div>
+    </form>
+    <button id="inline-intake" type="button">직원에게 문의하기</button>
+  </section>
+
+<section id="intake" aria-labelledby="intake-title" hidden>
+  <h2 id="intake-title" tabindex="-1">직원에게 문의하기</h2>
+  <p id="intake-prompt">어떤 문의를 접수할까요?</p>
+  <div id="intake-choices"></div>
+  <p id="intake-status" role="status"></p>
+  <div class="quick">
+    <button type="button" id="intake-back" hidden>이전</button>
+    <button type="button" id="intake-cancel">안내로 돌아가기</button>
+  </div>
+</section>
+<footer><a href="tel:01029244425">명지점 데스크 010-2924-4425</a> · <a href="/privacy.html">개인정보 수집·이용 안내</a> · <a href="/inquiry/">챗봇 이용이 어려울 때: 기존 문의 양식</a></footer>
+</main>
+</body>
+</html>

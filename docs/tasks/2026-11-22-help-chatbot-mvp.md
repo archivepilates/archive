@@ -1,0 +1,7 @@
+# Archive Help rule-based chatbot MVP
+
+- Production candidate: `help/chatbot/`; existing Help entry has one optional link. Existing `help/assets/app.js`, categories, hosted site ID, CSP, and `/api/inquiries` routing/permissions are untouched. The chatbot itself sends no submissions; the staff link opens the established Help flow.
+- No account is created. The member lane is general rules, not authentication or private lookups. The sole fetch on this route loads the existing same-origin public guidance file; questions are handled locally in memory (only intent state is retained), not sent, persisted, or echoed. iOS/Android links open app stores only after a click.
+- The prospect flow uses 2026 November regular group products by frequency from the approved source; no promo, month-bound data blanked outside active period in Asia/Seoul. No live catalog, capacity, or schedule; class suggestions are based on user preferences with actual time and seat confirmation in the app or with staff. Next catalog requires a new approved snapshot.
+- No GPT, SMS, API key, Firebase service, Supabase or StudioMate services are called by this chatbot. Existing staff intake remains independent.
+- Test from repository root: `node --test scripts/help-chatbot-mvp.test.mjs`. Confirm browser rendering at 390px and desktop, direct /chatbot/ routing and root staff flow without submission before release, then confirm hosted asset and read-only route after authorized deploy. Existing Hosting CSP requires first-party script/style (implemented).
