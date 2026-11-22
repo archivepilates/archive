@@ -16,6 +16,12 @@
 - Verified live dashboard usage with both egress classes displayed as 0.00 GB. The short-lived local usage sample stores a conservative combined ceiling for the rounded dashboard figures. Details fail closed when that observation expires; no scheduler was added.
 - Dashboard fallback for operator-authenticated Supabase accounts: `--prepare-dashboard` writes the pending config and the verifier-only SQL in the private Supabase secrets directory. It performs no database write and never prints a credential. The operator submits that SQL in the exact project after confirming the role and leaving the existing administrator password unchanged. After operator submission, `--verify-dashboard` makes one dedicated-role readback and publishes the private config only upon success. Pending artifacts are not overwritten or replayed.
 
+## October 2026 verified subset
+
+- The separate private `archive_history_partial.booking_pass_snapshot` holds the independently verified 1,284 bookings and 123 linked passes only. The 726 held bookings and payment/refund data are not exposed; the full-month table and the non-October reader are unchanged.
+- `sql/october-partial-read-only.sql` installs a static-query function pinned to this batch's source and payload hashes. Only the existing dedicated reader is granted execution. No schema/table access, new credential, API publication, or write capability is granted. Keep rollback scoped to the October function and its caller; never modify the approved source snapshot.
+- October requests keep the owner check, recent live StudioMate selection, and existing usage gate. The response clearly marks partial coverage, returns no native identifiers and uses per-member response-local pass references. Missing verified rows must never be used to infer inactivity or drive messages, reservations, membership changes, or payment decisions.
+
 ## Verification
 
 - `node --test tests/history-reader.test.mjs`: actor, exact live identity, month bounds, egress guard, minimized query and response, failure and connection cleanup.

@@ -74,6 +74,8 @@ ARCHIVE_MCP_READ_ONLY = "true"
 
 기존 StudioMate 실시간 도구를 교체하지 않습니다. `history_get_member_month`는 활성 운영자 재확인 후, 같은 MCP 연결에서 최근 10분 내 `members_find`로 확인한 정확한 원본 회원 ID와 마감 월만 받습니다. 이름 검색과 연락처 확인은 StudioMate에서만 합니다. Supabase 쿼리는 원본 ID가 아닌 가명 키와 월만 받습니다. 반환값은 적재 당시 이름과 날짜·예약 상태·수업 유형·거래 분류입니다. 연락처·원본 ID·금액은 반환하지 않고 예약·환불·발송 근거로 사용하지 않습니다.
 
+2026년 10월은 별도 부분 스냅샷입니다. `history_get_member_month`는 검증된 예약의 날짜·유형·상태와 연결 발급권의 응답 내 번호만 반환합니다. 이름·원본 ID·수강권 상품명·구매/환불 정보는 이 스냅샷에 없습니다. `partial_no_verified_rows`는 검증된 적재분에 해당 회원 기록이 없다는 뜻이며 실제 활동이 없었다는 뜻이 아닙니다. `sql/october-partial-read-only.sql`은 기존 전용 계정에 이 함수 1개의 실행만 허용하며 원본 테이블 접근을 열지 않습니다.
+
 1. 대상은 Free 파일럿 `archive-member-history-pilot`(`vrmtkewdqgcrhpbeijhr`)뿐입니다. 기존 Data API 비활성·RLS를 유지한 채, 별도 승인 후 `sql/history-read-only.sql`을 운영 관리자가 적용합니다. `NOLOGIN` 역할에는 단일 조회 함수 실행권만 부여합니다. 상속된 공개 테이블 권한이 감지되면 전체 변경이 취소됩니다. 기존 권한을 자동 수정하지 않습니다.
 2. 관리자 승인과 지정 계정의 로컬 인증 설정 후에만 이 역할을 로그인 가능하게 합니다. 승인된 로컬 비공개 경로의 0600 일반 파일에 `project`, 대시보드의 정확한 `host`, 전용 `password`, 파일럿 적재와 **동일한** `hmacKey`(64자리 hex), 대시보드 CA의 PEM 문자열 `ca`를 보관합니다. 관리자 비밀번호·JWT·서비스 역할을 대신 쓰거나 TLS 검증을 해제하지 않습니다. PostgreSQL 접속에 쓸 호스트는 프로젝트 Connect 화면에서 확인합니다. 파일은 채팅·Git·공용 클라우드에 저장하지 않습니다.
 3. 동일 경로 뒤에 `.usage.json`을 붙인 0600 파일에 대상 `project`, 실제 사용량 관측 `observedAt`, 청구 기간의 `egressBytes`를 기록합니다. 24시간이 지나거나 4 GB 이상이면 상세 조회가 보류됩니다. 사용량 갱신은 수동이며 주기 작업을 추가하지 않습니다.
