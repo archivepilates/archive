@@ -3,6 +3,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import {respond,reusableQuestion} from '../help/chatbot/engine.js';
 import {conversationTurn} from '../help/chatbot/conversation.js';
+import {novemberTimetable,publishedTimetable} from '../help/chatbot/timetable.js';
 const rules=JSON.parse(fs.readFileSync(new URL('../help/assets/member-inquiry-guidance.json',import.meta.url)));
 const nov=new Date('2026-11-30T14:59:59Z');
 const december=new Date('2026-11-30T15:00:00Z');
@@ -79,12 +80,34 @@ test('public chat gives direct dated sources and respects the month rollover',()
  const turn=(q,now=nov)=>conversationTurn(q,{}, {now,rules});
  const slots=turn('명지점 시간표 보여줘');
  assert.equal(slots.source,'https://archivepilates.notion.site/#409d49eae4bf800a9bdbdfcc29f1c3cc');
+ assert.equal(slots.timetable.selectedDay,'월');
  assert.match(slots.text,/월간 예정표/);
  assert.equal(turn('12월 시간표 보여줘').source,undefined);
+ assert.equal(turn('12월 시간표 보여줘').timetable,undefined);
  const rates=turn('11월 수강권 문의');
  assert.match(rates.text,/398,000원 · 10주/);
  assert.equal(rates.source,'https://archivepilates.notion.site/');
  assert.doesNotMatch(turn('수강료 알려줘',december).text,/398,000/);
+});
+
+test('inline schedule uses published month, exact weekday slots and no stale timetable',()=>{
+ const date=new Date('2026-11-23T04:00:00Z');
+ const first=conversationTurn('시간표',{}, {now:date,rules});
+ const thu=conversationTurn('목요일은요?',first.state,{now:date,rules});
+ assert.equal(thu.timetable.selectedDay,'목');
+ assert.deepEqual(thu.timetable.byDay.목,[
+  ['09:00','은영'],['10:00','은영'],['17:30','은영'],['18:30','유리'],['19:00','은영'],['19:30','유리'],['20:30','유리']
+ ]);
+ assert.deepEqual(novemberTimetable.byDay.일,[['09:00','민진'],['10:00','민진'],['11:00','민진']]);
+ assert.equal(Object.values(novemberTimetable.byDay).flat().length,53);
+ assert.equal(publishedTimetable('내일 시간표',date).selectedDay,'화');
+ assert.equal(publishedTimetable('11월 28일 시간표',date).selectedDay,'토');
+ assert.equal(publishedTimetable('11월 31일 시간표',date),null);
+ assert.equal(publishedTimetable('10월 시간표',date),null);
+ assert.equal(publishedTimetable('내일 시간표',nov),null);
+ assert.equal(publishedTimetable('11월 시간표',december),null);
+ const jpeg=fs.readFileSync(new URL('../help'+novemberTimetable.image.src,import.meta.url));
+ assert.deepEqual([...jpeg.subarray(0,2)],[255,216]);
 });
 
 test('public chat keeps policy follow-ups, private routing and intake separate',()=>{

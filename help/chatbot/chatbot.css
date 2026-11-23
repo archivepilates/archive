@@ -32,6 +32,20 @@ button[type=submit]{background:var(--action);color:#fff;border-color:var(--actio
 .follow-up,.chat-actions{margin-top:.38rem}
 .quick button,.chat-actions button{font-size:.85rem}
 .chat-actions a{display:inline-flex;align-items:center;font-size:.85rem;min-height:44px;padding-inline:.3rem;overflow-wrap:anywhere}
+.has-timetable .turn-body{flex:1;max-width:min(100%,41rem)}
+.timetable{margin-top:.45rem;background:var(--paper);border:1px solid var(--chat-line);border-radius:.5rem;padding:.7rem;min-width:0}
+.timetable h2{font-size:1rem;margin:0}
+.schedule-period{font-size:.78rem;color:var(--muted);margin:.15rem 0 .55rem}
+.timetable-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.25rem}
+.timetable-days button{padding:.35rem .12rem;border-color:var(--line);font-weight:650}
+.timetable-days button[aria-pressed=true]{background:var(--action);color:#fff;border-color:var(--action)}
+.schedule-slots{list-style:none;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:.65rem;margin:.55rem 0 0}
+.schedule-slots li{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.35rem;align-items:baseline;padding:.28rem 0;border-bottom:1px solid var(--line);font-size:.83rem;overflow-wrap:anywhere}
+.schedule-slots time{font-weight:750;font-variant-numeric:tabular-nums}
+.timetable-original summary{cursor:pointer;min-height:44px;padding:.65rem 0 .4rem;font-size:.83rem}
+.timetable-original img{display:block;width:100%;height:auto;border-radius:.35rem}
+.timetable-original a{display:inline-flex;align-items:center;min-height:44px;font-size:.8rem}
+@media(max-width:430px){.timetable-days{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .compose{border-top:1px solid var(--chat-line);padding:.63rem .6rem .5rem}
 .suggestions{margin-bottom:.55rem}
 .suggestions button{border-color:var(--line);font-size:.8rem;padding-inline:.5rem}

@@ -1,9 +1,9 @@
 import { regularNov, sourcePrice } from './content.js';
 import { respond, reusableQuestion } from './engine.js';
+import { publishedTimetable } from './timetable.js';
 
 const appGuide='https://archivepilates.notion.site/studiomate';
 const rates='https://archivepilates.notion.site/';
-const schedule=rates+'#409d49eae4bf800a9bdbdfcc29f1c3cc';
 const calendar=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'});
 const timing={오전:'오전',아침:'오전',오후:'오후',저녁:'저녁',퇴근:'저녁'};
 const counts={한:1,두:2,세:3,네:4,다섯:5,여섯:6,일곱:7};
@@ -65,11 +65,12 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
     const base=/여행|출장|휴가/u.test(q)?rule(rules,'holding-base'):'';
     return close({...result,text:[base,result.text].filter(Boolean).join(' '),inquiry:'staff',topic:'holding'});
   }
-  if(scheduleAsk.test(q)||previous.topic==='schedule'&&/다음\s*달|12\s*월|목요일|주말/u.test(q)&&!rateAsk.test(q)&&!booking.test(q)){
+  if(scheduleAsk.test(q)||previous.topic==='schedule'&&/다음\s*달|\d{1,2}\s*월|[월화수목금토일]\s*요일|주말|내일|모레/u.test(q)&&!rateAsk.test(q)&&!booking.test(q)){
+    const timetable=publishedTimetable(q,now);
     return close({
-      text:(november&&!anotherMonth?'2026년 11월 명지점 월간 예정표예요. 날짜별 수업 시간은 아래 원문에서 확인할 수 있어요.':'명지점 시간표는 스튜디오메이트 회원 앱의 수업 목록에서 날짜와 시간을 선택해 확인해 주세요.')+
-        '\n남은 자리와 당일 변경은 월간 예정표와 다를 수 있어요. 앱에서 확인해 주세요.',
-      ...(november&&!anotherMonth?{source:schedule,sourceLabel:'11월 명지점 시간표 원문'}:{}),appGuide,topic:'schedule'});
+      text:timetable?'명지점 월간 예정표예요. 남은 자리와 당일 변경은 회원 앱에서 확인해 주세요.':
+        '이 날짜에 적용할 확인된 월간 예정표가 없어요. 명지점 시간표와 남은 자리는 회원 앱의 수업 목록에서 확인해 주세요.',
+      ...(timetable?{timetable,source:timetable.source,sourceLabel:'11월 명지점 시간표 원문'}:{}),appGuide,topic:'schedule'});
   }
   if(!rateAsk.test(q)&&(personal.test(q)||previous.topic==='member'&&/^(?:그럼|그러면).*(?:언제까지|예약|몇\s*(?:회|번))/u.test(q))){
     const reply=respond('내 수강권',{rules,now,mode:'member'});
