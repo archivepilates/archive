@@ -124,3 +124,22 @@
     html { scroll-behavior: auto; }
   }
 }
+
+/* Position groups in each stage */
+.position-cta{margin-top:10px}
+.position-group{border:1px solid #d1d9d1;border-left:3px solid #778f80;border-radius:10px;padding:10px;margin-top:10px;background:#f7f9f5;min-width:0}
+.position-group.unassigned{border-left-color:#abad9b;background:#fbfaf5}
+.position-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.position-head h3{margin:0;font-size:15px;overflow-wrap:anywhere;min-width:0;flex:1}
+.position-index{min-width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#e1e9df;color:#29413b;font-size:12px;font-weight:700}
+.position-tools{display:flex;gap:4px;flex-wrap:wrap}
+.position-review{font-size:13px;color:#655025;margin:8px 0}
+.position-empty{margin:8px 0}
+.position-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:12px 0 18px}
+.position-choice{border:1px solid #bccac0;border-radius:8px;background:#fff;min-height:82px;padding:6px;color:#29413b;font:inherit;font-size:13px;cursor:pointer;display:grid;justify-items:center;align-content:center}
+.position-choice svg{display:block;width:min(100%,96px);height:auto}
+.position-choice[aria-pressed="true"]{outline:2px solid #385c48;outline-offset:-2px;background:#e9f1e7;font-weight:700}
+.position-choice:focus-visible,.position-tools button:focus-visible{outline:2px solid #29413b;outline-offset:2px}
+#positionDialog form{margin:0}
+#positionDialog input{width:100%}
+@media(max-width:480px){.position-group{padding:8px}.position-tools button,.position-group .stage-add button,.position-cta button{min-height:44px}.position-head h3{flex-basis:calc(100% - 38px)}}

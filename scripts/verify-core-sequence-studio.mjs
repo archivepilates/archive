@@ -206,7 +206,7 @@ function sdkRuntime(call) {
 
 const adapterSource = await fs.readFile(path.join(coreRoot, "assets/sequence-store.js"), "utf8");
 const adapterHash = createHash("sha256").update(adapterSource).digest("hex");
-const uiHashes = new Map(await Promise.all(["sequence/studio.html", "sequence/studio-ui.css", "assets/ui-icons.js"].map(async (file) =>
+const uiHashes = new Map(await Promise.all(["sequence/studio.html", "sequence/studio-ui.css", "sequence/position-groups.js", "assets/ui-icons.js"].map(async (file) =>
   [file, createHash("sha256").update(await fs.readFile(path.join(coreRoot, file))).digest("hex")])));
 const { createSequenceStore } = await import(`data:text/javascript;base64,${Buffer.from(adapterSource).toString("base64")}`);
 const runtimeFor = (uid) => {
@@ -461,6 +461,98 @@ async function editSaved(frame, id) {
   assert.equal((await snapshot(frame)).state.id, id);
 }
 
+async function positionGroups(width) {
+  const uid = `position-groups-${width}`;
+  const id = "legacy_position_"+width;
+  await createSequenceStore(runtimeFor(uid),{uid}).save(note(id,"포지션 편집 예시"),0);
+  return withContext(uid, width, async (context, errors) => {
+    const {page, frame: initial} = await openStudio(context);
+    let frame = initial;
+    await editSaved(frame,id);
+    await frame.getByRole("tab", {name:"작성",exact:true}).click();
+    const stage = frame.locator('.stage').first();
+    const unassigned = stage.getByRole("region", {name:"포지션 미지정"});
+    assert.equal(await unassigned.locator(".move strong").textContent(),"롤백");
+    assert.equal((await snapshot(frame)).state.positions,undefined,"legacy flat notes remain flat until actively grouped");
+    await stage.getByRole("button",{name:"+ 포지션 추가"}).click();
+    await frame.getByRole("dialog").getByRole("button",{name:"앉은 자세"}).click();
+    await page.keyboard.press('Escape');
+    await frame.getByRole("dialog").waitFor({state:"hidden"});
+    assert.equal((await snapshot(frame)).state.positions,undefined);
+    await stage.getByRole("button",{name:"+ 포지션 추가"}).click();
+    const dialog = frame.getByRole("dialog");
+    await dialog.getByRole("button",{name:"앉은 자세"}).click();
+    await dialog.getByRole("button",{name:"포지션 저장"}).click();
+    const first=stage.getByRole("region",{name:"앉은 자세"});
+    await first.getByRole("button",{name:"+ 동작 추가"}).click();
+    await first.getByLabel("동작명",{exact:true}).fill("체어 스트레치");
+    await stage.getByRole("button",{name:"+ 포지션 추가"}).click();
+    await dialog.getByRole("button",{name:"직접 입력"}).click();
+    await dialog.getByLabel("포지션 이름").fill("페달 옆 준비");
+    await dialog.getByRole("button",{name:"포지션 저장"}).click();
+    const second=stage.getByRole("region",{name:"페달 옆 준비"});
+    await second.getByRole("button",{name:"+ 동작 추가"}).click();
+    await second.getByLabel("동작명",{exact:true}).fill("발목 순환");
+    await unassigned.locator("summary").click();
+    await unassigned.getByLabel("동작의 포지션").selectOption({label:"2. 페달 옆 준비"});
+    assert.equal(await second.locator(".move").count(),2);
+    await second.locator(".move").last().getByRole("button",{name:"동작 위로 이동"}).click();
+    await second.getByRole("button",{name:"포지션 위로 이동"}).click();
+    assert.deepEqual((await snapshot(frame)).state.moves.warm.map(m=>m.name),["롤백","발목 순환","체어 스트레치"]);
+    await frame.getByRole("button",{name:"리포머",exact:true}).click();
+    await stage.getByText(/기구 변경 전 포지션/).first().waitFor();
+    await second.getByRole("button",{name:"페달 옆 준비 수정"}).click();
+    assert.equal(await dialog.getByRole("button",{name:"바로 누운 자세"}).locator("svg").count(),1);
+    assert.equal(await dialog.getByRole("button",{name:"네발기기"}).locator("svg").count(),1);
+    await dialog.getByRole("button",{name:"바로 누운 자세"}).click();
+    await dialog.screenshot({path:path.join(output,`positions-picker-${width}.png`)});
+    await dialog.getByRole("button",{name:"포지션 저장"}).click();
+    await stage.evaluate(el=>{el.querySelectorAll('.move[open]').forEach(row=>row.open=false);el.scrollIntoView({block:'start',behavior:'instant'});});
+    await page.screenshot({path:path.join(output,`positions-editor-${width}.png`),animations:'disabled'});
+    await flush(frame);
+    const saved=(await snapshot(frame)).state;
+    assert.equal(documents.get("sequenceNotes/"+id).moveCount,3);
+    assert.deepEqual(JSON.parse(documents.get("sequenceNotes/"+id).payload).positions,saved.positions);
+    frame=await reloadBlank(page,saved.id);
+    await editSaved(frame,saved.id);
+    assert.equal(await frame.locator('#preview').getByText("바로 누운 자세",{exact:true}).count(),1);
+    assert.equal(await frame.locator('#preview').getByText("앉은 자세",{exact:true}).count(),1);
+    const pagination = await frame.evaluate(()=>{
+      const current=window.ARCHIVE_TEST.getState(),first=current.moves.warm[0];
+      current.moves.warm=Array.from({length:14},(_,i)=>({...first,id:'position-test-'+i,name:'동작 '+i}));
+      return window.ARCHIVE_TEST.buildPages(current).map(page=>({head:page.filter(x=>x.t==='text'&&x.text==='바로 누운 자세').length,cards:page.filter(x=>x.t==='text'&&/^동작 /.test(x.text)).length}));
+    });
+    assert.ok(pagination.length>1);
+    assert.ok(pagination.every(p=>p.cards>0&&p.head===1),"position reappears on continuation pages");
+    await frame.getByTestId("sequence-file-tools").click();
+    const answer=await downloadJSON(page,frame.getByRole("button",{name:"응답 파일 저장 (.json)",exact:true}),`positions-${width}.json`);
+    assert.deepEqual(answer.data.positions,saved.positions);
+    assert.deepEqual(answer.data.moves,saved.moves);
+    await frame.getByRole("tab",{name:"작성",exact:true}).click();
+    const updated=frame.locator('.stage').first().getByRole("region",{name:"바로 누운 자세"});
+    page.once('dialog', d=>d.accept());
+    await updated.getByRole("button",{name:"바로 누운 자세 포지션 삭제"}).click();
+    assert.equal(await frame.locator('.stage').first().getByRole("region",{name:"포지션 미지정"}).locator(".move").count(),2);
+    assert.equal((await snapshot(frame)).state.moves.warm.length,3);
+    assert.equal(await frame.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    await confirm(context,async()=>{
+      await frame.locator('#importFile').setInputFiles(answer.target);
+      await frame.getByRole('status').filter({hasText:'1개 기록을 Firestore에 저장했어요.'}).waitFor();
+    });
+    const copied=rowsFor(uid).find(([key])=>key!=='sequenceNotes/'+id);
+    assert.ok(copied,'import creates a separate note');
+    assert.deepEqual(JSON.parse(copied[1].payload).positions,saved.positions);
+    assert.deepEqual(JSON.parse(copied[1].payload).moves,saved.moves);
+    await frame.locator(".stage").first().getByRole("button",{name:"+ 포지션 추가"}).click();
+    await frame.getByRole("dialog").getByRole("button",{name:"앉은 자세"}).click();
+    await frame.getByRole("dialog").getByRole("button",{name:"포지션 저장"}).click();
+    const duplicateGroups=(await snapshot(frame)).state.positions.warm.filter(g=>g.label==='앉은 자세');
+    assert.equal(duplicateGroups.length,2,"same preset may be repeated in different blocks");
+    assert.notEqual(duplicateGroups[0].id,duplicateGroups[1].id);
+    assert.deepEqual(errors,[]);
+    return {width,legacyOrderPreserved:true, cancelSafe:true, moveAndGroupOrder:true, deviceReview:true, firestoreFixtureReload:true, previewAndJson:true, deletionConservesMoves:true};
+  });
+}
 async function downloadJSON(page, button, filename) {
   const promise = page.waitForEvent("download");
   await button.click();
@@ -1400,6 +1492,7 @@ try {
     return {fullConnectionRetry:true,saveReady:true,mockSDK:true};
   }));
   for (const width of [320, 390, 768, 1440]) await check(`library created dates ${width}: Timestamp/seconds/ISO/KST boundary/recovery/class date/no fallback`, () => libraryCreatedDates(width));
+  for (const width of [320, 390, 1440]) await check(`position groups ${width}: legacy/create/change/reorder/reload/preview/JSON/demotion`, () => positionGroups(width));
   for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: compact chrome/tools/focus/persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
   for (const width of [320, 390, 768, 1440]) await check(`save isolation ${width}: blank startup/New/copy/pending save/fresh backup`, () => saveIsolation(width));
   for (const width of [320, 390, 768, 1440]) await check(`library PDF ${width}: canonical saved source/MIME/filename/Korean/title/image/draft isolation/double-click guard`, () => libraryPDF(width));

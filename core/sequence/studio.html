@@ -16,7 +16,8 @@
 @media(max-width:420px){.grid2,.grid3{grid-template-columns:1fr}.brand{font-size:12px}.btn{padding:9px 12px}.top-right .btn{font-size:12px}.qhead{gap:10px}.chip{padding:7px 11px}.bottombar .btn{font-size:12px}.move-body .grid2{gap:0}.tabs button{padding:12px 10px}.tab-count{margin-left:5px}}
 @media print{@page{size:1200pt 900pt;margin:0}body>*:not(.printPages){display:none!important}.printPages{display:block}.printPages>div{width:1200pt;height:900pt;break-after:page}.printPages>div:last-child{break-after:auto}.printPages svg{width:1200pt;height:900pt}}
 </style>
-<link rel="stylesheet" href="./studio-ui.css">
+<link rel="stylesheet" href="./studio-ui.css?v=20261123-position">
+<script src="./position-groups.js?v=1"></script>
 </head>
 <body>
 <header class="top"><h1>시퀀스 노트</h1><div class="top-right"><span id="saveStatus" class="status" role="status">연결 중</span><button class="btn sm" id="newBtn">새 시퀀스</button><details class="tool-menu"><summary class="btn subtle" aria-label="시퀀스 도구" title="시퀀스 도구"><span data-note-icon="settings-2"></span></summary><div class="tool-options"><button class="btn" id="sampleBtn">체어 예시 불러오기</button><button class="btn" id="aiBtn">AI 정리 요청문</button><button class="btn" id="helpBtn">도움말·라이선스</button></div></details></div></header>
@@ -36,6 +37,7 @@
 <footer class="bottombar"><div class="hint" id="bottomSummary">0개 동작</div><div class="right"><button class="btn" id="bottomSample">예시 불러오기</button><button class="btn main" id="generate">미리보기</button></div></footer>
 <div id="toast" class="toast" role="status" aria-live="polite"></div><input type="file" id="importFile" accept=".json,application/json" hidden><input type="file" id="imageFile" accept="image/jpeg,image/png,image/webp" hidden>
 <dialog id="helpDialog"><div class="dialog-top"><h2>파일·라이선스</h2><button class="btn sm" data-close="helpDialog">닫기</button></div><p>PDF에 추가한 필기는 원본 시퀀스에 반영되지 않습니다.</p><p>최신 기록을 열면 저장하지 않은 수정사항은 사라집니다. 저장 실패 시 응답 파일을 보관하세요.</p><p class="hint">체어 예시 출처: 「정유리강사 시퀀스노트(구).pdf」 2페이지.</p><details class="extra"><summary>글꼴 라이선스</summary><p class="hint">NanumSquare · SIL Open Font License 1.1. © NAVER Corporation. NanumSquare는 예약된 글꼴 이름입니다.</p><pre id="fontLicense" class="hint" style="white-space:pre-wrap"></pre></details></dialog>
+<dialog id="positionDialog" aria-labelledby="positionTitle"><div class="dialog-top"><h2 id="positionTitle">포지션 선택</h2><button type="button" class="btn sm" data-close="positionDialog">닫기</button></div><p class="hint" id="positionEquipment"></p><div class="position-options" id="positionOptions" role="group" aria-label="자세 그림 선택"></div><form id="positionForm"><label for="positionLabel">포지션 이름</label><input id="positionLabel" maxlength="40" required placeholder="예: 페달 앞에 앉은 자세"><div class="stage-add"><button type="submit" class="btn main">포지션 저장</button></div></form></dialog>
 <dialog id="pickDialog"><div class="dialog-top"><h2>이전에 정리한 동작 가져오기</h2><button class="btn sm" data-close="pickDialog">닫기</button></div><label for="pickSource">시퀀스 선택</label><select id="pickSource"><option value="sample">체어 예시</option></select><div id="pickList"></div></dialog>
 <dialog id="aiDialog"><div class="dialog-top"><h2>긴 메모 → 짧은 응답</h2><button class="btn sm" data-close="aiDialog">닫기</button></div><p class="hint">아래 요청문을 사용하는 AI에 붙여넣고 본인 메모를 덧붙이세요. 결과를 검토한 뒤 각 구간의 ‘한 번에 입력’에 넣으면 됩니다.</p><textarea id="aiPrompt" readonly></textarea><div class="field"><button class="btn main" id="copyPrompt">요청문 복사</button></div><p class="hint">이 기능은 요청문을 복사할 뿐, 외부 AI를 호출하거나 회원정보를 전송하지 않습니다.</p></dialog>
 <div class="printPages" id="printPages"></div>
@@ -54,18 +56,24 @@ const cloud=window.parent.archiveSequenceStore;
 if(!cloud){blockEditor('저장 연결을 확인한 뒤 새로고침하세요.');return;}
 const libraryScope=()=>cloud.canReadAll?$('libraryScope').value:'mine';
 let moreAvailable=false,loadingLibrary=false,libraryGeneration=0,loadedPages=1,pendingLibraryRows=null,libraryReadFailed=false;
+const positions=window.SequencePositions;
+if(!positions){blockEditor('포지션 편집기를 불러오지 못했습니다. 새로고침하세요.');return;}
 const FONTS=JSON.parse(document.getElementById('font-assets').textContent);
 const STAGES=[{key:'warm',label:'WARM UP',ko:'준비 구간'},{key:'main',label:'MAIN',ko:'메인 구간'},{key:'cool',label:'COOL DOWN',ko:'마무리 구간'}];
 const KEY='archive.sequence.studio.draft.v1',LIBKEY='archive.sequence.studio.library.v1';
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-function blank(){return {schema:'archive.sequence.v1',id:uid(),title:'',teacher:'',equipment:'체어',equipmentOther:'',date:'',duration:'',audience:'',goal:'',cues:['','',''],memo:'',sketchSpace:true,source:'',moves:{warm:[],main:[],cool:[]}};}
+function blank(){return {schema:'archive.sequence.v1',id:uid(),title:'',teacher:'',equipment:'체어',equipmentOther:'',date:'',duration:'',audience:'',goal:'',cues:['','',''],memo:'',sketchSpace:true,source:'',positions:{warm:[],main:[],cool:[]},moves:{warm:[],main:[],cool:[]}};}
 const m=(name,description,muscles,purpose)=>({id:uid(),name,description,muscles,purpose,image:''});
 const SAMPLE=blank();Object.assign(SAMPLE,{title:'체어 · 흉추 가동성',teacher:'정유리',goal:'일자등·말린등을 위한 흉추 움직임',source:'정유리강사 시퀀스노트(구).pdf · 2p',cues:['명치를 뒤로 보내기','등힘으로 밀어내기','복부힘으로 끌어오기']});SAMPLE.moves={warm:[m('힙힌지 + 신전·굴곡·회전','등 말기 → 골반부터 세우기 → 하체 지지하며 회전','하지 후면 · 등','어깨 가동성·등힘 인지')],main:[m('롤백 + 트위스트','명치를 뒤로 → 한 손 페달 밀며 회전','등 · 복부(복사근)','흉추 굴곡·복부 인지'),m('닐링 사이드 플랭크 + 로테이션','골반 위치 맞추기 → 회전·굴곡 → 발 띄우기','등 · 복부','복부로 끌어올림 인지'),m('네발기기 + 한 다리 뻗기','다리 뻗기 → 굴곡·신전 → 힙힌지','복부 · 엉덩이 · 등','복부힘·등힘 유지'),m('스완','팔꿈치 띄우기 → 팔로 밀기','','흉추 신전'),m('프로그 + 풀오버','페달 밀기 → 힘 유지하며 포물선으로 올라오기','하지 · 복부 · 등','하체·복부·등힘 유지')],cool:[m('흉추 회전 + 호흡','두 무릎을 포개고 흉추 회전 후 호흡','','')]};
-let state=blank(), library=[],currentTab='write',pickStage='main',imageTarget=null,dirtyPdf=true,pdfBlob=null,pdfURL='',pdfName='',pages=[],savingTimer=null,storageOK=true,toastTimer=null;
+let state=blank(), library=[],currentTab='write',pickStage='main',pickPosition='',pickVersion=0,imageTarget=null,dirtyPdf=true,pdfBlob=null,pdfURL='',pdfName='',pages=[],savingTimer=null,storageOK=true,toastTimer=null;
 let revision=0,editVersion=0,cloudDirty=false,savePromise=null,cloudReady=false,cloudConflict=false,unsubscribe=null,unwatch=null,watchedId=null,deferredRemote=null,switching=false;
 function notify(s){$('toast').textContent=s;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3300);}
 function clone(o){return JSON.parse(JSON.stringify(o));}
+function payload(d){
+ if(STAGES.some(s=>d.positions[s.key].length))return d;
+ const {positions:unused,...legacy}=d;return legacy;
+}
 function validState(raw){
  if(!raw||raw.schema!=='archive.sequence.v1'||!raw.moves)throw Error('이 생성기의 응답 파일이 아니에요.');
  const clean=(v,max,label)=>{const t=String(v??'');if(t.length>max)throw Error(label+' 내용이 길어요. '+max+'자 이내로 줄인 파일을 불러와주세요.');return t;};
@@ -77,18 +85,18 @@ function validState(raw){
  d.cues=Array.from({length:3},(_,i)=>clean(raw.cues?.[i],65,'핵심 큐'));d.sketchSpace=raw.sketchSpace!==false;
  for(const st of STAGES){const ar=raw.moves[st.key];if(!Array.isArray(ar)||ar.length>30)throw Error('구간별 동작은 최대 30개까지 불러올 수 있어요.');
   d.moves[st.key]=ar.map(x=>{if(!x||typeof x!=='object')throw Error('동작 정보 형식이 올바르지 않아요.');const image=x.image||'';if(image&&(!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>=1200000))throw Error('첨부 그림 형식을 확인해주세요. 이 생성기의 그림 첨부 기능으로 다시 넣어주세요.');return {id:typeof x.id==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(x.id)?x.id:uid(),name:clean(x.name,80,'동작명'),description:clean(x.description,160,'동작 설명'),muscles:clean(x.muscles,80,'근육'),purpose:clean(x.purpose,120,'목적'),image};});
- }return d;
+ }return positions.restore(d,raw);
 }
 function saveError(error){storageOK=false;cloudConflict=error.code==='sequence/conflict';$('saveStatus').textContent=cloudConflict?'다른 기기에서 변경됨 · 최신 기록 또는 사본 선택':'저장 실패 · 재시도 또는 응답 백업';notify(error.message||'서버 저장을 확인하지 못했습니다.');$('cloudRecovery').hidden=false;}
 async function saveDraft(){clearTimeout(savingTimer);savingTimer=null;if(savePromise)return savePromise;if(!cloudDirty)return true;if(!cloudReady||cloudConflict)return false;
- let snapshot;try{snapshot=validState(clone(state));}catch(error){saveError(error);return false;}const version=editVersion,expected=revision;$('saveStatus').textContent='저장 중';
+ let snapshot;try{snapshot=payload(validState(clone(state)));}catch(error){saveError(error);return false;}const version=editVersion,expected=revision;$('saveStatus').textContent='저장 중';
  savePromise=(async()=>{try{const next=await cloud.save(snapshot,expected);if(state.id===snapshot.id){revision=next;cloudDirty=editVersion!==version;storageOK=true;$('saveStatus').textContent=cloudDirty?'변경사항 저장 대기':'Firestore 저장 완료';$('cloudRecovery').hidden=true;}return true;}catch(error){saveError(error);return false;}})();
  const ok=await savePromise;savePromise=null;if(ok){const remote=deferredRemote;deferredRemote=null;watchCurrent();if(remote)remoteChanged(remote);if(cloudDirty)persist(false);}return ok;
 }
 function persist(changed=true){dirtyPdf=true;$('pdfReady').style.display='none';if(changed){cloudDirty=true;editVersion++;}$('saveStatus').textContent=cloudConflict?'다른 기기에서 변경됨':'변경사항 저장 대기';clearTimeout(savingTimer);savingTimer=setTimeout(()=>{saveDraft();updateStats();},2500);}
 async function flushCurrent(){if(!hasContent()&&!cloudDirty)return true;do{if(!(await saveDraft()))return false;}while(cloudDirty);return true;}
 window.archiveSequenceNavigation={prepare:flushCurrent};
-function resetEditor(next,nextRevision=0){const clean=validState(next);clearTimeout(savingTimer);savingTimer=null;unwatch?.();unwatch=null;watchedId=null;deferredRemote=null;state=clean;revision=nextRevision;cloudDirty=false;cloudConflict=false;storageOK=true;editVersion++;imageTarget=null;dirtyPdf=true;pdfBlob=null;if(pdfURL)URL.revokeObjectURL(pdfURL);pdfURL='';pdfName='';pages=[];$('pdfReady').style.display='none';$('preview').innerHTML='';$('printPages').innerHTML='';renderFields();$('cloudRecovery').hidden=true;$('saveStatus').textContent=revision?'Firestore 저장 완료':'새 시퀀스';watchCurrent();}
+function resetEditor(next,nextRevision=0){const clean=validState(next);clearTimeout(savingTimer);savingTimer=null;unwatch?.();unwatch=null;watchedId=null;deferredRemote=null;state=clean;pickVersion++;if($('pickDialog').open)$('pickDialog').close();if($('positionDialog').open)$('positionDialog').close();for(const {key} of STAGES){const el=$('bulk-'+key);if(el){el.value='';el.closest('details').open=false;}}revision=nextRevision;cloudDirty=false;cloudConflict=false;storageOK=true;editVersion++;imageTarget=null;dirtyPdf=true;pdfBlob=null;if(pdfURL)URL.revokeObjectURL(pdfURL);pdfURL='';pdfName='';pages=[];$('pdfReady').style.display='none';$('preview').innerHTML='';$('printPages').innerHTML='';renderFields();$('cloudRecovery').hidden=true;$('saveStatus').textContent=revision?'Firestore 저장 완료':'새 시퀀스';watchCurrent();}
 function switchControls(){document.querySelectorAll('#newBtn,#newLib,#sampleBtn,#bottomSample,#latestCloud,#copyCloud,[data-act=open],[data-act=copy],[data-act=delete]').forEach(el=>el.disabled=switching);}
 async function switchEditor(action){if(switching||!cloudReady)return false;switching=true;switchControls();try{if(savePromise)await savePromise;return await action();}catch(error){saveError(error);return false;}finally{switching=false;switchControls();}}
 async function openCloud(id){clearTimeout(savingTimer);const version=editVersion;const loaded=await cloud.get(id);if(!loaded)throw Error('노트를 찾지 못했습니다.');if(editVersion!==version)throw Object.assign(Error('불러오는 동안 입력이 변경됐습니다. 사본으로 저장하세요.'),{code:'sequence/conflict'});resetEditor(loaded.state,loaded.revision);}
@@ -105,18 +113,136 @@ $('libraryMore').onclick=async()=>{if(loadingLibrary||!moreAvailable||!library.l
 function updateStats(){const n=STAGES.reduce((a,s)=>a+state.moves[s.key].length,0);$('bottomSummary').textContent=`${n}개 동작`;$('libCount').textContent=library.length;}
 function renderFields(){for(const el of document.querySelectorAll('[data-field]')){const f=el.dataset.field;if(el.type==='checkbox')el.checked=!!state[f];else el.value=state[f]??'';}for(let i=0;i<3;i++)$('cue'+i).value=state.cues[i]||'';renderEquip();renderStages();updateStats();$('sourceLabel').classList.toggle('hidden',!state.source);$('sourceLabel').textContent=state.source?'출처: '+state.source:'';}
 function renderEquip(){const list=['체어','캐딜락','바렐','리포머','매트','기타'];$('equipmentChips').innerHTML=list.map(x=>`<button type="button" class="chip ${state.equipment===x?'on':''}" data-equip="${x}" aria-pressed="${state.equipment===x}">${x}</button>`).join('');$('equipmentOther').classList.toggle('hidden',state.equipment!=='기타');}
-function moveHTML(move,s,i){return `<details class="move" data-id="${esc(move.id)}" data-stage="${s}"><summary><span class="move-no">${String(i+1).padStart(2,'0')}</span><span class="move-summary"><strong>${esc(move.name||'새 동작 이름을 입력하세요')}</strong><small>${esc(move.description||'이름 · 설명 · 근육 · 목적 입력')}</small></span><span class="editflag">수정 +</span></summary><div class="move-body"><div class="field"><label for="n-${move.id}">동작명</label><input id="n-${move.id}" data-prop="name" maxlength="80" value="${esc(move.name)}" placeholder="예: 롤백 + 트위스트"></div><div class="field"><label for="d-${move.id}">간단한 동작 설명</label><input id="d-${move.id}" data-prop="description" maxlength="160" value="${esc(move.description)}" placeholder="예: 롤백 후 한쪽으로 회전"></div><div class="grid2"><div class="field"><label for="mu-${move.id}">주요 근육 · 힘</label><input id="mu-${move.id}" data-prop="muscles" maxlength="80" value="${esc(move.muscles)}" placeholder="예: 복부 · 복사근 / 모르겠으면 공란"></div><div class="field"><label for="p-${move.id}">동작 목적</label><input id="p-${move.id}" data-prop="purpose" maxlength="120" value="${esc(move.purpose)}" placeholder="예: 흉추 굴곡·회전"></div></div><div class="move-actions"><button type="button" class="btn sm" data-action="up" aria-label="동작 위로 이동">↑</button><button type="button" class="btn sm" data-action="down" aria-label="동작 아래로 이동">↓</button><button type="button" class="btn sm" data-action="image">스케치·사진 ${move.image?'바꾸기':'첨부'}</button>${move.image?`<img class="photo-thumb" src="${move.image}" alt="첨부한 동작 그림"><button type="button" class="btn sm" data-action="removeImage">그림 삭제</button>`:''}<button type="button" class="btn sm danger delete" data-action="delete">동작 삭제</button></div></div></details>`;}
-function renderStages(openId){let open=new Set([...document.querySelectorAll('.move[open]')].map(x=>x.dataset.id));if(openId)open.add(openId);$('stages').innerHTML=STAGES.map(s=>`<div class="stage"><div class="stage-head"><b>${s.ko}</b><span class="stage-tag">${s.label}</span><span class="stage-count">${state.moves[s.key].length}개</span></div>${state.moves[s.key].map((x,i)=>moveHTML(x,s.key,i)).join('')||'<div class="empty-stage">아래 버튼으로 첫 동작을 넣어주세요.</div>'}<div class="stage-add"><button type="button" class="btn sm" data-add="${s.key}">+ 동작 추가</button><button type="button" class="btn sm" data-pick="${s.key}">이전 동작 가져오기</button></div><details class="extra bulk"><summary>여러 동작을 한 번에 입력하기</summary><p class="hint">한 줄에 한 동작. 이름만 적어도 되고, 설명·근육·목적은 | 로 나눠 적어도 돼요. 기존 동작 뒤에 추가됩니다.</p><textarea id="bulk-${s.key}" aria-label="${s.ko} 여러 동작 입력" placeholder="롤백 | 명치를 뒤로 보내기 | 복부 | 척추 굴곡&#10;스완 | 팔꿈치 띄우기 → 팔로 밀기 | | 흉추 신전"></textarea><button type="button" class="btn sm" data-bulk="${s.key}">동작으로 나누기</button></details></div>`).join('');for(const id of open){const e=$('stages').querySelector(`[data-id="${id}"]`);if(e)e.open=true;}}
+function moveHTML(move,s,i,moveOptions){return `<details class="move" data-id="${esc(move.id)}" data-stage="${s}"><summary><span class="move-no">${String(i+1).padStart(2,'0')}</span><span class="move-summary"><strong>${esc(move.name||'새 동작 이름을 입력하세요')}</strong><small>${esc(move.description||'이름 · 설명 · 근육 · 목적 입력')}</small></span><span class="editflag">수정 +</span></summary><div class="move-body"><div class="field"><label for="n-${move.id}">동작명</label><input id="n-${move.id}" data-prop="name" maxlength="80" value="${esc(move.name)}" placeholder="예: 롤백 + 트위스트"></div><div class="field"><label for="d-${move.id}">간단한 동작 설명</label><input id="d-${move.id}" data-prop="description" maxlength="160" value="${esc(move.description)}" placeholder="예: 롤백 후 한쪽으로 회전"></div><div class="grid2"><div class="field"><label for="mu-${move.id}">주요 근육 · 힘</label><input id="mu-${move.id}" data-prop="muscles" maxlength="80" value="${esc(move.muscles)}" placeholder="예: 복부 · 복사근 / 모르겠으면 공란"></div><div class="field"><label for="p-${move.id}">동작 목적</label><input id="p-${move.id}" data-prop="purpose" maxlength="120" value="${esc(move.purpose)}" placeholder="예: 흉추 굴곡·회전"></div></div><div class="field"><label for="position-of-${move.id}">동작의 포지션</label><select id="position-of-${move.id}" data-move-position>${moveOptions}</select></div><div class="move-actions"><button type="button" class="btn sm" data-action="up" aria-label="동작 위로 이동">↑</button><button type="button" class="btn sm" data-action="down" aria-label="동작 아래로 이동">↓</button><button type="button" class="btn sm" data-action="image">스케치·사진 ${move.image?'바꾸기':'첨부'}</button>${move.image?`<img class="photo-thumb" src="${move.image}" alt="첨부한 동작 그림"><button type="button" class="btn sm" data-action="removeImage">그림 삭제</button>`:''}<button type="button" class="btn sm danger delete" data-action="delete">동작 삭제</button></div></div></details>`;}
+function renderStages(openId){
+ const open=new Set([...$('stages').querySelectorAll('.move[open]')].map(x=>x.dataset.id));
+ if(openId)open.add(openId);
+ const priorBulk=STAGES.map(({key})=>({text:$('bulk-'+key)?.value,open:$('bulk-'+key)?.closest('details').open}));
+ $('stages').innerHTML=STAGES.map(({key:s,ko,label})=>{
+  const groups=state.positions[s], moves=state.moves[s];
+  const htmlFor=(group,index)=>{
+   const id=group?.id||'', members=moves.filter(x=>positions.groupId(x)===id);
+   const mismatch=group&&group.equipment!==state.equipment;
+   const heading=group?`<span class="position-index">${index+1}</span><h3 id="position-${s}-${id}">${esc(group.label)}</h3>
+    <div class="position-tools"><button type="button" class="btn sm" data-position-edit="${id}" aria-label="${esc(group.label)} 수정">수정</button><button type="button" class="btn sm" data-position-order="-1" aria-label="포지션 위로 이동" ${index===0?'disabled':''}>↑</button><button type="button" class="btn sm" data-position-order="1" aria-label="포지션 아래로 이동" ${index===groups.length-1?'disabled':''}>↓</button><button type="button" class="btn sm danger" data-position-delete aria-label="${esc(group.label)} 포지션 삭제">삭제</button></div>`:'<h3>포지션 미지정</h3>';
+   const cards=members.map(x=>{
+    const options=[null,...groups].map(g=>`<option value="${g?.id||''}" ${(g?.id||'')===id?'selected':''}>${g?groups.indexOf(g)+1+'. ':''}${esc(positions.label(g))}</option>`).join('');
+    return moveHTML(x,s,moves.indexOf(x),options);
+   }).join('');
+   return `<section class="position-group${group?'':' unassigned'}" data-position-group="${id}" data-stage="${s}" aria-label="${esc(positions.label(group))}"><div class="position-head">${heading}</div>${mismatch?`<p class="position-review">기구 변경 전 포지션(${esc(group.equipment)})이에요. 동작은 그대로 두었어요. 필요하면 포지션을 다시 선택해주세요.</p>`:''}${cards||'<p class="hint position-empty">아직 동작이 없어요.</p>'}<div class="stage-add"><button type="button" class="btn sm" data-add="${s}">+ 동작 추가</button><button type="button" class="btn sm" data-pick="${s}">이전 동작 가져오기</button></div></section>`;
+  };
+  return `<div class="stage"><div class="stage-head"><b>${ko}</b><span class="stage-tag">${label}</span><span class="stage-count">${moves.length}개</span></div><div class="position-cta"><button type="button" class="btn sm" data-position-add="${s}">+ 포지션 추가</button></div>${htmlFor(null,-1)}${groups.map(htmlFor).join('')}<details class="extra bulk"><summary>여러 동작을 한 번에 입력하기</summary><p class="hint">한 줄에 한 동작. 설명·근육·목적은 | 로 나눠 적어도 돼요. 입력한 동작은 ‘포지션 미지정’ 뒤에 추가돼요.</p><textarea id="bulk-${s}" aria-label="${ko} 여러 동작 입력" placeholder="롤백 | 명치를 뒤로 보내기 | 복부 | 척추 굴곡"></textarea><button type="button" class="btn sm" data-bulk="${s}">동작으로 나누기</button></details></div>`;
+ }).join('');
+ for(const id of open){const e=$('stages').querySelector(`[data-id="${id}"]`);if (e)e.open=true;}
+ STAGES.forEach(({key},i)=>{const box=$('bulk-'+key);if(priorBulk[i].text!==undefined)box.value=priorBulk[i].text;box.closest('details').open=!!priorBulk[i].open;});
+}
+let positionEdit=null;
+function showPosition(stage, group, trigger){
+ const dialog=$('positionDialog');
+ positionEdit={stage,id:group?.id||'',kind:group?.equipment===state.equipment?group.kind:null,equipment:state.equipment,note:state.id,trigger};
+ $('positionTitle').textContent=group?'포지션 수정':'포지션 추가';
+ $('positionEquipment').textContent=(state.equipment==='기타'?(state.equipmentOther.trim()||'기타'):state.equipment)+' · 그림은 시작 자세를 구분하기 위한 보기예요.';
+ $('positionLabel').value=group?.label||'';
+ $('positionLabel').setCustomValidity('');
+ $('positionOptions').innerHTML=positions.options(state.equipment).map(k=>`<button type="button" class="position-choice" aria-pressed="${k===positionEdit.kind}" data-position-kind="${k}">${positions.illustration(state.equipment,k)}<span>${positions.labels[k]||'직접 입력'}</span></button>`).join('');
+ dialog.showModal();
+ ($('positionOptions').querySelector('[aria-pressed="true"]')||$('positionOptions').querySelector('button'))?.focus();
+}
+$('positionOptions').addEventListener('click',e=>{
+ const b=e.target.closest('[data-position-kind]');if(!b||!positionEdit)return;
+ positionEdit.kind=b.dataset.positionKind;
+ for(const item of $('positionOptions').children)item.setAttribute('aria-pressed',String(item===b));
+ if(positions.labels[positionEdit.kind])$('positionLabel').value=positions.labels[positionEdit.kind];
+ else $('positionLabel').focus();
+ $('positionLabel').setCustomValidity('');
+});
+$('positionLabel').addEventListener('input',()=> $('positionLabel').setCustomValidity(''));
+$('positionForm').addEventListener('submit',e=>{
+ e.preventDefault();
+ const edit=positionEdit, label=$('positionLabel').value.trim();
+ if(!label){$('positionLabel').setCustomValidity('포지션 이름을 적어주세요.');$('positionLabel').reportValidity();return;}
+ if(!edit||edit.note!==state.id||edit.equipment!==state.equipment){$('positionDialog').close();return notify('노트나 기구가 바뀌었어요. 포지션을 다시 선택해주세요.');}
+ const groups=state.positions[edit.stage], existing=groups.find(g=>g.id===edit.id);
+ if((edit.id&&!existing)||(!edit.id&&groups.length>=positions.maxGroups))return notify('포지션 목록이 바뀌었어요. 다시 선택해주세요.');
+ const id=edit.id||uid(), result={id,label,equipment:edit.equipment,kind:edit.kind||'custom'};
+ if(existing)Object.assign(existing,result);else groups.push(result);
+ $('positionDialog').close();renderStages();persist();
+ $('stages').querySelector(`[data-stage="${edit.stage}"][data-position-group="${id}"] [data-add]`)?.focus();
+});
+$('positionDialog').addEventListener('close',()=>{const trigger=positionEdit?.trigger;positionEdit=null;if(trigger?.isConnected)trigger.focus();});
+function restoreMoveFocus(box, action){const el=$('stages').querySelector(`[data-stage="${box.dataset.stage}"][data-id="${box.dataset.id}"] ${action}`);el?.focus();}
 function getMove(el){const box=el.closest('.move');if(!box)return null;const arr=state.moves[box.dataset.stage],idx=arr.findIndex(x=>x.id===box.dataset.id);return {box,arr,idx,move:arr[idx]};}
 $('survey').addEventListener('submit',e=>{e.preventDefault();generate();});$('survey').addEventListener('input',e=>{const el=e.target;if(el.dataset.field){state[el.dataset.field]=el.type==='checkbox'?el.checked:el.value;}else if(el.dataset.cue!==undefined){state.cues[+el.dataset.cue]=el.value;}else if(el.dataset.prop){const g=getMove(el);g.move[el.dataset.prop]=el.value;g.box.querySelector('strong').textContent=g.move.name||'새 동작 이름을 입력하세요';g.box.querySelector('small').textContent=g.move.description||'이름 · 설명 · 근육 · 목적 입력';}else return;persist();});
-$('survey').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.equip){state.equipment=b.dataset.equip;renderEquip();persist();}if(b.dataset.add){const a=state.moves[b.dataset.add];if(a.length>=30)return notify('구간별 최대 30개까지 작성할 수 있어요.');const x=m('','','','');a.push(x);renderStages(x.id);persist();setTimeout(()=>$('n-'+x.id)?.focus(),0);}if(b.dataset.pick){pickStage=b.dataset.pick;showPick();}if(b.dataset.bulk){const s=b.dataset.bulk;const rows=$('bulk-'+s).value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);if(!rows.length)return notify('동작을 먼저 적어주세요.');if(state.moves[s].length+rows.length>30)return notify('구간별 최대 30개까지 입력할 수 있어요.');const parsed=rows.map(x=>x.split('|').map(y=>y.trim()));if(parsed.some(x=>x.length>4||x[0].length>80||(x[1]||'').length>160||(x[2]||'').length>80||(x[3]||'').length>120))return notify('동작명 80자·설명 160자·근육 80자·목적 120자 이내, 최대 4칸으로 나눠주세요.');state.moves[s].push(...parsed.map(x=>m(x[0],x[1]||'',x[2]||'',x[3]||'')));renderStages();persist();notify(rows.length+'개 동작을 추가했어요.');}if(b.dataset.action){const g=getMove(b);switch(b.dataset.action){case 'delete':if(confirm('이 동작을 설문에서 지울까요?'))g.arr.splice(g.idx,1);else return;break;case 'up':if(g.idx>0)[g.arr[g.idx-1],g.arr[g.idx]]=[g.arr[g.idx],g.arr[g.idx-1]];break;case 'down':if(g.idx<g.arr.length-1)[g.arr[g.idx+1],g.arr[g.idx]]=[g.arr[g.idx],g.arr[g.idx+1]];break;case 'image':imageTarget={stage:g.box.dataset.stage,id:g.move.id};$('imageFile').value='';$('imageFile').click();return;case 'removeImage':g.move.image='';break;}renderStages(g.move?.id);persist();}});
-async function showPick(){try{const source=$('pickSource').value==='sample'?null:await cloud.get($('pickSource').value);const entries=source?STAGES.flatMap(s=>source.state.moves[s.key]):STAGES.flatMap(s=>SAMPLE.moves[s.key]);$('pickList').innerHTML='';entries.forEach(x=>{const row=document.createElement('div');row.className='librarypick';row.innerHTML=`<div><b>${esc(x.name)}</b><p>${esc(x.description)}</p></div><button class="btn sm">가져오기</button>`;row.querySelector('button').onclick=()=>{if(state.moves[pickStage].length>=30)return notify('구간별 최대 30개예요.');const a={...clone(x),id:uid()};state.moves[pickStage].push(a);renderStages(a.id);persist();$('pickDialog').close();};$('pickList').appendChild(row);});if(!$('pickDialog').open)$('pickDialog').showModal();}catch(error){notify(error.message);}}
+$('survey').addEventListener('change',e=>{
+ const el=e.target;if(!el.matches('[data-move-position]'))return;
+ const g=getMove(el);if(!g||!positions.moveTo(state,g.box.dataset.stage,g.move,el.value))return;
+ renderStages(g.move.id);persist();restoreMoveFocus(g.box,'[data-move-position]');
+});
+$('survey').addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ const groupBox=b.closest('[data-position-group]'), id=groupBox?.dataset.positionGroup||'';
+ if(b.dataset.equip){
+  if(state.equipment===b.dataset.equip)return;
+  state.equipment=b.dataset.equip;renderEquip();renderStages();persist();
+  $('equipmentChips').querySelector('[aria-pressed="true"]')?.focus();return;
+ }
+ if(b.dataset.positionAdd){
+  if(state.positions[b.dataset.positionAdd].length>=positions.maxGroups)return notify('구간별 포지션은 최대 30개예요.');
+  return showPosition(b.dataset.positionAdd,null,b);
+ }
+ if(groupBox&&id){
+  const stage=groupBox.dataset.stage, groups=state.positions[stage], index=groups.findIndex(g=>g.id===id);
+  if(index<0)return;
+  if(b.dataset.positionEdit)return showPosition(stage,groups[index],b);
+  if(b.hasAttribute('data-position-delete')){
+   if(!confirm('포지션을 삭제할까요? 안에 있는 동작은 삭제하지 않고 미지정으로 옮겨요.'))return;
+   positions.removeGroup(state,stage,id);renderStages();persist();
+   $('stages').querySelector(`[data-position-add="${stage}"]`)?.focus();return;
+  }
+  if(b.dataset.positionOrder){
+   const next=index+Number(b.dataset.positionOrder);
+   if(next<0||next>=groups.length)return;
+   [groups[index],groups[next]]=[groups[next],groups[index]];
+   positions.sync(state,stage);renderStages();persist();
+   const target=$('stages').querySelector(`[data-stage="${stage}"][data-position-group="${id}"]`);
+   const again=target?.querySelector(`[data-position-order="${b.dataset.positionOrder}"]:not([disabled])`);
+   (again||target?.querySelector('[data-position-edit]'))?.focus();return;
+  }
+ }
+ if(b.dataset.add){
+  const stage=b.dataset.add,a=state.moves[stage];
+  if(a.length>=30)return notify('구간별 최대 30개까지 작성할 수 있어요.');
+  const x=m('','','','');if(id)x.positionId=id;
+  a.push(x);positions.sync(state,stage);renderStages(x.id);persist();$('n-'+x.id)?.focus();return;
+ }
+ if(b.dataset.pick){pickStage=b.dataset.pick;pickPosition=id;showPick();return;}
+ if(b.dataset.bulk){
+  const stage=b.dataset.bulk, box=$('bulk-'+stage), rows=box.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!rows.length)return notify('동작을 먼저 적어주세요.');
+  if(state.moves[stage].length+rows.length>30)return notify('구간별 최대 30개까지 입력할 수 있어요.');
+  const parsed=rows.map(x=>x.split('|').map(y=>y.trim()));
+  if(parsed.some(x=>x.length>4||x[0].length>80||(x[1]||'').length>160||(x[2]||'').length>80||(x[3]||'').length>120))return notify('동작명 80자·설명 160자·근육 80자·목적 120자 이내, 최대 4칸으로 나눠주세요.');
+  state.moves[stage].push(...parsed.map(x=>m(x[0],x[1]||'',x[2]||'',x[3]||'')));positions.sync(state,stage);
+  box.value='';renderStages();persist();notify(rows.length+'개 동작을 추가했어요.');return;
+ }
+ if(b.dataset.action){
+  const g=getMove(b);if(!g)return;
+  switch(b.dataset.action){
+   case 'delete':if(confirm('이 동작을 설문에서 지울까요?'))g.arr.splice(g.idx,1);else return;break;
+   case 'up':case 'down':positions.reorderMove(state,g.box.dataset.stage,g.idx,b.dataset.action==='up'?-1:1);break;
+   case 'image':imageTarget={stage:g.box.dataset.stage,id:g.move.id};$('imageFile').value='';$('imageFile').click();return;
+   case 'removeImage':g.move.image='';break;
+  }
+  renderStages(g.move.id);persist();restoreMoveFocus(g.box,`[data-action="${b.dataset.action}"]`);
+ }
+});
+async function showPick(){const version=++pickVersion,noteId=state.id,stage=pickStage,position=pickPosition;try{const source=$('pickSource').value==='sample'?null:await cloud.get($('pickSource').value);if(version!==pickVersion||noteId!==state.id)return;const entries=source?STAGES.flatMap(s=>source.state.moves[s.key]):STAGES.flatMap(s=>SAMPLE.moves[s.key]);$('pickList').innerHTML='';entries.forEach(x=>{const row=document.createElement('div');row.className='librarypick';row.innerHTML=`<div><b>${esc(x.name)}</b><p>${esc(x.description)}</p></div><button class="btn sm">가져오기</button>`;row.querySelector('button').onclick=()=>{if(version!==pickVersion||noteId!==state.id)return;if(state.moves[stage].length>=30)return notify('구간별 최대 30개예요.');if(position&&!state.positions[stage].some(g=>g.id===position))return notify('포지션이 바뀌었어요. 다시 선택해주세요.');const a={...clone(x),id:uid()};delete a.positionId;if(position)a.positionId=position;state.moves[stage].push(a);positions.sync(state,stage);renderStages(a.id);persist();$('pickDialog').close();};$('pickList').appendChild(row);});if(!$('pickDialog').open)$('pickDialog').showModal();}catch(error){notify(error.message);}}
 $('pickSource').onchange=showPick;
 $('imageFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f||!imageTarget)return;if(!/^image\/(jpeg|png|webp)$/.test(f.type)||f.size>10000000)return notify('10MB 이하 JPG·PNG·WebP 그림을 선택하세요.');const target={...imageTarget,noteId:state.id};try{const image=await cloud.compressImage(f);if(state.id!==target.noteId)return;const a=state.moves[target.stage].find(x=>x.id===target.id);if(a){a.image=image;renderStages(a.id);persist();notify('그림을 줄여 첨부했어요.');}}catch(err){notify('그림을 읽지 못했어요. 다른 이미지로 다시 시도하세요.');}});
 function changeTab(tab){currentTab=tab;document.body.dataset.view=tab;document.querySelectorAll('[role=tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===tab)));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+tab));if(tab==='library')renderLibrary();$('generate').textContent=tab==='preview'?'PDF 만들기':'미리보기';}
 async function gotoTab(tab){if(tab==='preview'){await generate();return;}changeTab(tab);window.scrollTo({top:0,behavior:'smooth'});}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>gotoTab(b.dataset.tab));
-function hasContent(){return !!(state.title||state.goal||STAGES.some(s=>state.moves[s.key].length));}
+function hasContent(){return !!(state.title||state.goal||STAGES.some(s=>state.moves[s.key].length||state.positions[s.key].length));}
 async function loadSample(){return switchEditor(async()=>{if(!(await flushCurrent()))return false;resetEditor({...clone(SAMPLE),id:uid()});persist();changeTab('write');notify('원본 체어 수업 예시를 불러왔어요.');window.scrollTo({top:0,behavior:'smooth'});return true;});}
 async function newSequence(){return switchEditor(async()=>{if(!(await flushCurrent()))return false;resetEditor(blank());changeTab('write');window.scrollTo({top:0,behavior:'smooth'});return true;});}
 $('sampleBtn').onclick=$('bottomSample').onclick=loadSample;$('newBtn').onclick=$('newLib').onclick=newSequence;
@@ -146,13 +272,13 @@ async function exportLibraryPDF(id,button){
  }catch(error){notify(error.message||'PDF 생성에 실패했습니다. 다시 시도하세요.');}
  finally{libraryPdfExports.delete(id);renderLibrary();}
 }
-$('exportAnswer').onclick=()=>exportJSON(state,'ARCHIVE_'+safeName(state.title)+'_응답.json');$('backupBtn').onclick=async()=>{try{if(!(await flushCurrent()))return;const rows=await cloud.list(),records=[];for(const d of rows){const loaded=await cloud.get(d.id);records.push(loaded.state);}exportJSON({schema:'archive.library.v1',records},'ARCHIVE_시퀀스_최근100개백업.json');}catch(error){notify(error.message);}};$('importBtn').onclick=()=>{$('importFile').value='';$('importFile').click();};
+$('exportAnswer').onclick=()=>exportJSON(payload(state),'ARCHIVE_'+safeName(state.title)+'_응답.json');$('backupBtn').onclick=async()=>{try{if(!(await flushCurrent()))return;const rows=await cloud.list(),records=[];for(const d of rows){const loaded=await cloud.get(d.id);records.push(loaded.state);}exportJSON({schema:'archive.library.v1',records},'ARCHIVE_시퀀스_최근100개백업.json');}catch(error){notify(error.message);}};$('importBtn').onclick=()=>{$('importFile').value='';$('importFile').click();};
 async function prepareImport(raw){const d=validState(raw);for(const move of STAGES.flatMap(s=>d.moves[s.key]))if(move.image)move.image=await cloud.compressImage(move.image);return d;}
-async function importCopies(records,legacy=false){if(!cloudReady)throw Error('먼저 Firestore에 연결해주세요.');if(!(await flushCurrent()))return;let saved=0;for(const raw of records){const d=await prepareImport(raw);if(legacy){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(cloud.uid+':'+d.id));d.id='legacy_'+[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');if(await cloud.get(d.id))continue;}else d.id=uid();await cloud.save(d,0);saved++;}notify(saved+'개 기록을 Firestore에 저장했어요.');}
+async function importCopies(records,legacy=false){if(!cloudReady)throw Error('먼저 Firestore에 연결해주세요.');if(!(await flushCurrent()))return;let saved=0;for(const raw of records){const d=await prepareImport(raw);if(legacy){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(cloud.uid+':'+d.id));d.id='legacy_'+[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');if(await cloud.get(d.id))continue;}else d.id=uid();await cloud.save(payload(d),0);saved++;}notify(saved+'개 기록을 Firestore에 저장했어요.');}
 $('importFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;if(f.size>30000000)return notify('30MB 이하 응답 파일을 사용하세요.');try{const data=JSON.parse(await f.text());const records=data.schema==='archive.library.v1'?data.records:[data];if(!Array.isArray(records)||records.length>100)throw Error('최대 100개 기록까지 복원할 수 있어요.');if(!confirm(records.length+'개 기록을 새 사본으로 저장할까요?'))return;await importCopies(records);}catch(err){notify(err.message||'응답 파일을 읽지 못했어요.');}});
 $('importLegacy').onclick=async()=>{try{const old=JSON.parse(localStorage.getItem(LIBKEY)||'[]');if(!Array.isArray(old))throw Error('기존 보관함 형식을 확인해주세요.');const records=old.slice();const draft=localStorage.getItem(KEY);if(draft){const d=JSON.parse(draft);const saved=records.find(x=>x.id===d.id);if(!saved)records.push(d);else if(JSON.stringify(saved)!==JSON.stringify(d))records.push({...d,id:d.id+'_draft'});}if(!records.length)return notify('이 브라우저에 이전 기록이 없습니다.');if(records.length>100)throw Error('100개 이하로 나눠 가져와주세요.');if(!confirm('이 브라우저의 '+records.length+'개 기록을 현재 운영자 계정에 옮길까요? 기존 데이터는 보존합니다.'))return;await importCopies(records,true);}catch(error){notify(error.message);}};
 $('retryCloud').onclick=async()=>{if(!cloudReady)await startCloud();else await flushCurrent();};
-$('backupDraft').onclick=()=>exportJSON(state,'ARCHIVE_'+safeName(state.title)+'_미저장응답.json');
+$('backupDraft').onclick=()=>exportJSON(payload(state),'ARCHIVE_'+safeName(state.title)+'_미저장응답.json');
 $('latestCloud').onclick=()=>switchEditor(async()=>{if(!confirm('현재 변경사항을 버리고 최신 저장본을 열까요? 필요한 내용은 먼저 응답 백업하세요.'))return false;await openCloud(state.id);return true;});
 $('copyCloud').onclick=()=>switchEditor(async()=>{resetEditor({...clone(state),id:uid()});persist();return flushCurrent();});
 $('saveRecord').onclick=async()=>{if(!state.title)return notify('수업명을 먼저 입력해주세요.');if(await flushCurrent())notify('Firestore에 저장했어요.');};
@@ -193,7 +319,19 @@ function block(ops,text,x,y,w,size=14,color=C.ink,bold=false,leading=20){const a
 function imageOp(ops,data,x,y,w,h){ops.push({t:'image',data,x,y,w,h});}
 function cardLayout(x,w,move,num){const pad=14,indent=24,iw=move.image?72:0,gap=move.image?12:0,tx=x+pad+indent+iw+gap,tw=w-pad*2-indent-iw-gap;const title=wrap(move.name||'동작명 확인 필요',tw,16,true),desc=wrap(move.description||'설명 확인 필요',tw,13.5);let y=10+title.length*20+2+desc.length*18+4;const half=(tw-16)/2;const muscles=wrap(move.muscles||'확인 필요',half,12.5),purpose=wrap(move.purpose||'확인 필요',half,12.5);const two=tw>=320;if(two)y+=11+Math.max(muscles.length,purpose.length)*17+10;else y+=14+wrap(move.muscles||'확인 필요',tw,12.5).length*17+8+14+wrap(move.purpose||'확인 필요',tw,12.5).length*17+12;return {move,num,x,w,tx,tw,title,desc,two,half,h:Math.max(y,move.image?100:0)};}
 function drawCard(ops,c,y){rect(ops,c.x,y,c.w,c.h,'#ffffff',C.line);txt(ops,String(c.num).padStart(2,'0'),c.x+13,y+22,11,C.accent,true);let py=y+22;c.title.forEach(t=>{txt(ops,t,c.tx,py,16,C.ink,true);py+=20;});py+=0;c.desc.forEach(t=>{txt(ops,t,c.tx,py,13.5,c.move.description?C.ink:C.muted);py+=18;});py+=4;txt(ops,'근육 · 힘',c.tx,py,10,C.muted,true);if(c.two){txt(ops,'목적',c.tx+c.half+16,py,10,C.muted,true);block(ops,c.move.muscles||'확인 필요',c.tx,py+18,c.half,12.5,c.move.muscles?C.green:C.accent,false,17);block(ops,c.move.purpose||'확인 필요',c.tx+c.half+16,py+18,c.half,12.5,c.move.purpose?C.green:C.accent,false,17);}else{py+=18;py+=block(ops,c.move.muscles||'확인 필요',c.tx,py,c.tw,12.5,c.move.muscles?C.green:C.accent,false,17);py+=5;txt(ops,'목적',c.tx,py,10,C.muted,true);block(ops,c.move.purpose||'확인 필요',c.tx,py+18,c.tw,12.5,c.move.purpose?C.green:C.accent,false,17);}if(c.move.image)imageOp(ops,c.move.image,c.x+38,y+15,72,Math.min(92,c.h-30));}
-function splitCards(cards,maxH){const chunks=[];let a=[],used=0;for(const c of cards){if(c.h>maxH)throw Error('한 동작의 내용이 너무 길어요. 설명·근육·목적을 짧게 나누어주세요.');if(a.length&&used+c.h+9>maxH){chunks.push(a);a=[];used=0;}a.push(c);used+=c.h+9;}if(a.length)chunks.push(a);return chunks;}
+function splitCards(cards,maxH){
+ const chunks=[];let chunk=[],used=0;
+ for(const card of cards){
+  const title=previous=>card.positionLabel&&previous?.positionId!==card.positionId?wrap(card.positionLabel,card.w-26,11,true):[];
+  let heading=title(chunk.at(-1)), height=heading.length?heading.length*15+9:0;
+  if(chunk.length&&used+card.h+height+9>maxH){
+   chunks.push(chunk);chunk=[];used=0;heading=title(null);height=heading.length?heading.length*15+9:0;
+  }
+  if(card.h+height>maxH)throw Error('한 동작의 내용이 너무 길어요. 설명·근육·목적을 짧게 나누어주세요.');
+  chunk.push({...card,heading,headingHeight:height});used+=card.h+height+9;
+ }
+ if(chunk.length)chunks.push(chunk);return chunks;
+}
 function buildPages(d){
  const all=[];let n=0;const widths=[252,552,292],xs=[36,304,872];
  const title=d.title||'제목 없는 시퀀스';let ts=32;while(measure(title,ts,true)>805&&ts>23)ts-=1;
@@ -203,7 +341,10 @@ function buildPages(d){
  const goalLines=wrap(d.goal||'수업 목표를 입력해주세요',988,15),goalY=ruleY+25;
  const headerBottom=goalY+goalLines.length*19,contentY=headerBottom+51,contentBottom=740,maxH=contentBottom-contentY;
  if(maxH<230)throw Error('수업명·대상·목표가 길어요. 짧게 정리하면 한눈에 보기 쉬워집니다.');
- const partitions=STAGES.map((s,i)=>splitCards(d.moves[s.key].map(move=>cardLayout(xs[i],widths[i],move,++n)),maxH));
+ const partitions=STAGES.map((s,i)=>{
+  const groups=d.positions?.[s.key]||[],labelById=new Map(groups.map(g=>[g.id,g.label]));
+  return splitCards(d.moves[s.key].map(move=>({...cardLayout(xs[i],widths[i],move,++n),positionId:labelById.has(move.positionId)?move.positionId:'',positionLabel:labelById.get(move.positionId)||(groups.length?'포지션 미지정':'')})),maxH);
+ });
  const count=Math.max(1,...partitions.map(x=>x.length));
  const cueLines=d.cues.filter(x=>x.trim()).flatMap((s,i)=>wrap(s,626,13.5).map((t,j)=>(j?'     ':String(i+1).padStart(2,'0')+'  ')+t));
  const memoLines=wrap(d.memo,384,12);const longCues=cueLines.length>3,longMemo=d.memo&&memoLines.length>3,extra=longCues||longMemo,total=count+(extra?1:0);
@@ -213,7 +354,10 @@ function buildPages(d){
   line(ops,36,ruleY,1164,ruleY);txt(ops,'TODAY’S INTENT',36,goalY,10,C.accent,true);goalLines.forEach((t,i)=>txt(ops,t,176,goalY+i*19,15,C.ink));
   STAGES.forEach((s,i)=>{const x=xs[i],w=widths[i],hy=headerBottom+12;rect(ops,x,hy,w,29,i===1?C.green:C.wash);txt(ops,s.label,x+13,hy+19,12,i===1?'#ffffff':C.ink,true);const chunk=partitions[i][pg]||[];const label=chunk.length+' MOVES';txt(ops,label,x+w-15-measure(label,9),hy+19,9,i===1?'#dce4d8':C.muted);let y=contentY;
    if(!chunk.length){txt(ops,partitions[i].length?'앞 페이지에서 완료한 구간':'동작을 추가해주세요',x+14,y+26,12,C.muted);y+=60;}
-   chunk.forEach(c=>{drawCard(ops,c,y);y+=c.h+9;});
+   chunk.forEach(c=>{
+    if(c.headingHeight){rect(ops,x,y,w,c.headingHeight-3,C.wash);c.heading.forEach((name,j)=>txt(ops,name,x+13,y+14+j*15,11,C.green,true));y+=c.headingHeight;}
+    drawCard(ops,c,y);y+=c.h+9;
+   });
    if(d.sketchSpace&&contentBottom-y>90){line(ops,x+2,y+18,x+w-2,y+18);txt(ops,i===0?'SKETCH / 연결 메모':i===2?'CHECK / 수업 후 기록':'NOTE / 수업 메모',x+4,y+39,10,C.muted,true);for(let ly=y+65;ly<contentBottom-2;ly+=24)line(ops,x+4,ly,x+w-4,ly,'#e6e8e0',.6);}
   });
   line(ops,36,760,1164,760,C.line);txt(ops,'KEY CUES',36,782,10,C.accent,true);
@@ -255,7 +399,7 @@ const autosaveTick=setInterval(()=>{if(cloudReady&&cloudDirty&&!cloudConflict&&!
 window.addEventListener('beforeunload',event=>{if(cloudDirty||savePromise){event.preventDefault();event.returnValue='';}});
 window.addEventListener('pagehide',()=>{clearTimeout(savingTimer);clearInterval(autosaveTick);unsubscribe?.();unwatch?.();if(pdfURL)URL.revokeObjectURL(pdfURL);});
 window.addEventListener('online',()=>{if(cloudDirty&&!cloudConflict)saveDraft();});
-window.ARCHIVE_TEST={getState:()=>clone(state),setState:d=>{state=validState(d);renderFields();persist();},sample:()=>clone(SAMPLE),generate,buildPages,makePDF,opsSVG,getPages:()=>pages,ready:()=>fontsReady,flush:flushCurrent,getRevision:()=>revision,dirty:()=>cloudDirty};
+window.ARCHIVE_TEST={getState:()=>clone(payload(state)),setState:d=>{state=validState(d);renderFields();persist();},sample:()=>clone(SAMPLE),generate,buildPages,makePDF,opsSVG,getPages:()=>pages,ready:()=>fontsReady,flush:flushCurrent,getRevision:()=>revision,dirty:()=>cloudDirty};
 startCloud();
 }
 }
