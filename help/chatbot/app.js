@@ -10,7 +10,9 @@ function link(label,href){
 function append(result){
  const p=document.createElement('p');p.className='chat';p.textContent=result.text;
  if(result.source){p.append(document.createElement('br'),link('안내 원문',result.source));}
- if(result.memberApp){
+ if(result.memberLookup){
+  p.append(document.createElement('br'),link('회원 앱에서 확인하는 방법','https://archivepilates.notion.site/studiomate'));
+ }else if(result.memberApp){
   p.append(document.createElement('br'),link('스튜디오메이트 iPhone 설치','https://apps.apple.com/kr/app/id1400126585'),document.createTextNode(' · '),link('Android 설치','https://play.google.com/store/apps/details?hl=ko&id=kr.studiomate.user'));
  }
  if(Array.isArray(result.choices)){
@@ -24,7 +26,7 @@ function append(result){
 function ask(question){
  get('conversation').querySelectorAll('.quick').forEach(row=>row.remove());
  const result=respond(question,{mode,context,rules});
- context=result.context||'';append(result);
+ context=result.context||'';append(result);return result;
 }
 function setMode(next){
  window.dispatchEvent(new CustomEvent('archive:help-mode'));
@@ -38,4 +40,4 @@ function setMode(next){
  append({text:mode==='member'?'예약·홀딩·재등록 등 공통 기준을 안내해요. 개인 예약이나 잔여 횟수는 회원 앱에서 확인해 주세요.':'수강권 비교나 처음 듣는 수업이 궁금하신가요? 가능한 요일·시간과 주당 운동 횟수를 알려 주세요.'});
 }
 for(const button of document.querySelectorAll('[data-mode]'))button.addEventListener('click',()=>{if(button.dataset.mode!==mode)setMode(button.dataset.mode);});
-get('question').addEventListener('submit',e=>{e.preventDefault();const query=get('query');const q=query.value;query.value='';window.dispatchEvent(new CustomEvent('archive:help-question',{detail:reusableQuestion(q)?q:''}));ask(q);query.focus();});
+get('question').addEventListener('submit',e=>{e.preventDefault();const query=get('query');const q=query.value;query.value='';const result=ask(q);window.dispatchEvent(new CustomEvent('archive:help-question',{detail:!result.memberLookup&&reusableQuestion(q)?q:''}));query.focus();});

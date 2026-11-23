@@ -1,6 +1,7 @@
 import {regularNov,sourcePrice} from './content.js';
+import {privateInput,healthInput} from './privacy.js';
 const kst=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'});
-const memberApp='내 수강권·잔여 횟수와 출석은 스튜디오메이트 회원 앱에서 확인해 주세요. 앱과 실제 기록이 다르면 직원에게 문의해 주세요.';
+const memberApp='개인 수강권이나 수강 이력은 공개 채팅에서 조회하지 않아요. 스튜디오메이트 회원 앱에 로그인하고 내 수강권 또는 이용내역을 열어 주세요.';
 const staff='정확한 적용 여부는 직원에게 확인해 주세요.';
 const money=n=>n.toLocaleString('ko-KR')+'원';
 const kstDate=now=>kst.format(now);
@@ -19,21 +20,20 @@ function plan(n,now){
  if(!items.length)return {text:'이 방문 횟수에 맞는 수강권은 직원과 확인해 주세요. 시간대와 일정을 알려 주시면 비교하기 쉬워요.'};
  return {text:'11월 정규 수강료 기준이에요. 부가세 포함이며 유효기간은 첫 수업일부터 계산해요.\n'+items.map(x=>x.name+' · '+x.duration+' · '+money(x.price)).join('\n')+'\n실제 판매·등록 가능 여부는 직원에게 확인해 주세요.',source:sourcePrice};
 }
-const privateMarkers=/0(?:10|11|16|17|18|19)[ -]?\d{3,4}[ -]?\d{4}|\d{6}[ -]?\d{7}|[^\s@]+@[^\s@]+\.[^\s@]+|(?:이름|연락처|휴대폰|회원번호)\s*[:：]/;
-export const reusableQuestion=q=>typeof q==="string"&&!privateMarkers.test(q)&&!/통증|수술|산후|임신|재활|부상|아파|디스크/.test(q);
+export const reusableQuestion=q=>typeof q==="string"&&!privateInput(q)&&!healthInput.test(q);
 export function respond(q,{mode='prospect',context='',now=new Date(),rules=null}={}){
  if(typeof q!=='string'||!q.trim())return {text:'궁금한 내용을 입력해 주세요.'};
+ if(privateInput(q))return {text:'이름, 연락처, 생년월일은 채팅에 적지 않아도 돼요. 개인 기록은 회원 앱 또는 직원 문의에서 확인해 주세요.'};
  q=q.trim().slice(0,160);
- if(privateMarkers.test(q))return {text:'개인정보 없이 질문해 주세요. 기록 확인이 필요하면 직원 문의 또는 회원 앱을 이용해 주세요.'};
  const expired=/만료|(?:기간|기한)(?:이|은)?\s*(?:끝|지난|지났|지나)|이미\s*끝/.test(q), extension=/연장|홀딩|일시.?정지/.test(q), leftover=/남(?:은|았|아)|잔여|미사용/.test(q);
- if(/통증|수술|산후|임신|재활|부상|아파|디스크/.test(q))return {text:'통증이나 회복 상태에 맞는 운동은 여기서 판단하지 않아요. 직원에게 문의해 코치 상담을 받아 주세요.'};
+ if(healthInput.test(q))return {text:'통증이나 회복 상태에 맞는 운동은 여기서 판단하지 않아요. 직원에게 문의해 코치 상담을 받아 주세요.'};
  if(expired&&!/환불/.test(q)&&(extension||leftover)){
    if(/기간권/.test(q))return fromRule(rules,'holding-period','기간권은 유료 기간 연장 대상이 아니에요. 개인 사례는 직원에게 확인해 주세요.');
    const source='https://app.notion.com/p/216d49eae4bf806983abfb9665af7992';
    if(/횟수권/.test(q))return {source,text:'만료된 횟수권에 미사용 횟수가 남았다면 일반 홀딩이 아닌 유료 기간 연장 상담으로 문의해 주세요. 가능한지, 비용이 얼마인지는 담당자가 수강권을 확인한 뒤 안내해요. 연장은 실행되지 않아요. 필요한 경우 별도로 직원에게 문의해 주세요.'};
    return {source,text:'홀딩은 유효기간 안에 사전 신청하는 제도예요. 이미 끝난 수강권에 남은 횟수가 있다면 직원에게 수강권 종류와 기간 연장 가능 여부를 확인해 주세요.'};
  }
- if(/잔여|남(?:은|았)|내 수강권|제 수강권|출석|로그인|회원 인증/.test(q))return {text:memberApp,memberApp:true};
+ if(/잔여|남(?:은|았)|(?:내|제)\s*수강권|출석|수강\s*이력|이용\s*내역|로그인|회원\s*인증|패스키/.test(q))return {text:memberApp,memberApp:true,memberLookup:true};
  if(mode==='member'&&/재등록/.test(q))return {text:'재등록 상담은 유효한 수강권이 있거나 마지막 실제 출석일로부터 3개월 이내인 경우를 기준으로 확인해요. 예약만 하거나 취소한 수업은 출석에 들어가지 않아요. 개인별 재등록 여부는 기존 문의 양식에서 직원이 확인해 드려요.',memberApp:true};
  if(/잘 모르겠/.test(q))return {text:'가입한 수강권이나 예약 유형을 회원 앱에서 먼저 확인하거나, 직원에게 문의해 주세요.'};
  if(/환불/.test(q)&&!/홀딩이나 환불/.test(q))return {text:'개인별 환불 가능 여부와 금액은 직원이 계약·이용 이력을 확인해 안내해요. 여기서 환불을 실행하지 않아요. 직원 문의는 별도로 선택해 주세요.',source:'https://app.notion.com/p/313d49eae4bf80179269f09d02597ede'};

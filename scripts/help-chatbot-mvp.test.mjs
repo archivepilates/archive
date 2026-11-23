@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
-import {respond} from '../help/chatbot/engine.js';
+import {respond,reusableQuestion} from '../help/chatbot/engine.js';
 const rules=JSON.parse(fs.readFileSync(new URL('../help/assets/member-inquiry-guidance.json',import.meta.url)));
 const nov=new Date('2026-11-30T14:59:59Z');
 const december=new Date('2026-11-30T15:00:00Z');
@@ -23,7 +23,17 @@ test('valid dated prices, no clearance or December prices',()=>{
  assert.doesNotMatch(b.text,/398,000/);assert.equal(b.source,undefined);
 });
 test('personal queries point to the app, privacy markers and health go to guidance',()=>{
- for(const q of ['내 잔여 횟수','내 출석','제 수강권 확인'])assert.equal(ask(q).memberApp,true);
+ for(const q of ['내 잔여 횟수','내 출석','제 수강권 확인','최근 수강 이력','패스키 로그인']){
+  const a=ask(q);
+  assert.equal(a.memberLookup,true);
+  assert.match(a.text,/공개 채팅에서 조회하지 않아요/);
+  assert.equal(a.source,undefined);
+ }
+ for(const q of ['제 생년월일은 1999-01-01','생년월일 19990101','０１０ １２３４ ５６７８']){
+  assert.equal(reusableQuestion(q),false);
+  assert.doesNotMatch(ask(q).text,/1999|1234/);
+ }
+ assert.notEqual(ask('홀딩').memberLookup,true);
  assert.doesNotMatch(ask('이름: 가상 회원, 010-1234-5678').text,/010|가상 회원/);
  assert.match(ask('수술 후 운동을 추천해주세요').text,/코치 상담/);
  assert.match(ask('환불 신청').text,/여기서 환불을 실행하지 않아요/);
