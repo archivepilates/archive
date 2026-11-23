@@ -131,6 +131,10 @@ async function start(event,{refund=false}={}){
  category();
 }
 el('refund-intake').addEventListener('click',event=>start(event,{refund:true}));
+window.addEventListener('archive:help-open-intake',event=>{
+ const trigger=event.detail?.trigger;
+ if(trigger instanceof HTMLButtonElement)void start({currentTarget:trigger},{refund:event.detail.refund===true});
+});
 for(const id of ['start-intake','inline-intake'])el(id).addEventListener('click',start);
 cancel.addEventListener('click',()=>{if(key||busy)return;box.hidden=true;draft=null;lastButton?.focus();});
 back.addEventListener('click',()=>{

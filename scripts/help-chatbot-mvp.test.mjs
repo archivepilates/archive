@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
 import {respond,reusableQuestion} from '../help/chatbot/engine.js';
+import {conversationTurn} from '../help/chatbot/conversation.js';
 const rules=JSON.parse(fs.readFileSync(new URL('../help/assets/member-inquiry-guidance.json',import.meta.url)));
 const nov=new Date('2026-11-30T14:59:59Z');
 const december=new Date('2026-11-30T15:00:00Z');
@@ -51,6 +52,8 @@ test('static Help deployment does not gain any API route or personal persistence
  const app=fs.readFileSync(new URL('../help/chatbot/app.js',import.meta.url),'utf8');
  const firebase=JSON.parse(fs.readFileSync(new URL('../firebase.json',import.meta.url)));
  assert.match(html,/id="start-intake"/);
+ assert.match(html,/<form id="question">/);
+ assert.doesNotMatch(html,/data-mode|테스트 본인확인|가상 가입 링크/);
  assert.equal(html,base);
  assert.match(base,/href="\/inquiry\/">챗봇 이용이 어려울 때: 기존 문의 양식/);
  assert.match(fallback,/id="member-form"/);
@@ -60,6 +63,46 @@ test('static Help deployment does not gain any API route or personal persistence
  const config=firebase.hosting.find(row=>row.site==='archive-pilates-help');
  assert.equal(config.public,'help');
  assert.deepEqual(config.rewrites.map(r=>r.source),['/api/inquiries','**']);
+});
+
+test('public chat carries visiting preferences and adjusts a follow-up without inventing seats',()=>{
+ const turn=(q,state)=>conversationTurn(q,state,{now:nov,rules});
+ const first=turn('운동은 처음인데 퇴근하고 주 2회 가고 싶어요');
+ assert.match(first.text,/입문.*저녁.*주 2회/);
+ assert.match(turn('그럼 한 달이면 몇 번이야?',first.state).text,/4주에 8회/);
+ const next=turn('목요일밖에 안 되면?',first.state);
+ assert.match(next.text,/목요일 저녁만.*주 1회.*4주에 4회/);
+ assert.match(next.text,/남은 자리는 회원 앱/);
+});
+
+test('public chat gives direct dated sources and respects the month rollover',()=>{
+ const turn=(q,now=nov)=>conversationTurn(q,{}, {now,rules});
+ const slots=turn('명지점 시간표 보여줘');
+ assert.equal(slots.source,'https://archivepilates.notion.site/#409d49eae4bf800a9bdbdfcc29f1c3cc');
+ assert.match(slots.text,/월간 예정표/);
+ assert.equal(turn('12월 시간표 보여줘').source,undefined);
+ const rates=turn('11월 수강권 문의');
+ assert.match(rates.text,/398,000원 · 10주/);
+ assert.equal(rates.source,'https://archivepilates.notion.site/');
+ assert.doesNotMatch(turn('수강료 알려줘',december).text,/398,000/);
+});
+
+test('public chat keeps policy follow-ups, private routing and intake separate',()=>{
+ const turn=(q,state)=>conversationTurn(q,state,{now:nov,rules});
+ const hold=turn('다음 달 여행인데 수강권 멈출 수 있어요?');
+ assert.deepEqual(hold.choices,['기간권','횟수권','잘 모르겠어요']);
+ assert.match(turn('횟수권',hold.state).text,/7일/);
+ const booking=turn('토요일 예약을 취소하고 싶어요');
+ assert.match(turn('자유 예약',booking.state).text,/21시/);
+ assert.equal(turn('환불 신청').inquiry,'refund');
+ const lookup=turn('내 수강권 몇 회 남았어?');
+ assert.equal(lookup.memberLookup,true);
+ assert.equal(lookup.appGuide,'https://archivepilates.notion.site/studiomate');
+ assert.equal(turn('그럼 언제까지예요?',lookup.state).memberLookup,true);
+ const sensitive=turn('생년월일 1999-01-01');
+ assert.equal(sensitive.hideInput,true);
+ assert.doesNotMatch(JSON.stringify(sensitive),/1999-01-01/);
+ assert.equal(turn('친구의 수강권을 확인할래요').hideInput,true);
 });
 
 test('class question with weekly frequency is not converted into a pass quote',()=>{
