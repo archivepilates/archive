@@ -104,7 +104,7 @@ function append(role,result,follow=true){
   if(role==='assistant'){
     const logo=element('img',null,'avatar');logo.src='/favicon.png';logo.alt='';logo.width=24;logo.height=24;row.append(logo);
   }
-  body.append(element('span',role==='user'?'나':result.aiAssisted?'명지점 상담 · AI 답변':'명지점 상담','speaker'));
+  body.append(element('span',role==='user'?'나':result.aiAssisted?'명지점 상담 · AI 답변':result.aiUnavailable?'명지점 상담 · 기본 안내':'명지점 상담','speaker'));
   if(result.welcome){
     const greeting=element('div',null,'welcome-turn');
     const drawing=greetingArt();
@@ -112,7 +112,7 @@ function append(role,result,follow=true){
     text.append(element('h2','오늘은 무엇을 도와드릴까요?'),element('p',result.text));
     greeting.append(text,drawing);
     body.append(greeting);
-  }else body.append(element('p',result.text,'bubble'));
+  }else body.append(element('p',result.aiUnavailable?'GPT 답변을 지금 받을 수 없어 기본 안내로 답해요.\n\n'+result.text:result.text,'bubble'));
   if(result.timetable){row.classList.add('has-timetable');body.append(showTimetable(result.timetable));}
   const links=element('div',null,'chat-actions');
   if(result.source&&!result.timetable)links.append(link(result.sourceLabel??'안내 원문',result.source));
@@ -190,7 +190,7 @@ function ask(question,{focusInput=true,useAi=false}={}){
       naturalHistory=[...natural.history,{role:'user',text:natural.question},
         {role:'assistant',text:answer.answer.normalize('NFKC')}].slice(-4);
     }
-    const reply=answer?applyNaturalReply(state,answer):basicReply(q);
+    const reply=answer?applyNaturalReply(state,answer):{...basicReply(q),aiUnavailable:true};
     finishTurn(q,reply,false,true,follow);
   });
 }

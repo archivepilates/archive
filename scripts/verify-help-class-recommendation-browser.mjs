@@ -272,6 +272,8 @@ try{
               assert.equal(await consent.isVisible(),false);
               await ask('예약 취소는요?');
               await page.getByText('고정 예약인가요, 자유 예약인가요?').waitFor();
+              await page.getByText('GPT 답변을 지금 받을 수 없어 기본 안내로 답해요.',{exact:false}).waitFor();
+              assert(await page.getByText('명지점 상담 · 기본 안내',{exact:true}).isVisible());
               assert.deepEqual(naturalRequests.at(-1).history,[]);
             }
           }
