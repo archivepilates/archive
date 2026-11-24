@@ -28,6 +28,28 @@
       "duration": "10개월"
     }
   ],
+  "promotions": [
+    {
+      "kind": "group",
+      "name": "그룹레슨 50회",
+      "price": 870000,
+      "duration": "6개월"
+    },
+    {
+      "kind": "duet",
+      "name": "듀엣레슨 20회 (강사)",
+      "price": 600000,
+      "duration": "100일",
+      "perPerson": true
+    },
+    {
+      "kind": "duet",
+      "name": "듀엣레슨 20회 (부원장)",
+      "price": 660000,
+      "duration": "100일",
+      "perPerson": true
+    }
+  ],
   "times": [
     [
       "08:00",

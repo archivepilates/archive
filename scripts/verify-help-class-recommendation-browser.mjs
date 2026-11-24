@@ -44,6 +44,8 @@ try{
             };
           });
           const page=await ctx.newPage(), writes=[],errors=[];
+          if(live)await page.route('**/api/public-chat-intent?capabilities=natural',
+            route=>route.fulfill({json:{natural:false}}));
           page.on('pageerror',err=>errors.push(err.message));
           await ctx.route('**/*',route=>{
             const req=route.request();
@@ -176,44 +178,11 @@ try{
               }
               await page.getByRole('button',{name:'새 대화',exact:true}).click();
             }
-            const requests=[];
-            let fallbackTest=false;
-            await page.route('**/api/public-chat-intent',async route=>{
-              assert.equal(route.request().method(),'POST');
-              const packet=route.request().postDataJSON();
-              requests.push(packet);
-              if(fallbackTest&&packet.detail==='daily')return route.fulfill({json:{ok:true,
-                answer:'매일 운동과 매일 수업은 달라요.',next:'routine_scope'}});
-              if(requests.length>2)return route.fulfill({status:503,json:{ok:false}});
-              return route.fulfill({json:{ok:true,answer:requests.length===1?'목요일 시간표를 모아 봤어요.':'앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.',next:requests.length===1?'time':'none'}});
-            });
             await page.clock.setFixedTime(new Date('2026-11-24T01:00:00Z'));
-            await chat.fill('목요일에 수업은 몇 시에 열려요?');
-            await chat.press('Enter');
-            await page.getByText('명지점 상담 · AI 답변',{exact:true}).waitFor();
-            await page.getByRole('list',{name:'목요일 예정 수업'}).waitFor();
-            await page.getByText(/어느 시간대가 편하세요/).waitFor();
-            await page.getByRole('button',{name:'저녁',exact:true}).click();
-            await page.getByText('앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.',{exact:true}).waitFor();
-            assert.equal(await page.getByRole('button',{name:'저녁',exact:true}).count(),0);
-            assert.deepEqual(requests.map(({topic,previousTopic,day,time})=>[topic,previousTopic,day,time]),[
-              ['schedule','',4,0],['schedule','schedule',4,3]]);
-            assert(requests.every(r=>Object.keys(r).length===8&&r.version===2));
-            await chat.fill('내 수강권 몇 회 남았어?');
-            await chat.press('Enter');
-            await page.getByRole('link',{name:'회원 앱에서 확인하는 방법'}).waitFor();
-            assert.equal(requests.length,2);
-            await page.getByRole('button',{name:'새 대화',exact:true}).click();
-            await chat.fill('목요일에 수업은 몇 시에 열려요?');
-            await chat.press('Enter');
-            await page.getByText(/명지점 월간 예정표예요/).waitFor();
-            assert.equal(requests.length,3);
-            assert.equal(await page.getByText('명지점 상담 · AI 답변',{exact:true}).count(),0);
-            fallbackTest=true;
             await page.getByRole('button',{name:'새 대화',exact:true}).click();
             for(const [question,expected] of [
               ['주 3회 운동하고 싶어요',/주 3회 기준/],
-              ['매일운동하려면?',/센터 수업만 생각하고 계세요/],
+              ['매일운동하려면?',/센터 수업만 매일 듣고 싶으세요/],
               ['매일은?',/수강권 조건과 날짜별 개설·예약 상황/],
               ['오늘은?',/명지점 월간 예정표예요/]
             ]){
@@ -222,8 +191,6 @@ try{
               await chat.press('Enter');
               await page.locator('.turn.assistant').nth(nextIndex).getByText(expected).waitFor();
             }
-            assert.deepEqual(requests.slice(3).map(({topic,detail,day})=>[topic,detail,day]),[
-              ['plan','general',0],['plan','daily',0],['plan','daily_studio',0],['schedule','timetable',2]]);
             await page.getByRole('list',{name:'화요일 예정 수업'}).waitFor();
             if(width<500){
               const keyboardHeight=height-300;
@@ -263,8 +230,13 @@ try{
               await page.route('**/api/public-chat-intent?capabilities=natural',
                 route=>route.fulfill({json:{natural:true}}));
               await page.route(requestUrl=>requestUrl.pathname==='/api/public-chat-intent'&&!requestUrl.search,route=>{
-                naturalRequests.push(route.request().postDataJSON());
-                return route.fulfill({json:{ok:true,answer:'처음이라면 가벼운 강도로 시작해 볼까요?',link:'none'}});
+                const packet=route.request().postDataJSON();
+                naturalRequests.push(packet);
+                if(packet.question==='예약 취소는요?')return route.fulfill({status:503,json:{ok:false}});
+                if(packet.question==='2-3번')return route.fulfill({json:{ok:true,
+                  answer:'저녁 일곱 시 이후라면 주 2회와 주 3회 상품을 비교해 보세요.',
+                  details:['그룹 기간권 주 2회 · 398,000원 · 10주'],link:'pricing',scheduleDay:null}});
+                return route.fulfill({json:{ok:true,answer:'처음이라면 가벼운 강도로 시작해 볼까요?',link:'none',details:[],scheduleDay:null}});
               });
               const question='운동이랑 데면데면한데 가볍게부터 할 수 있을까요?';
               const consent=page.getByRole('dialog',{name:'GPT 공개 상담'});
@@ -284,10 +256,23 @@ try{
               await consent.getByRole('button',{name:'GPT로 보내기'}).click();
               await page.getByText('처음이라면 가벼운 강도로 시작해 볼까요?',{exact:true}).waitFor();
               assert.deepEqual(naturalRequests,[{version:3,consent:true,question,history:[]}]);
+              await ask('요일 무관하고 오후7시 이후');
+              await page.locator('.turn.assistant').nth(2).getByText('처음이라면 가벼운 강도로 시작해 볼까요?').waitFor();
+              await ask('2-3번');
+              await page.getByText(/그룹 기간권 주 2회 · 398,000원/).waitFor();
+              assert.deepEqual(naturalRequests[2].history.filter(turn=>turn.role==='user').map(turn=>turn.text),
+                [question,'요일 무관하고 오후7시 이후']);
+              assert.equal(naturalRequests[2].question,'2-3번');
+              assert(naturalRequests.every(packet=>Object.keys(packet).sort().join(',')==='consent,history,question,version'));
               await ask('내 수강권은 몇 번 남았어요?');
               await page.getByRole('link',{name:'회원 앱에서 확인하는 방법'}).waitFor();
-              assert.equal(naturalRequests.length,1);
+              await ask('저는 김가람입니다');
+              assert.equal(naturalRequests.length,3);
+              assert.equal(await page.getByText('저는 김가람입니다',{exact:true}).count(),0);
               assert.equal(await consent.isVisible(),false);
+              await ask('예약 취소는요?');
+              await page.getByText('고정 예약인가요, 자유 예약인가요?').waitFor();
+              assert.deepEqual(naturalRequests.at(-1).history,[]);
             }
           }
           assert.deepEqual(writes,[]);

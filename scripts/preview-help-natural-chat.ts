@@ -31,7 +31,7 @@ createServer(async(req,res)=>{
       let bytes=0;
       for await(const chunk of req){
         bytes+=chunk.length;
-        if(bytes>3600){send(res,400,{ok:false});return;}
+        if(bytes>5200){send(res,400,{ok:false});return;}
         chunks.push(chunk);
       }
       const turn=parsePublicNaturalChat(JSON.parse(Buffer.concat(chunks).toString("utf8")));

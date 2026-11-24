@@ -1,5 +1,5 @@
 import { reusableQuestion } from './engine.js';
-import {applyGuidedReply,preparePublicReply,requestPublicReply} from './public-ai.js';
+import {conversationTurn} from './conversation.js';
 import {applyNaturalReply,publicNaturalPacket,requestNaturalReply,supportsNaturalChat} from './public-natural.js';
 
 const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
@@ -152,42 +152,45 @@ function finishTurn(q,result,focusInput,userShown=false,follow=true){
   append('assistant',result,follow);
   if(focusInput)input.focus({preventScroll:true});
 }
+function basicReply(q){return conversationTurn(q,state,{rules});}
 function finishPending(){
   if(!pendingAi)return;
   const previous=pendingAi;pendingAi=null;
   previous.controller.abort();
   previous.loading.remove();
-  finishTurn(previous.q,previous.fallback,false,true);
+  finishTurn(previous.q,basicReply(previous.q),false,true);
 }
 function ask(question,{focusInput=true,useAi=false}={}){
   const q=question.trim();
   if(!q)return;
   finishPending();
-  const {result,signals}=preparePublicReply(q,state,{rules});
-  const natural=useAi&&naturalEnabled&&consentChoice!=='basic'?publicNaturalPacket(q,naturalHistory,result):null;
+  const packet=useAi?publicNaturalPacket(q,naturalHistory):null;
+  const natural=naturalEnabled&&consentChoice!=='basic'?packet:null;
   if(natural&&!consentChoice){
     pendingConsent={q,options:{focusInput,useAi}};consentQuestion.textContent=q;
     consentDialog.returnValue='edit';consentDialog.showModal();return;
   }
-  if(naturalEnabled&&useAi&&!natural)naturalHistory=[];
-  if(!useAi||!natural&&(naturalEnabled||!signals)){finishTurn(q,result,focusInput);return;}
+  if(!natural){
+    if(!packet)naturalHistory=[];
+    const reply=basicReply(q);
+    finishTurn(q,useAi&&!packet?{...reply,hideInput:true}:reply,focusInput);return;
+  }
   clearChoices();
   append('user',{text:q});
   const loading=element('p','답변을 작성하고 있어요.','chat-pending');
   loading.setAttribute('role','status');stream.append(loading);stream.scrollTop=stream.scrollHeight;
-  const request={q,fallback:result,controller:new AbortController(),loading};
+  const request={q,controller:new AbortController(),loading};
   pendingAi=request;
   if(focusInput)input.focus({preventScroll:true});
-  const response=natural?requestNaturalReply(natural,request.controller):requestPublicReply(signals,request.controller);
-  void response.then(answer=>{
+  void requestNaturalReply(natural,request.controller).then(answer=>{
     if(pendingAi!==request)return;
     const follow=atLatest();
     pendingAi=null;loading.remove();
-    if(natural&&answer){
+    if(answer){
       naturalHistory=[...natural.history,{role:'user',text:natural.question},
         {role:'assistant',text:answer.answer.normalize('NFKC')}].slice(-4);
     }
-    const reply=answer?(natural?applyNaturalReply(result,answer):applyGuidedReply(result,answer)):result;
+    const reply=answer?applyNaturalReply(state,answer):basicReply(q);
     finishTurn(q,reply,false,true,follow);
   });
 }
@@ -197,7 +200,7 @@ function welcome(){
   append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
 }
 for(const btn of prompts.querySelectorAll('[data-question]')){
-  btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false,useAi:naturalEnabled}));
+  btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false,useAi:true}));
 }
 get('question').addEventListener('submit',e=>{e.preventDefault();const q=input.value;input.value='';ask(q,{useAi:true});});
 get('reset-chat').addEventListener('click',()=>{welcome();input.focus({preventScroll:true});});

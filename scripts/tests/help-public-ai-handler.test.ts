@@ -53,8 +53,10 @@ test("OpenAI request sends only allowed signals and accepts one completed intent
 test("disabled, bad origin and exhausted quota do not call the model",async()=>{
   let enabled=false,reserved=false,keyReads=0,modelCalls=0;
   const fn=createHelpPublicChatHandler({enabled:()=>enabled,key:()=>{keyReads++;return "fake";},
-    reserve:async()=>reserved,classify:async()=>{modelCalls++;return "schedule";},generate:async()=>{modelCalls++;return {answer:"답변",next:"none"};}});
-  const call=async(origin:string,body:unknown=signals)=>{
+    reserve:async()=>reserved},{enabled:()=>true,generate:async()=>{
+    modelCalls++;return {answer:"답변",link:"none",details:[],scheduleDay:null};
+  }});
+  const call=async(origin:string,body:unknown={version:3,consent:true,question:"퇴근하고 가볍게 할 수 있을까요?",history:[]})=>{
     const req={method:"POST",get:()=>origin,is:()=>true,rawBody:Buffer.from(JSON.stringify(body)),body} as any;
     let status=0;
     const res={set(){},status(v:number){status=v;return this;},json(){}};
@@ -65,7 +67,8 @@ test("disabled, bad origin and exhausted quota do not call the model",async()=>{
   assert.equal(keyReads,0);
   enabled=true;
   assert.equal(await call("https://foreign.invalid"),403);
-  assert.equal(await call("https://help.archivepilates.com",{...signals,raw:"비공개"}),400);
+  assert.equal(await call("https://help.archivepilates.com",signals),400);
+  assert.equal(await call("https://help.archivepilates.com",fixture),400);
   assert.equal(keyReads,0);
   assert.equal(await call("https://help.archivepilates.com"),503);
   assert.equal(modelCalls,0);
@@ -74,16 +77,17 @@ test("disabled, bad origin and exhausted quota do not call the model",async()=>{
   assert.equal(modelCalls,1);
 });
 test("natural turns require a separate feature flag and reject identifiers before accessing keys",async()=>{
-  for(const value of [undefined,"","TRUE","false","oops"])assert.equal(isHelpNaturalEnabled("archive-pilates",value),false);
+  for(const value of ["","TRUE","false","oops"])assert.equal(isHelpNaturalEnabled("archive-pilates",value),false);
+  assert.equal(isHelpNaturalEnabled("archive-pilates",undefined),true);
   assert.equal(isHelpNaturalEnabled("unrelated-project","true"),false);
   assert.equal(isHelpNaturalEnabled("archive-pilates","true"),true);
   let enabled=false, called=0, keys=0;
   const fn=createHelpPublicChatHandler({enabled:()=>true,key:()=>{keys++;return "fake";},
-    reserve:async()=>true,classify:async()=>null,generate:async()=>null},
+    reserve:async()=>true},
     {enabled:()=>enabled,generate:async request=>{
       called++;
       assert.equal(request.question,"한동안 못 오다가 다시 이어도 되나요?");
-      return {answer:"수강권 종류부터 확인해 볼까요?",link:"none"};
+      return {answer:"수강권 종류부터 확인해 볼까요?",link:"none",details:[],scheduleDay:null};
     }});
   const post=async(question:string)=>{
     const body={version:3,consent:true,question,history:[]},req={method:"POST",get:()=>"https://help.archivepilates.com",

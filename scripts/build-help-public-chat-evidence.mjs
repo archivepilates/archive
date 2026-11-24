@@ -1,6 +1,6 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {regularNov} from '../help/chatbot/content.js';
+import {promotionNov,regularNov} from '../help/chatbot/content.js';
 import {novemberTimetable} from '../help/chatbot/timetable.js';
 
 export function buildPublicChatEvidence({check=false}={}){
@@ -9,6 +9,7 @@ export function buildPublicChatEvidence({check=false}={}){
     validFrom:'2026-11-01',
     validThrough:novemberTimetable.endDate,
     rates:regularNov.map(({name,price,duration})=>({name,price,duration})),
+    promotions:promotionNov,
     times:Object.values(novemberTimetable.byDay).map(slots=>slots.map(([time])=>time))
   };
   const expected=JSON.stringify(data,null,2)+'\n';

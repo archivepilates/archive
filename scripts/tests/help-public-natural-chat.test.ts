@@ -9,9 +9,9 @@ const turn:PublicNaturalChat={version:3,consent:true,question,history:[
   {role:"user",text:"퇴근 무렵 가볍게 몸을 풀고 싶어요."},
   {role:"assistant",text:"처음이시면 편한 요일부터 골라 볼까요?"}
 ]};
-const provider=(answer:string,link:string):typeof fetch=>async()=>Response.json({
+const provider=(answer:string,link:string,factIds:string[]=[]):typeof fetch=>async()=>Response.json({
   status:"completed",output:[{type:"message",role:"assistant",status:"completed",
-    content:[{type:"output_text",text:JSON.stringify({answer,link})}]}]
+    content:[{type:"output_text",text:JSON.stringify({answer,link,factIds})}]}]
 });
 test("natural mode forwards novel wording and only two recent public exchanges",async()=>{
   let called=0;
@@ -48,9 +48,28 @@ test("provider answers cannot add unpublished prices, fake links or confirmed ac
   ] as const)assert.equal(await generatePublicNaturalChat(turn,"test",provider(answer,link),date),null,answer);
 });
 
+test("public facts are rendered by matching source row, never handwritten by the model",async()=>{
+  const reply=await generatePublicNaturalChat({...turn,question:"11월 프로모션은요?"},"test",
+    provider("공개된 프로모션을 비교해 볼게요.","none",["promo-0","promo-1"]),nov);
+  assert.equal(reply?.link,"pricing");
+  assert.match(reply?.details.join("\n")??"",/그룹레슨 50회 · 870,000원 · 6개월.*듀엣레슨 20회 \(강사\) · 1인 600,000원 · 100일/su);
+  assert.match(reply?.details.at(-1)??"",/판매 여부는 직원에게/);
+  const weekday={...turn,question:"화요일 몇 시 수업 있어요?"};
+  assert.equal(await generatePublicNaturalChat(weekday,"test",provider("예정표를 볼까요?","schedule",["schedule-0"]),nov),null);
+  assert.equal((await generatePublicNaturalChat(weekday,"test",provider("예정표를 볼까요?","schedule",["schedule-1"]),nov))?.scheduleDay,"화");
+  for(const question of ["12월 가격은요?","11월 31일 수업","오늘 월요일 시간표","다음달 프로모션 있나요?"]){
+    assert.equal(await generatePublicNaturalChat({...turn,question},"test",provider("공개 기준이에요.","none",["price-0"]),nov),null);
+  }
+  const boundary=new Date("2026-11-30T23:00:00+09:00");
+  assert.equal(await generatePublicNaturalChat({...turn,question:"내일은?"},"test",provider("예정표예요.","schedule",["schedule-1"]),boundary),null);
+  assert.equal(await generatePublicNaturalChat({...turn,question:"가격은?"},"test",provider("공개 기준이에요.","none",["price-0"]),dec),null);
+});
+
 test("member details, contacts and protected turns are rejected at the API before model use",async()=>{
   for(const request of [
     {...turn,question:"김민지님 수강권은요?"},
+    {...turn,question:"저는 김가람입니다"},
+    {...turn,question:"내 시간표 보여줘"},
     {...turn,question:"내 수강권은 몇 번 남았어요?"},
     {...turn,question:"010 1234 5678"},
     {...turn,question:"명지국제2로 28번길에 살아요."},
@@ -66,4 +85,5 @@ test("member details, contacts and protected turns are rejected at the API befor
   }
   assert(parsePublicNaturalChat({...turn,question:"정유리 강사님은 수업에서 어떤 점을 먼저 보세요?"}));
   assert(parsePublicNaturalChat({...turn,question:"그룹으로 2회 정도 어떨까요?"}));
+  assert(parsePublicNaturalChat({...turn,question:"저는 직장인입니다. 퇴근 후에 다니고 싶어요."}));
 });

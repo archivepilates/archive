@@ -1,5 +1,25 @@
 # ARCHIVE PILATES Help public AI
 
+## GPT-first public consultation
+
+- Replaces the previous routing and guided reply in the public UI and endpoint.
+  After an explicit per-chat choice, GPT receives the current public wording
+  and up to two preceding public exchanges. Basic guidance needs no API call.
+  The usual identifiable text signs are blocked on both sides; visitors
+  are reminded not to submit personal or health information. The guard is not
+  anonymization. The API has no member or action tool, and personal queries
+  stay on the local member-app path.
+- The conversational reply selects official rule, rate and timetable records.
+  The server renders the selected facts rather than trusting an AI-composed
+  price or time; weekday and month conflicts fail closed, and promotions are
+  not availability checks. Existing global limits and billing settings are
+  unchanged. `HELP_PUBLIC_NATURAL_CHAT_ENABLED=false` restores basic-only mode.
+- Member authentication is separate. No test dispatch until the exact SOLAPI
+  template is APPROVED and the KST dispatch window and self-only flow checks
+  pass. Preserve the current member-app handoff while pending.
+
+## Previous releases
+
 ## Public answer and contact update
 
 - Typed public turns and follow-ups submit an allowlisted versioned packet
