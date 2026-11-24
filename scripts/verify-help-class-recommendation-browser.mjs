@@ -158,6 +158,24 @@ try{
           }
           await page.getByRole('button',{name:'새 대화',exact:true}).click();
           if(!live){
+            if(width===390){
+              await page.clock.setFixedTime(new Date('2026-11-24T12:26:00Z'));
+              for(const [question,expected] of [
+                ['11월 프로모션 가격 있나요',/870,000원/],
+                ['직장인인데 추천 상품은',/일주일에 몇 번/],
+                ['요일은 상관없고 오후7시 이후',/요일 무관 · 19:00 이후/],
+                ['2-3번',/주 2~3회 방문.*그룹 기간권 주 2회 · 398,000원.*그룹 기간권 주 3회 · 570,000원/su],
+                ['추천 상품없어',/먼저 그룹 기간권 주 2회/],
+                ['?',/먼저 그룹 기간권 주 2회/]
+              ]){
+                const turns=page.locator('.turn.assistant');
+                const nextIndex=await turns.count();
+                await chat.fill(question);
+                await chat.press('Enter');
+                await turns.nth(nextIndex).getByText(expected).waitFor();
+              }
+              await page.getByRole('button',{name:'새 대화',exact:true}).click();
+            }
             const requests=[];
             let fallbackTest=false;
             await page.route('**/api/public-chat-intent',async route=>{

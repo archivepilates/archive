@@ -49,6 +49,16 @@ The private v3 preview requires a per-chat choice, but consent is not a
 replacement for privacy filtering or place/date-specific source validation.
 The shared production usage counter and member-app handoff are unchanged.
 
+## Published promotion and pass comparison
+
+The November public Notion price page (3ebd49ea-e4bf-8198-ba47-c4cb222d7c69)
+was re-read before adding the three published promotion rows. They are
+separate from normal rates and never prove that the limited promotion is
+still available. Both close at the end of November KST. The recommendation
+flow keeps visit-frequency ranges and explicit after-hours preferences,
+checks them against the published timetable, and renders the verified
+product rows without an AI call. Live bookings and inventory are not read.
+
 ## Initial classification release
 
 Use the OpenAI Responses API only as a routing aid for typed public questions the existing

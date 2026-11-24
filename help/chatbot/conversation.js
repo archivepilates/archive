@@ -1,6 +1,7 @@
 import { regularNov, sourcePrice } from './content.js';
 import { respond, reusableQuestion } from './engine.js';
 import { publishedTimetable } from './timetable.js';
+import { publicPassConsultation } from './pass-consultation.js';
 
 const appGuide='https://archivepilates.notion.site/studiomate';
 const rates='https://archivepilates.notion.site/';
@@ -118,6 +119,8 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
     return {text:text||'정확한 안내는 카카오톡으로 직원에게 문의해 주세요.',state:previous,direct:true,
       ...(!text?{inquiry:'staff'}:{})};
   }
+  const pass=publicPassConsultation(q,previous,now);
+  if(pass)return {...pass.result,state:{...state,topic:'pricing',passConsultation:pass.context}};
   if(rateAsk.test(q)||previous.topic==='pricing'&&(suppliedFrequency||/^(?:주\s*[1-7]\s*(?:회|번)|[1-7]\s*(?:회|번))[\s.요만]*$/u.test(q))){
     if(!november||anotherMonth)return close({text:'현재 확인된 수강료가 없어요. 적용 월과 상품을 직원에게 확인해 주세요.',inquiry:'staff',topic:'pricing'});
     if(/개인|프라이빗|듀엣|프로모션|특가|블랙프라이데이/u.test(q))return close({text:'11월 개인·듀엣 수강료와 프로모션 조건은 아래 원문에서 확인할 수 있어요. 실제 판매 여부나 선착순 혜택이 남았는지는 직원에게 확인해 주세요.',source:rates,sourceLabel:'11월 수강료 원문',topic:'pricing'});

@@ -132,3 +132,49 @@ test('brand and public staff questions send allowlisted selectors, not the wordi
   assert.equal(signals.detail,'chorim');
   assert.doesNotMatch(JSON.stringify(signals),/이초림|수석강사|어떤 수업/);
 });
+test('verified November promotion prices and the complete after-work product conversation',()=>{
+  const opts={now:new Date('2026-11-24T21:26:00+09:00')};
+  let state={};
+  const next=q=>{
+    const turn=preparePublicReply(q,state,opts);
+    assert.equal(turn.signals,null);
+    state=turn.result.state;
+    return turn.result;
+  };
+  const promo=next('11월 프로모션 가격 있나요');
+  assert.match(promo.text,/그룹레슨 50회 · 870,000원 · 6개월/);
+  assert.match(promo.text,/강사\) · 1인 600,000원 · 100일/);
+  assert.match(promo.text,/부원장\) · 1인 660,000원 · 100일/);
+  assert.match(promo.text,/잔여 혜택과 현재 판매 여부는 직원 확인/);
+  assert.equal(promo.source,'https://archivepilates.notion.site/');
+  assert.match(next('직장인인데 추천 상품은').text,/일주일에 몇 번/);
+  assert.match(next('요일은 상관없고 오후7시 이후').text,/요일 무관 · 19:00 이후/);
+  const result=next('2-3번');
+  assert.match(result.text,/19:00 이후.*월·화·수·목·금\. 실제 개설·잔여 자리는 회원 앱/);
+  assert.match(result.text,/주 2~3회/);
+  assert.match(result.text,/그룹 기간권 주 2회 · 398,000원 · 10주/);
+  assert.match(result.text,/그룹 기간권 주 3회 · 570,000원 · 10주/);
+  assert.match(result.text,/그룹 횟수권 20회 · 450,000원 · 5개월/);
+  assert.doesNotMatch(result.text,/어느 요일|몇 번 정도 오실/);
+  for(const question of ['추천 상품없어','?']){
+    const recap=next(question);
+    assert.match(recap.text,/먼저 그룹 기간권 주 2회 · 398,000원 · 10주/);
+    assert.match(recap.text,/방문 횟수가 주마다 바뀐다면/);
+    assert.doesNotMatch(recap.text,/어느 요일|몇 번 정도 오실/);
+  }
+});
+test('product replies expire in KST, accept Korean ranges and do not treat a private pass as a recommendation',()=>{
+  const nov={now:new Date('2026-11-30T23:59:59+09:00')}, dec={now:new Date('2026-12-01T00:00:00+09:00')};
+  const initial=preparePublicReply('수강권 추천',{},nov).result.state;
+  const context=preparePublicReply('토요일 오후 7시 30분 이후',initial,nov).result.state;
+  const offer=preparePublicReply('두세 번',context,nov).result;
+  assert.match(offer.text,/토요일 19:30 이후/);
+  assert.match(offer.text,/해당 시간대 수업은 확인되지/);
+  assert.match(offer.text,/주 2~3회/);
+  for(const [q,opts] of [['11월 프로모션',dec],['추천 상품없어',dec],['다음 달 프로모션',nov],['10월 프로모션',nov]]){
+    const result=preparePublicReply(q,offer.state,opts).result;
+    assert.doesNotMatch(result.text,/870,000|398,000/);
+    assert.equal(result.source,undefined);
+  }
+  assert(preparePublicReply('내 수강권은 몇 번 남았어요?',offer.state,nov).result.memberLookup);
+});
