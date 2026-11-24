@@ -141,16 +141,17 @@ try{
               assert.equal(route.request().method(),'POST');
               requests.push(route.request().postDataJSON());
               if(requests.length>2)return route.fulfill({status:503,json:{ok:false}});
-              return route.fulfill({json:{ok:true,answer:requests.length===1?'목요일 시간표를 모아 봤어요.':'앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.'}});
+              return route.fulfill({json:{ok:true,answer:requests.length===1?'목요일 시간표를 모아 봤어요.':'앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.',next:requests.length===1?'time':'none'}});
             });
             await page.clock.setFixedTime(new Date('2026-11-24T01:00:00Z'));
             await chat.fill('목요일에 수업은 몇 시에 열려요?');
             await chat.press('Enter');
             await page.getByText('명지점 상담 · AI 답변',{exact:true}).waitFor();
             await page.getByRole('list',{name:'목요일 예정 수업'}).waitFor();
-            await chat.fill('그럼 저녁엔요?');
-            await chat.press('Enter');
+            await page.getByText(/어느 시간대가 편하세요/).waitFor();
+            await page.getByRole('button',{name:'저녁',exact:true}).click();
             await page.getByText('앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.',{exact:true}).waitFor();
+            assert.equal(await page.getByRole('button',{name:'저녁',exact:true}).count(),0);
             assert.deepEqual(requests.map(({topic,previousTopic,day,time})=>[topic,previousTopic,day,time]),[
               ['schedule','',4,0],['schedule','schedule',4,3]]);
             assert(requests.every(r=>Object.keys(r).length===8&&r.version===2));

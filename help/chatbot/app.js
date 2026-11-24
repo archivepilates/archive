@@ -1,5 +1,5 @@
 import { reusableQuestion } from './engine.js';
-import {preparePublicReply,requestPublicReply} from './public-ai.js';
+import {applyGuidedReply,preparePublicReply,requestPublicReply} from './public-ai.js';
 
 const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
 
@@ -78,7 +78,7 @@ function append(role,result){
   if(links.children.length)body.append(links);
   if(result.choices?.length){
     lastChoices=element('div',null,'quick follow-up');
-    for(const choice of result.choices)lastChoices.append(button(choice,()=>ask(choice)));
+    for(const choice of result.choices)lastChoices.append(button(choice,()=>ask(choice,{useAi:true})));
     body.append(lastChoices);
   }
   row.append(body);stream.append(row);
@@ -130,7 +130,7 @@ function ask(question,{focusInput=true,useAi=false}={}){
   void requestPublicReply(signals,request.controller).then(answer=>{
     if(pendingAi!==request)return;
     pendingAi=null;loading.remove();
-    finishTurn(q,answer?{...result,text:answer,aiAssisted:true}:result,false,true);
+    finishTurn(q,answer?applyGuidedReply(result,answer):result,false,true);
   });
 }
 function welcome(){

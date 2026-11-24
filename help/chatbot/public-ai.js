@@ -43,6 +43,7 @@ const routeSpecs={
 
 const routes={schedule:'schedule',pricing:'price',holding:'hold',booking:'book',plan:'recommend'};
 const lineTime=/오전|오후|저녁|아침|퇴근/u;
+const timeAnswer=/^(?:평일\s*)?(?:오전|오후|아침|저녁|퇴근\s*후)(?:\s*시간)?(?:이요|이에요|요)?[.!?\s]*$/u;
 const dateReference=/[월화수목금토일]\s*요일|주말|평일|\d{1,2}\s*[월일]|다음\s*(?:주|달)|지난\s*(?:주|달)|오늘|내일|모레|어제|내년|작년/u;
 const currentWindow=/이번\s*달|현재|11\s*월/u;
 const wrongMonth=/다음\s*달|지난\s*달|내년|작년|십이월|(?:^|[^\d])(?:[1-9]|10|12)\s*월/u;
@@ -58,7 +59,7 @@ export function preparePublicReply(question,previous={},options={}){
     ||!reusableQuestion(q)||requestPolicy.test(q)||sensitive.test(q))return {result,signals:null};
   const old=previous.publicContext;
   const cues=prepareAiSignals(q,result.state)?.tags??[];
-  const isFollow=followUp.test(q);
+  const isFollow=followUp.test(q)||timeAnswer.test(q);
   if(!Object.hasOwn(routes,result.state.topic)){
     const candidates=Object.values(routes).filter(intent=>cues.includes(intent));
     const inferred=isFollow&&old&&candidates.length===0?routes[old.topic]:candidates.length===1?candidates[0]:null;
@@ -85,7 +86,7 @@ export function preparePublicReply(question,previous={},options={}){
       result=conversationTurn('다음 달 수강료',previous,options);
       detail='unverified';
     }else if(/개인|프라이빗|듀엣|프로모션|특가|블랙프라이데이/u.test(q))detail='other';
-    else if(directFrequency||frequency&&!result.choices?.length){
+    else if(directFrequency||frequency&&(!result.choices?.length||previous.guidedNext==='frequency')){
       detail='comparison';
       if(directFrequency){
         result=conversationTurn('수강료 주 '+directFrequency+'회',previous,options);
@@ -108,6 +109,21 @@ export function preparePublicReply(question,previous={},options={}){
   return {result:{...result,state:{...result.state,publicContext}},signals:packet};
 }
 
+const guidedQuestions={
+  day:{text:'어느 요일이 가장 편하세요?'},
+  time:{text:'어느 시간대가 편하세요?',choices:['오전','오후','저녁']},
+  frequency:{text:'일주일에 몇 번 정도 오실 수 있나요?',choices:['주 1회','주 2회','주 3회']},
+  pass_type:{text:'기간권과 횟수권 중 어느 쪽이 궁금하세요?',choices:['기간권 홀딩','횟수권 홀딩']},
+  booking_type:{text:'고정예약과 자유예약 중 어느 쪽이 궁금하세요?',choices:['고정예약','자유예약']}
+};
+
+export function applyGuidedReply(result,reply){
+  const next=Object.hasOwn(guidedQuestions,reply.next)?guidedQuestions[reply.next]:null;
+  return {...result,text:next?reply.answer+'\n\n'+next.text:reply.answer,aiAssisted:true,
+    choices:reply.next?next?.choices:result.choices,
+    state:{...result.state,guidedNext:next?reply.next:''}};
+}
+
 export async function requestPublicReply(signals,controller,fetcher=fetch){
   if(!signals)return null;
   const timeout=setTimeout(()=>controller.abort(),7400);
@@ -118,7 +134,10 @@ export async function requestPublicReply(signals,controller,fetcher=fetch){
     });
     if(!reply.ok||!reply.headers.get('content-type')?.includes('application/json'))return null;
     const data=await reply.json();
-    return data?.ok===true&&typeof data.answer==='string'&&data.answer.trim()&&data.answer.length<=1500?data.answer:null;
+    if(data?.ok!==true||typeof data.answer!=='string'||!data.answer.trim()||data.answer.length>1500)return null;
+    const next=data.next??'';
+    if(next!==''&&next!=='none'&&!Object.hasOwn(guidedQuestions,next))return null;
+    return {answer:data.answer,next};
   }catch{return null;}
   finally{clearTimeout(timeout);}
 }

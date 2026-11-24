@@ -8,6 +8,7 @@ const calendar=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'});
 const timing={오전:'오전',아침:'오전',오후:'오후',저녁:'저녁',퇴근:'저녁'};
 const counts={한:1,두:2,세:3,네:4,다섯:5,여섯:6,일곱:7};
 const weekly=/(?:일주일(?:에)?|주당|주(?:에)?)\s*([1-7]|한|두|세|네|다섯|여섯|일곱)\s*(?:회|번)/u;
+const shortFrequency=/^([1-7]|한|두|세|네|다섯|여섯|일곱)\s*(?:회|번)(?:쯤| 정도)?(?:이요|요|이에요)?[.!?\s]*$/u;
 const monthly=/한\s*달|4\s*주|월\s*몇\s*(?:회|번)/u;
 const hold=/홀딩|일시\s*(?:정지|중지)|(?:수강권|회원권).{0,26}(?:멈추|멈출|쉬|정지)|(?:여행|출장|휴가).{0,34}(?:멈추|멈출|쉬|정지|얼려)/u;
 const scheduleAsk=/시간표|스케줄|수업\s*일정|수업\s*목록|오늘\s*수업|빈\s*자리|실시간\s*좌석|몇\s*시.{0,7}수업|자리\s*(?:남|있)/u;
@@ -33,9 +34,10 @@ function planText(p,question){
   const conditions=[where,freq?'주 '+freq+'회':''].filter(Boolean).join(' · ');
   return {text:[first,conditions?conditions+' 기준으로 비교해 볼 수 있어요.':'',questionText].filter(Boolean).join(' '),...(day&&freq?{appGuide}:{})};
 }
-function nextPlan(previous,q){
+function nextPlan(previous,q,askedFrequency){
   const p={...previous};
-  const match=q.match(weekly)?.[1], day=q.match(/([월화수목금토일])요일/u)?.[1];
+  const match=q.match(weekly)?.[1]||(askedFrequency?q.match(shortFrequency)?.[1]:undefined);
+  const day=q.match(/([월화수목금토일])요일/u)?.[1];
   if(match)p.frequency=counts[match]??Number(match);
   if(day){
     p.day=day;p.onlyDay=/밖에|요일\s*만/u.test(q);
@@ -52,7 +54,8 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
   if(greeting.test(q))return {text:'안녕하세요! 시간표, 수강료, 예약 등 궁금한 내용을 편하게 물어보세요.',state:previous,direct:true};
   if(thanks.test(q))return {text:'천만에요! 또 궁금한 게 있으면 편하게 물어보세요.',state:previous,direct:true};
   if(otherMember.test(q))return {text:'다른 회원의 수강권이나 이용내역은 안내하지 않아요. 본인의 기록은 회원 앱에서 확인해 주세요.',state:previous,hideInput:true,appGuide};
-  const plan=nextPlan(previous.plan,q);
+  const suppliedFrequency=previous.guidedNext==='frequency'&&shortFrequency.test(q);
+  const plan=nextPlan(previous.plan,q,suppliedFrequency);
   const state={plan,topic:'',context:''};
   const close=result=>({...result,state:{...state,topic:result.topic??'',context:result.context??''}});
   const kst=calendar.format(now);
@@ -88,15 +91,18 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
     return {text:text||'정확한 안내는 카카오톡으로 직원에게 문의해 주세요.',state:previous,direct:true,
       ...(!text?{inquiry:'staff'}:{})};
   }
-  if(rateAsk.test(q)||previous.topic==='pricing'&&/^(?:주\s*[1-7]\s*(?:회|번)|[1-7]\s*(?:회|번))[\s.요만]*$/u.test(q)){
+  if(rateAsk.test(q)||previous.topic==='pricing'&&(suppliedFrequency||/^(?:주\s*[1-7]\s*(?:회|번)|[1-7]\s*(?:회|번))[\s.요만]*$/u.test(q))){
     if(!november||anotherMonth)return close({text:'현재 확인된 수강료가 없어요. 적용 월과 상품을 직원에게 확인해 주세요.',inquiry:'staff',topic:'pricing'});
     if(/개인|프라이빗|듀엣|프로모션|특가|블랙프라이데이/u.test(q))return close({text:'11월 개인·듀엣 수강료와 프로모션 조건은 아래 원문에서 확인할 수 있어요. 실제 판매 여부나 선착순 혜택이 남았는지는 직원에게 확인해 주세요.',source:rates,sourceLabel:'11월 수강료 원문',topic:'pricing'});
-    if(weekly.test(q)||/^[1-7]\s*(?:회|번)/u.test(q))return close({...rateResponse(existing()),topic:'pricing'});
+    if(weekly.test(q)||/^[1-7]\s*(?:회|번)/u.test(q)||suppliedFrequency){
+      const compared=suppliedFrequency?respond('수강료 주 '+plan.frequency+'회',{rules,now,mode:'member'}):existing();
+      return close({...rateResponse(compared),topic:'pricing'});
+    }
     return close({text:['11월 명지점 정규 그룹 수강료예요. 부가세가 포함되며 기간은 첫 수업일부터 계산해요.',
       ...regularNov.map(r=>r.name+' · '+amount(r.price)+' · '+r.duration),'주 몇 회 방문할 수 있는지 알려주시면 비교해 드릴게요.'].join('\n'),
       source:rates,sourceLabel:'11월 수강료 원문',choices:['주 1회','주 2회','주 3회'],topic:'pricing'});
   }
-  if(planAsk||previous.topic==='plan'&&(monthly.test(q)||/요일|아침|오전|오후|저녁/u.test(q)||weekly.test(q))){
+  if(planAsk||previous.topic==='plan'&&(monthly.test(q)||/요일|아침|오전|오후|저녁|퇴근/u.test(q)||weekly.test(q)||suppliedFrequency)){
     return close({...planText(plan,q),topic:'plan'});
   }
   const continuation=previous.context==='booking'&&/고정|자유|모르겠어요/u.test(q)

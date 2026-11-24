@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import {conversationTurn} from '../help/chatbot/conversation.js';
-import {prepareAiSignals,preparePublicReply,requestPublicReply} from '../help/chatbot/public-ai.js';
+import {applyGuidedReply,prepareAiSignals,preparePublicReply,requestPublicReply} from '../help/chatbot/public-ai.js';
 
 test('greeting, parking and booking opening do not fall through to an unrelated GPT topic',()=>{
   const rules=JSON.parse(fs.readFileSync(new URL('../help/assets/member-inquiry-guidance.json',import.meta.url)));
@@ -52,9 +52,30 @@ test('answers use a scoped public turn and keep the selected weekday on a follow
     assert.deepEqual(JSON.parse(options.body),follow.signals);
     return Response.json({ok:true,answer:'목요일 저녁에 맞춰 확인했어요.'});
   });
-  assert.equal(result,'목요일 저녁에 맞춰 확인했어요.');
+  assert.deepEqual(result,{answer:'목요일 저녁에 맞춰 확인했어요.',next:''});
   assert.equal(await requestPublicReply(follow.signals,new AbortController(),async()=>new Response('<html>')),null);
   assert.equal(await requestPublicReply(follow.signals,new AbortController(),async()=>Response.json({ok:false},{status:503})),null);
+  assert.equal(await requestPublicReply(follow.signals,new AbortController(),async()=>Response.json({ok:true,answer:'응답',next:'member_id'})),null);
+});
+
+test('GPT can lead with one approved question and short replies resume the same topic',()=>{
+  const opts={now:new Date('2026-11-24T10:00:00+09:00')};
+  function guided(question,next,previous){
+    const turn=preparePublicReply(question,previous,opts);
+    return applyGuidedReply(turn.result,{answer:'조건을 확인했어요.',next});
+  }
+  const schedule=guided('목요일 시간표','time');
+  assert.match(schedule.text,/어느 시간대가 편하세요\?/);
+  assert.deepEqual(schedule.choices,['오전','오후','저녁']);
+  const evening=preparePublicReply('저녁이요',schedule.state,opts);
+  assert.deepEqual([evening.signals.topic,evening.signals.day,evening.signals.time],['schedule',4,3]);
+  const pricing=guided('수강료','frequency');
+  const two=preparePublicReply('두 번이요',pricing.state,opts);
+  assert.deepEqual([two.signals.topic,two.signals.detail,two.signals.frequency],['pricing','comparison',2]);
+  const plan=guided('필라테스는 처음이에요','frequency');
+  const planned=preparePublicReply('두 번 정도요',plan.state,opts);
+  assert.deepEqual([planned.signals.topic,planned.signals.beginner,planned.signals.frequency],['plan',true,2]);
+  assert.equal(preparePublicReply('내 수강권 몇 번 남았어요?',plan.state,opts).signals,null);
 });
 
 test('public planning carries only bounded preferences; private turns never request GPT',()=>{

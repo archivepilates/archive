@@ -10,6 +10,8 @@ const variants={
 } as const;
 type Topic=keyof typeof variants;
 export type PublicReplySignals={version:2;topic:Topic;detail:string;previousTopic:Topic|"";day:number;time:number;frequency:number;beginner:boolean};
+type NextQuestion="none"|"day"|"time"|"frequency"|"pass_type"|"booking_type";
+export type GuidedPublicReply={answer:string;next:NextQuestion};
 const weekdays=["","월","화","수","목","금","토","일"];
 const times=["","오전","오후","저녁"];
 const monthCalendar=new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Seoul"});
@@ -79,19 +81,39 @@ export function renderPublicReply(value:unknown,facts:string):string|null{
   return [parts[0].trim(),facts,parts[1].trim()].filter(Boolean).join("\n\n");
 }
 
-export async function generatePublicReply(input:PublicReplySignals,key:string,fetcher:typeof fetch=fetch,now=new Date()):Promise<string|null>{
+function allowedNext(s:PublicReplySignals,now:Date):NextQuestion[]{
+  const next:NextQuestion[]=["none"];
+  if(s.topic==="plan"&&s.detail==="general"){
+    if(!s.day)next.push("day");
+    if(!s.time)next.push("time");
+    if(!s.frequency)next.push("frequency");
+    if(next.length>1)next.shift();
+  }else if(s.topic==="schedule"&&s.detail==="timetable"&&!s.time){
+    const date=monthCalendar.format(now);
+    if(date>=evidence.validFrom&&date<=evidence.validThrough)next.push("time");
+  }else if(s.topic==="pricing"&&s.detail==="regular"&&!s.frequency){
+    const date=monthCalendar.format(now);
+    if(date>=evidence.validFrom&&date<=evidence.validThrough)next.push("frequency");
+  }else if(s.topic==="holding"&&s.detail==="general")next.push("pass_type");
+  else if(s.topic==="booking"&&s.detail==="general")next.push("booking_type");
+  return next;
+}
+
+export async function generatePublicReply(input:PublicReplySignals,key:string,fetcher:typeof fetch=fetch,now=new Date()):Promise<GuidedPublicReply|null>{
   const signals=parsePublicReplySignals(input);
   if(!signals||!key.trim())return null;
   const facts=publicReplyFacts(signals,now);
+  const nextOptions=allowedNext(signals,now);
   const res=await fetcher("https://api.openai.com/v1/responses",{
     method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${key.trim()}`},
     redirect:"error",signal:AbortSignal.timeout(6500),
     body:JSON.stringify({
       model:"gpt-6-luna",store:false,reasoning:{effort:"none"},max_output_tokens:140,
-      instructions:"Write a short, natural Korean public Pilates reply in 해요체. Use the public context: day 1..7 means Monday..Sunday, time 1..3 means morning, afternoon, evening; zero means unknown. Start with one context-specific Korean sentence, then a newline and {{facts}} on its own line. Optionally add one useful question, without assuming availability. The server inserts the complete facts at the marker. The prose outside the marker MUST contain only Korean letters, spaces and simple punctuation, with NO digits at all. Never write a date, time, price, weekly or monthly count in that prose: say '말씀하신 요일만 기준으로 이렇게 계산할 수 있어요.' rather than repeating a weekly count. For a time filter, say for example '앞에서 말씀하신 목요일 중 저녁 시간만 모아 봤어요.' Do not invent policies, eligibility, availability or actions, include URLs or private details, or repeat the fact text. If evidence is unavailable, say so without guessing.",
+      instructions:"Write a short, natural Korean public Pilates reply in 해요체. Use the topic, previous topic and selected day, time or frequency to acknowledge what the visitor already told you. Day 1..7 means Monday..Sunday and time 1..3 means morning, afternoon, evening; zero means unknown. Write one Korean sentence that answers or frames the specific request, followed by {{facts}} on its own line. The server inserts all facts at the marker. Outside the marker use only Korean letters, spaces and simple punctuation. Never include figures, external links, private details, unsupported facts, or claim an action or real-time availability. Do not add a question to the answer itself. For next, select at most one listed missing preference that will make the next answer useful: day (weekday), time (morning, afternoon or evening), frequency (visits per week), pass_type (duration or session count), booking_type (fixed or flexible). Prefer an actionable question when it narrows the answer, otherwise select none. Do not ask for a value already provided.",
       input:JSON.stringify({signals,facts}),
       text:{format:{type:"json_schema",name:"help_public_answer",strict:true,schema:{type:"object",
-        properties:{answer:{type:"string"}},required:["answer"],additionalProperties:false}}}
+        properties:{answer:{type:"string"},next:{type:"string",enum:nextOptions}},
+        required:["answer","next"],additionalProperties:false}}}
     })
   });
   if(!res.ok)return null;
@@ -103,6 +125,8 @@ export async function generatePublicReply(input:PublicReplySignals,key:string,fe
   if(p?.type!=="output_text"||typeof p.text!=="string"||p.text.length>720)return null;
   try{
     const data=JSON.parse(p.text);
-    return data&&typeof data==="object"&&Object.keys(data).join(",")==="answer"?renderPublicReply(data.answer,facts):null;
+    if(!data||typeof data!=="object"||Object.keys(data).sort().join(",")!=="answer,next"||!nextOptions.includes(data.next))return null;
+    const answer=renderPublicReply(data.answer,facts);
+    return answer?{answer,next:data.next}:null;
   }catch{return null;}
 }

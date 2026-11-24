@@ -95,8 +95,8 @@ export function createHelpPublicChatHandler(deps={
       const key=deps.key();
       if(!key?.trim()||!await deps.reserve()){response.status(503).json({ok:false});return;}
       if(replySignals){
-        const answer=await deps.generate(replySignals,key);
-        response.status(answer?200:503).json(answer?{ok:true,answer}:{ok:false});return;
+        const reply=await deps.generate(replySignals,key);
+        response.status(reply?200:503).json(reply?{ok:true,...reply}:{ok:false});return;
       }
       const intent=signals&&await deps.classify(signals,key);
       response.status(intent?200:503).json(intent?{ok:true,intent}:{ok:false});

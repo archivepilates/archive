@@ -10,6 +10,10 @@
   backend inserts official times, prices and policy text itself rather than
   accepting model-generated values. Timetable and rates fail closed outside
   the verified KST month. Missing or rejected responses use local guidance.
+- GPT may choose one applicable follow-up from a server allowlist when a
+  visit preference or policy category is still unknown. The site renders the
+  approved question and accepts either a short reply or an option button.
+  Existing rate limits, data minimization, and member-app handoff are unchanged.
 - Staff and refund CTA links open the official Kakao channel. The Help form
   is retired; old public form URLs redirect to the channel and Help no longer
   rewrites to the intake function. Existing CORE records, retention, staff
