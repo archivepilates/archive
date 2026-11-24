@@ -47,11 +47,10 @@ button[type=submit]{background:var(--action);color:#fff;border-color:var(--actio
 .timetable-original a{display:inline-flex;align-items:center;min-height:44px;font-size:.8rem}
 @media(max-width:430px){.timetable-days{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .compose{border-top:1px solid var(--line);padding:.63rem .6rem .5rem}
-.compose-shortcuts{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.4rem;margin-bottom:.55rem}
-.compose-shortcuts .suggestions{display:contents}
+.suggestions{margin-bottom:.55rem}
 #start-recommendation{background:#fff2e9;border-color:#e6b999;color:#74340e;font-size:.85rem;font-weight:750}
 #start-recommendation:hover{background:#ffe7d7}
-.suggestions button{border-color:var(--line);font-size:.8rem;padding-inline:.5rem}
+.suggestions button{border-color:var(--line);font-size:.8rem;padding-inline:.5rem;min-inline-size:44px}
 #question{margin:0}
 .input-row{display:flex;align-items:center;gap:.45rem}
 .input-row input{flex:1;min-width:0;width:100%;height:46px}

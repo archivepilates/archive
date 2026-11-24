@@ -54,6 +54,8 @@ test('static Help deployment does not gain any API route or personal persistence
  const firebase=JSON.parse(fs.readFileSync(new URL('../firebase.json',import.meta.url)));
  assert.match(html,/id="start-intake"/);
  assert.match(html,/<form id="question">/);
+ assert.match(html,/id="prompts"[^>]+role="group"[^>]+aria-label="추천 질문"/);
+ assert.match(html,/id="query"[^>]+enterkeyhint="send"/);
  assert.doesNotMatch(html,/data-mode|테스트 본인확인|가상 가입 링크/);
  assert.equal(html,base);
  assert.match(base,/href="\/inquiry\/">챗봇 이용이 어려울 때: 기존 문의 양식/);
@@ -61,6 +63,7 @@ test('static Help deployment does not gain any API route or personal persistence
  assert.equal((app.match(/\bfetch\(/g)||[]).length,1);
  assert.match(app,/fetch\('\/assets\/member-inquiry-guidance\.json'/);
  assert.doesNotMatch(app,/localStorage|sessionStorage|cookie|\/api\//);
+ assert.doesNotMatch(app,/prompts\.hidden/);
  const config=firebase.hosting.find(row=>row.site==='archive-pilates-help');
  assert.equal(config.public,'help');
  assert.deepEqual(config.rewrites.map(r=>r.source),['/api/inquiries','**']);

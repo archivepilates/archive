@@ -79,7 +79,7 @@ function append(role,result){
   else stream.scrollTop=stream.scrollHeight;
 }
 function clearChoices(){lastChoices?.remove();lastChoices=null;}
-function ask(question){
+function ask(question,{focusInput=true}={}){
   const q=question.trim();
   if(!q)return;
   const result=conversationTurn(q,state,{rules});
@@ -87,16 +87,17 @@ function ask(question){
   clearChoices();
   if(reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
   append('assistant',result);
-  prompts.hidden=true;
   window.dispatchEvent(new CustomEvent('archive:help-question',{detail:!result.memberLookup&&!result.hideInput&&reusableQuestion(q)?q:''}));
-  input.focus({preventScroll:true});
+  if(focusInput)input.focus({preventScroll:true});
 }
 function welcome(){
-  state={};clearChoices();input.value='';stream.replaceChildren();prompts.hidden=false;
+  state={};clearChoices();input.value='';stream.replaceChildren();
   window.dispatchEvent(new Event('archive:help-mode'));
   append('assistant',{text:'안녕하세요! ARCHIVE PILATES 명지점이에요. 수업 시간이나 수강료, 예약·홀딩 규정 중 궁금한 게 있으세요?'});
 }
-for(const btn of prompts.querySelectorAll('button'))btn.addEventListener('click',()=>{input.value='';ask(btn.dataset.question);});
+for(const btn of prompts.querySelectorAll('[data-question]')){
+  btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false}));
+}
 get('question').addEventListener('submit',e=>{e.preventDefault();const q=input.value;input.value='';ask(q);});
 get('reset-chat').addEventListener('click',()=>{welcome();input.focus({preventScroll:true});});
 welcome();

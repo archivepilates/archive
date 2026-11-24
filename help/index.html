@@ -34,19 +34,17 @@
     <h1 id="chat-title" class="sr-only">아카이브 챗봇</h1>
     <div id="conversation" role="log" aria-label="상담 대화" aria-live="polite" tabindex="0"></div>
     <div class="compose">
-      <div class="compose-shortcuts">
-      <button id="start-recommendation" type="button" aria-haspopup="dialog">30초 수업 추천</button>
-      <div id="prompts" class="quick suggestions" aria-label="추천 질문">
+      <div id="prompts" class="quick suggestions" role="group" aria-label="추천 질문">
+        <button id="start-recommendation" type="button" aria-haspopup="dialog">30초 수업 추천</button>
         <button type="button" data-question="명지점 시간표 보여줘">시간표</button>
         <button type="button" data-question="수강료 알려줘">수강료</button>
         <button type="button" data-question="수강권을 잠시 멈출 수 있나요?">홀딩 규정</button>
         <button type="button" data-question="내 수강권 몇 회 남았어?">내 수강권</button>
       </div>
-      </div>
       <form id="question">
         <label class="sr-only" for="query">궁금한 내용</label>
         <div class="input-row">
-          <input id="query" maxlength="160" required autocomplete="off" placeholder="궁금한 내용을 입력해 주세요">
+          <input id="query" maxlength="160" required autocomplete="off" enterkeyhint="send" placeholder="궁금한 내용을 입력해 주세요">
           <button type="submit" class="icon-button send" aria-label="보내기" title="보내기">
             <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.7 3.7 22 12 3.7 20.3 6 12l-2.3-8.3ZM6 12h16"/></svg>
           </button>

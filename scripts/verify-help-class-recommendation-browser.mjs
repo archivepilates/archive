@@ -83,6 +83,29 @@ try{
           await chat.press('Enter');
           assert(await page.getByText('명지점 시간표 보여줘',{exact:true}).isVisible());
           assert(await trigger.isVisible());
+          const shortcuts=page.getByRole('group',{name:'추천 질문',exact:true});
+          const topics=['시간표','수강료','홀딩 규정','내 수강권'];
+          assert.equal(await shortcuts.getByRole('button').count(),5);
+          await chat.fill('작성 중인 질문');
+          for(const label of topics){
+            const choice=shortcuts.getByRole('button',{name:label,exact:true});
+            await choice.focus();
+            await choice.press('Enter');
+            assert.equal(await choice.evaluate(node=>node===document.activeElement),true);
+            assert.equal(await chat.inputValue(),'작성 중인 질문');
+            assert.equal(await shortcuts.getByRole('button').count(),5);
+            for(const next of topics)assert(await shortcuts.getByRole('button',{name:next,exact:true}).isVisible());
+          }
+          assert.equal(await chat.getAttribute('enterkeyhint'),'send');
+          assert.equal(await page.evaluate(()=>{
+            const buttons=[...document.querySelectorAll('#prompts button')].map(button=>button.getBoundingClientRect());
+            return document.documentElement.scrollWidth<=innerWidth
+              &&buttons.every(rect=>rect.width>=44&&rect.height>=44)
+              &&buttons.every(rect=>rect.bottom<=document.querySelector('#question').getBoundingClientRect().top);
+          }),true);
+          await page.getByRole('button',{name:'새 대화',exact:true}).click();
+          assert.equal(await shortcuts.getByRole('button').count(),5);
+          assert.equal(await chat.inputValue(),'');
           assert(await page.getByRole('button',{name:'직원 문의',exact:true}).isVisible());
           assert.deepEqual(writes,[]);
           assert.deepEqual(errors,[]);
@@ -92,4 +115,4 @@ try{
     }finally{await browser.close();}
   }
 }finally{if(server)await new Promise(resolve=>server.close(resolve));}
-console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true}));
+console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true,persistentQuestions:true}));
