@@ -18,15 +18,16 @@ function switchView(showResults){
 
 open.addEventListener('click',()=>{
   if(dialog.open)return;
+  form.reset();
+  list.replaceChildren();
   switchView(false);
   dialog.showModal();
   dialog.scrollTop=0;
 });
 close.addEventListener('click',()=>dialog.close());
 dialog.addEventListener('close',()=>{
-  form.reset();
-  list.replaceChildren();
-  open.focus({preventScroll:true});
+  const active=document.activeElement;
+  if(!dialog.open&&(active===document.body||dialog.contains(active)))open.focus({preventScroll:true});
 });
 
 function node(tag,text){

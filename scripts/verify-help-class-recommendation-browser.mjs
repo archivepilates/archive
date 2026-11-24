@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import {extname,join} from 'node:path';
 
 const {chromium,webkit}=createRequire(process.env.ARCHIVE_PLAYWRIGHT_PACKAGE??import.meta.url)('playwright');
-const mime={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json','.png':'image/png','.jpg':'image/jpeg'};
+const mime={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml'};
 const live=process.argv.includes('--live');
 let server, origin='https://help.archivepilates.com';
 if(!live){
@@ -43,6 +43,18 @@ try{
           });
           await page.clock.setFixedTime(new Date('2026-11-24T01:00:00Z'));
           await page.goto(origin+(width===768?'/chatbot/':'/'),{waitUntil:'networkidle'});
+          await page.waitForFunction(()=>{
+            const icons=[...document.querySelectorAll('#prompts .prompt-art use,.welcome-art use')];
+            return icons.length===6&&icons.every(use=>use.getBBox().width>0&&use.getBBox().height>0);
+          });
+          assert.equal(await page.evaluate(()=>{
+            const stream=document.querySelector('#conversation').getBoundingClientRect();
+            const input=document.querySelector('#question').getBoundingClientRect();
+            return stream.height>=96&&input.bottom<=innerHeight&&document.documentElement.scrollWidth<=innerWidth;
+          }),true);
+          if(process.env.ARCHIVE_HELP_QA_SHOTS&&name==='chromium'&&[390,1440].includes(width)){
+            await page.screenshot({path:join(process.env.ARCHIVE_HELP_QA_SHOTS,'illustrated-'+width+'.png')});
+          }
           const trigger=page.getByRole('button',{name:'30초 수업 추천',exact:true});
           await trigger.click();
           const modal=page.getByRole('dialog',{name:'30초 수업 추천'});
@@ -91,7 +103,9 @@ try{
             const choice=shortcuts.getByRole('button',{name:label,exact:true});
             await choice.focus();
             await choice.press('Enter');
-            assert.equal(await choice.evaluate(node=>node===document.activeElement),true);
+            const focused=await choice.evaluate(node=>node===document.activeElement
+              ? null : document.activeElement?.id||document.activeElement?.tagName||'none');
+            assert.equal(focused,null,`${name} @ ${width}: ${label} moved focus to ${focused}`);
             assert.equal(await chat.inputValue(),'작성 중인 질문');
             assert.equal(await shortcuts.getByRole('button').count(),5);
             for(const next of topics)assert(await shortcuts.getByRole('button',{name:next,exact:true}).isVisible());
@@ -115,4 +129,4 @@ try{
     }finally{await browser.close();}
   }
 }finally{if(server)await new Promise(resolve=>server.close(resolve));}
-console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true,persistentQuestions:true}));
+console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true,persistentQuestions:true,originalIllustrationsRendered:true}));

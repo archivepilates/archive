@@ -59,7 +59,15 @@ function append(role,result){
   if(role==='assistant'){
     const logo=element('img',null,'avatar');logo.src='/favicon.png';logo.alt='';logo.width=24;logo.height=24;row.append(logo);
   }
-  body.append(element('span',role==='user'?'나':'명지점 상담','speaker'),element('p',result.text,'bubble'));
+  body.append(element('span',role==='user'?'나':'명지점 상담','speaker'));
+  if(result.welcome){
+    const greeting=element('div',null,'welcome-turn');
+    const drawing=greetingArt();
+    const text=element('div',null,'welcome-copy');
+    text.append(element('h2','오늘은 무엇을 도와드릴까요?'),element('p',result.text));
+    greeting.append(text,drawing);
+    body.append(greeting);
+  }else body.append(element('p',result.text,'bubble'));
   if(result.timetable){row.classList.add('has-timetable');body.append(showTimetable(result.timetable));}
   const links=element('div',null,'chat-actions');
   if(result.source&&!result.timetable)links.append(link(result.sourceLabel??'안내 원문',result.source));
@@ -78,6 +86,19 @@ function append(role,result){
   if(result.timetable)stream.scrollTop+=row.getBoundingClientRect().top-stream.getBoundingClientRect().top-10;
   else stream.scrollTop=stream.scrollHeight;
 }
+function greetingArt(){
+  const ns='http://www.w3.org/2000/svg';
+  const art=document.createElementNS(ns,'svg'), symbol=document.createElementNS(ns,'use');
+  art.setAttribute('class','welcome-art');
+  art.setAttribute('viewBox','0 0 160 120');
+  art.setAttribute('width','96');
+  art.setAttribute('height','72');
+  art.setAttribute('aria-hidden','true');
+  art.setAttribute('focusable','false');
+  symbol.setAttribute('href','/assets/categories.svg#other');
+  art.append(symbol);
+  return art;
+}
 function clearChoices(){lastChoices?.remove();lastChoices=null;}
 function ask(question,{focusInput=true}={}){
   const q=question.trim();
@@ -93,7 +114,7 @@ function ask(question,{focusInput=true}={}){
 function welcome(){
   state={};clearChoices();input.value='';stream.replaceChildren();
   window.dispatchEvent(new Event('archive:help-mode'));
-  append('assistant',{text:'안녕하세요! ARCHIVE PILATES 명지점이에요. 수업 시간이나 수강료, 예약·홀딩 규정 중 궁금한 게 있으세요?'});
+  append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
 }
 for(const btn of prompts.querySelectorAll('[data-question]')){
   btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false}));
