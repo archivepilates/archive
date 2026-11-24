@@ -2,6 +2,7 @@ import type {Request} from "firebase-functions/v2/https";
 import {db} from "../config/firebase";
 import {defineSecret,projectID} from "firebase-functions/params";
 import {generatePublicReply,parsePublicReplySignals} from "./publicChatReply";
+import {generatePublicNaturalChat,parsePublicNaturalChat} from "./publicNaturalChat";
 
 export const helpPublicOpenAiApiKey = defineSecret("HELP_PUBLIC_OPENAI_API_KEY");
 const allowedOrigins = new Set(["https://help.archivepilates.com", "https://archive-pilates-help.web.app"]);
@@ -76,24 +77,39 @@ export async function classifyPublicIntent(signals:Signals,apiKey:string,fetcher
 export function isHelpPublicAiEnabled(project:string,override:string|undefined):boolean {
   return project==="archive-pilates"&&override!=="false";
 }
+export const isHelpNaturalEnabled=(project:string,override:string|undefined)=>project==="archive-pilates"&&override==="true";
 
 export function createHelpPublicChatHandler(deps={
   enabled:()=>isHelpPublicAiEnabled(projectID.value(),process.env.HELP_PUBLIC_AI_ENABLED),
   key:()=>helpPublicOpenAiApiKey.value(),reserve:reserveModelCall,classify:classifyPublicIntent,generate:generatePublicReply
+},natural={
+  enabled:()=>isHelpNaturalEnabled(projectID.value(),process.env.HELP_PUBLIC_NATURAL_CHAT_ENABLED),
+  generate:generatePublicNaturalChat
 }) {
   return async (req:Request,response:any):Promise<void>=>{
     response.set("Cache-Control","private, no-store");
     response.set("X-Content-Type-Options","nosniff");
+    if(req.method==="GET"&&req.query?.capabilities==="natural"){
+      response.status(200).json({natural:natural.enabled()&&deps.enabled()});return;
+    }
     if(req.method!=="POST"){response.status(405).json({ok:false});return;}
     if(!allowedOrigins.has(req.get("origin")??"")){response.status(403).json({ok:false});return;}
-    if(!req.is("application/json")||!req.rawBody||req.rawBody.length>1024){response.status(400).json({ok:false});return;}
+    if(!req.is("application/json")||!req.rawBody||req.rawBody.length>(req.body?.version===3?3600:1024)){
+      response.status(400).json({ok:false});return;
+    }
+    if(req.body?.version===3&&!natural.enabled()){response.status(503).json({ok:false});return;}
+    const naturalTurn=req.body?.version===3?parsePublicNaturalChat(req.body):null;
     const signals=parsePublicSignals(req.body);
     const replySignals=parsePublicReplySignals(req.body);
-    if(!signals&&!replySignals){response.status(400).json({ok:false});return;}
+    if(!signals&&!replySignals&&!naturalTurn){response.status(400).json({ok:false});return;}
     try{
       if(!deps.enabled()){response.status(503).json({ok:false});return;}
       const key=deps.key();
       if(!key?.trim()||!await deps.reserve()){response.status(503).json({ok:false});return;}
+      if(naturalTurn){
+        const reply=await natural.generate(naturalTurn,key);
+        response.status(reply?200:503).json(reply?{ok:true,...reply}:{ok:false});return;
+      }
       if(replySignals){
         const reply=await deps.generate(replySignals,key);
         response.status(reply?200:503).json(reply?{ok:true,...reply}:{ok:false});return;

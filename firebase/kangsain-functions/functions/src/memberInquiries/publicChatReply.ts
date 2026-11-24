@@ -1,16 +1,19 @@
 import guidance from "./guidance.json";
 import evidence from "./public-chat-evidence.generated.json";
+import {publicIdentity} from "./publicNaturalChat";
 
 const variants={
   schedule:["timetable","unverified"],
   pricing:["regular","comparison","other","unverified"],
   holding:["general","period","count"],
   booking:["general","flexible","fixed","ending"],
-  plan:["general","four_weeks","single_day"]
+  plan:["general","four_weeks","single_day","daily","daily_home","daily_studio"],
+  clarify:["open","context"],
+  identity:["story","history","team","kihyo","minjin","eunyoung","chorim","yuri"]
 } as const;
 type Topic=keyof typeof variants;
 export type PublicReplySignals={version:2;topic:Topic;detail:string;previousTopic:Topic|"";day:number;time:number;frequency:number;beginner:boolean};
-type NextQuestion="none"|"day"|"time"|"frequency"|"pass_type"|"booking_type";
+type NextQuestion="none"|"day"|"time"|"frequency"|"pass_type"|"booking_type"|"routine_scope"|"help_topic";
 export type GuidedPublicReply={answer:string;next:NextQuestion};
 const weekdays=["","월","화","수","목","금","토","일"];
 const times=["","오전","오후","저녁"];
@@ -29,6 +32,8 @@ export function parsePublicReplySignals(input:unknown):PublicReplySignals|null{
     ||!index(r.day,7)||!index(r.time,3)||!index(r.frequency,7)||typeof r.beginner!=="boolean")return null;
   if((r.detail==="four_weeks"&&!r.frequency)||(r.detail==="single_day"&&(!r.day||!r.frequency))
     ||r.detail==="timetable"&&!r.day||r.detail==="comparison"&&!r.frequency)return null;
+  if(r.previousTopic==="clarify"||r.topic==="clarify"&&(r.day!==0||r.time!==0||r.frequency!==0||r.beginner
+    ||(r.detail==="context")!==Boolean(r.previousTopic)))return null;
   return r as PublicReplySignals;
 }
 
@@ -65,6 +70,17 @@ export function publicReplyFacts(s:PublicReplySignals,now=new Date()):string{
     const id=s.detail==="fixed"?"booking-fixed":s.detail==="ending"?"fixed-end":"booking-flexible";
     return rule(id)+(s.detail==="ending"?" 카카오톡 문의만으로 기한을 충족했거나 해지가 완료된 것으로 볼 수 없어요.":"");
   }
+  if(s.topic==="clarify")return "어떤 내용인지 확실하지 않아서 먼저 확인할게요.";
+  if(s.topic==="identity"){
+    if(s.detail==="story")return publicIdentity.values+" "+publicIdentity.approach;
+    if(s.detail==="history")return "개원 연도 등 공개 자료에서 확인되지 않은 연혁은 정확히 안내하기 어려워요. "+publicIdentity.values;
+    if(s.detail==="team")return "팀아카이브 공개 프로필에는 "+publicIdentity.team.map(([name,role])=>name+" "+role).join(", ")+"이 소개돼 있어요.";
+    const person=publicIdentity.team[["kihyo","minjin","eunyoung","chorim","yuri"].indexOf(s.detail)];
+    return "공식 프로필에서 "+person[0]+" "+person[1]+"의 주요 분야로 소개하는 내용이에요: "+person[2]+".";
+  }
+  if(s.detail==="daily")return "매일 운동하는 것과 매일 센터 수업에 참여하는 건 달라요. 센터 방문과 집에서 하는 운동을 나눠서 계획할 수 있어요.";
+  if(s.detail==="daily_home")return "센터에 오는 날과 집에서 가볍게 움직이는 날을 나눠서 계획할 수 있어요.";
+  if(s.detail==="daily_studio")return "센터 수업을 매일 들을 수 있는지는 수강권 조건과 날짜별 개설·예약 상황에 따라 달라요. 먼저 월간 예정표를 볼 수 있어요. "+app;
   if(s.detail==="single_day")return weekdays[s.day]+"요일만 주 1회씩 참여한다면 4주에 4회예요. "+app;
   if(s.detail==="four_weeks")return "주 "+s.frequency+"회라면 4주 기준 "+s.frequency*4+"회예요. 실제 한 달 횟수는 시작일과 요일에 따라 달라져요.";
   return [s.beginner?"처음이라면 기본 동작을 안내하는 입문 수업부터 비교해 보세요.":"꾸준히 다닐 수 있는 시간대를 먼저 정해 보세요.",
@@ -79,6 +95,9 @@ export function renderPublicReply(value:unknown,facts:string):string|null{
 }
 
 function allowedNext(s:PublicReplySignals,now:Date):NextQuestion[]{
+  if(s.topic==="clarify")return ["help_topic"];
+  if(s.topic==="plan"&&s.detail==="daily")return ["routine_scope"];
+  if(s.topic==="plan"&&s.detail==="daily_home")return s.day?["none"]:["day"];
   const next:NextQuestion[]=["none"];
   if(s.topic==="plan"&&s.detail==="general"){
     if(!s.day)next.push("day");
@@ -106,7 +125,7 @@ export async function generatePublicReply(input:PublicReplySignals,key:string,fe
     redirect:"error",signal:AbortSignal.timeout(6500),
     body:JSON.stringify({
       model:"gpt-6-luna",store:false,reasoning:{effort:"none"},max_output_tokens:140,
-      instructions:"Write a short, natural Korean public Pilates reply in 해요체. Use the topic, previous topic and selected day, time or frequency to acknowledge what the visitor already told you. Day 1..7 means Monday..Sunday and time 1..3 means morning, afternoon, evening; zero means unknown. Write only one short opening sentence in answer. The server appends all facts separately; never repeat them. Use only Korean letters, spaces and simple punctuation. Never include figures, external links, private details, unsupported facts, or claim an action or real-time availability. Do not add a question to answer. For next, select one listed missing preference that will make the next answer useful: day (weekday), time (morning, afternoon or evening), frequency (visits per week), pass_type (duration or session count), booking_type (fixed or flexible). Prefer an actionable question when it narrows the answer; choose none only if offered and no question is useful. Do not ask for a value already provided.",
+      instructions:"Talk naturally in Korean 해요체 like a friendly studio receptionist. Acknowledge known preferences or a change of plan instead of writing a generic confirmation. Day 1..7 means Monday..Sunday; time 1..3 means morning, afternoon, evening; zero means unknown. When detail is daily, distinguish everyday exercise from taking a class every day. For clarify, the message was not understood: briefly acknowledge that without guessing the visitor's words. In answer write only one short opening sentence in Korean letters, spaces and simple punctuation, without a question. The server appends official facts and the selected question separately. Never repeat facts, use figures or links, infer medical or private details, or claim eligibility, actions or real-time seats. For next, choose one offered question: day, time, frequency, pass_type, booking_type, routine_scope (studio classes only or exercise at home too), help_topic (ask what kind of help), or none if offered and no question would help. Never ask for a preference already provided.",
       input:JSON.stringify({signals,facts}),
       text:{format:{type:"json_schema",name:"help_public_answer",strict:true,schema:{type:"object",
         properties:{answer:{type:"string"},next:{type:"string",enum:nextOptions}},

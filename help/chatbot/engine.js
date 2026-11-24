@@ -78,5 +78,5 @@ export function respond(q,{mode='prospect',context='',now=new Date(),rules=null}
   }
   return {text:'가능한 시간대와 필라테스·기구 경험을 알려 주세요. 예: 화요일 오전, 리포머는 처음이에요.',context:'class',choices:['오전 · 처음이에요','저녁 · 기구 수업 경험 있어요']};
  }
- return {text:'정확히 확인하기 어려운 질문이에요. 위의 빠른 질문을 고르거나 기존 직원 문의를 이용해 주세요.'};
+ return {text:'어떤 점이 궁금하신지 조금만 더 알려주세요.',unknown:true};
 }

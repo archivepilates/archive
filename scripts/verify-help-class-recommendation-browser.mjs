@@ -34,6 +34,15 @@ try{
       for(const [width,height] of sizes){
         const ctx=await browser.newContext({viewport:{width,height},isMobile:width<500,hasTouch:width<500,serviceWorkers:'block'});
         try{
+          if(!live&&width<500)await ctx.addInitScript(()=>{
+            const viewport=Object.assign(new EventTarget(),{height:innerHeight,offsetTop:0,scale:1});
+            Object.defineProperty(window,'visualViewport',{value:viewport});
+            window.setTestViewport=(height,offsetTop=0,scale=1)=>{
+              const type=viewport.height===height&&viewport.scale===scale?'scroll':'resize';
+              Object.assign(viewport,{height,offsetTop,scale});
+              viewport.dispatchEvent(new Event(type));
+            };
+          });
           const page=await ctx.newPage(), writes=[],errors=[];
           page.on('pageerror',err=>errors.push(err.message));
           await ctx.route('**/*',route=>{
@@ -53,7 +62,7 @@ try{
             const input=document.querySelector('#question').getBoundingClientRect();
             return stream.height>=96&&input.bottom<=innerHeight&&document.documentElement.scrollWidth<=innerWidth;
           }),true);
-          if(process.env.ARCHIVE_HELP_QA_SHOTS&&name==='chromium'&&[390,1440].includes(width)){
+          if(process.env.ARCHIVE_HELP_QA_SHOTS&&name==='chromium'){
             await page.screenshot({path:join(process.env.ARCHIVE_HELP_QA_SHOTS,'illustrated-'+width+'.png')});
           }
           const trigger=page.getByRole('button',{name:'30초 수업 추천',exact:true});
@@ -117,6 +126,19 @@ try{
               &&buttons.every(rect=>rect.width>=44&&rect.height>=44)
               &&buttons.every(rect=>rect.bottom<=document.querySelector('#question').getBoundingClientRect().top);
           }),true);
+          if(!live){
+            assert(await shortcuts.evaluate(node=>{
+              const chips=[...node.children].map(child=>child.getBoundingClientRect());
+              return chips.every(chip=>chip.top===chips[0].top)&&getComputedStyle(node).overflowX==='auto';
+            }));
+            if(width===320)assert(await shortcuts.evaluate(node=>{
+              if(node.scrollWidth<=node.clientWidth)return false;
+              node.scrollLeft=node.scrollWidth;
+              const reached=node.lastElementChild.getBoundingClientRect().right<=node.getBoundingClientRect().right;
+              node.scrollLeft=0;
+              return reached;
+            }));
+          }
           await page.getByRole('button',{name:'새 대화',exact:true}).click();
           assert.equal(await shortcuts.getByRole('button').count(),5);
           assert.equal(await chat.inputValue(),'');
@@ -137,9 +159,13 @@ try{
           await page.getByRole('button',{name:'새 대화',exact:true}).click();
           if(!live){
             const requests=[];
+            let fallbackTest=false;
             await page.route('**/api/public-chat-intent',async route=>{
               assert.equal(route.request().method(),'POST');
-              requests.push(route.request().postDataJSON());
+              const packet=route.request().postDataJSON();
+              requests.push(packet);
+              if(fallbackTest&&packet.detail==='daily')return route.fulfill({json:{ok:true,
+                answer:'매일 운동과 매일 수업은 달라요.',next:'routine_scope'}});
               if(requests.length>2)return route.fulfill({status:503,json:{ok:false}});
               return route.fulfill({json:{ok:true,answer:requests.length===1?'목요일 시간표를 모아 봤어요.':'앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.',next:requests.length===1?'time':'none'}});
             });
@@ -165,6 +191,86 @@ try{
             await page.getByText(/명지점 월간 예정표예요/).waitFor();
             assert.equal(requests.length,3);
             assert.equal(await page.getByText('명지점 상담 · AI 답변',{exact:true}).count(),0);
+            fallbackTest=true;
+            await page.getByRole('button',{name:'새 대화',exact:true}).click();
+            for(const [question,expected] of [
+              ['주 3회 운동하고 싶어요',/주 3회 기준/],
+              ['매일운동하려면?',/센터 수업만 생각하고 계세요/],
+              ['매일은?',/수강권 조건과 날짜별 개설·예약 상황/],
+              ['오늘은?',/명지점 월간 예정표예요/]
+            ]){
+              const nextIndex=await page.locator('.turn.assistant').count();
+              await chat.fill(question);
+              await chat.press('Enter');
+              await page.locator('.turn.assistant').nth(nextIndex).getByText(expected).waitFor();
+            }
+            assert.deepEqual(requests.slice(3).map(({topic,detail,day})=>[topic,detail,day]),[
+              ['plan','general',0],['plan','daily',0],['plan','daily_studio',0],['schedule','timetable',2]]);
+            await page.getByRole('list',{name:'화요일 예정 수업'}).waitFor();
+            if(width<500){
+              const keyboardHeight=height-300;
+              await chat.focus();
+              await page.evaluate(h=>window.setTestViewport(h,40),keyboardHeight);
+              await page.waitForFunction(h=>{
+                const shell=document.querySelector('.help').getBoundingClientRect();
+                const input=document.querySelector('#question').getBoundingClientRect();
+                return shell.top===40&&shell.height===h&&input.bottom<=40+h;
+              },keyboardHeight);
+              await chat.fill('안녕');
+              await chat.press('Enter');
+              await page.getByText('안녕하세요! 시간표, 수강료, 예약 등 궁금한 내용을 편하게 물어보세요.').waitFor();
+              await page.waitForFunction(()=>{
+                const log=document.querySelector('#conversation');
+                const last=log.lastElementChild.getBoundingClientRect(), viewport=log.getBoundingClientRect();
+                return log.scrollHeight>log.clientHeight&&last.top>=viewport.top&&last.bottom<=viewport.bottom;
+              });
+              if(process.env.ARCHIVE_HELP_QA_SHOTS&&name==='webkit'&&width===390){
+                await page.screenshot({path:join(process.env.ARCHIVE_HELP_QA_SHOTS,'keyboard-390.png')});
+              }
+              await page.evaluate(h=>{
+                document.querySelector('#conversation').scrollTop=0;
+                window.setTestViewport(h,60);
+              },keyboardHeight);
+              await page.waitForFunction(()=>document.querySelector('.help').getBoundingClientRect().top===60);
+              assert(await page.locator('#conversation').evaluate(node=>node.scrollTop===0));
+              assert(await page.evaluate(()=>scrollY===0&&document.documentElement.scrollHeight<=innerHeight));
+              await page.evaluate(h=>window.setTestViewport(h,0,1.3),keyboardHeight);
+              await page.waitForFunction(()=>!document.querySelector('.help').classList.contains('keyboard-open'));
+              await chat.blur();
+              await page.evaluate(h=>window.setTestViewport(h),height);
+              assert(await page.locator('footer').isVisible());
+            }
+            if(width===390){
+              const naturalRequests=[];
+              await page.route('**/api/public-chat-intent?capabilities=natural',
+                route=>route.fulfill({json:{natural:true}}));
+              await page.route(requestUrl=>requestUrl.pathname==='/api/public-chat-intent'&&!requestUrl.search,route=>{
+                naturalRequests.push(route.request().postDataJSON());
+                return route.fulfill({json:{ok:true,answer:'처음이라면 가벼운 강도로 시작해 볼까요?',link:'none'}});
+              });
+              const question='운동이랑 데면데면한데 가볍게부터 할 수 있을까요?';
+              const consent=page.getByRole('dialog',{name:'GPT 공개 상담'});
+              const ask=async q=>{await chat.fill(q);await chat.press('Enter');};
+              await page.reload({waitUntil:'networkidle'});
+              await ask(question);
+              await consent.getByText(question,{exact:true}).waitFor();
+              assert.equal(naturalRequests.length,0);
+              await consent.getByRole('button',{name:'질문 수정'}).click();
+              await page.waitForFunction(value=>document.querySelector('#query').value===value,question);
+              await ask(question);
+              await consent.getByRole('button',{name:'기본 안내'}).click();
+              await page.getByText(question,{exact:true}).waitFor();
+              assert.equal(naturalRequests.length,0);
+              await page.getByRole('button',{name:'새 대화',exact:true}).click();
+              await ask(question);
+              await consent.getByRole('button',{name:'GPT로 보내기'}).click();
+              await page.getByText('처음이라면 가벼운 강도로 시작해 볼까요?',{exact:true}).waitFor();
+              assert.deepEqual(naturalRequests,[{version:3,consent:true,question,history:[]}]);
+              await ask('내 수강권은 몇 번 남았어요?');
+              await page.getByRole('link',{name:'회원 앱에서 확인하는 방법'}).waitFor();
+              assert.equal(naturalRequests.length,1);
+              assert.equal(await consent.isVisible(),false);
+            }
           }
           assert.deepEqual(writes,[]);
           assert.deepEqual(errors,[]);

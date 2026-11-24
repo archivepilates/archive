@@ -12,7 +12,7 @@ const shortFrequency=/^([1-7]|한|두|세|네|다섯|여섯|일곱)\s*(?:회|번
 const monthly=/한\s*달|4\s*주|월\s*몇\s*(?:회|번)/u;
 const hold=/홀딩|일시\s*(?:정지|중지)|(?:수강권|회원권).{0,26}(?:멈추|멈출|쉬|정지)|(?:여행|출장|휴가).{0,34}(?:멈추|멈출|쉬|정지|얼려)/u;
 const scheduleAsk=/시간표|스케줄|수업\s*일정|수업\s*목록|오늘\s*수업|빈\s*자리|실시간\s*좌석|몇\s*시.{0,7}수업|자리\s*(?:남|있)/u;
-const rateAsk=/수강료|가격|비용|얼마|프로모션|특가|블랙프라이데이|11\s*월.{0,10}수강권/u;
+const rateAsk=/수강료|가격|비용|얼마(?!나)|프로모션|특가|블랙프라이데이|11\s*월.{0,10}수강권/u;
 const otherMember=/(?:친구|가족|배우자|타인|다른\s*회원).{0,14}(?:수강권|잔여|출석|이력)/u;
 const personal=/(?:내|제)\s*(?:수강권|예약|출석)|잔여\s*횟수|몇\s*(?:회|번)\s*남|수강\s*이력|출석\s*기록|패스키|회원\s*인증/u;
 const booking=/예약|취소|고정|(?:자유\s*예약)|(?:해지|종료)/u;
@@ -21,7 +21,16 @@ const greeting=/^(?:안녕(?:하세요|하십니까|하세용)?|안뇽|반가워
 const thanks=/^(?:고마워(?:요)?|감사(?:해요|합니다)|덕분이에요)[!?~.\s\p{Extended_Pictographic}]*$/u;
 const parking=/주차(?:장)?|출차|차량\s*등록/u;
 const bookingOpen=/(?:예약|일정).{0,16}(?:언제\s*(?:열|오픈|시작|부터)|열리|오픈|개시)/u;
+const dailyRoutine=/매일|날마다|매\s*일|하루(?:에)?\s*(?:한|1)\s*(?:번|회)|하루도\s*안\s*쉬/u;
+const shortDaily=/^(?:그럼\s*|그러면\s*)?(?:매일|날마다)\s*(?:은|는|도|요|이요)?[.!?~\s]*$/u;
+const shortDate=/^(?:그럼\s*|그러면\s*)?(?:오늘|내일|모레|어제)\s*(?:은|는|도|요|이요)?[.!?~\s]*$/u;
+const repairAsk=/^(?:지금\s*)?(?:계속\s*)?(?:이상해(?:요)?|그게\s*아니(?:에요|야)|그거\s*아닌데(?:요)?|다시\s*(?:설명해\s*줘|말해\s*줘))(?:[.!?~\s]*)$/u;
+const routineChoice={
+  home:/집(?:에선|에서|에서도|이요|요)|홈트|혼자\s*운동/u,
+  studio:/센터(?:에서|에|요|이요)|센터\s*수업|수업만|수업을\s*매일/u
+};
 const amount=n=>n.toLocaleString('ko-KR')+'원';
+const teamProfiles={김기효:'kihyo',배민진:'minjin',정은영:'eunyoung',이초림:'chorim',정유리:'yuri'};
 
 function rule(rules,id){return rules?.rules?.find(row=>row.id===id)?.text??'';}
 function planText(p,question){
@@ -58,6 +67,10 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
   const plan=nextPlan(previous.plan,q,suppliedFrequency);
   const state={plan,topic:'',context:''};
   const close=result=>({...result,state:{...state,topic:result.topic??'',context:result.context??''}});
+  const clarify=()=>({
+    text:'제가 질문을 정확히 이해하지 못했어요. 수업 시간, 수강료, 운동 계획 중 어떤 쪽을 이어서 볼까요?',
+    choices:['시간표','수강료','수업 추천'],state:previous,clarify:true
+  });
   const kst=calendar.format(now);
   const november=kst>='2026-11-01'&&kst<='2026-11-30';
   const anotherMonth=/다음\s*달|12\s*월|십이월/u.test(q);
@@ -68,22 +81,36 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
   const planAsk=/어떤\s*수업|수업.{0,8}추천|처음|초보|일정을\s*짜/u.test(q)||weekly.test(q)&&/운동|다니|가고|방문|가능|퇴근/u.test(q);
 
   if(asksRefund)return close({...respond('환불 상담',{rules,now,mode:'member'}),inquiry:'refund',topic:'refund'});
+  if((!rateAsk.test(q)&&personal.test(q))||previous.topic==='member'&&(shortDate.test(q)||/^(?:그럼|그러면).*(?:언제까지|예약|몇\s*(?:회|번))/u.test(q))){
+    const reply=respond('내 수강권',{rules,now,mode:'member'});
+    return close({...reply,appGuide,topic:'member'});
+  }
+  if(repairAsk.test(q))return clarify();
+  const teamMember=Object.keys(teamProfiles).find(name=>q.includes(name));
+  const teamQuestion=/팀\s*아카이브|강사(?:님)?\s*(?:소개|프로필|이력)|누가\s*가르치/u.test(q);
+  const brandQuestion=/아카이브.{0,20}(?:이름|철학|가치|히스토리|연혁|기록|창립)|아카이브\s*메소드|ARCHIVE\s*METHOD|언제\s*(?:문을\s*열|시작했)/iu.test(q);
+  if(teamMember||teamQuestion||brandQuestion){
+    const history=/연혁|히스토리|창립|개원|문을\s*열|언제\s*시작했/u.test(q);
+    const identity=teamMember?teamProfiles[teamMember]:teamQuestion?'team':history?'history':'story';
+    const source=teamMember?'https://archivepilates.com/teams/'+identity:teamQuestion?'https://archivepilates.com/teams':'https://archivepilates.com/';
+    const text=teamMember||teamQuestion?'각 구성원의 역할과 수업에서 중요하게 보는 점은 공식 프로필에서 확인할 수 있어요.'
+      :history?'확인된 개원 연도나 상세 연혁은 안내에 포함되어 있지 않아요.'
+      :'아카이브는 움직임을 먼저 관찰하고, 그날에 맞게 수업을 조정하고, 발견한 내용을 기록해 다음 수업에 반영해요.';
+    return close({topic:'identity',identity,text,source,sourceLabel:teamMember||teamQuestion?'팀아카이브 공식 프로필':'ARCHIVE PILATES 공식 소개'});
+  }
   if(shelf){
     const normalized=hold.test(q)&&!/^홀딩이나\s*환불/u.test(q)&&!/만료|이미\s*끝|기간.{0,4}지난/u.test(q)?q+' 홀딩':q;
     const result=respond(normalized,{rules,now,mode:'member',context:'hold'});
     const base=/여행|출장|휴가/u.test(q)?rule(rules,'holding-base'):'';
     return close({...result,text:[base,result.text].filter(Boolean).join(' '),inquiry:'staff',topic:'holding'});
   }
-  if(scheduleAsk.test(q)||previous.topic==='schedule'&&/다음\s*달|\d{1,2}\s*월|[월화수목금토일]\s*요일|주말|내일|모레/u.test(q)&&!rateAsk.test(q)&&!booking.test(q)){
+  if(scheduleAsk.test(q)||['schedule','plan'].includes(previous.topic)&&shortDate.test(q)
+    ||previous.topic==='schedule'&&/다음\s*달|\d{1,2}\s*월|[월화수목금토일]\s*요일|주말|내일|모레/u.test(q)&&!rateAsk.test(q)&&!booking.test(q)){
     const timetable=publishedTimetable(q,now);
     return close({
       text:timetable?'명지점 월간 예정표예요. 남은 자리와 당일 변경은 회원 앱에서 확인해 주세요.':
         '이 날짜에 적용할 확인된 월간 예정표가 없어요. 명지점 시간표와 남은 자리는 회원 앱의 수업 목록에서 확인해 주세요.',
       ...(timetable?{timetable,source:timetable.source,sourceLabel:'11월 명지점 시간표 원문'}:{}),appGuide,topic:'schedule'});
-  }
-  if(!rateAsk.test(q)&&(personal.test(q)||previous.topic==='member'&&/^(?:그럼|그러면).*(?:언제까지|예약|몇\s*(?:회|번))/u.test(q))){
-    const reply=respond('내 수강권',{rules,now,mode:'member'});
-    return close({...reply,appGuide,topic:'member'});
   }
   const commonRule=parking.test(q)?'other-facility':bookingOpen.test(q)&&!/취소|변경|해지/u.test(q)?'other-booking':'';
   if(commonRule){
@@ -102,6 +129,20 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
       ...regularNov.map(r=>r.name+' · '+amount(r.price)+' · '+r.duration),'주 몇 회 방문할 수 있는지 알려주시면 비교해 드릴게요.'].join('\n'),
       source:rates,sourceLabel:'11월 수강료 원문',choices:['주 1회','주 2회','주 3회'],topic:'pricing'});
   }
+  const atHome=routineChoice.home.test(q), atStudio=routineChoice.studio.test(q);
+  if(dailyRoutine.test(q)||previous.routine==='daily'&&(atHome||atStudio)){
+    const repeat=previous.routine==='daily'&&shortDaily.test(q);
+    const detail=atHome&&!atStudio?'daily_home':(atStudio&&!atHome)||repeat?'daily_studio':'daily';
+    const combined=detail!=='daily';
+    const result=close({text:detail==='daily_home'
+      ?'센터에 오는 날과 집에서 가볍게 움직이는 날을 나눠서 계획할 수 있어요. 센터에 오기 편한 요일부터 정해 볼까요?'
+      :detail==='daily_studio'
+      ?'센터에 매일 오는 걸 말씀하신다면, 가능한지는 수강권 조건과 날짜별 개설·예약 상황에 따라 달라요. 먼저 예정표를 보고 실제 예약 가능 여부는 회원 앱에서 확인해 주세요.'
+      :'매일 운동하는 것과 매일 센터 수업을 듣는 건 달라요. 센터 수업만 매일 듣고 싶으세요, 아니면 집에서 하는 운동도 포함할까요?',
+    choices:combined?undefined:['센터 수업만','집에서도 운동'],...(detail==='daily_studio'?{appGuide}:{}),
+    topic:'plan',planDetail:detail});
+    return {...result,state:{...result.state,routine:'daily'}};
+  }
   if(planAsk||previous.topic==='plan'&&(monthly.test(q)||/요일|아침|오전|오후|저녁|퇴근/u.test(q)||weekly.test(q)||suppliedFrequency)){
     return close({...planText(plan,q),topic:'plan'});
   }
@@ -109,6 +150,7 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
     ||previous.context==='fixed'&&/한\s*번|이번\s*수업|해지|종료|그만|다음\s*달부터/u.test(q)
     ||previous.context==='flexible'&&/주말|토요일|일요일|공휴일/u.test(q);
   const result=rateResponse(existing({context:continuation?previous.context:''}));
+  if(result.unknown)return clarify();
   return close({...result,...(result.memberApp?{appGuide}:{}),
     ...(booking.test(q)&&!(result.choices?.length)?{inquiry:'staff'}:{}),
     topic:result.memberLookup?'member':booking.test(q)||continuation?'booking':result.context==='pass'?'pricing':''});

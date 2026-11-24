@@ -33,7 +33,6 @@
     <h1 id="chat-title" class="sr-only">아카이브 챗봇</h1>
     <div id="conversation" role="log" aria-label="상담 대화" aria-live="polite" tabindex="0"></div>
     <div class="compose">
-      <p class="suggestions-title" aria-hidden="true">추천 질문</p>
       <div id="prompts" class="quick suggestions" role="group" aria-label="추천 질문">
         <button id="start-recommendation" type="button" aria-haspopup="dialog">
           <svg class="prompt-art" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="/assets/chat-icons.svg#calendar-check"></use></svg>
@@ -117,6 +116,20 @@
     </div>
     <a data-recommendation-source class="recommendation-source">시간표 원본</a>
   </section>
+</dialog>
+
+<dialog id="public-ai-consent" aria-labelledby="public-ai-consent-title" aria-describedby="public-ai-consent-note">
+  <form method="dialog">
+    <h2 id="public-ai-consent-title">GPT 공개 상담</h2>
+    <p id="public-ai-consent-note">공개 질문과 최근 답변 두 차례까지 OpenAI로 전달돼요. 이름, 연락처, 건강정보 없이 질문해 주세요.</p>
+    <p class="consent-question" id="public-ai-consent-question"></p>
+    <p><a href="/privacy.html" target="_blank" rel="noopener noreferrer">개인정보 안내</a></p>
+    <div class="consent-actions">
+      <button value="edit" autofocus>질문 수정</button>
+      <button value="basic">기본 안내</button>
+      <button value="natural" class="consent-send">GPT로 보내기</button>
+    </div>
+  </form>
 </dialog>
 
 <footer><a href="tel:01029244425">명지점 데스크 010-2924-4425</a><a href="/privacy.html">개인정보 안내</a></footer>

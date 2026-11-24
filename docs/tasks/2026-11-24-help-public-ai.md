@@ -14,6 +14,14 @@
   visit preference or policy category is still unknown. The site renders the
   approved question and accepts either a short reply or an option button.
   Existing rate limits, data minimization, and member-app handoff are unchanged.
+- Mobile chat continuity preview: keep the composer in the visible viewport
+  while typing and keep shortcuts on one scrollable row. Treat daily exercise
+  as distinct from daily studio attendance, resolve short date follow-ups
+  against the public KST timetable, and preserve the previous topic on an
+  unclear turn. The model still receives only public structured context, not
+  the user's sentences or conversation history; unrecognized wording gets a
+  clarification, not an unrestricted AI answer.
+
 - Staff and refund CTA links open the official Kakao channel. The Help form
   is retired; old public form URLs redirect to the channel and Help no longer
   rewrites to the intake function. Existing CORE records, retention, staff
@@ -21,6 +29,25 @@
   automatically create CORE inquiries or execute bookings.
 - Keep the existing Pro-only payment posture and per-day/per-minute limits.
   Tests use synthetic questions only; no Kakao message or inquiry is sent.
+
+## Direct conversation preview
+
+The independent v3 preview lets GPT read the current public question and up
+to two recent public exchanges. It uses the named ARCHIVE PILATES identity,
+the official home and Team Archive profiles, and date-checked public rule,
+schedule and pricing facts. This is an updateable prompt and source set, not
+fine-tuning. No model tools, stored provider conversation, or member lookup
+are used. Unverified history and private staff records are excluded.
+
+The browser and server block recognizable identifiers and personal topics.
+This is not a guarantee of anonymization for arbitrary free text. The
+live deployment deliberately leaves the explicit v3 enable flag unset:
+privacy review found sensitive free text can pass a denylist and the model
+can attach a real lesson time to the wrong day. The scoped release is
+mobile layout, contextual v2 answers, and published brand/team facts.
+The private v3 preview requires a per-chat choice, but consent is not a
+replacement for privacy filtering or place/date-specific source validation.
+The shared production usage counter and member-app handoff are unchanged.
 
 ## Initial classification release
 

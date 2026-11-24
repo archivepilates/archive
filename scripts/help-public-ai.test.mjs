@@ -91,3 +91,44 @@ test('public planning carries only bounded preferences; private turns never requ
   const rates=preparePublicReply('수강료 알려줘',{},opts);
   assert.equal(preparePublicReply('2회만',rates.result.state,opts).signals.detail,'comparison');
 });
+
+test('daily plans and short date questions preserve public conversation without asserting bookings',()=>{
+  const opts={now:new Date('2026-11-24T21:26:00+09:00')};
+  const plan=preparePublicReply('주 3회 운동하고 싶어요',{},opts);
+  const daily=preparePublicReply('매일운동하려면?',plan.result.state,opts);
+  const restated=preparePublicReply('매일은?',daily.result.state,opts);
+  assert.equal(daily.signals.detail,'daily');
+  assert.equal(daily.signals.frequency,3);
+  assert.match(daily.result.text,/매일 운동하는 것과 매일 센터 수업을 듣는 건 달라요/);
+  assert.equal(restated.signals.detail,'daily_studio');
+  assert.match(restated.result.text,/수강권 조건과 날짜별 개설·예약 상황/);
+  const home=preparePublicReply('집에서도 운동',restated.result.state,opts);
+  assert.equal(home.signals.detail,'daily_home');
+  const today=preparePublicReply('오늘은?',restated.result.state,opts);
+  assert.deepEqual([today.signals.topic,today.signals.day,today.result.timetable.selectedDay],['schedule',2,'화']);
+  const thu=preparePublicReply('목요일 시간표',{},opts);
+  assert.equal(preparePublicReply('오늘은?',thu.result.state,opts).signals.day,2);
+  const nextMonth=preparePublicReply('오늘은?',thu.result.state,{now:new Date('2026-12-01T00:01:00+09:00')});
+  assert.equal(nextMonth.result.timetable,undefined);
+  assert.equal(nextMonth.signals.detail,'unverified');
+});
+
+test('conversation repair keeps context, sends no free-text, and cannot request private data',()=>{
+  const opts={now:new Date('2026-11-24T21:26:00+09:00')};
+  const plan=preparePublicReply('퇴근하고 주 3회 운동하고 싶어요',{},opts);
+  const repair=preparePublicReply('지금 계속 이상해',plan.result.state,opts);
+  assert.equal(repair.result.state,plan.result.state);
+  assert.deepEqual(repair.signals,{version:2,topic:'clarify',detail:'context',previousTopic:'plan',day:0,time:0,frequency:0,beginner:false});
+  assert.equal(preparePublicReply('익명 테스트 표현입니다',{},opts).signals.detail,'open');
+  const detail=preparePublicReply('목요일에요',repair.result.state,opts);
+  assert.deepEqual([detail.signals.topic,detail.signals.day,detail.signals.frequency],['plan',4,3]);
+  assert.equal(preparePublicReply('내 수강권 몇 회 남았어요?',plan.result.state,opts).signals,null);
+  assert.equal(preparePublicReply('전화번호 01012345678, 매일은?',plan.result.state,opts).signals,null);
+});
+test('brand and public staff questions send allowlisted selectors, not the wording',()=>{
+  const {result,signals}=preparePublicReply('이초림 수석강사는 어떤 수업을 해요?');
+  assert.equal(result.source,'https://archivepilates.com/teams/chorim');
+  assert.equal(signals.topic,'identity');
+  assert.equal(signals.detail,'chorim');
+  assert.doesNotMatch(JSON.stringify(signals),/이초림|수석강사|어떤 수업/);
+});

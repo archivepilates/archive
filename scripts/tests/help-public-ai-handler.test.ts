@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {classifyPublicIntent,createHelpPublicChatHandler,isHelpPublicAiEnabled,parsePublicSignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatIntent";
+import {classifyPublicIntent,createHelpPublicChatHandler,isHelpNaturalEnabled,isHelpPublicAiEnabled,parsePublicSignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatIntent";
 import {generatePublicReply,parsePublicReplySignals,publicReplyFacts,renderPublicReply,type PublicReplySignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatReply";
 
 const signals={tags:["schedule","weekday"],context:"plan",day:4,time:3,frequency:2};
@@ -73,9 +73,60 @@ test("disabled, bad origin and exhausted quota do not call the model",async()=>{
   assert.equal(await call("https://help.archivepilates.com"),200);
   assert.equal(modelCalls,1);
 });
+test("natural turns require a separate feature flag and reject identifiers before accessing keys",async()=>{
+  for(const value of [undefined,"","TRUE","false","oops"])assert.equal(isHelpNaturalEnabled("archive-pilates",value),false);
+  assert.equal(isHelpNaturalEnabled("unrelated-project","true"),false);
+  assert.equal(isHelpNaturalEnabled("archive-pilates","true"),true);
+  let enabled=false, called=0, keys=0;
+  const fn=createHelpPublicChatHandler({enabled:()=>true,key:()=>{keys++;return "fake";},
+    reserve:async()=>true,classify:async()=>null,generate:async()=>null},
+    {enabled:()=>enabled,generate:async request=>{
+      called++;
+      assert.equal(request.question,"한동안 못 오다가 다시 이어도 되나요?");
+      return {answer:"수강권 종류부터 확인해 볼까요?",link:"none"};
+    }});
+  const post=async(question:string)=>{
+    const body={version:3,consent:true,question,history:[]},req={method:"POST",get:()=>"https://help.archivepilates.com",
+      is:()=>true,body,rawBody:Buffer.from(JSON.stringify(body))} as any;
+    let status=0;
+    const res={set(){},status(v:number){status=v;return this;},json(){}};
+    await fn(req,res);
+    return status;
+  };
+  assert.equal(await post("한동안 못 오다가 다시 이어도 되나요?"),503);
+  enabled=true;
+  assert.equal(await post("내 수강권과 전화번호 확인해줘"),400);
+  assert.equal(keys,0);assert.equal(called,0);
+  assert.equal(await post("한동안 못 오다가 다시 이어도 되나요?"),200);
+  assert.equal(keys,1);assert.equal(called,1);
+});
 
 const fixture:PublicReplySignals={version:2,topic:"schedule",detail:"timetable",previousTopic:"schedule",day:4,time:3,frequency:0,beginner:false};
 const nov=new Date("2026-11-24T10:00:00+09:00");
+test("public daily and clarification turns carry bounded context only",async()=>{
+  const daily={...fixture,topic:"plan",detail:"daily",previousTopic:"plan",frequency:3} as const;
+  assert.match(publicReplyFacts(daily,nov),/매일 운동하는 것과 매일 센터 수업에 참여하는 건 달라요/);
+  const unclear={...fixture,topic:"clarify",detail:"context",previousTopic:"plan",day:0,time:0} as const;
+  assert.deepEqual(parsePublicReplySignals(unclear),unclear);
+  for(const value of [{...unclear,previousTopic:""},{...unclear,day:2},{...unclear,frequency:3},{...unclear,raw:"회원정보"}]){
+    assert.equal(parsePublicReplySignals(value),null);
+  }
+  const mock=(expected:string):typeof fetch=>async(_url,init)=>{
+    const request=JSON.parse(String(init?.body));
+    assert.deepEqual(request.text.format.schema.properties.next.enum,[expected]);
+    return Response.json({status:"completed",output:[{type:"message",role:"assistant",status:"completed",
+      content:[{type:"output_text",text:JSON.stringify({answer:"앞에서 말씀하신 내용을 이어서 볼게요.",next:expected})}]}]});
+  };
+  assert.equal((await generatePublicReply(daily,"fake",mock("routine_scope"),nov))?.next,"routine_scope");
+  assert.equal((await generatePublicReply(unclear,"fake",mock("help_topic"),nov))?.next,"help_topic");
+});
+test("the privacy-safe route can explain only selected published brand and team facts",()=>{
+  const ask={version:2,topic:"identity",detail:"chorim",previousTopic:"",day:0,time:0,frequency:0,beginner:false} as const;
+  assert.deepEqual(parsePublicReplySignals(ask),ask);
+  assert.match(publicReplyFacts(ask,nov),/이초림 수석강사.*설명 속도와 난이도/);
+  assert.match(publicReplyFacts({...ask,detail:"history"},nov),/공개 자료에서 확인되지 않은 연혁/);
+  assert.equal(parsePublicReplySignals({...ask,detail:"김가상"}),null);
+});
 test("only the closed public context schema and current official facts enter GPT",async()=>{
   for(const v of [{...fixture,raw:"private"},{...fixture,time:4},{...fixture,previousTopic:"member"},{...fixture,detail:"compare"},{...fixture,day:0}]){
     assert.equal(parsePublicReplySignals(v),null);

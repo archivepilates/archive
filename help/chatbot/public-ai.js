@@ -38,10 +38,11 @@ const routeSpecs={
   price:{cue:'price',topic:'pricing',prefix:'수강료'},
   hold:{cue:'hold',topic:'holding',prefix:'홀딩'},
   book:{cue:'book',topic:'booking',prefix:'예약'},
-  recommend:{cue:'recommend',topic:'plan',prefix:'수업 추천'}
+  recommend:{cue:'recommend',topic:'plan',prefix:'수업 추천'},
+  identity:{cue:'identity',topic:'identity',prefix:'아카이브 가치'}
 };
 
-const routes={schedule:'schedule',pricing:'price',holding:'hold',booking:'book',plan:'recommend'};
+const routes={schedule:'schedule',pricing:'price',holding:'hold',booking:'book',plan:'recommend',identity:'identity'};
 const lineTime=/오전|오후|저녁|아침|퇴근/u;
 const timeAnswer=/^(?:평일\s*)?(?:오전|오후|아침|저녁|퇴근\s*후)(?:\s*시간)?(?:이요|이에요|요)?[.!?\s]*$/u;
 const dateReference=/[월화수목금토일]\s*요일|주말|평일|\d{1,2}\s*[월일]|다음\s*(?:주|달)|지난\s*(?:주|달)|오늘|내일|모레|어제|내년|작년/u;
@@ -60,10 +61,16 @@ export function preparePublicReply(question,previous={},options={}){
   const old=previous.publicContext;
   const cues=prepareAiSignals(q,result.state)?.tags??[];
   const isFollow=followUp.test(q)||timeAnswer.test(q);
-  if(!Object.hasOwn(routes,result.state.topic)){
+  if(result.clarify||!Object.hasOwn(routes,result.state.topic)){
     const candidates=Object.values(routes).filter(intent=>cues.includes(intent));
     const inferred=isFollow&&old&&candidates.length===0?routes[old.topic]:candidates.length===1?candidates[0]:null;
     if(inferred)result=conversationTurn(routeSpecs[inferred].prefix+' '+q,previous,options);
+  }
+  if(result.clarify){
+    if(previous.topic==='member')return {result,signals:null};
+    const previousTopic=Object.hasOwn(routes,previous.topic)?previous.topic:'';
+    return {result,signals:{version:2,topic:'clarify',detail:previousTopic?'context':'open',
+      previousTopic,day:0,time:0,frequency:0,beginner:false}};
   }
   const topic=result.state.topic;
   if(!Object.hasOwn(routes,topic)||result.hideInput||result.memberLookup||result.inquiry==='refund')return {result,signals:null};
@@ -99,8 +106,10 @@ export function preparePublicReply(question,previous={},options={}){
   }else if(topic==='booking'){
     const kind=result.state.context;
     detail=kind==='fixed'?(/해지|종료|그만|다음\s*달부터/u.test(q)?'ending':'fixed'):kind==='flexible'?'flexible':'general';
+  }else if(topic==='identity'){
+    detail=result.identity;
   }else{
-    detail=day&&frequency&&plan.onlyDay?'single_day':frequency&&monthCount.test(q)?'four_weeks':'general';
+    detail=result.planDetail??(day&&frequency&&plan.onlyDay?'single_day':frequency&&monthCount.test(q)?'four_weeks':'general');
   }
   const publicContext={topic,detail,day,time};
   const packet={version:2,topic,detail,previousTopic:Object.hasOwn(routes,previous.topic)?previous.topic:'',
@@ -114,7 +123,9 @@ const guidedQuestions={
   time:{text:'어느 시간대가 편하세요?',choices:['오전','오후','저녁']},
   frequency:{text:'일주일에 몇 번 정도 오실 수 있나요?',choices:['주 1회','주 2회','주 3회']},
   pass_type:{text:'기간권과 횟수권 중 어느 쪽이 궁금하세요?',choices:['기간권 홀딩','횟수권 홀딩']},
-  booking_type:{text:'고정예약과 자유예약 중 어느 쪽이 궁금하세요?',choices:['고정예약','자유예약']}
+  booking_type:{text:'고정예약과 자유예약 중 어느 쪽이 궁금하세요?',choices:['고정예약','자유예약']},
+  routine_scope:{text:'센터 수업만 생각하고 계세요, 아니면 집에서 하는 운동도 포함할까요?',choices:['센터 수업만','집에서도 운동']},
+  help_topic:{text:'수업 시간, 수강료, 운동 계획 중 어떤 쪽이 궁금하세요?',choices:['시간표','수강료','수업 추천']}
 };
 
 export function applyGuidedReply(result,reply){
@@ -136,7 +147,7 @@ export async function requestPublicReply(signals,controller,fetcher=fetch){
     const data=await reply.json();
     if(data?.ok!==true||typeof data.answer!=='string'||!data.answer.trim()||data.answer.length>1500)return null;
     const next=data.next??'';
-    if(next!==''&&next!=='none'&&!Object.hasOwn(guidedQuestions,next))return null;
+    if(typeof next!=='string'||next!==''&&next!=='none'&&!Object.hasOwn(guidedQuestions,next))return null;
     return {answer:data.answer,next};
   }catch{return null;}
   finally{clearTimeout(timeout);}

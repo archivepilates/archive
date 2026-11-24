@@ -1,13 +1,56 @@
 import { reusableQuestion } from './engine.js';
 import {applyGuidedReply,preparePublicReply,requestPublicReply} from './public-ai.js';
+import {applyNaturalReply,publicNaturalPacket,requestNaturalReply,supportsNaturalChat} from './public-natural.js';
 
 const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
 
 const get=id=>document.getElementById(id);
 const stream=get('conversation'), input=get('query'), prompts=get('prompts');
+const consentDialog=get('public-ai-consent'), consentQuestion=get('public-ai-consent-question');
+const shell=stream.closest('.help'), viewport=window.visualViewport;
+const atLatest=()=>stream.scrollHeight-stream.clientHeight-stream.scrollTop<=32;
+let viewportFrame=0, followOnFocus=false;
 let state={},rules=null,lastChoices,pendingAi=null;
+let naturalEnabled=false,naturalHistory=[],consentChoice='',pendingConsent;
+void supportsNaturalChat().then(enabled=>{
+  naturalEnabled=enabled;
+});
+consentDialog.addEventListener('close',()=>{
+  const pending=pendingConsent;pendingConsent=null;consentQuestion.textContent='';
+  if(!pending)return;
+  const decision=consentDialog.returnValue;
+  if(decision!=='natural'&&decision!=='basic'){
+    if(!input.value)input.value=pending.q;
+    input.focus({preventScroll:true});return;
+  }
+  consentChoice=decision;ask(pending.q,pending.options);
+});
 fetch('/assets/member-inquiry-guidance.json',{cache:'no-store',referrerPolicy:'no-referrer'})
   .then(r=>r.ok?r.json():null).then(v=>{if(Array.isArray(v?.rules)&&v?.sources)rules=v;}).catch(()=>{});
+
+function syncChatViewport(){
+  if(viewportFrame)return;
+  viewportFrame=requestAnimationFrame(()=>{
+    viewportFrame=0;
+    const follow=followOnFocus||atLatest(), zoomed=viewport?.scale>1.01;
+    followOnFocus=false;
+    // Mobile keyboards can move and shrink the visual viewport without resizing the page.
+    const fitsKeyboard=viewport&&!zoomed&&document.activeElement===input&&innerHeight-viewport.height>80;
+    if(fitsKeyboard){
+      shell.style.setProperty('--chat-viewport-height',viewport.height+'px');
+      shell.style.setProperty('--chat-viewport-top',viewport.offsetTop+'px');
+    }else{
+      shell.style.removeProperty('--chat-viewport-height');
+      shell.style.removeProperty('--chat-viewport-top');
+    }
+    shell.classList.toggle('keyboard-open',Boolean(fitsKeyboard));
+    if(follow&&!zoomed)stream.scrollTop=stream.scrollHeight;
+  });
+}
+input.addEventListener('focus',()=>{followOnFocus=true;syncChatViewport();});
+input.addEventListener('blur',syncChatViewport);
+viewport?.addEventListener('resize',syncChatViewport);
+viewport?.addEventListener('scroll',syncChatViewport);
 
 function element(tag,text,className){
   const node=document.createElement(tag);
@@ -55,7 +98,7 @@ function showTimetable(data){
   });
   panel.append(title,period,days,list,original);select(data.selectedDay);return panel;
 }
-function append(role,result){
+function append(role,result,follow=true){
   const row=element('article',null,'turn '+role);
   const body=element('div',null,'turn-body');
   if(role==='assistant'){
@@ -83,8 +126,10 @@ function append(role,result){
   }
   row.append(body);stream.append(row);
   while(stream.children.length>40)stream.firstElementChild.remove();
-  if(result.timetable)stream.scrollTop+=row.getBoundingClientRect().top-stream.getBoundingClientRect().top-10;
-  else stream.scrollTop=stream.scrollHeight;
+  if(follow){
+    if(result.timetable&&row.offsetHeight>stream.clientHeight)stream.scrollTop+=row.getBoundingClientRect().top-stream.getBoundingClientRect().top-10;
+    else stream.scrollTop=stream.scrollHeight;
+  }
 }
 function greetingArt(){
   const ns='http://www.w3.org/2000/svg';
@@ -100,11 +145,11 @@ function greetingArt(){
   return art;
 }
 function clearChoices(){lastChoices?.remove();lastChoices=null;}
-function finishTurn(q,result,focusInput,userShown=false){
+function finishTurn(q,result,focusInput,userShown=false,follow=true){
   state=result.state;
   clearChoices();
   if(!userShown&&reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
-  append('assistant',result);
+  append('assistant',result,follow);
   if(focusInput)input.focus({preventScroll:true});
 }
 function finishPending(){
@@ -119,7 +164,13 @@ function ask(question,{focusInput=true,useAi=false}={}){
   if(!q)return;
   finishPending();
   const {result,signals}=preparePublicReply(q,state,{rules});
-  if(!useAi||!signals){finishTurn(q,result,focusInput);return;}
+  const natural=useAi&&naturalEnabled&&consentChoice!=='basic'?publicNaturalPacket(q,naturalHistory,result):null;
+  if(natural&&!consentChoice){
+    pendingConsent={q,options:{focusInput,useAi}};consentQuestion.textContent=q;
+    consentDialog.returnValue='edit';consentDialog.showModal();return;
+  }
+  if(naturalEnabled&&useAi&&!natural)naturalHistory=[];
+  if(!useAi||!natural&&(naturalEnabled||!signals)){finishTurn(q,result,focusInput);return;}
   clearChoices();
   append('user',{text:q});
   const loading=element('p','답변을 작성하고 있어요.','chat-pending');
@@ -127,19 +178,26 @@ function ask(question,{focusInput=true,useAi=false}={}){
   const request={q,fallback:result,controller:new AbortController(),loading};
   pendingAi=request;
   if(focusInput)input.focus({preventScroll:true});
-  void requestPublicReply(signals,request.controller).then(answer=>{
+  const response=natural?requestNaturalReply(natural,request.controller):requestPublicReply(signals,request.controller);
+  void response.then(answer=>{
     if(pendingAi!==request)return;
+    const follow=atLatest();
     pendingAi=null;loading.remove();
-    finishTurn(q,answer?applyGuidedReply(result,answer):result,false,true);
+    if(natural&&answer){
+      naturalHistory=[...natural.history,{role:'user',text:natural.question},
+        {role:'assistant',text:answer.answer.normalize('NFKC')}].slice(-4);
+    }
+    const reply=answer?(natural?applyNaturalReply(result,answer):applyGuidedReply(result,answer)):result;
+    finishTurn(q,reply,false,true,follow);
   });
 }
 function welcome(){
   pendingAi?.controller.abort();pendingAi=null;
-  state={};clearChoices();input.value='';stream.replaceChildren();
+  state={};consentChoice='';naturalHistory=[];clearChoices();input.value='';prompts.scrollLeft=0;stream.replaceChildren();
   append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
 }
 for(const btn of prompts.querySelectorAll('[data-question]')){
-  btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false}));
+  btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false,useAi:naturalEnabled}));
 }
 get('question').addEventListener('submit',e=>{e.preventDefault();const q=input.value;input.value='';ask(q,{useAi:true});});
 get('reset-chat').addEventListener('click',()=>{welcome();input.focus({preventScroll:true});});
