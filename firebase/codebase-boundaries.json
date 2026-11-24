@@ -90,6 +90,7 @@
       "sourceEntrypoint": "firebase/kangsain-functions/functions/src/exports/app.ts",
       "owns": [
         "memberInquiryApi",
+        "helpPublicChatIntent",
         "memberInquiryStaff",
         "getCoreAirConditioners",
         "operatorControlCoreAirConditioner",

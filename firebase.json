@@ -952,6 +952,13 @@
           }
         },
         {
+          "source": "/api/public-chat-intent",
+          "function": {
+            "functionId": "helpPublicChatIntent",
+            "region": "asia-northeast3"
+          }
+        },
+        {
           "source": "**",
           "destination": "/index.html"
         }

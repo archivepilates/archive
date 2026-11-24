@@ -1,0 +1,44 @@
+# ARCHIVE PILATES Help public AI
+
+## Scope
+
+Use the OpenAI Responses API only as a routing aid for typed public questions the existing
+conversation logic could not classify. The browser sends fixed vocabulary
+tags and bounded values for previous public preferences, never the original
+question, chat transcript, or a member record. No tools or links are derived
+from the model. The response must be a single accepted intent grounded in the
+incoming tags or topic; the existing dated public timetable, pricing and rules
+produce the displayed answer. The current question or draft is never sent as
+model input. Personal questions and known policy responses keep their existing
+path. This is not unrestricted generated advice.
+
+## Limits and launch
+
+- Only the ARCHIVE PILATES Help origin may use the browser route.
+- The function only runs for the `archive-pilates` project and can be
+  turned off with `HELP_PUBLIC_AI_ENABLED=false`. Use a dedicated OpenAI project and
+  `HELP_PUBLIC_OPENAI_API_KEY` only after model access and the incremental-cost
+  boundary are confirmed. ChatGPT login is not a runtime credential. If using
+  the subscription API credit benefit, verify an active grant in the intended
+  API organization and that calls cannot draw on purchased credits or paid
+  billing. Do not change billing settings automatically or reuse a different
+  workload's key. Requests use `store: false` and no tools or provider history.
+- Global allowance: 20 model calls per UTC day, 4 per minute. Fail closed
+  before calling the model if the counter cannot be reserved; do not retry
+  the model call. The singleton counter contains bounds and counts only.
+- Verify with synthetic prompts on the real model before public enablement.
+  Confirm one positive public route, one expired source, one private bypass,
+  one mismatched intent rejection and one timeout/fallback. Hosted privacy,
+  member records, inquiries, payments and outbound messaging stay unchanged.
+- Publish only the Help function and Help Hosting after validation of the
+  credential, billing tier and real response. A simulated response or a
+  disabled function is not an AI release.
+
+## Current status
+
+The Personal API organization received the Pro promotional grant, with no
+added API payment method or auto-recharge. The dedicated Responses key is
+in Secret Manager and expires on 2026-12-24; rotate it before expiry or
+the site falls back to its existing answers. A synthetic pricing signal
+returned `price` from GPT-6 Luna before rollout. No member lookup or inquiry
+submission was used for validation.

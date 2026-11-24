@@ -1,9 +1,10 @@
 import { reusableQuestion } from './engine.js';
 import { conversationTurn } from './conversation.js';
+import {prepareAiSignals,requestAiIntent} from './public-ai.js';
 
 const get=id=>document.getElementById(id);
 const stream=get('conversation'), input=get('query'), prompts=get('prompts');
-let state={},rules=null,lastChoices;
+let state={},rules=null,lastChoices,pendingAi=null;
 fetch('/assets/member-inquiry-guidance.json',{cache:'no-store',referrerPolicy:'no-referrer'})
   .then(r=>r.ok?r.json():null).then(v=>{if(Array.isArray(v?.rules)&&v?.sources)rules=v;}).catch(()=>{});
 
@@ -59,7 +60,7 @@ function append(role,result){
   if(role==='assistant'){
     const logo=element('img',null,'avatar');logo.src='/favicon.png';logo.alt='';logo.width=24;logo.height=24;row.append(logo);
   }
-  body.append(element('span',role==='user'?'나':'명지점 상담','speaker'));
+  body.append(element('span',role==='user'?'나':result.aiAssisted?'명지점 상담 · AI 질문 이해':'명지점 상담','speaker'));
   if(result.welcome){
     const greeting=element('div',null,'welcome-turn');
     const drawing=greetingArt();
@@ -100,10 +101,7 @@ function greetingArt(){
   return art;
 }
 function clearChoices(){lastChoices?.remove();lastChoices=null;}
-function ask(question,{focusInput=true}={}){
-  const q=question.trim();
-  if(!q)return;
-  const result=conversationTurn(q,state,{rules});
+function finishTurn(q,result,focusInput){
   state=result.state;
   clearChoices();
   if(reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
@@ -111,7 +109,36 @@ function ask(question,{focusInput=true}={}){
   window.dispatchEvent(new CustomEvent('archive:help-question',{detail:!result.memberLookup&&!result.hideInput&&reusableQuestion(q)?q:''}));
   if(focusInput)input.focus({preventScroll:true});
 }
+function finishPending(){
+  if(!pendingAi)return;
+  const previous=pendingAi;pendingAi=null;
+  previous.controller.abort();
+  stream.removeAttribute('aria-busy');
+  finishTurn(previous.q,previous.fallback,false);
+}
+function ask(question,{focusInput=true,useAi=false}={}){
+  const q=question.trim();
+  if(!q)return;
+  finishPending();
+  const result=conversationTurn(q,state,{rules});
+  // Keep direct policy/member answers on their established code path.
+  const signals=useAi&&!result.hideInput&&!result.memberLookup&&!result.inquiry&&!result.state.topic
+    ?prepareAiSignals(q,state):null;
+  if(!signals){finishTurn(q,result,focusInput);return;}
+  const request={q,fallback:result,controller:new AbortController()};
+  pendingAi=request;stream.setAttribute('aria-busy','true');
+  if(focusInput)input.focus({preventScroll:true});
+  void requestAiIntent(signals,request.controller).then(route=>{
+    if(pendingAi!==request)return;
+    pendingAi=null;stream.removeAttribute('aria-busy');
+    // Preserve the user's dates and temporal qualifiers; do not render model text.
+    const refined=route?conversationTurn(route.prefix+' '+q,state,{rules}):null;
+    const accepted=refined?.state.topic===route?.topic&&!refined?.hideInput&&!refined?.memberLookup&&refined;
+    finishTurn(q,accepted?{...accepted,aiAssisted:true}:result,false);
+  });
+}
 function welcome(){
+  pendingAi?.controller.abort();pendingAi=null;stream.removeAttribute('aria-busy');
   state={};clearChoices();input.value='';stream.replaceChildren();
   window.dispatchEvent(new Event('archive:help-mode'));
   append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
@@ -119,6 +146,6 @@ function welcome(){
 for(const btn of prompts.querySelectorAll('[data-question]')){
   btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false}));
 }
-get('question').addEventListener('submit',e=>{e.preventDefault();const q=input.value;input.value='';ask(q);});
+get('question').addEventListener('submit',e=>{e.preventDefault();const q=input.value;input.value='';ask(q,{useAi:true});});
 get('reset-chat').addEventListener('click',()=>{welcome();input.focus({preventScroll:true});});
 welcome();

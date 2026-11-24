@@ -1,5 +1,6 @@
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { memberInquiryApiHandler, memberInquiryStaffHandler } from "../memberInquiries/handlers";
+import { createHelpPublicChatHandler, helpPublicOpenAiApiKey } from "../memberInquiries/publicChatIntent";
 import { operatorCaptureStudioMateReferralHandler, getStudioMateReferralDashboardHandler } from "../callable/studiomateReferral";
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { climateHandler, lgThinQConnection } from "../climate/climateCallables";
@@ -81,6 +82,10 @@ import { getVideoWatchDashboardHandler, videoWatchEventApiHandler } from "../vid
 const secretlessCallableOptions = { ...callableOptions, secrets: [] };
 
 export const memberInquiryApi = onRequest({ ...publicRequestOptions, maxInstances: 2, concurrency: 10 }, memberInquiryApiHandler);
+export const helpPublicChatIntent = onRequest({
+  region: REGION, invoker: "public", secrets: [helpPublicOpenAiApiKey],
+  minInstances: 0, maxInstances: 1, concurrency: 4, timeoutSeconds: 8, memory: "256MiB",
+}, createHelpPublicChatHandler());
 export const memberInquiryStaff = onCall(secretlessCallableOptions, async request => {
   try { return await memberInquiryStaffHandler(request); } catch (error) { throw toHttpsError(error); }
 });

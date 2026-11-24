@@ -122,6 +122,31 @@ try{
           assert.equal(await shortcuts.getByRole('button').count(),5);
           assert.equal(await chat.inputValue(),'');
           assert(await page.getByRole('button',{name:'직원 문의',exact:true}).isVisible());
+          if(!live){
+            const requests=[];
+            await page.route('**/api/public-chat-intent',async route=>{
+              assert.equal(route.request().method(),'POST');
+              requests.push(route.request().postDataJSON());
+              if(requests.length>1)return route.fulfill({status:503,json:{ok:false}});
+              return route.fulfill({json:{ok:true,intent:'schedule'}});
+            });
+            await page.clock.setFixedTime(new Date('2026-11-24T01:00:00Z'));
+            await chat.fill('목요일에 수업은 몇 시에 열려요?');
+            await chat.press('Enter');
+            await page.getByText('명지점 상담 · AI 질문 이해',{exact:true}).waitFor();
+            await page.getByRole('list',{name:'목요일 예정 수업'}).waitFor();
+            assert.deepEqual(requests,[{tags:['schedule','weekday'],context:'',day:0,time:0,frequency:0}]);
+            await chat.fill('내 수강권 몇 회 남았어?');
+            await chat.press('Enter');
+            await page.getByRole('link',{name:'회원 앱에서 확인하는 방법'}).waitFor();
+            assert.equal(requests.length,1);
+            await page.getByRole('button',{name:'새 대화',exact:true}).click();
+            await chat.fill('목요일에 수업은 몇 시에 열려요?');
+            await chat.press('Enter');
+            await page.getByText(/가능한 요일과 시간대에 무리 없이/).waitFor();
+            assert.equal(requests.length,2);
+            assert.equal(await page.getByText('명지점 상담 · AI 질문 이해',{exact:true}).count(),0);
+          }
           assert.deepEqual(writes,[]);
           assert.deepEqual(errors,[]);
           checks.push(name+'@'+width);
@@ -130,4 +155,4 @@ try{
     }finally{await browser.close();}
   }
 }finally{if(server)await new Promise(resolve=>server.close(resolve));}
-console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true,persistentQuestions:true,lineIconsRendered:true}));
+console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true,persistentQuestions:true,lineIconsRendered:true,mockAiVerified:!live}));

@@ -46,7 +46,7 @@ test('class preferences lead to a class type, not live attendance or seats',()=>
  const b=ask('화요일 오전 리포머 초보',{context:a.context,mode:'prospect'});
  assert.match(b.text,/입문/);assert.match(b.text,/실제 개설 여부와 좌석은 확인하지 않았어요/);
 });
-test('static Help deployment does not gain any API route or personal persistence',()=>{
+test('Help keeps AI intent analysis isolated without personal persistence',()=>{
  const html=fs.readFileSync(new URL('../help/chatbot/index.html',import.meta.url),'utf8');
  const base=fs.readFileSync(new URL('../help/index.html',import.meta.url),'utf8');
  const fallback=fs.readFileSync(new URL('../help/inquiry/index.html',import.meta.url),'utf8');
@@ -66,7 +66,10 @@ test('static Help deployment does not gain any API route or personal persistence
  assert.doesNotMatch(app,/prompts\.hidden/);
  const config=firebase.hosting.find(row=>row.site==='archive-pilates-help');
  assert.equal(config.public,'help');
- assert.deepEqual(config.rewrites.map(r=>r.source),['/api/inquiries','**']);
+ assert.deepEqual(config.rewrites.map(r=>r.source),['/api/inquiries','/api/public-chat-intent','**']);
+ assert.equal(config.rewrites[1].function.functionId,'helpPublicChatIntent');
+ assert(firebase.hosting.filter(row=>row.site!=='archive-pilates-help').every(row=>
+  !row.rewrites?.some(r=>r.function?.functionId==='helpPublicChatIntent')));
 });
 
 test('public chat carries visiting preferences and adjusts a follow-up without inventing seats',()=>{
