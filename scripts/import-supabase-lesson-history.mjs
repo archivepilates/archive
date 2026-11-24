@@ -107,16 +107,67 @@ async function upload(dir, batches){
   }finally{await connection.end().catch(()=>{});}
 }
 
+async function uploadSupplement(dir){
+  const base='legacy-native-recheck-20261124';
+  const m=JSON.parse(await readPrivate(join(dir,base+'.manifest.json'),20000));
+  const bytes=await readPrivate(join(dir,base+'.payload.json'),500000);
+  assert(m.key===base&&Number.isSafeInteger(m.sourceRows)&&m.sourceRows>0&&
+    Number.isSafeInteger(m.acceptedRows)&&m.acceptedRows>0&&m.acceptedRows<=m.sourceRows&&
+    hex.test(m.payloadSha)&&sha(bytes)===m.payloadSha&&Number.isFinite(Date.parse(m.observedAt)));
+  const rows=JSON.parse(bytes.toString('utf8'));
+  assert(Array.isArray(rows)&&rows.length===m.acceptedRows&&new Set(rows.map(x=>x.key)).size===m.acceptedRows);
+  const aggregate=rows.reduce((a,r)=>{a[r.status]=(a[r.status]??0)+1;return a;},{});
+  const receipt=async db=>(await db.query('SELECT archive_lesson_history.supplement_receipt() AS r')).rows[0].r;
+  const match=r=>{
+    assert(r&&r.sourceRows===m.sourceRows&&r.acceptedRows===m.acceptedRows&&r.digest===m.payloadSha);
+  };
+  let db=await connect();
+  try{
+    const before=await receipt(db);
+    match(before);
+    if(!before.loaded){
+      let sent=false;
+      await db.query('BEGIN');
+      try{
+        await db.query("SET LOCAL lock_timeout='3s'");
+        await db.query("SET LOCAL statement_timeout='4s'");
+        await db.query("SET LOCAL plan_cache_mode='force_generic_plan'");
+        await checkLogging(db);
+        const x=(await db.query('SELECT archive_lesson_history.publish_supplement($1::text) AS r',[bytes.toString('utf8')])).rows[0].r;
+        match(x);
+        assert(x.loaded&&x.verified&&x.bookings===m.acceptedRows);
+        sent=true;
+        await db.query('COMMIT');
+      }catch(error){
+        await db.query('ROLLBACK').catch(()=>{});
+        if(!sent)throw error;
+      }
+      await db.end().catch(()=>{});
+      db=await connect();
+    }
+    const after=await receipt(db);
+    match(after);
+    assert(after.loaded&&after.verified&&after.bookings===m.acceptedRows&&hex.test(after.rowsDigest));
+    assert.deepEqual(after.statuses,aggregate);
+    console.log(JSON.stringify({stored:after.bookings,alreadyStored:before.loaded,sourceRows:m.sourceRows,verified:true}));
+  }finally{await db.end().catch(()=>{});}
+}
+
 const [mode, path, ...only]=process.argv.slice(2);
 try {
-  assert(['--plan','--apply'].includes(mode)&&path);
+  assert(['--plan','--apply','--apply-supplement'].includes(mode)&&path);
   const dir=resolve(path), d=await lstat(dir);
   assert(d.isDirectory()&&d.uid===process.getuid()&&!(d.mode&0o077));
-  const all=(await readdir(dir)).filter(n=>/^20\d{2}-\d{2}-\d{2}\.manifest\.json$/.test(n)).sort();
-  const batches=only.length?only.map(n=>n+'.manifest.json'):all;
-  assert(batches.length>0&&batches.length<=30&&new Set(batches).size===batches.length&&batches.every(x=>all.includes(x)));
-  if(mode==='--plan'){
-    const manifests=[];for(const name of batches)manifests.push((await readManifest(dir,name)).m);
-    console.log(JSON.stringify(manifests));
-  }else await upload(dir,batches);
+  if(mode==='--apply-supplement'){
+    assert(only.length===0);
+    await uploadSupplement(dir);
+  }else{
+    const all=(await readdir(dir)).filter(n=>/^20\d{2}-\d{2}-\d{2}\.manifest\.json$/.test(n)).sort();
+    const batches=only.length?only.map(n=>n+'.manifest.json'):all;
+    assert(batches.length>0&&batches.length<=30&&new Set(batches).size===batches.length&&batches.every(x=>all.includes(x)));
+    if(mode==='--plan'){
+      const manifests=[];for(const name of batches)manifests.push((await readManifest(dir,name)).m);
+      console.log(JSON.stringify(manifests));
+    }else await upload(dir,batches);
+  }
 }catch(error){console.log(JSON.stringify({ok:false,error:/^[A-Z0-9_]{3,45}$/.test(error?.code??'')?error.code:'IMPORT_NOT_VERIFIED'}));process.exitCode=1;}
