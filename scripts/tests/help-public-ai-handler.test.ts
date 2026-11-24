@@ -1,19 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {classifyPublicIntent,createHelpPublicChatHandler,isHelpNaturalEnabled,isHelpPublicAiEnabled,nextHelpPublicChatUsage,parsePublicSignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatIntent";
+import {classifyPublicIntent,createHelpPublicChatHandler,isHelpNaturalEnabled,isHelpPublicAiEnabled,parsePublicSignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatIntent";
 import {generatePublicReply,parsePublicReplySignals,publicReplyFacts,renderPublicReply,type PublicReplySignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatReply";
 
 const signals={tags:["schedule","weekday"],context:"plan",day:4,time:3,frequency:2};
-test("past daily cap never gates a new call; the fourth per minute is the last",()=>{
-  const now=Date.parse("2026-11-25T03:04:00Z"),minute=Math.floor(now/60_000);
-  const previous={date:"2026-11-25",daily:20,dayLimit:20,minute,recent:3};
-  const next=nextHelpPublicChatUsage(previous,now);
-  assert.deepEqual(next,{date:"2026-11-25",daily:21,minute,recent:4});
-  assert.equal(nextHelpPublicChatUsage(next!,now),null);
-  assert.equal(nextHelpPublicChatUsage({...previous,daily:230,recent:4},now+60_000)?.daily,231);
-  assert.equal(nextHelpPublicChatUsage({...previous,daily:-1},now)?.recent,4);
-  assert.equal(nextHelpPublicChatUsage({...previous,recent:"4"},now),null);
-});
 test("the live model is restricted to the intended project and can be disabled",()=>{
   assert.equal(isHelpPublicAiEnabled("archive-pilates",undefined),true);
   assert.equal(isHelpPublicAiEnabled("archive-pilates","false"),false);
@@ -60,11 +50,11 @@ test("OpenAI request sends only allowed signals and accepts one completed intent
   assert.equal(await classifyPublicIntent({...signals,context:"untrusted"},"fake",mock([valid])),null);
   assert.equal(calls,8);
 });
-test("disabled, bad origin and exhausted quota do not call the model",async()=>{
-  let enabled=false,reserved=false,keyReads=0,modelCalls=0;
-  const fn=createHelpPublicChatHandler({enabled:()=>enabled,key:()=>{keyReads++;return "fake";},
-    reserve:async()=>reserved},{enabled:()=>true,generate:async()=>{
-    modelCalls++;return {answer:"답변",link:"none",details:[],scheduleDay:null};
+test("invalid requests never call the model; valid requests have no site call cap",async()=>{
+  let enabled=false,key="",keyReads=0,modelCalls=0,providerAvailable=true;
+  const fn=createHelpPublicChatHandler({enabled:()=>enabled,key:()=>{keyReads++;return key;}},
+    {enabled:()=>true,generate:async()=>{
+    modelCalls++;return providerAvailable?{answer:"답변",link:"none",details:[],scheduleDay:null}:null;
   }});
   const call=async(origin:string,body:unknown={version:3,consent:true,question:"퇴근하고 가볍게 할 수 있을까요?",history:[]})=>{
     const req={method:"POST",get:()=>origin,is:()=>true,rawBody:Buffer.from(JSON.stringify(body)),body} as any;
@@ -82,9 +72,12 @@ test("disabled, bad origin and exhausted quota do not call the model",async()=>{
   assert.equal(keyReads,0);
   assert.equal(await call("https://help.archivepilates.com"),503);
   assert.equal(modelCalls,0);
-  reserved=true;
-  assert.equal(await call("https://help.archivepilates.com"),200);
-  assert.equal(modelCalls,1);
+  key="fake";
+  for(let i=0;i<21;i++)assert.equal(await call("https://help.archivepilates.com"),200);
+  assert.equal(modelCalls,21);
+  providerAvailable=false;
+  assert.equal(await call("https://help.archivepilates.com"),503);
+  assert.equal(modelCalls,22);
 });
 test("natural turns require a separate feature flag and reject identifiers before accessing keys",async()=>{
   for(const value of ["","TRUE","false","oops"])assert.equal(isHelpNaturalEnabled("archive-pilates",value),false);
@@ -92,8 +85,7 @@ test("natural turns require a separate feature flag and reject identifiers befor
   assert.equal(isHelpNaturalEnabled("unrelated-project","true"),false);
   assert.equal(isHelpNaturalEnabled("archive-pilates","true"),true);
   let enabled=false, called=0, keys=0;
-  const fn=createHelpPublicChatHandler({enabled:()=>true,key:()=>{keys++;return "fake";},
-    reserve:async()=>true},
+  const fn=createHelpPublicChatHandler({enabled:()=>true,key:()=>{keys++;return "fake";}},
     {enabled:()=>enabled,generate:async request=>{
       called++;
       assert.equal(request.question,"한동안 못 오다가 다시 이어도 되나요?");

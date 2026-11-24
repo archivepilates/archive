@@ -6,9 +6,11 @@
   the composer, a GPT send action and a separate Basic send action. Enter
   uses the primary action. Basic sends and preset shortcuts stay local and
   clear GPT history; private input stays blocked regardless of send action.
-- The site-wide daily cap was removed. Day counts are usage metrics only.
-  The shared four-per-minute limit, per-request budget and provider billing
-  configuration are unchanged. At capacity the UI still shows Basic guidance.
+- The site-wide daily and per-minute caps were removed. The old Firestore
+  counter is retained as historical data; the live endpoint no longer
+  depends on it. Use the OpenAI usage dashboard to track model usage.
+  Per-request budget, runtime concurrency and provider billing settings
+  are unchanged. If GPT is unavailable the UI still shows Basic guidance.
 
 ## Previous GPT-first public consultation
 
