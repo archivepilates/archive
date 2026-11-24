@@ -96,11 +96,12 @@ test("only the closed public context schema and current official facts enter GPT
     assert.deepEqual(offered,expected.time?["none"]:["none","time"]);
     return Response.json({status:"completed",output:[{type:"message",role:"assistant",status:"completed",content:[{type:"output_text",text:JSON.stringify({answer,next})}]}]});
   };
-  const composed=await generatePublicReply(fixture,"fake",mock("목요일 저녁으로 좁혀 봤어요.\n{{facts}}"),nov);
+  const composed=await generatePublicReply(fixture,"fake",mock("목요일 저녁으로 좁혀 봤어요."),nov);
   assert.deepEqual(composed,{answer:"목요일 저녁으로 좁혀 봤어요.\n\n"+facts,next:"none"});
-  assert.equal(await generatePublicReply(fixture,"fake",mock("목요일 저녁이에요.\n{{facts}}","time"),nov),null);
+  assert.equal(await generatePublicReply(fixture,"fake",mock("목요일 저녁이에요.","time"),nov),null);
   const dayOnly={...fixture,time:0};
-  assert.equal((await generatePublicReply(dayOnly,"fake",mock("목요일 시간표를 확인했어요.\n{{facts}}","time",dayOnly),nov))?.next,"time");
-  for(const text of ["예약 완료됐어요.\n{{facts}}","특가 123원이에요.\n{{facts}}","https://example.com\n{{facts}}","{{facts}}","안내예요. {{facts}}","안내예요.\n{{facts}}\n{{facts}}"])assert.equal(renderPublicReply(text,facts),null);
+  assert.deepEqual(await generatePublicReply(dayOnly,"fake",mock("특가 123원이에요.","time",dayOnly),nov),
+    {answer:publicReplyFacts(dayOnly,nov),next:"time"});
+  for(const text of ["예약 완료됐어요.","특가 123원이에요.","https://example.com","안내 날짜예요?","안내예요.\n확인이에요.",""])assert.equal(renderPublicReply(text,facts),null);
   assert.match(publicReplyFacts({...fixture,topic:"plan",detail:"four_weeks",frequency:2},nov),/4주 기준 8회/);
 });

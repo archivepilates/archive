@@ -15,7 +15,6 @@ export type GuidedPublicReply={answer:string;next:NextQuestion};
 const weekdays=["","월","화","수","목","금","토","일"];
 const times=["","오전","오후","저녁"];
 const monthCalendar=new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Seoul"});
-const marker="{{facts}}";
 const allowedProse=/^[\p{Script=Hangul}\p{Zs}.,!?~·()\n]+$/u;
 const unsupported=/예약\s*(?:완료|확정)|환불\s*(?:완료|확정)|자리\s*(?:있|남)|(?:무료|할인|선착순|확실히|무조건|자동으로\s*승인|치료|진단)|https?/u;
 
@@ -73,12 +72,10 @@ export function publicReplyFacts(s:PublicReplySignals,now=new Date()):string{
 }
 
 export function renderPublicReply(value:unknown,facts:string):string|null{
-  if(typeof value!=="string"||value.length>320||!facts)return null;
-  const parts=value.split(marker);
-  if(parts.length!==2||!value.split("\n").some(line=>line.trim()===marker))return null;
-  const prose=parts.map(p=>p.trim()).filter(Boolean);
-  if(!prose.length||prose.some(p=>!allowedProse.test(p)||unsupported.test(p)))return null;
-  return [parts[0].trim(),facts,parts[1].trim()].filter(Boolean).join("\n\n");
+  if(typeof value!=="string"||value.length>160||!facts)return null;
+  const lead=value.trim();
+  if(!lead||/[?\n]/u.test(lead)||!allowedProse.test(lead)||unsupported.test(lead))return null;
+  return lead+"\n\n"+facts;
 }
 
 function allowedNext(s:PublicReplySignals,now:Date):NextQuestion[]{
@@ -109,7 +106,7 @@ export async function generatePublicReply(input:PublicReplySignals,key:string,fe
     redirect:"error",signal:AbortSignal.timeout(6500),
     body:JSON.stringify({
       model:"gpt-6-luna",store:false,reasoning:{effort:"none"},max_output_tokens:140,
-      instructions:"Write a short, natural Korean public Pilates reply in 해요체. Use the topic, previous topic and selected day, time or frequency to acknowledge what the visitor already told you. Day 1..7 means Monday..Sunday and time 1..3 means morning, afternoon, evening; zero means unknown. Write one Korean sentence that answers or frames the specific request, followed by {{facts}} on its own line. The server inserts all facts at the marker. Outside the marker use only Korean letters, spaces and simple punctuation. Never include figures, external links, private details, unsupported facts, or claim an action or real-time availability. Do not add a question to the answer itself. For next, select at most one listed missing preference that will make the next answer useful: day (weekday), time (morning, afternoon or evening), frequency (visits per week), pass_type (duration or session count), booking_type (fixed or flexible). Prefer an actionable question when it narrows the answer, otherwise select none. Do not ask for a value already provided.",
+      instructions:"Write a short, natural Korean public Pilates reply in 해요체. Use the topic, previous topic and selected day, time or frequency to acknowledge what the visitor already told you. Day 1..7 means Monday..Sunday and time 1..3 means morning, afternoon, evening; zero means unknown. Write only one short opening sentence in answer. The server appends all facts separately; never repeat them. Use only Korean letters, spaces and simple punctuation. Never include figures, external links, private details, unsupported facts, or claim an action or real-time availability. Do not add a question to answer. For next, select one listed missing preference that will make the next answer useful: day (weekday), time (morning, afternoon or evening), frequency (visits per week), pass_type (duration or session count), booking_type (fixed or flexible). Prefer an actionable question when it narrows the answer; choose none only if offered and no question is useful. Do not ask for a value already provided.",
       input:JSON.stringify({signals,facts}),
       text:{format:{type:"json_schema",name:"help_public_answer",strict:true,schema:{type:"object",
         properties:{answer:{type:"string"},next:{type:"string",enum:nextOptions}},
@@ -125,8 +122,8 @@ export async function generatePublicReply(input:PublicReplySignals,key:string,fe
   if(p?.type!=="output_text"||typeof p.text!=="string"||p.text.length>720)return null;
   try{
     const data=JSON.parse(p.text);
-    if(!data||typeof data!=="object"||Object.keys(data).sort().join(",")!=="answer,next"||!nextOptions.includes(data.next))return null;
-    const answer=renderPublicReply(data.answer,facts);
-    return answer?{answer,next:data.next}:null;
+    if(!data||typeof data!=="object"||Object.keys(data).sort().join(",")!=="answer,next"
+      ||typeof data.answer!=="string"||!nextOptions.includes(data.next))return null;
+    return {answer:renderPublicReply(data.answer,facts)??facts,next:data.next};
   }catch{return null;}
 }
