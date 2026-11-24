@@ -6,24 +6,20 @@ const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
 
 const get=id=>document.getElementById(id);
 const stream=get('conversation'), input=get('query'), prompts=get('prompts');
-const consentDialog=get('public-ai-consent'), consentQuestion=get('public-ai-consent-question');
+const sendButton=get('chat-send'), basicSend=get('chat-basic-send');
 const shell=stream.closest('.help'), viewport=window.visualViewport;
 const atLatest=()=>stream.scrollHeight-stream.clientHeight-stream.scrollTop<=32;
 let viewportFrame=0, followOnFocus=false;
 let state={},rules=null,lastChoices,pendingAi=null;
-let naturalEnabled=false,naturalHistory=[],consentChoice='',pendingConsent;
+let naturalEnabled=false,naturalHistory=[];
 void supportsNaturalChat().then(enabled=>{
+  if(!enabled)return;
+  get('chat-gpt-notice').hidden=false;
+  get('chat-gpt-label').hidden=false;
+  basicSend.hidden=false;
+  sendButton.setAttribute('aria-label','GPT로 보내기');
+  sendButton.title='GPT로 보내기';
   naturalEnabled=enabled;
-});
-consentDialog.addEventListener('close',()=>{
-  const pending=pendingConsent;pendingConsent=null;consentQuestion.textContent='';
-  if(!pending)return;
-  const decision=consentDialog.returnValue;
-  if(decision!=='natural'&&decision!=='basic'){
-    if(!input.value)input.value=pending.q;
-    input.focus({preventScroll:true});return;
-  }
-  consentChoice=decision;ask(pending.q,pending.options);
 });
 fetch('/assets/member-inquiry-guidance.json',{cache:'no-store',referrerPolicy:'no-referrer'})
   .then(r=>r.ok?r.json():null).then(v=>{if(Array.isArray(v?.rules)&&v?.sources)rules=v;}).catch(()=>{});
@@ -121,7 +117,7 @@ function append(role,result,follow=true){
   if(links.children.length)body.append(links);
   if(result.choices?.length){
     lastChoices=element('div',null,'quick follow-up');
-    for(const choice of result.choices)lastChoices.append(button(choice,()=>ask(choice,{useAi:true})));
+    for(const choice of result.choices)lastChoices.append(button(choice,()=>ask(choice)));
     body.append(lastChoices);
   }
   row.append(body);stream.append(row);
@@ -164,16 +160,12 @@ function ask(question,{focusInput=true,useAi=false}={}){
   const q=question.trim();
   if(!q)return;
   finishPending();
-  const packet=useAi?publicNaturalPacket(q,naturalHistory):null;
-  const natural=naturalEnabled&&consentChoice!=='basic'?packet:null;
-  if(natural&&!consentChoice){
-    pendingConsent={q,options:{focusInput,useAi}};consentQuestion.textContent=q;
-    consentDialog.returnValue='edit';consentDialog.showModal();return;
-  }
+  const packet=publicNaturalPacket(q,naturalHistory);
+  const natural=useAi&&naturalEnabled?packet:null;
   if(!natural){
-    if(!packet)naturalHistory=[];
+    naturalHistory=[];
     const reply=basicReply(q);
-    finishTurn(q,useAi&&!packet?{...reply,hideInput:true}:reply,focusInput);return;
+    finishTurn(q,!packet?{...reply,hideInput:true}:reply,focusInput);return;
   }
   clearChoices();
   append('user',{text:q});
@@ -196,12 +188,15 @@ function ask(question,{focusInput=true,useAi=false}={}){
 }
 function welcome(){
   pendingAi?.controller.abort();pendingAi=null;
-  state={};consentChoice='';naturalHistory=[];clearChoices();input.value='';prompts.scrollLeft=0;stream.replaceChildren();
+  state={};naturalHistory=[];clearChoices();input.value='';prompts.scrollLeft=0;stream.replaceChildren();
   append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
 }
 for(const btn of prompts.querySelectorAll('[data-question]')){
-  btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false,useAi:true}));
+  btn.addEventListener('click',()=>ask(btn.dataset.question,{focusInput:false}));
 }
-get('question').addEventListener('submit',e=>{e.preventDefault();const q=input.value;input.value='';ask(q,{useAi:true});});
+get('question').addEventListener('submit',e=>{
+  e.preventDefault();const q=input.value;input.value='';
+  ask(q,{useAi:e.submitter!==basicSend});
+});
 get('reset-chat').addEventListener('click',()=>{welcome();input.focus({preventScroll:true});});
 welcome();

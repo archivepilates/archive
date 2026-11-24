@@ -225,7 +225,7 @@ try{
               await page.evaluate(h=>window.setTestViewport(h),height);
               assert(await page.locator('footer').isVisible());
             }
-            if(width===390){
+            {
               const naturalRequests=[];
               await page.route('**/api/public-chat-intent?capabilities=natural',
                 route=>route.fulfill({json:{natural:true}}));
@@ -239,22 +239,19 @@ try{
                 return route.fulfill({json:{ok:true,answer:'처음이라면 가벼운 강도로 시작해 볼까요?',link:'none',details:[],scheduleDay:null}});
               });
               const question='운동이랑 데면데면한데 가볍게부터 할 수 있을까요?';
-              const consent=page.getByRole('dialog',{name:'GPT 공개 상담'});
               const ask=async q=>{await chat.fill(q);await chat.press('Enter');};
               await page.reload({waitUntil:'networkidle'});
-              await ask(question);
-              await consent.getByText(question,{exact:true}).waitFor();
+              const send=page.getByRole('button',{name:'GPT로 보내기',exact:true});
+              const basic=page.getByRole('button',{name:'기본 안내',exact:true});
+              await send.waitFor();
+              assert(await basic.isVisible());
+              assert(await page.getByText(/GPT 전송 시 질문과 최근 대화 2차례/).isVisible());
+              assert.equal(await page.locator('#public-ai-consent').count(),0);
+              await chat.fill(question);
               assert.equal(naturalRequests.length,0);
-              await consent.getByRole('button',{name:'질문 수정'}).click();
-              await page.waitForFunction(value=>document.querySelector('#query').value===value,question);
-              await ask(question);
-              await consent.getByRole('button',{name:'기본 안내'}).click();
-              await page.getByText(question,{exact:true}).waitFor();
-              assert.equal(naturalRequests.length,0);
-              await page.getByRole('button',{name:'새 대화',exact:true}).click();
-              await ask(question);
-              await consent.getByRole('button',{name:'GPT로 보내기'}).click();
+              await send.click();
               await page.getByText('처음이라면 가벼운 강도로 시작해 볼까요?',{exact:true}).waitFor();
+              assert.equal(await page.locator('dialog[open]').count(),0);
               assert.deepEqual(naturalRequests,[{version:3,consent:true,question,history:[]}]);
               await ask('요일 무관하고 오후7시 이후');
               await page.locator('.turn.assistant').nth(2).getByText('처음이라면 가벼운 강도로 시작해 볼까요?').waitFor();
@@ -264,17 +261,34 @@ try{
                 [question,'요일 무관하고 오후7시 이후']);
               assert.equal(naturalRequests[2].question,'2-3번');
               assert(naturalRequests.every(packet=>Object.keys(packet).sort().join(',')==='consent,history,question,version'));
+              await chat.fill('기본 안내로만 물어볼게요');
+              await basic.click();
+              await page.getByText('기본 안내로만 물어볼게요',{exact:true}).waitFor();
+              await page.getByRole('button',{name:'시간표',exact:true}).first().click();
+              assert.equal(naturalRequests.length,3);
               await ask('내 수강권은 몇 번 남았어요?');
               await page.getByRole('link',{name:'회원 앱에서 확인하는 방법'}).waitFor();
               await ask('저는 김가람입니다');
               assert.equal(naturalRequests.length,3);
               assert.equal(await page.getByText('저는 김가람입니다',{exact:true}).count(),0);
-              assert.equal(await consent.isVisible(),false);
               await ask('예약 취소는요?');
               await page.getByText('고정 예약인가요, 자유 예약인가요?').waitFor();
               await page.getByText('GPT 답변을 지금 받을 수 없어 기본 안내로 답해요.',{exact:false}).waitFor();
               assert(await page.getByText('명지점 상담 · 기본 안내',{exact:true}).isVisible());
               assert.deepEqual(naturalRequests.at(-1).history,[]);
+              if(width<500){
+                const visibleHeight=height-300;
+                await chat.focus();
+                await page.evaluate(h=>window.setTestViewport(h,40),visibleHeight);
+                await page.waitForFunction(h=>{
+                  const compose=document.querySelector('.compose'),note=document.querySelector('#chat-privacy-note');
+                  const buttons=[document.querySelector('#chat-send'),document.querySelector('#chat-basic-send')];
+                  return document.querySelector('.help').classList.contains('keyboard-open')
+                    &&compose.getBoundingClientRect().bottom<=h+40
+                    &&note.scrollWidth<=note.clientWidth&&document.documentElement.scrollWidth<=innerWidth
+                    &&buttons.every(b=>b.offsetHeight>=44&&b.offsetWidth>=44);
+                },visibleHeight);
+              }
             }
           }
           assert.deepEqual(writes,[]);

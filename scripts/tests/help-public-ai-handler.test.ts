@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {classifyPublicIntent,createHelpPublicChatHandler,isHelpNaturalEnabled,isHelpPublicAiEnabled,parsePublicSignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatIntent";
+import {classifyPublicIntent,createHelpPublicChatHandler,isHelpNaturalEnabled,isHelpPublicAiEnabled,nextHelpPublicChatUsage,parsePublicSignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatIntent";
 import {generatePublicReply,parsePublicReplySignals,publicReplyFacts,renderPublicReply,type PublicReplySignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatReply";
 
 const signals={tags:["schedule","weekday"],context:"plan",day:4,time:3,frequency:2};
+test("past daily cap never gates a new call; the fourth per minute is the last",()=>{
+  const now=Date.parse("2026-11-25T03:04:00Z"),minute=Math.floor(now/60_000);
+  const previous={date:"2026-11-25",daily:20,dayLimit:20,minute,recent:3};
+  const next=nextHelpPublicChatUsage(previous,now);
+  assert.deepEqual(next,{date:"2026-11-25",daily:21,minute,recent:4});
+  assert.equal(nextHelpPublicChatUsage(next!,now),null);
+  assert.equal(nextHelpPublicChatUsage({...previous,daily:230,recent:4},now+60_000)?.daily,231);
+  assert.equal(nextHelpPublicChatUsage({...previous,daily:-1},now)?.recent,4);
+  assert.equal(nextHelpPublicChatUsage({...previous,recent:"4"},now),null);
+});
 test("the live model is restricted to the intended project and can be disabled",()=>{
   assert.equal(isHelpPublicAiEnabled("archive-pilates",undefined),true);
   assert.equal(isHelpPublicAiEnabled("archive-pilates","false"),false);

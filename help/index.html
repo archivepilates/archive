@@ -58,13 +58,15 @@
       <form id="question">
         <label class="sr-only" for="query">궁금한 내용</label>
         <div class="input-row">
-          <input id="query" maxlength="160" required autocomplete="off" enterkeyhint="send" placeholder="궁금한 내용을 입력해 주세요">
-          <button type="submit" class="icon-button send" aria-label="보내기" title="보내기">
+          <input id="query" maxlength="160" required autocomplete="off" enterkeyhint="send" aria-describedby="chat-privacy-note" placeholder="궁금한 내용">
+          <button id="chat-send" type="submit" class="icon-button send" aria-label="보내기" title="보내기">
             <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.7 3.7 22 12 3.7 20.3 6 12l-2.3-8.3ZM6 12h16"/></svg>
+            <span id="chat-gpt-label" hidden>GPT</span>
           </button>
+          <button id="chat-basic-send" type="submit" class="basic-send" hidden>기본 안내</button>
         </div>
       </form>
-      <p class="privacy-note">이름·연락처·생년월일은 채팅에 입력하지 마세요.</p>
+      <p class="privacy-note" id="chat-privacy-note"><span id="chat-gpt-notice" hidden>GPT 전송 시 질문과 최근 대화 2차례가 OpenAI에 전달돼요. </span>개인정보·건강정보는 입력하지 마세요. <a href="/privacy.html">개인정보 안내</a></p>
     </div>
   </section>
 
@@ -116,20 +118,6 @@
     </div>
     <a data-recommendation-source class="recommendation-source">시간표 원본</a>
   </section>
-</dialog>
-
-<dialog id="public-ai-consent" aria-labelledby="public-ai-consent-title" aria-describedby="public-ai-consent-note">
-  <form method="dialog">
-    <h2 id="public-ai-consent-title">GPT 공개 상담</h2>
-    <p id="public-ai-consent-note">현재 질문과 최근 대화 두 차례까지 OpenAI로 보내요. 이름, 연락처, 건강정보는 입력하지 마세요. 기본 안내는 질문을 보내지 않아요.</p>
-    <p class="consent-question" id="public-ai-consent-question"></p>
-    <p><a href="/privacy.html" target="_blank" rel="noopener noreferrer">개인정보 안내</a></p>
-    <div class="consent-actions">
-      <button value="edit" autofocus>질문 수정</button>
-      <button value="basic">기본 안내</button>
-      <button value="natural" class="consent-send">GPT로 보내기</button>
-    </div>
-  </form>
 </dialog>
 
 <footer><a href="tel:01029244425">명지점 데스크 010-2924-4425</a><a href="/privacy.html">개인정보 안내</a></footer>

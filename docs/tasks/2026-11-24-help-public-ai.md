@@ -1,6 +1,16 @@
 # ARCHIVE PILATES Help public AI
 
-## GPT-first public consultation
+## Inline GPT send and usage controls (2026-11-25)
+
+- The first-question modal is replaced by a visible OpenAI notice next to
+  the composer, a GPT send action and a separate Basic send action. Enter
+  uses the primary action. Basic sends and preset shortcuts stay local and
+  clear GPT history; private input stays blocked regardless of send action.
+- The site-wide daily cap was removed. Day counts are usage metrics only.
+  The shared four-per-minute limit, per-request budget and provider billing
+  configuration are unchanged. At capacity the UI still shows Basic guidance.
+
+## Previous GPT-first public consultation
 
 - Replaces the previous routing and guided reply in the public UI and endpoint.
   After an explicit per-chat choice, GPT receives the current public wording

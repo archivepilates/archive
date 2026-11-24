@@ -55,6 +55,10 @@ test('Help keeps public GPT and Kakao links isolated without a legacy form',()=>
  assert.match(html,/<form id="question">/);
  assert.match(html,/id="prompts"[^>]+role="group"[^>]+aria-label="추천 질문"/);
  assert.match(html,/id="query"[^>]+enterkeyhint="send"/);
+ assert.match(html,/id="query"[^>]+aria-describedby="chat-privacy-note"/);
+ assert.match(html,/id="chat-gpt-notice"[^>]*>[^<]+OpenAI/);
+ assert.match(html,/id="chat-basic-send"[^>]*>기본 안내/);
+ assert.doesNotMatch(html,/public-ai-consent/);
  assert.doesNotMatch(html,/data-mode|테스트 본인확인|가상 가입 링크/);
  assert.equal(html,base);
  assert.doesNotMatch(base,/href="\/inquiry\/|id="intake"|intake-ui\.js/);

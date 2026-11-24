@@ -11,7 +11,7 @@ const intents = ["schedule","price","hold","book","recommend","unknown"] as cons
 type Intent = typeof intents[number];
 type Signals = {tags:string[]; context:string; day:number; time:number; frequency:number};
 const model = "gpt-6-luna";
-const dailyLimit = 20, minuteLimit = 4;
+const minuteLimit = 4;
 let cooldownUntil = 0;
 
 export function parsePublicSignals(value:unknown):Signals|null {
@@ -26,20 +26,27 @@ export function parsePublicSignals(value:unknown):Signals|null {
   return {tags:raw.tags,context:raw.context,day:raw.day,time:raw.time,frequency:raw.frequency};
 }
 
-async function reserveModelCall():Promise<boolean> {
-  const now=Date.now();
-  if(now<cooldownUntil)return false;
+export function nextHelpPublicChatUsage(previous:Record<string,unknown>|undefined,now:number){
   const date=new Date(now).toISOString().slice(0,10),minute=Math.floor(now/60_000);
+  const recent=previous?.minute===minute?previous.recent:0;
+  if(typeof recent!=="number"||!Number.isSafeInteger(recent)||recent<0||recent>=minuteLimit)return null;
+  // Keep the daily count for usage reporting, not as a gate.
+  const daily=previous?.date===date?previous.daily:0;
+  return {date,daily:typeof daily==="number"&&Number.isSafeInteger(daily)&&daily>=0?daily+1:1,
+    minute,recent:recent+1};
+}
+
+async function reserveModelCall():Promise<boolean> {
+  if(Date.now()<cooldownUntil)return false;
   const ref=db.doc("systemSettings/helpPublicChatUsage");
   return db.runTransaction(async tx=>{
-    const previous=(await tx.get(ref)).data();
-    const daily=previous?.date===date?previous.daily:0, recent=previous?.minute===minute?previous.recent:0;
-    if(!Number.isSafeInteger(daily)||daily<0||!Number.isSafeInteger(recent)||recent<0)return false;
-    if(daily>=dailyLimit||recent>=minuteLimit){
-      cooldownUntil=daily>=dailyLimit?Date.parse(date+"T00:00:00Z")+86_400_000:(minute+1)*60_000;
+    const previous=(await tx.get(ref)).data(),now=Date.now();
+    const next=nextHelpPublicChatUsage(previous,now);
+    if(!next){
+      cooldownUntil=(Math.floor(now/60_000)+1)*60_000;
       return false;
     }
-    tx.set(ref,{date,dayLimit:dailyLimit,daily:daily+1,minute,recent:recent+1});
+    tx.set(ref,next);
     return true;
   },{maxAttempts:3});
 }
