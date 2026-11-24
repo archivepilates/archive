@@ -47,7 +47,10 @@ button[type=submit]{background:var(--action);color:#fff;border-color:var(--actio
 .timetable-original a{display:inline-flex;align-items:center;min-height:44px;font-size:.8rem}
 @media(max-width:430px){.timetable-days{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .compose{border-top:1px solid var(--line);padding:.63rem .6rem .5rem}
-.suggestions{margin-bottom:.55rem}
+.compose-shortcuts{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.4rem;margin-bottom:.55rem}
+.compose-shortcuts .suggestions{display:contents}
+#start-recommendation{background:#fff2e9;border-color:#e6b999;color:#74340e;font-size:.85rem;font-weight:750}
+#start-recommendation:hover{background:#ffe7d7}
 .suggestions button{border-color:var(--line);font-size:.8rem;padding-inline:.5rem}
 #question{margin:0}
 .input-row{display:flex;align-items:center;gap:.45rem}
@@ -66,4 +69,29 @@ footer a{display:inline-flex;align-items:center;min-height:44px;font-size:.78rem
 #intake-choices dt{font-weight:700}
 #intake-choices dd{margin:0 0 .5rem;overflow-wrap:anywhere}
 .intake-trap{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+#class-recommendation{width:min(34rem,calc(100% - 1.25rem));max-height:calc(100svh - 1.25rem);overflow:auto;
+  overscroll-behavior:contain;border:1px solid var(--line);border-radius:.5rem;background:var(--paper);color:var(--ink);padding:.95rem}
+#class-recommendation::backdrop{background:rgb(28 33 35 / 48%)}
+.recommendation-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.5rem}
+.recommendation-top h2{margin:0;font-size:1.18rem}
+#class-recommendation fieldset{min-inline-size:0;margin:0 0 .75rem;padding:0;border:0}
+#class-recommendation legend{padding:0;margin-bottom:.3rem;font-weight:750}
+.recommendation-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(8rem,100%),1fr));gap:.35rem}
+.recommendation-options label{display:flex;align-items:center;gap:.35rem;min-height:46px;padding:.3rem .45rem;
+  border:1px solid #b1babc;border-radius:.4rem;font-size:.88rem;cursor:pointer;word-break:keep-all;overflow-wrap:anywhere}
+.recommendation-options label:has(input:checked){border-color:var(--action);background:#e8f4f0;font-weight:700}
+#class-recommendation .recommendation-options input{min-height:0;margin:0;flex:none;accent-color:var(--action)}
+#class-recommendation button[type=submit]{width:100%;font-weight:750}
+#class-recommendation h3{margin:.15rem 0 .3rem;font-size:1.1rem}
+#class-recommendation p{margin:.3rem 0 .65rem;word-break:keep-all;overflow-wrap:anywhere;font-size:.91rem}
+.recommendation-results{margin:.7rem 0;padding:0;list-style:none}
+.recommendation-results li{border-top:1px solid var(--line);padding:.55rem 0}
+.recommendation-results li:last-child{border-bottom:1px solid var(--line)}
+.recommendation-results h4{margin:0;font-size:1.05rem}
+#class-recommendation .recommendation-results p{margin:.15rem 0 0}
+.recommendation-booking-hint{color:var(--muted)}
+.recommendation-actions{display:flex;flex-wrap:wrap;gap:.45rem}
+.recommendation-booking,.recommendation-source{display:inline-flex;align-items:center;min-height:44px;overflow-wrap:anywhere}
+.recommendation-booking{padding:.4rem .65rem;background:var(--action);color:#fff;border-radius:.45rem;font-weight:750;text-decoration:none}
+.recommendation-source{font-size:.85rem}
 [hidden]{display:none!important}

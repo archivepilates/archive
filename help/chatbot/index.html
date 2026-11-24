@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/chatbot/chatbot.css">
 <script src="/chatbot/app.js" type="module"></script>
 <script src="/chatbot/intake-ui.js" type="module"></script>
+<script src="/chatbot/recommendation-ui.js" type="module"></script>
 </head>
 <body>
 <main class="help">
@@ -33,11 +34,14 @@
     <h1 id="chat-title" class="sr-only">아카이브 챗봇</h1>
     <div id="conversation" role="log" aria-label="상담 대화" aria-live="polite" tabindex="0"></div>
     <div class="compose">
+      <div class="compose-shortcuts">
+      <button id="start-recommendation" type="button" aria-haspopup="dialog">30초 수업 추천</button>
       <div id="prompts" class="quick suggestions" aria-label="추천 질문">
         <button type="button" data-question="명지점 시간표 보여줘">시간표</button>
         <button type="button" data-question="수강료 알려줘">수강료</button>
         <button type="button" data-question="수강권을 잠시 멈출 수 있나요?">홀딩 규정</button>
         <button type="button" data-question="내 수강권 몇 회 남았어?">내 수강권</button>
+      </div>
       </div>
       <form id="question">
         <label class="sr-only" for="query">궁금한 내용</label>
@@ -53,6 +57,56 @@
   </section>
 
 <div hidden><button id="refund-intake" type="button">환불 상담</button><button id="inline-intake" type="button">직원에게 문의하기</button></div>
+
+<dialog id="class-recommendation" aria-labelledby="recommendation-title">
+  <div class="recommendation-top">
+    <h2 id="recommendation-title">30초 수업 추천</h2>
+    <button class="icon-button" type="button" data-close-recommendation aria-label="수업 추천 닫기" title="수업 추천 닫기">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <form aria-labelledby="recommendation-title">
+    <fieldset>
+      <legend>가능한 시간</legend>
+      <div class="recommendation-options">
+        <label><input type="radio" name="time" value="weekdayMorning" required>평일 오전</label>
+        <label><input type="radio" name="time" value="weekdayAfternoon">평일 오후</label>
+        <label><input type="radio" name="time" value="weekdayEvening">평일 저녁</label>
+        <label><input type="radio" name="time" value="weekend">주말</label>
+        <label><input type="radio" name="time" value="flexible">시간 무관</label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>운동 목표</legend>
+      <div class="recommendation-options">
+        <label><input type="radio" name="goal" value="basics" required>기초 익히기</label>
+        <label><input type="radio" name="goal" value="strength">근력·코어</label>
+        <label><input type="radio" name="goal" value="routine">운동 습관 만들기</label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>원하는 강도</legend>
+      <div class="recommendation-options">
+        <label><input type="radio" name="intensity" value="gentle" required>가볍게</label>
+        <label><input type="radio" name="intensity" value="moderate">보통</label>
+        <label><input type="radio" name="intensity" value="active">활동적으로</label>
+      </div>
+    </fieldset>
+    <button type="submit">추천 수업 보기</button>
+  </form>
+  <section aria-labelledby="recommendation-results-title" data-recommendation-results hidden>
+    <h3 id="recommendation-results-title" tabindex="-1" data-results-heading>추천 수업</h3>
+    <p data-recommendation-note></p>
+    <ol class="recommendation-results"></ol>
+    <p data-recommendation-advice></p>
+    <p class="recommendation-booking-hint">회원 앱에서 명지점 날짜·시간을 선택해 예약해 주세요.</p>
+    <div class="recommendation-actions">
+      <a data-recommendation-booking class="recommendation-booking" href="https://archivepilates.notion.site/studiomate">StudioMate 예약 안내</a>
+      <button type="button" data-edit-recommendation>조건 바꾸기</button>
+    </div>
+    <a data-recommendation-source class="recommendation-source">시간표 원본</a>
+  </section>
+</dialog>
 
 <section id="intake" aria-labelledby="intake-title" hidden>
   <h2 id="intake-title" tabindex="-1">직원에게 문의하기</h2>

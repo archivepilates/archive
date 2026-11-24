@@ -11,6 +11,7 @@ const tueThu=[
 export const novemberTimetable={
   title:'11월 명지점 시간표',
   period:'2026.11.01~11.30',
+  endDate:'2026-11-30',
   image:{src:'/assets/myeongji-timetable-2026-11.jpg',width:1414,height:2000},
   source,
   byDay:{
