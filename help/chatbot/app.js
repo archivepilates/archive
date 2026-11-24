@@ -90,12 +90,12 @@ function greetingArt(){
   const ns='http://www.w3.org/2000/svg';
   const art=document.createElementNS(ns,'svg'), symbol=document.createElementNS(ns,'use');
   art.setAttribute('class','welcome-art');
-  art.setAttribute('viewBox','0 0 160 120');
-  art.setAttribute('width','96');
-  art.setAttribute('height','72');
+  art.setAttribute('viewBox','0 0 24 24');
+  art.setAttribute('width','24');
+  art.setAttribute('height','24');
   art.setAttribute('aria-hidden','true');
   art.setAttribute('focusable','false');
-  symbol.setAttribute('href','/assets/categories.svg#other');
+  symbol.setAttribute('href','/assets/chat-icons.svg#message-circle');
   art.append(symbol);
   return art;
 }

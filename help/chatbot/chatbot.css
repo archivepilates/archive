@@ -29,11 +29,12 @@ button[type=submit]{background:var(--action);color:#fff;border-color:var(--actio
 .user .bubble{background:var(--user);text-align:left}
 .speaker{display:block;color:var(--muted);font-size:.75rem;font-weight:650}
 .welcome-turn{display:flex;align-items:center;gap:.45rem 1rem;margin-top:.2rem;padding:.7rem .8rem;
-  border-inline-start:3px solid var(--archive-red);background:#fbf5f4;border-radius:.35rem}
+  border-inline-start:2px solid var(--archive-red);background:#f7f8f7;border-radius:.35rem}
 .welcome-copy{min-inline-size:0;overflow-wrap:break-word;word-break:keep-all}
 .welcome-copy h2{margin:0;font-size:1.05rem;font-weight:800;line-height:1.4;text-wrap:balance}
 .welcome-copy p{margin:.2rem 0 0;color:var(--muted);font-size:.86rem}
-.welcome-art{flex:none;inline-size:3.25rem;block-size:auto;aspect-ratio:4/3}
+.welcome-art{flex:none;inline-size:1.65rem;block-size:auto;color:var(--action)}
+.welcome-art,.prompt-art{fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
 .quick,.chat-actions{display:flex;flex-wrap:wrap;gap:.4rem}
 .follow-up,.chat-actions{margin-top:.38rem}
 .quick button,.chat-actions button{font-size:.85rem}
@@ -55,20 +56,19 @@ button[type=submit]{background:var(--action);color:#fff;border-color:var(--actio
 .compose{container:composer / inline-size;border-top:1px solid var(--line);padding:.63rem .6rem .5rem}
 .suggestions-title{margin:0 0 .32rem;color:var(--muted);font-size:.8rem;font-weight:700}
 .suggestions{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin-bottom:.65rem}
-.suggestions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;grid-column:span 2;
-  min-inline-size:44px;min-block-size:3.5rem;padding:.3rem .2rem;border-color:#ded9d6;background:#f9f8f7;
+.suggestions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.25rem;grid-column:span 2;
+  min-inline-size:44px;min-block-size:3.1rem;padding:.3rem .2rem;border-color:var(--line);background:var(--paper);
   font-size:.8rem;font-weight:650;line-height:1.25;text-align:center;word-break:keep-all;overflow-wrap:break-word}
 .suggestions button:nth-last-child(-n+2){grid-column:span 3}
-.suggestions button:hover{background:#f0f3f1;border-color:#9aa9a1}
-#start-recommendation{background:#fbefed;border-color:#e0b1ae;color:#7b2027;font-weight:800}
+.suggestions button:hover{background:var(--soft);border-color:#9aa9a1}
+#start-recommendation{background:#fcf3f2;border-color:#e0b1ae;color:#7b2027;font-weight:800}
 #start-recommendation:hover{background:#f7e3e0;border-color:#be706f}
-.prompt-art{flex:none;inline-size:2.35rem;block-size:auto;aspect-ratio:4/3;pointer-events:none}
+.prompt-art{flex:none;inline-size:1.15rem;block-size:auto;color:var(--action);pointer-events:none}
+#start-recommendation .prompt-art{color:inherit}
 @container composer (min-inline-size:34rem){
   .suggestions{grid-template-columns:repeat(5,minmax(0,1fr))}
-  .suggestions button,.suggestions button:nth-last-child(-n+2){grid-column:span 1;min-block-size:4.4rem}
-  .prompt-art{inline-size:3rem}
+  .suggestions button,.suggestions button:nth-last-child(-n+2){grid-column:span 1;flex-direction:row;gap:.45rem}
 }
-@media(min-width:600px){.welcome-art{inline-size:5rem}}
 #question{margin:0}
 .input-row{display:flex;align-items:center;gap:.45rem}
 .input-row input{flex:1;min-width:0;width:100%;height:46px}

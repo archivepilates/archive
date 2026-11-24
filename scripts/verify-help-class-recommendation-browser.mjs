@@ -45,7 +45,8 @@ try{
           await page.goto(origin+(width===768?'/chatbot/':'/'),{waitUntil:'networkidle'});
           await page.waitForFunction(()=>{
             const icons=[...document.querySelectorAll('#prompts .prompt-art use,.welcome-art use')];
-            return icons.length===6&&icons.every(use=>use.getBBox().width>0&&use.getBBox().height>0);
+            return icons.length===6&&icons.every(use=>use.getAttribute('href').startsWith('/assets/chat-icons.svg#')
+              &&use.getBBox().width>0&&use.getBBox().height>0&&getComputedStyle(use).stroke!=='none');
           });
           assert.equal(await page.evaluate(()=>{
             const stream=document.querySelector('#conversation').getBoundingClientRect();
@@ -129,4 +130,4 @@ try{
     }finally{await browser.close();}
   }
 }finally{if(server)await new Promise(resolve=>server.close(resolve));}
-console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true,persistentQuestions:true,originalIllustrationsRendered:true}));
+console.log(JSON.stringify({origin,checks,writes:0,twoRecommendations:true,expiredScheduleBlocked:true,persistentQuestions:true,lineIconsRendered:true}));
