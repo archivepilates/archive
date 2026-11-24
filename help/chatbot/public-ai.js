@@ -1,4 +1,5 @@
 import {reusableQuestion} from './engine.js';
+import {conversationTurn} from './conversation.js';
 
 // Send only predefined tags, not a redacted copy of the visitor's message.
 const cues={
@@ -40,16 +41,76 @@ const routeSpecs={
   recommend:{cue:'recommend',topic:'plan',prefix:'수업 추천'}
 };
 
-export function groundedIntent(intent,signals){
-  const rule=Object.hasOwn(routeSpecs,intent)?routeSpecs[intent]:null;
-  if(!rule||!signals)return null;
-  return signals.tags.includes(rule.cue)||signals.context===rule.topic
-    ||intent==='recommend'&&signals.tags.includes('beginner')?rule:null;
+const routes={schedule:'schedule',pricing:'price',holding:'hold',booking:'book',plan:'recommend'};
+const lineTime=/오전|오후|저녁|아침|퇴근/u;
+const dateReference=/[월화수목금토일]\s*요일|주말|평일|\d{1,2}\s*[월일]|다음\s*(?:주|달)|지난\s*(?:주|달)|오늘|내일|모레|어제|내년|작년/u;
+const currentWindow=/이번\s*달|현재|11\s*월/u;
+const wrongMonth=/다음\s*달|지난\s*달|내년|작년|십이월|(?:^|[^\d])(?:[1-9]|10|12)\s*월/u;
+const followUp=/^(?:그럼|그러면|그중|그 때)|(?:오전|오후|저녁|아침|요일)(?:은|에는|만|밖에|엔)|(?:기간권|횟수권|공휴일)(?:은|는|이면)|(?:한\s*달|4\s*주)|^[1-7]\s*(?:회|번)/u;
+const monthCount=/한\s*달|4\s*주|월\s*몇\s*(?:회|번)/u;
+const sensitive=/(?:내|제|저의|우리)\s*(?:수강권|회원권|예약|결제|환불|계정|이력|홀딩)|(?:연락처|생년월일|주민번호|계좌|비밀번호|인증번호|진단서)|(?:방금|이미)\s*(?:예약|결제|신청)/u;
+const kst=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'});
+
+export function preparePublicReply(question,previous={},options={}){
+  const q=question.normalize('NFKC').trim();
+  let result=conversationTurn(q,previous,options);
+  if(!q||q.length>220||result.hideInput||result.memberLookup||result.inquiry==='refund'
+    ||!reusableQuestion(q)||requestPolicy.test(q)||sensitive.test(q))return {result,signals:null};
+  const old=previous.publicContext;
+  const cues=prepareAiSignals(q,result.state)?.tags??[];
+  const isFollow=followUp.test(q);
+  if(!Object.hasOwn(routes,result.state.topic)){
+    const candidates=Object.values(routes).filter(intent=>cues.includes(intent));
+    const inferred=isFollow&&old&&candidates.length===0?routes[old.topic]:candidates.length===1?candidates[0]:null;
+    if(inferred)result=conversationTurn(routeSpecs[inferred].prefix+' '+q,previous,options);
+  }
+  const topic=result.state.topic;
+  if(!Object.hasOwn(routes,topic)||result.hideInput||result.memberLookup||result.inquiry==='refund')return {result,signals:null};
+  const same=old?.topic===topic;
+  const plan=result.state.plan??{};
+  const directFrequency=topic==='pricing'?Number(q.match(/(?:주(?:당|에)?\s*|^)([1-7])\s*(?:회|번)/u)?.[1]):0;
+  const frequency=directFrequency||(Number.isInteger(plan.frequency)&&plan.frequency>=1&&plan.frequency<=7?plan.frequency:0);
+  let day=Math.max(0,days.indexOf(plan.day)),time=Math.max(0,times.indexOf(plan.time)),detail='';
+  if(topic==='schedule'){
+    if(same&&old.detail==='unverified'&&!currentWindow.test(q)&&!/오늘/u.test(q)){
+      result=conversationTurn('다음 달 시간표',previous,options);
+    }else if(result.timetable&&same&&old.day&&!dateReference.test(q)){
+      result={...result,timetable:{...result.timetable,selectedDay:days[old.day]}};
+    }
+    if(!lineTime.test(q))time=same&&isFollow?old.time:0;
+    day=result.timetable?Math.max(0,days.indexOf(result.timetable.selectedDay)):0;
+    detail=day?'timetable':'unverified';
+  }else if(topic==='pricing'){
+    if(!kst.format(options.now??new Date()).startsWith('2026-11-')||wrongMonth.test(q)||same&&old.detail==='unverified'&&!currentWindow.test(q)){
+      result=conversationTurn('다음 달 수강료',previous,options);
+      detail='unverified';
+    }else if(/개인|프라이빗|듀엣|프로모션|특가|블랙프라이데이/u.test(q))detail='other';
+    else if(directFrequency||frequency&&!result.choices?.length){
+      detail='comparison';
+      if(directFrequency){
+        result=conversationTurn('수강료 주 '+directFrequency+'회',previous,options);
+      }
+    }else detail='regular';
+  }else if(topic==='holding'){
+    if(/만료|이미\s*끝|기간.{0,4}지난|연장/u.test(q))return {result,signals:null};
+    detail=/기간권/u.test(q)?'period':/횟수권/u.test(q)?'count':same&&isFollow?old.detail:'general';
+    if(!result.source&&detail!=='general')result=conversationTurn((detail==='period'?'기간권':'횟수권')+' 홀딩',previous,options);
+  }else if(topic==='booking'){
+    const kind=result.state.context;
+    detail=kind==='fixed'?(/해지|종료|그만|다음\s*달부터/u.test(q)?'ending':'fixed'):kind==='flexible'?'flexible':'general';
+  }else{
+    detail=day&&frequency&&plan.onlyDay?'single_day':frequency&&monthCount.test(q)?'four_weeks':'general';
+  }
+  const publicContext={topic,detail,day,time};
+  const packet={version:2,topic,detail,previousTopic:Object.hasOwn(routes,previous.topic)?previous.topic:'',
+    day:topic==='schedule'||topic==='plan'?day:0,time:topic==='schedule'||topic==='plan'?time:0,
+    frequency:topic==='pricing'||topic==='plan'?frequency:0,beginner:topic==='plan'&&plan.beginner===true};
+  return {result:{...result,state:{...result.state,publicContext}},signals:packet};
 }
 
-export async function requestAiIntent(signals,controller,fetcher=fetch){
+export async function requestPublicReply(signals,controller,fetcher=fetch){
   if(!signals)return null;
-  const timeout=setTimeout(()=>controller.abort(),4200);
+  const timeout=setTimeout(()=>controller.abort(),7400);
   try{
     const reply=await fetcher('/api/public-chat-intent',{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(signals),
@@ -57,7 +118,7 @@ export async function requestAiIntent(signals,controller,fetcher=fetch){
     });
     if(!reply.ok||!reply.headers.get('content-type')?.includes('application/json'))return null;
     const data=await reply.json();
-    return data?.ok===true&&typeof data.intent==='string'&&data.intent.length<=20?groundedIntent(data.intent,signals):null;
+    return data?.ok===true&&typeof data.answer==='string'&&data.answer.trim()&&data.answer.length<=1500?data.answer:null;
   }catch{return null;}
   finally{clearTimeout(timeout);}
 }

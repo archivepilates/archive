@@ -92,8 +92,7 @@ try{
           assert.equal(await modal.locator('form').evaluate(form=>form.checkValidity()),false);
           await modal.getByRole('button',{name:'수업 추천 닫기'}).click();
           const chat=page.getByRole('textbox',{name:'궁금한 내용'});
-          await chat.fill('명지점 시간표 보여줘');
-          await chat.press('Enter');
+          await page.getByRole('button',{name:'시간표',exact:true}).click();
           assert(await page.getByText('명지점 시간표 보여줘',{exact:true}).isVisible());
           assert(await trigger.isVisible());
           const shortcuts=page.getByRole('group',{name:'추천 질문',exact:true});
@@ -121,31 +120,40 @@ try{
           await page.getByRole('button',{name:'새 대화',exact:true}).click();
           assert.equal(await shortcuts.getByRole('button').count(),5);
           assert.equal(await chat.inputValue(),'');
-          assert(await page.getByRole('button',{name:'직원 문의',exact:true}).isVisible());
+          const staff=page.getByRole('link',{name:'직원 문의',exact:true});
+          assert(await staff.isVisible());
+          assert.equal(await staff.getAttribute('href'),'https://pf.kakao.com/_KxdDWxj/chat');
+          assert.equal(await staff.evaluate(a=>a.getBoundingClientRect().height>=44),true);
+          assert.equal(await page.locator('#intake').count(),0);
           if(!live){
             const requests=[];
             await page.route('**/api/public-chat-intent',async route=>{
               assert.equal(route.request().method(),'POST');
               requests.push(route.request().postDataJSON());
-              if(requests.length>1)return route.fulfill({status:503,json:{ok:false}});
-              return route.fulfill({json:{ok:true,intent:'schedule'}});
+              if(requests.length>2)return route.fulfill({status:503,json:{ok:false}});
+              return route.fulfill({json:{ok:true,answer:requests.length===1?'목요일 시간표를 모아 봤어요.':'앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.'}});
             });
             await page.clock.setFixedTime(new Date('2026-11-24T01:00:00Z'));
             await chat.fill('목요일에 수업은 몇 시에 열려요?');
             await chat.press('Enter');
-            await page.getByText('명지점 상담 · AI 질문 이해',{exact:true}).waitFor();
+            await page.getByText('명지점 상담 · AI 답변',{exact:true}).waitFor();
             await page.getByRole('list',{name:'목요일 예정 수업'}).waitFor();
-            assert.deepEqual(requests,[{tags:['schedule','weekday'],context:'',day:0,time:0,frequency:0}]);
+            await chat.fill('그럼 저녁엔요?');
+            await chat.press('Enter');
+            await page.getByText('앞에서 말씀하신 목요일 저녁으로 좁혀 봤어요.',{exact:true}).waitFor();
+            assert.deepEqual(requests.map(({topic,previousTopic,day,time})=>[topic,previousTopic,day,time]),[
+              ['schedule','',4,0],['schedule','schedule',4,3]]);
+            assert(requests.every(r=>Object.keys(r).length===8&&r.version===2));
             await chat.fill('내 수강권 몇 회 남았어?');
             await chat.press('Enter');
             await page.getByRole('link',{name:'회원 앱에서 확인하는 방법'}).waitFor();
-            assert.equal(requests.length,1);
+            assert.equal(requests.length,2);
             await page.getByRole('button',{name:'새 대화',exact:true}).click();
             await chat.fill('목요일에 수업은 몇 시에 열려요?');
             await chat.press('Enter');
-            await page.getByText(/가능한 요일과 시간대에 무리 없이/).waitFor();
-            assert.equal(requests.length,2);
-            assert.equal(await page.getByText('명지점 상담 · AI 질문 이해',{exact:true}).count(),0);
+            await page.getByText(/명지점 월간 예정표예요/).waitFor();
+            assert.equal(requests.length,3);
+            assert.equal(await page.getByText('명지점 상담 · AI 답변',{exact:true}).count(),0);
           }
           assert.deepEqual(writes,[]);
           assert.deepEqual(errors,[]);

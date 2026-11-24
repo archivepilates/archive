@@ -27,7 +27,7 @@ export const novemberTimetable={
 
 export function publishedTimetable(question,now){
   const today=calendar.format(now);
-  if(!today.startsWith('2026-11-')||/다음\s*달|지난\s*달|십이월|내년|작년/u.test(question))return null;
+  if(!today.startsWith('2026-11-')||/(?:다음|지난)\s*(?:달|주)|십이월|내년|작년/u.test(question))return null;
   const month=question.match(/(?:^|[^\d])(\d{1,2})\s*월(?!요일)/u)?.[1];
   const year=question.match(/(20\d{2})\s*년/u)?.[1];
   if((month&&Number(month)!==11)||(year&&year!=='2026'))return null;

@@ -18,7 +18,8 @@ button:hover{background:var(--soft)}
 button[type=submit]{background:var(--action);color:#fff;border-color:var(--action)}
 :focus-visible{outline:3px solid #135d72;outline-offset:2px}
 .icon-button{width:44px;min-width:44px;height:44px;padding:0;display:inline-grid;place-items:center}
-.staff-button{font-weight:650;white-space:normal;font-size:.86rem}
+.staff-button{display:inline-flex;align-items:center;min-height:44px;font-weight:650;white-space:normal;font-size:.86rem}
+.chat-pending{margin:.2rem 0;color:var(--muted);font-size:.85rem}
 .chat-workspace{display:grid;grid-template-rows:minmax(0,1fr) auto;height:calc(100vh - 8rem);height:calc(100svh - 8rem);min-height:25rem;background:var(--paper)}
 #conversation{overflow:auto;padding:1.35rem .6rem .7rem;overscroll-behavior:contain;scrollbar-gutter:stable;min-width:0}
 .turn{display:flex;align-items:flex-start;gap:.45rem;margin-bottom:.95rem}

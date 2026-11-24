@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {conversationTurn} from '../help/chatbot/conversation.js';
-import {prepareAiSignals,groundedIntent,requestAiIntent} from '../help/chatbot/public-ai.js';
+import {prepareAiSignals,preparePublicReply,requestPublicReply} from '../help/chatbot/public-ai.js';
 
 test('public AI input consists only of bounded known tags and previous settings',()=>{
   const question='임의 고유 문자열 말하자면, 다음주 목요일에 수업은 몇 시에 열려요?';
@@ -13,24 +13,41 @@ test('public AI input consists only of bounded known tags and previous settings'
   }
 });
 
-test('valid intent resolves a free-form question through the dated source only',async()=>{
+test('answers use a scoped public turn and keep the selected weekday on a follow-up',async()=>{
   const q='목요일에 수업은 몇 시에 열려요?';
   const opts={now:new Date('2026-11-24T10:00:00+09:00')},state={};
   assert.equal(conversationTurn(q,state,opts).timetable,undefined);
-  const signs=prepareAiSignals(q,state),chosen=groundedIntent('schedule',signs);
-  assert.equal(conversationTurn(chosen.prefix+' '+q,state,opts).timetable.selectedDay,'목');
-  assert.equal(groundedIntent('price',signs),null);
-  assert.equal(groundedIntent('__proto__',signs),null);
-  const expired=conversationTurn(chosen.prefix+' '+q,state,{now:new Date('2026-12-01T00:00:00+09:00')});
-  assert.equal(expired.timetable,undefined);
-  assert.match(expired.text,/확인된 월간 예정표가 없어요/);
-  const result=await requestAiIntent(signs,new AbortController(),async(url,options)=>{
+  const first=preparePublicReply(q,state,opts);
+  assert.equal(first.result.timetable.selectedDay,'목');
+  const follow=preparePublicReply('그럼 저녁엔요?',first.result.state,opts);
+  assert.deepEqual(follow.signals,{version:2,topic:'schedule',detail:'timetable',previousTopic:'schedule',day:4,time:3,frequency:0,beginner:false});
+  assert.equal(follow.result.timetable.selectedDay,'목');
+  const expired=preparePublicReply(q,state,{now:new Date('2026-12-01T00:00:00+09:00')});
+  assert.equal(expired.result.timetable,undefined);
+  assert.equal(expired.signals.detail,'unverified');
+  const missing=preparePublicReply('다음 달 시간표 보여줘',first.result.state,opts);
+  assert.equal(preparePublicReply('그럼 목요일은?',missing.result.state,opts).signals.detail,'unverified');
+  const result=await requestPublicReply(follow.signals,new AbortController(),async(url,options)=>{
     assert.equal(url,'/api/public-chat-intent');
     assert.equal(options.credentials,'omit');
-    assert.deepEqual(JSON.parse(options.body),signs);
-    return Response.json({ok:true,intent:'schedule',text:'위조됨'});
+    assert.deepEqual(JSON.parse(options.body),follow.signals);
+    return Response.json({ok:true,answer:'목요일 저녁에 맞춰 확인했어요.'});
   });
-  assert.deepEqual(result,chosen);
-  assert.equal(await requestAiIntent(signs,new AbortController(),async()=>new Response('<html>')),null);
-  assert.equal(await requestAiIntent(signs,new AbortController(),async()=>Response.json({ok:false},{status:503})),null);
+  assert.equal(result,'목요일 저녁에 맞춰 확인했어요.');
+  assert.equal(await requestPublicReply(follow.signals,new AbortController(),async()=>new Response('<html>')),null);
+  assert.equal(await requestPublicReply(follow.signals,new AbortController(),async()=>Response.json({ok:false},{status:503})),null);
+});
+
+test('public planning carries only bounded preferences; private turns never request GPT',()=>{
+  const opts={now:new Date('2026-11-24T10:00:00+09:00')};
+  const a=preparePublicReply('운동은 처음인데 퇴근하고 주 2회 가고 싶어요',{},opts);
+  const b=preparePublicReply('그럼 한 달이면 몇 번이야?',a.result.state,opts);
+  const c=preparePublicReply('목요일밖에 안 되면?',b.result.state,opts);
+  assert.deepEqual([a.signals.detail,b.signals.detail,c.signals.detail],['general','four_weeks','single_day']);
+  assert.deepEqual([c.signals.frequency,c.signals.time,c.signals.day,c.signals.beginner],[2,3,4,true]);
+  for(const q of ['내 수강권 몇 회 남았어?','내가 01012341234인데 홀딩 돼?','다른 회원 수강 이력','통증 있는데 추천','환불 신청','제 홀딩 언제 끝나요?','이미 만료된 횟수권 연장']){
+    assert.equal(preparePublicReply(q,c.result.state,opts).signals,null,q);
+  }
+  const rates=preparePublicReply('수강료 알려줘',{},opts);
+  assert.equal(preparePublicReply('2회만',rates.result.state,opts).signals.detail,'comparison');
 });

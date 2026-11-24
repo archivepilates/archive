@@ -34,7 +34,7 @@ export function respond(q,{mode='prospect',context='',now=new Date(),rules=null}
    return {source,text:'홀딩은 유효기간 안에 사전 신청하는 제도예요. 이미 끝난 수강권에 남은 횟수가 있다면 직원에게 수강권 종류와 기간 연장 가능 여부를 확인해 주세요.'};
  }
  if(/잔여|남(?:은|았)|(?:내|제)\s*수강권|출석|수강\s*이력|이용\s*내역|로그인|회원\s*인증|패스키/.test(q))return {text:memberApp,memberApp:true,memberLookup:true};
- if(mode==='member'&&/재등록/.test(q))return {text:'재등록 상담은 유효한 수강권이 있거나 마지막 실제 출석일로부터 3개월 이내인 경우를 기준으로 확인해요. 예약만 하거나 취소한 수업은 출석에 들어가지 않아요. 개인별 재등록 여부는 기존 문의 양식에서 직원이 확인해 드려요.',memberApp:true};
+ if(mode==='member'&&/재등록/.test(q))return {text:'재등록 상담은 유효한 수강권이 있거나 마지막 실제 출석일로부터 3개월 이내인 경우를 기준으로 확인해요. 예약만 하거나 취소한 수업은 출석에 들어가지 않아요. 개인별 재등록 여부는 카카오톡으로 직원에게 문의해 주세요.',memberApp:true,inquiry:'staff'};
  if(/잘 모르겠/.test(q))return {text:'가입한 수강권이나 예약 유형을 회원 앱에서 먼저 확인하거나, 직원에게 문의해 주세요.'};
  if(/환불/.test(q)&&!/홀딩이나 환불/.test(q))return {text:'개인별 환불 가능 여부와 금액은 직원이 계약·이용 이력을 확인해 안내해요. 여기서 환불을 실행하지 않아요. 직원 문의는 별도로 선택해 주세요.',source:'https://app.notion.com/p/313d49eae4bf80179269f09d02597ede'};
  if(/홀딩이나 환불/.test(q))return {text:'홀딩(일시정지)과 환불 중 무엇을 확인할까요?',context:'hold-choice',choices:['홀딩','환불']};
@@ -43,11 +43,11 @@ export function respond(q,{mode='prospect',context='',now=new Date(),rules=null}
  const recurringEnd=/해지|종료|그만|고정.{0,12}(?:중단|빼)|다음\s*달부터.{0,10}(?:안|못)\s*(?:갈|할|다닐)/.test(q);
  if((fixed||context==='fixed')&&recurringEnd&&(!single||/해지|종료/.test(q))){
    const result=fromRule(rules,'fixed-end','고정예약 해지 마감과 적용월은 데스크에 직접 확인해 주세요.');
-   return {...result,context:'fixed',text:result.text+'\n데스크에 직접 요청해 주세요. 해지 방법을 온라인으로 문의하려면 ‘고정예약 문의 → 해지 방법 문의’를 선택해 주세요. 온라인 문의만으로 접수 기한을 충족했거나 해지가 완료됐다고 볼 수 없으니, 데스크에서 확인해 주세요.'};
+   return {...result,context:'fixed',text:result.text+'\n데스크에 직접 요청해 주세요. 카카오톡 문의만으로 접수 기한을 충족했거나 해지가 완료됐다고 볼 수 없으니, 데스크에서 확인해 주세요.'};
  }
  if(fixed||context==='fixed'&&single){
    const result=fromRule(rules,'booking-fixed','고정예약 수업 1회 취소·변경은 원칙적으로 불가해요.');
-   return {...result,context:'fixed',text:result.text+'\n한 회차는 기존 양식의 ‘수업 취소·변경 → 고정예약’에서 확인해 주세요. 예외 검토가 필요하면 ‘고정예약 문의 → 취소·변경 예외 상담’을 선택해 주세요.'};
+   return {...result,context:'fixed',text:result.text+'\n한 회차의 예외 검토가 필요하면 직원에게 문의해 주세요.'};
  }
  if(flex||context==='flexible'&&/주말|토요일|일요일|공휴일/.test(q)){
    const answer=fromRule(rules,'booking-flexible','자유 예약의 마감은 스튜디오메이트 회원 앱 또는 직원에게 확인해 주세요.');

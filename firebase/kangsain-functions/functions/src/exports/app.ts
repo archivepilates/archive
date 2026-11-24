@@ -84,7 +84,7 @@ const secretlessCallableOptions = { ...callableOptions, secrets: [] };
 export const memberInquiryApi = onRequest({ ...publicRequestOptions, maxInstances: 2, concurrency: 10 }, memberInquiryApiHandler);
 export const helpPublicChatIntent = onRequest({
   region: REGION, invoker: "public", secrets: [helpPublicOpenAiApiKey],
-  minInstances: 0, maxInstances: 1, concurrency: 4, timeoutSeconds: 8, memory: "256MiB",
+  minInstances: 0, maxInstances: 1, concurrency: 4, timeoutSeconds: 12, memory: "256MiB",
 }, createHelpPublicChatHandler());
 export const memberInquiryStaff = onCall(secretlessCallableOptions, async request => {
   try { return await memberInquiryStaffHandler(request); } catch (error) { throw toHttpsError(error); }

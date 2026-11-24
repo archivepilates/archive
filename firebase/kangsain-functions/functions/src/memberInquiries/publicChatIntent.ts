@@ -1,6 +1,7 @@
 import type {Request} from "firebase-functions/v2/https";
 import {db} from "../config/firebase";
 import {defineSecret,projectID} from "firebase-functions/params";
+import {generatePublicReply,parsePublicReplySignals} from "./publicChatReply";
 
 export const helpPublicOpenAiApiKey = defineSecret("HELP_PUBLIC_OPENAI_API_KEY");
 const allowedOrigins = new Set(["https://help.archivepilates.com", "https://archive-pilates-help.web.app"]);
@@ -78,7 +79,7 @@ export function isHelpPublicAiEnabled(project:string,override:string|undefined):
 
 export function createHelpPublicChatHandler(deps={
   enabled:()=>isHelpPublicAiEnabled(projectID.value(),process.env.HELP_PUBLIC_AI_ENABLED),
-  key:()=>helpPublicOpenAiApiKey.value(),reserve:reserveModelCall,classify:classifyPublicIntent
+  key:()=>helpPublicOpenAiApiKey.value(),reserve:reserveModelCall,classify:classifyPublicIntent,generate:generatePublicReply
 }) {
   return async (req:Request,response:any):Promise<void>=>{
     response.set("Cache-Control","private, no-store");
@@ -87,12 +88,17 @@ export function createHelpPublicChatHandler(deps={
     if(!allowedOrigins.has(req.get("origin")??"")){response.status(403).json({ok:false});return;}
     if(!req.is("application/json")||!req.rawBody||req.rawBody.length>1024){response.status(400).json({ok:false});return;}
     const signals=parsePublicSignals(req.body);
-    if(!signals){response.status(400).json({ok:false});return;}
+    const replySignals=parsePublicReplySignals(req.body);
+    if(!signals&&!replySignals){response.status(400).json({ok:false});return;}
     try{
       if(!deps.enabled()){response.status(503).json({ok:false});return;}
       const key=deps.key();
       if(!key?.trim()||!await deps.reserve()){response.status(503).json({ok:false});return;}
-      const intent=await deps.classify(signals,key);
+      if(replySignals){
+        const answer=await deps.generate(replySignals,key);
+        response.status(answer?200:503).json(answer?{ok:true,answer}:{ok:false});return;
+      }
+      const intent=signals&&await deps.classify(signals,key);
       response.status(intent?200:503).json(intent?{ok:true,intent}:{ok:false});
     }catch{response.status(503).json({ok:false});}
   };

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {classifyPublicIntent,createHelpPublicChatHandler,isHelpPublicAiEnabled,parsePublicSignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatIntent";
+import {generatePublicReply,parsePublicReplySignals,publicReplyFacts,renderPublicReply,type PublicReplySignals} from "../../firebase/kangsain-functions/functions/src/memberInquiries/publicChatReply";
 
 const signals={tags:["schedule","weekday"],context:"plan",day:4,time:3,frequency:2};
 test("the live model is restricted to the intended project and can be disabled",()=>{
@@ -52,7 +53,7 @@ test("OpenAI request sends only allowed signals and accepts one completed intent
 test("disabled, bad origin and exhausted quota do not call the model",async()=>{
   let enabled=false,reserved=false,keyReads=0,modelCalls=0;
   const fn=createHelpPublicChatHandler({enabled:()=>enabled,key:()=>{keyReads++;return "fake";},
-    reserve:async()=>reserved,classify:async()=>{modelCalls++;return "schedule";}});
+    reserve:async()=>reserved,classify:async()=>{modelCalls++;return "schedule";},generate:async()=>{modelCalls++;return "답변";}});
   const call=async(origin:string,body:unknown=signals)=>{
     const req={method:"POST",get:()=>origin,is:()=>true,rawBody:Buffer.from(JSON.stringify(body)),body} as any;
     let status=0;
@@ -71,4 +72,30 @@ test("disabled, bad origin and exhausted quota do not call the model",async()=>{
   reserved=true;
   assert.equal(await call("https://help.archivepilates.com"),200);
   assert.equal(modelCalls,1);
+});
+
+const fixture:PublicReplySignals={version:2,topic:"schedule",detail:"timetable",previousTopic:"schedule",day:4,time:3,frequency:0,beginner:false};
+const nov=new Date("2026-11-24T10:00:00+09:00");
+test("only the closed public context schema and current official facts enter GPT",async()=>{
+  for(const v of [{...fixture,raw:"private"},{...fixture,time:4},{...fixture,previousTopic:"member"},{...fixture,detail:"compare"},{...fixture,day:0}]){
+    assert.equal(parsePublicReplySignals(v),null);
+  }
+  const facts=publicReplyFacts(fixture,nov);
+  assert.match(facts,/목요일 저녁/);
+  assert.match(facts,/17:30, 18:30, 19:00, 19:30, 20:30/);
+  assert.doesNotMatch(facts,/09:00|은영|유리/);
+  assert.doesNotMatch(publicReplyFacts(fixture,new Date("2026-12-01T00:00:00+09:00")),/17:30/);
+  assert.doesNotMatch(publicReplyFacts({...fixture,detail:"unverified"},nov),/17:30/);
+  const mock=(answer:string):typeof fetch=>async(url,init)=>{
+    assert.equal(url,"https://api.openai.com/v1/responses");
+    const request=JSON.parse(String(init?.body));
+    assert.equal(request.store,false);assert.equal(request.max_output_tokens,140);
+    assert.equal(Object.hasOwn(request,"tools"),false);
+    assert.deepEqual(JSON.parse(request.input),{signals:fixture,facts});
+    return Response.json({status:"completed",output:[{type:"message",role:"assistant",status:"completed",content:[{type:"output_text",text:JSON.stringify({answer})}]}]});
+  };
+  const composed=await generatePublicReply(fixture,"fake",mock("목요일 저녁으로 좁혀 봤어요.\n{{facts}}"),nov);
+  assert.equal(composed,"목요일 저녁으로 좁혀 봤어요.\n\n"+facts);
+  for(const text of ["예약 완료됐어요.\n{{facts}}","특가 123원이에요.\n{{facts}}","https://example.com\n{{facts}}","{{facts}}","안내예요. {{facts}}","안내예요.\n{{facts}}\n{{facts}}"])assert.equal(renderPublicReply(text,facts),null);
+  assert.match(publicReplyFacts({...fixture,topic:"plan",detail:"four_weeks",frequency:2},nov),/4주 기준 8회/);
 });

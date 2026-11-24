@@ -46,28 +46,30 @@ test('class preferences lead to a class type, not live attendance or seats',()=>
  const b=ask('화요일 오전 리포머 초보',{context:a.context,mode:'prospect'});
  assert.match(b.text,/입문/);assert.match(b.text,/실제 개설 여부와 좌석은 확인하지 않았어요/);
 });
-test('Help keeps AI intent analysis isolated without personal persistence',()=>{
+test('Help keeps public GPT and Kakao links isolated without a legacy form',()=>{
  const html=fs.readFileSync(new URL('../help/chatbot/index.html',import.meta.url),'utf8');
  const base=fs.readFileSync(new URL('../help/index.html',import.meta.url),'utf8');
- const fallback=fs.readFileSync(new URL('../help/inquiry/index.html',import.meta.url),'utf8');
  const app=fs.readFileSync(new URL('../help/chatbot/app.js',import.meta.url),'utf8');
  const firebase=JSON.parse(fs.readFileSync(new URL('../firebase.json',import.meta.url)));
- assert.match(html,/id="start-intake"/);
+ assert.match(html,/id="staff-chat"[^>]+href="https:\/\/pf\.kakao\.com\/_KxdDWxj\/chat"/);
  assert.match(html,/<form id="question">/);
  assert.match(html,/id="prompts"[^>]+role="group"[^>]+aria-label="추천 질문"/);
  assert.match(html,/id="query"[^>]+enterkeyhint="send"/);
  assert.doesNotMatch(html,/data-mode|테스트 본인확인|가상 가입 링크/);
  assert.equal(html,base);
- assert.match(base,/href="\/inquiry\/">챗봇 이용이 어려울 때: 기존 문의 양식/);
- assert.match(fallback,/id="member-form"/);
+ assert.doesNotMatch(base,/href="\/inquiry\/|id="intake"|intake-ui\.js/);
+ assert.equal(fs.existsSync(new URL('../help/inquiry/index.html',import.meta.url)),false);
  assert.equal((app.match(/\bfetch\(/g)||[]).length,1);
  assert.match(app,/fetch\('\/assets\/member-inquiry-guidance\.json'/);
  assert.doesNotMatch(app,/localStorage|sessionStorage|cookie|\/api\//);
  assert.doesNotMatch(app,/prompts\.hidden/);
  const config=firebase.hosting.find(row=>row.site==='archive-pilates-help');
  assert.equal(config.public,'help');
- assert.deepEqual(config.rewrites.map(r=>r.source),['/api/inquiries','/api/public-chat-intent','**']);
- assert.equal(config.rewrites[1].function.functionId,'helpPublicChatIntent');
+ assert.deepEqual(config.rewrites.map(r=>r.source),['/api/public-chat-intent','**']);
+ assert.equal(config.rewrites[0].function.functionId,'helpPublicChatIntent');
+ assert.deepEqual(config.redirects.map(r=>[r.source,r.destination,r.type]),[
+  ['/inquiry','https://pf.kakao.com/_KxdDWxj/chat',302],['/inquiry/**','https://pf.kakao.com/_KxdDWxj/chat',302]]);
+ for(const asset of ['assets/app.js','assets/inquiry-schema.json','chatbot/intake.js']) assert(config.ignore.includes(asset));
  assert(firebase.hosting.filter(row=>row.site!=='archive-pilates-help').every(row=>
   !row.rewrites?.some(r=>r.function?.functionId==='helpPublicChatIntent')));
 });
@@ -144,7 +146,7 @@ test('class question with weekly frequency is not converted into a pass quote',(
 test('member renewal describes the consultation cutoff, not current eligibility',()=>{
  const result=respond('재등록이 궁금해요',{mode:'member'});
  assert.match(result.text,/실제 출석일로부터 3개월/);
- assert.match(result.text,/직원이 확인/);
+ assert.match(result.text,/카카오톡으로 직원에게 문의/);
  assert.equal(result.memberApp,true);
 });
 
@@ -216,21 +218,19 @@ test('monthly fixed booking termination is not a one-class cancellation',()=>{
  const ending=ask('12월에는 고정반을 그만하고 싶어요');
  assert.ok(ending.text.startsWith(ruleEnd.text));
  assert.match(ending.text,/마지막 영업일까지 데스크/);
- assert.match(ending.text,/고정예약 문의 → 해지 방법 문의/);
- assert.match(ending.text,/온라인 문의만으로 접수 기한을 충족했거나 해지가 완료됐다고 볼 수 없으니/);
+ assert.match(ending.text,/카카오톡 문의만으로 접수 기한을 충족했거나 해지가 완료됐다고 볼 수 없으니/);
  assert.doesNotMatch(ending.text,/12월\s*\d+일|취소·변경 예외 상담/);
  const one=ask('이번 토요일 고정반 한 번만 취소할 수 있나요?');
  assert.ok(one.text.startsWith(rules.rules.find(r=>r.id==='booking-fixed').text));
- assert.match(one.text,/수업 취소·변경 → 고정예약/);
- assert.match(one.text,/고정예약 문의 → 취소·변경 예외 상담/);
+ assert.match(one.text,/한 회차의 예외 검토가 필요하면 직원에게 문의/);
  assert.doesNotMatch(one.text,/마지막 영업일|해지 방법 문의/);
  const followup=ask('그럼 다음 달부터 그만하려고요',{context:one.context});
- assert.match(followup.text,/해지 방법 문의/);
+ assert.match(followup.text,/마지막 영업일까지 데스크/);
 });
 
 
 test('static desk contact works independently of scripts on both paths',()=>{
- for(const file of ['../help/index.html','../help/chatbot/index.html','../help/inquiry/index.html']){
+ for(const file of ['../help/index.html','../help/chatbot/index.html']){
   const html=fs.readFileSync(new URL(file,import.meta.url),'utf8');
   assert.match(html,/href="tel:01029244425">명지점 데스크 010-2924-4425<\/a>/);
  }

@@ -12,7 +12,6 @@
 <title>상담 도우미 · ARCHIVE PILATES</title>
 <link rel="stylesheet" href="/chatbot/chatbot.css">
 <script src="/chatbot/app.js" type="module"></script>
-<script src="/chatbot/intake-ui.js" type="module"></script>
 <script src="/chatbot/recommendation-ui.js" type="module"></script>
 </head>
 <body>
@@ -26,10 +25,10 @@
       <button id="reset-chat" type="button" class="icon-button" aria-label="새 대화" title="새 대화">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 1 9 9 9 9 0 0 1-6.7-3.1M3 12V5m0 7h7"/></svg>
       </button>
-      <button id="start-intake" type="button" class="staff-button">직원 문의</button>
+      <a id="staff-chat" class="staff-button" href="https://pf.kakao.com/_KxdDWxj/chat" target="_blank" rel="noopener noreferrer">직원 문의</a>
     </div>
   </header>
-  <noscript><p>상담 도우미를 열려면 자바스크립트가 필요해요. <a href="/inquiry/">기존 문의 양식</a>을 이용해 주세요.</p></noscript>
+  <noscript><p><a href="https://pf.kakao.com/_KxdDWxj/chat">카카오톡으로 문의</a></p></noscript>
   <section class="chat-workspace" aria-labelledby="chat-title">
     <h1 id="chat-title" class="sr-only">아카이브 챗봇</h1>
     <div id="conversation" role="log" aria-label="상담 대화" aria-live="polite" tabindex="0"></div>
@@ -69,8 +68,6 @@
       <p class="privacy-note">이름·연락처·생년월일은 채팅에 입력하지 마세요.</p>
     </div>
   </section>
-
-<div hidden><button id="refund-intake" type="button">환불 상담</button><button id="inline-intake" type="button">직원에게 문의하기</button></div>
 
 <dialog id="class-recommendation" aria-labelledby="recommendation-title">
   <div class="recommendation-top">
@@ -122,17 +119,7 @@
   </section>
 </dialog>
 
-<section id="intake" aria-labelledby="intake-title" hidden>
-  <h2 id="intake-title" tabindex="-1">직원에게 문의하기</h2>
-  <p id="intake-prompt">어떤 문의를 접수할까요?</p>
-  <div id="intake-choices"></div>
-  <p id="intake-status" role="status"></p>
-  <div class="quick">
-    <button type="button" id="intake-back" hidden>이전</button>
-    <button type="button" id="intake-cancel">안내로 돌아가기</button>
-  </div>
-</section>
-<footer><a href="tel:01029244425">명지점 데스크 010-2924-4425</a><a href="/privacy.html">개인정보 수집·이용 안내</a><a href="/inquiry/">챗봇 이용이 어려울 때: 기존 문의 양식</a></footer>
+<footer><a href="tel:01029244425">명지점 데스크 010-2924-4425</a><a href="/privacy.html">개인정보 안내</a></footer>
 </main>
 </body>
 </html>

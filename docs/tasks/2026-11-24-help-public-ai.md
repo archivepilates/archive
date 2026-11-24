@@ -1,6 +1,24 @@
 # ARCHIVE PILATES Help public AI
 
-## Scope
+## Public answer and contact update
+
+- Typed public turns and follow-ups submit an allowlisted versioned packet
+  with the current/previous public topic and relevant day, time, frequency
+  and beginner flags. Conversation text stays in the tab; no member lookup,
+  external tool, model-side thread or raw text transmission is used.
+- GPT writes Korean response prose using checked-in public evidence. The
+  backend inserts official times, prices and policy text itself rather than
+  accepting model-generated values. Timetable and rates fail closed outside
+  the verified KST month. Missing or rejected responses use local guidance.
+- Staff and refund CTA links open the official Kakao channel. The Help form
+  is retired; old public form URLs redirect to the channel and Help no longer
+  rewrites to the intake function. Existing CORE records, retention, staff
+  workflow and backend permissions are unchanged. Kakao messages do not
+  automatically create CORE inquiries or execute bookings.
+- Keep the existing Pro-only payment posture and per-day/per-minute limits.
+  Tests use synthetic questions only; no Kakao message or inquiry is sent.
+
+## Initial classification release
 
 Use the OpenAI Responses API only as a routing aid for typed public questions the existing
 conversation logic could not classify. The browser sends fixed vocabulary

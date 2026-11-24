@@ -943,14 +943,11 @@
           ]
         }
       ],
+      "redirects": [
+        { "source": "/inquiry", "destination": "https://pf.kakao.com/_KxdDWxj/chat", "type": 302 },
+        { "source": "/inquiry/**", "destination": "https://pf.kakao.com/_KxdDWxj/chat", "type": 302 }
+      ],
       "rewrites": [
-        {
-          "source": "/api/inquiries",
-          "function": {
-            "functionId": "memberInquiryApi",
-            "region": "asia-northeast3"
-          }
-        },
         {
           "source": "/api/public-chat-intent",
           "function": {
@@ -965,7 +962,11 @@
       ],
       "ignore": [
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "assets/app.js",
+        "assets/inquiry-schema.json",
+        "assets/renewal-policy-link.js",
+        "chatbot/intake.js"
       ]
     }
   ]

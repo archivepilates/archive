@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMemberInquiryContract } from "./build-member-inquiry-contract.mjs";
+import { buildPublicChatEvidence } from "./build-help-public-chat-evidence.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -15,6 +16,7 @@ const baseNodeModulesDir = path.join(repoRoot, "firebase", "kangsain-functions",
 const requested = process.argv[2] || "all";
 buildMemberInquiryContract({ check: true });
 const selected = selectTargets(requested);
+if(selected.some(([codebase])=>codebase==="functions-app"))buildPublicChatEvidence({check:true});
 
 for (const [codebase, config] of selected) {
   const sourceDir = path.resolve(repoRoot, config.physicalSource);

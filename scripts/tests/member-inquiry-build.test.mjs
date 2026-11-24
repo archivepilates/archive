@@ -20,8 +20,7 @@ test("help hosting is isolated and existing sites have no inquiry API replacemen
   const config = JSON.parse(fs.readFileSync("firebase.json", "utf8"));
   const help = config.hosting.filter(site => site.site === "archive-pilates-help");
   assert.equal(help.length, 1); assert.equal(help[0].public, "help");
-  assert.equal(help[0].rewrites[0].source, "/api/inquiries");
-  assert.equal(help[0].rewrites[0].function.functionId, "memberInquiryApi");
-  for (const site of config.hosting.filter(site => site.site !== "archive-pilates-help"))
+  assert(help[0].redirects.some(rule => rule.source === "/inquiry" && rule.destination === "https://pf.kakao.com/_KxdDWxj/chat"));
+  for (const site of config.hosting)
     assert(!site.rewrites?.some(rule => rule.function?.functionId === "memberInquiryApi"));
 });

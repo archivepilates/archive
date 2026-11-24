@@ -1,6 +1,7 @@
 import { reusableQuestion } from './engine.js';
-import { conversationTurn } from './conversation.js';
-import {prepareAiSignals,requestAiIntent} from './public-ai.js';
+import {preparePublicReply,requestPublicReply} from './public-ai.js';
+
+const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
 
 const get=id=>document.getElementById(id);
 const stream=get('conversation'), input=get('query'), prompts=get('prompts');
@@ -60,7 +61,7 @@ function append(role,result){
   if(role==='assistant'){
     const logo=element('img',null,'avatar');logo.src='/favicon.png';logo.alt='';logo.width=24;logo.height=24;row.append(logo);
   }
-  body.append(element('span',role==='user'?'나':result.aiAssisted?'명지점 상담 · AI 질문 이해':'명지점 상담','speaker'));
+  body.append(element('span',role==='user'?'나':result.aiAssisted?'명지점 상담 · AI 답변':'명지점 상담','speaker'));
   if(result.welcome){
     const greeting=element('div',null,'welcome-turn');
     const drawing=greetingArt();
@@ -73,9 +74,7 @@ function append(role,result){
   const links=element('div',null,'chat-actions');
   if(result.source&&!result.timetable)links.append(link(result.sourceLabel??'안내 원문',result.source));
   if(result.appGuide)links.append(link(result.memberLookup?'회원 앱에서 확인하는 방법':'공식 앱 이용 안내',result.appGuide));
-  if(result.inquiry)links.append(button(result.inquiry==='refund'?'직원에게 환불 문의':'직원에게 문의',event=>{
-    window.dispatchEvent(new CustomEvent('archive:help-open-intake',{detail:{trigger:event.currentTarget,refund:result.inquiry==='refund'}}));
-  }));
+  if(result.inquiry)links.append(link(result.inquiry==='refund'?'카카오톡으로 환불 문의':'카카오톡으로 직원 문의',staffChat));
   if(links.children.length)body.append(links);
   if(result.choices?.length){
     lastChoices=element('div',null,'quick follow-up');
@@ -101,46 +100,42 @@ function greetingArt(){
   return art;
 }
 function clearChoices(){lastChoices?.remove();lastChoices=null;}
-function finishTurn(q,result,focusInput){
+function finishTurn(q,result,focusInput,userShown=false){
   state=result.state;
   clearChoices();
-  if(reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
+  if(!userShown&&reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
   append('assistant',result);
-  window.dispatchEvent(new CustomEvent('archive:help-question',{detail:!result.memberLookup&&!result.hideInput&&reusableQuestion(q)?q:''}));
   if(focusInput)input.focus({preventScroll:true});
 }
 function finishPending(){
   if(!pendingAi)return;
   const previous=pendingAi;pendingAi=null;
   previous.controller.abort();
-  stream.removeAttribute('aria-busy');
-  finishTurn(previous.q,previous.fallback,false);
+  previous.loading.remove();
+  finishTurn(previous.q,previous.fallback,false,true);
 }
 function ask(question,{focusInput=true,useAi=false}={}){
   const q=question.trim();
   if(!q)return;
   finishPending();
-  const result=conversationTurn(q,state,{rules});
-  // Keep direct policy/member answers on their established code path.
-  const signals=useAi&&!result.hideInput&&!result.memberLookup&&!result.inquiry&&!result.state.topic
-    ?prepareAiSignals(q,state):null;
-  if(!signals){finishTurn(q,result,focusInput);return;}
-  const request={q,fallback:result,controller:new AbortController()};
-  pendingAi=request;stream.setAttribute('aria-busy','true');
+  const {result,signals}=preparePublicReply(q,state,{rules});
+  if(!useAi||!signals){finishTurn(q,result,focusInput);return;}
+  clearChoices();
+  append('user',{text:q});
+  const loading=element('p','답변을 작성하고 있어요.','chat-pending');
+  loading.setAttribute('role','status');stream.append(loading);stream.scrollTop=stream.scrollHeight;
+  const request={q,fallback:result,controller:new AbortController(),loading};
+  pendingAi=request;
   if(focusInput)input.focus({preventScroll:true});
-  void requestAiIntent(signals,request.controller).then(route=>{
+  void requestPublicReply(signals,request.controller).then(answer=>{
     if(pendingAi!==request)return;
-    pendingAi=null;stream.removeAttribute('aria-busy');
-    // Preserve the user's dates and temporal qualifiers; do not render model text.
-    const refined=route?conversationTurn(route.prefix+' '+q,state,{rules}):null;
-    const accepted=refined?.state.topic===route?.topic&&!refined?.hideInput&&!refined?.memberLookup&&refined;
-    finishTurn(q,accepted?{...accepted,aiAssisted:true}:result,false);
+    pendingAi=null;loading.remove();
+    finishTurn(q,answer?{...result,text:answer,aiAssisted:true}:result,false,true);
   });
 }
 function welcome(){
-  pendingAi?.controller.abort();pendingAi=null;stream.removeAttribute('aria-busy');
+  pendingAi?.controller.abort();pendingAi=null;
   state={};clearChoices();input.value='';stream.replaceChildren();
-  window.dispatchEvent(new Event('archive:help-mode'));
   append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
 }
 for(const btn of prompts.querySelectorAll('[data-question]')){
