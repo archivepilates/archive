@@ -1,7 +1,26 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 import {conversationTurn} from '../help/chatbot/conversation.js';
 import {prepareAiSignals,preparePublicReply,requestPublicReply} from '../help/chatbot/public-ai.js';
+
+test('greeting, parking and booking opening do not fall through to an unrelated GPT topic',()=>{
+  const rules=JSON.parse(fs.readFileSync(new URL('../help/assets/member-inquiry-guidance.json',import.meta.url)));
+  const now=new Date('2026-11-24T20:00:00+09:00');
+  const previous=preparePublicReply('목요일 시간표',{}, {rules,now}).result.state;
+  for(const q of ['안녕','안녕하세요!','hello','고마워요']){
+    const turn=preparePublicReply(q,previous,{rules,now});
+    assert.equal(turn.signals,null);
+    assert.equal(turn.result.state,previous);
+    assert.match(turn.result.text,/편하게/);
+  }
+  for(const [q,expected] of [['주차는 몇 시간 무료예요?',/2시간 무료 주차/],['예약은 언제 열려요?',/월요일 13시/]]){
+    const turn=preparePublicReply(q,{}, {rules,now});
+    assert.equal(turn.signals,null);
+    assert.match(turn.result.text,expected);
+  }
+  assert.equal(preparePublicReply('안녕하세요, 목요일 시간표 알려줘',{}, {rules,now}).signals.topic,'schedule');
+});
 
 test('public AI input consists only of bounded known tags and previous settings',()=>{
   const question='임의 고유 문자열 말하자면, 다음주 목요일에 수업은 몇 시에 열려요?';

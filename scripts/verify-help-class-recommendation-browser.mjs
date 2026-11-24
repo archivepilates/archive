@@ -125,6 +125,16 @@ try{
           assert.equal(await staff.getAttribute('href'),'https://pf.kakao.com/_KxdDWxj/chat');
           assert.equal(await staff.evaluate(a=>a.getBoundingClientRect().height>=44),true);
           assert.equal(await page.locator('#intake').count(),0);
+          for(const [question,expected] of [
+            ['안녕','안녕하세요! 시간표, 수강료, 예약 등 궁금한 내용을 편하게 물어보세요.'],
+            ['주차는 몇 시간 무료예요?',/2시간 무료 주차/],
+            ['예약은 언제 열려요?',/월요일 13시/]
+          ]){
+            await chat.fill(question);
+            await chat.press('Enter');
+            await page.locator('.turn.assistant').last().getByText(expected).waitFor();
+          }
+          await page.getByRole('button',{name:'새 대화',exact:true}).click();
           if(!live){
             const requests=[];
             await page.route('**/api/public-chat-intent',async route=>{

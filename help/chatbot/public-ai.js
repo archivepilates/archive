@@ -54,7 +54,7 @@ const kst=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'});
 export function preparePublicReply(question,previous={},options={}){
   const q=question.normalize('NFKC').trim();
   let result=conversationTurn(q,previous,options);
-  if(!q||q.length>220||result.hideInput||result.memberLookup||result.inquiry==='refund'
+  if(!q||q.length>220||result.direct||result.hideInput||result.memberLookup||result.inquiry==='refund'
     ||!reusableQuestion(q)||requestPolicy.test(q)||sensitive.test(q))return {result,signals:null};
   const old=previous.publicContext;
   const cues=prepareAiSignals(q,result.state)?.tags??[];

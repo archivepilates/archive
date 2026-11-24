@@ -16,6 +16,10 @@ const otherMember=/(?:친구|가족|배우자|타인|다른\s*회원).{0,14}(?:�
 const personal=/(?:내|제)\s*(?:수강권|예약|출석)|잔여\s*횟수|몇\s*(?:회|번)\s*남|수강\s*이력|출석\s*기록|패스키|회원\s*인증/u;
 const booking=/예약|취소|고정|(?:자유\s*예약)|(?:해지|종료)/u;
 const refund=/환불|돈.{0,8}돌려/u;
+const greeting=/^(?:안녕(?:하세요|하십니까|하세용)?|안뇽|반가워요|하이|hi|hello)[!?~.\s\p{Extended_Pictographic}]*$/iu;
+const thanks=/^(?:고마워(?:요)?|감사(?:해요|합니다)|덕분이에요)[!?~.\s\p{Extended_Pictographic}]*$/u;
+const parking=/주차(?:장)?|출차|차량\s*등록/u;
+const bookingOpen=/(?:예약|일정).{0,16}(?:언제\s*(?:열|오픈|시작|부터)|열리|오픈|개시)/u;
 const amount=n=>n.toLocaleString('ko-KR')+'원';
 
 function rule(rules,id){return rules?.rules?.find(row=>row.id===id)?.text??'';}
@@ -45,6 +49,8 @@ function nextPlan(previous,q){
 export function conversationTurn(question, previous={}, {rules=null,now=new Date()}={}){
   if(!reusableQuestion(question))return {...respond(question,{rules,now}),state:previous,hideInput:true};
   const q=question.normalize('NFKC').trim();
+  if(greeting.test(q))return {text:'안녕하세요! 시간표, 수강료, 예약 등 궁금한 내용을 편하게 물어보세요.',state:previous,direct:true};
+  if(thanks.test(q))return {text:'천만에요! 또 궁금한 게 있으면 편하게 물어보세요.',state:previous,direct:true};
   if(otherMember.test(q))return {text:'다른 회원의 수강권이나 이용내역은 안내하지 않아요. 본인의 기록은 회원 앱에서 확인해 주세요.',state:previous,hideInput:true,appGuide};
   const plan=nextPlan(previous.plan,q);
   const state={plan,topic:'',context:''};
@@ -75,6 +81,12 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
   if(!rateAsk.test(q)&&(personal.test(q)||previous.topic==='member'&&/^(?:그럼|그러면).*(?:언제까지|예약|몇\s*(?:회|번))/u.test(q))){
     const reply=respond('내 수강권',{rules,now,mode:'member'});
     return close({...reply,appGuide,topic:'member'});
+  }
+  const commonRule=parking.test(q)?'other-facility':bookingOpen.test(q)&&!/취소|변경|해지/u.test(q)?'other-booking':'';
+  if(commonRule){
+    const text=rule(rules,commonRule);
+    return {text:text||'정확한 안내는 카카오톡으로 직원에게 문의해 주세요.',state:previous,direct:true,
+      ...(!text?{inquiry:'staff'}:{})};
   }
   if(rateAsk.test(q)||previous.topic==='pricing'&&/^(?:주\s*[1-7]\s*(?:회|번)|[1-7]\s*(?:회|번))[\s.요만]*$/u.test(q)){
     if(!november||anotherMonth)return close({text:'현재 확인된 수강료가 없어요. 적용 월과 상품을 직원에게 확인해 주세요.',inquiry:'staff',topic:'pricing'});
