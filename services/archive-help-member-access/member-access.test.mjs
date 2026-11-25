@@ -107,7 +107,7 @@ test('expired invitation, bad user handle, logout and contact revision block acc
   const bad={id:fakeId,challenge:opts.options.challenge,response:{userHandle:token()}};
   assert.equal((await a.login(step,bad)).ok,false);
   assert.equal((await a.login(step,{...bad,response:{userHandle:f.currentHandle()}})).ok,false);
-  a.logout(ep.preAuth,ep.result.token);assert.equal(await a.resolveSession(ep.result.token),null);
+  await a.logout(ep.preAuth,ep.result.token);assert.equal(await a.resolveSession(ep.result.token),null);
   const next=token(),x=await a.loginOptions(next);
   const signin=await a.login(next,{id:fakeId,challenge:x.options.challenge,response:{userHandle:f.currentHandle()}});
   f.rotate();
@@ -237,8 +237,8 @@ test('remote verification is separate, browser-bound, single-use and silent duri
   const inv=await accounts.resolveOpenInvitation(invite.token);
   const hash=value=>createHash('sha256').update(value).digest('hex');
   const proof={account:inv.account,inviteDigest:inv.inviteDigest,stepDigest:hash(step),enrollmentDigest:hash(r.enrollmentReceipt)};
-  assert.equal(otp.matches(proof),true);
-  assert.equal(otp.matches({...proof,stepDigest:hash(other)}),false);
+  assert.equal(await otp.matches(proof),true);
+  assert.equal(await otp.matches({...proof,stepDigest:hash(other)}),false);
   assert.equal((await otp.verify(step,invite.token,code)).ok,false);
 });
 

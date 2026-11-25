@@ -44,7 +44,13 @@ async function payload(req){
   finally{reader.releaseLock();}
 }
 
-export function createMemberHttpHandler({enabled=false,accounts,lookup,otp}={}){
+export function createMemberHttpHandler({enabled=false,accounts,lookup,otp,onSessionClosed}={}){
+  async function closeSession(step,session){
+    await accounts.logout(step,session);
+    if(session&&onSessionClosed){
+      try{await onSessionClosed(session);}catch{/* The authenticated session is already closed. */}
+    }
+  }
   return async function handle(req){
     if(enabled!==true)return json(404,unavailable);
     try{
@@ -53,7 +59,7 @@ export function createMemberHttpHandler({enabled=false,accounts,lookup,otp}={}){
       if(!routeNames.has(route)||url.origin!==ORIGIN||url.search)return json(404,unavailable);
       if(req.method!=='POST'||req.headers.get('origin')!==ORIGIN)return json(403,unavailable);
       const {step,session}=readCookie(req);
-      if(!accounts.allowRequest(step??session,route))return json(429,unavailable);
+      if(!await accounts.allowRequest(step??session,route))return json(429,unavailable);
       const body=await payload(req);
       if(!body)return json(400,unavailable);
       if(route==='availability'&&keySet(body,''))return otp?json(200,{ok:true,remoteOtp:true}):json(404,unavailable);
@@ -68,7 +74,7 @@ export function createMemberHttpHandler({enabled=false,accounts,lookup,otp}={}){
         return json(result.ok?200:403,result);
       }
       if(route==='logout'&&keySet(body,'')){
-        accounts.logout(step,session);
+        await closeSession(step,session);
         return json(200,{ok:true},[cookie(null,null,0)]);
       }
       if(keySet(body,'')&&['cards','history'].includes(route)){
@@ -86,7 +92,7 @@ export function createMemberHttpHandler({enabled=false,accounts,lookup,otp}={}){
       if((route==='register'||route==='login')&&step&&keySet(body,'response')){
         const result=await accounts[route](step,body.response);
         if(!result.ok)return json(403,unavailable);
-        accounts.logout(null,session);
+        if(session)await closeSession(null,session);
         return json(200,{ok:true},[cookie(null,result.token,SESSION_MS/1000)]);
       }
       return json(400,unavailable);

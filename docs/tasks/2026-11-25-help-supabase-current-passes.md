@@ -90,3 +90,49 @@ It uses the existing daily atomic publication and session-bound read contract.
 Cloud enrollment and revocation, exact production catalog review, dedicated DB
 credentials and the first owner-only live verification are pending. The
 production Help fallback and schedule have not been changed.
+
+## Cloud authentication preflight
+
+The hosted service uses a dedicated PostgreSQL auth store, not the process disk.
+WebAuthn challenges, OTP claims and passkey sessions use atomic transactions. A
+separate issuer binds the authenticated session digest to the verified member
+key and a separate reader returns only that member's cards. The service checks
+the binding again after reading and does not release results after revocation.
+The browser cannot select a member. The history route is intentionally closed
+in this service. Neither route calls StudioMate or the Mac mini on demand, and
+personal results are not sent to the public GPT consultation backend.
+
+The private enrollment adapter needs two uncached canonical loaders: a
+time-limited operator approval reference and an exact current active binding
+with the approved in-person sign-up, registered contact and revision. A dated
+StudioMate observation is never presented as a live check; it expires after
+26 hours for a binding and one hour for an OTP recipient. Contact changes or
+revocation must invalidate the current canonical binding, not wait for the next
+daily snapshot. The OTP transport still verifies the approved template and
+communication window immediately before dispatch. Do not derive authority from
+the anonymous chatbot, pass snapshots, a historical spreadsheet, or a staff
+member's name/phone search.
+
+Startup requires three different restricted connections: auth transaction,
+session issuer and pass reader. Use TLS-verified pools and separate secrets.
+The previous authenticated Mac relay is superseded for this current-pass
+design. The Mac mini is still the existing source refresh host; an unavailable
+refresh does not break the cloud API, but expired or unverified data stays
+unavailable rather than being shown as zero.
+
+The empty auth schema was installed in the existing Seoul pilot in migration
+`20261125094757`. Independent readback confirmed forced RLS, two NOLOGIN roles,
+four runtime-only routines, no login or unintended grants, and zero auth or
+snapshot records. The native pilot and the hosted synthetic browser tests pass;
+the hosted browser uses a real virtual passkey verifier, local PostgreSQL auth
+storage, and mocked OTP and snapshot boundaries. SQL tests separately exercise
+the actual session-bound snapshot routines and deny access from other roles.
+No real member records, credentials or member messages were created by this
+preflight. The public member route is still not wired to a live service.
+
+Release order: provision scoped connections and wire the canonical enrollment
+and revocation loaders, resolve the exact product policy and publish/read back
+one verified pilot snapshot, then verify the HTTPS member route with a real
+member-controlled passkey and provider delivery. Do not enable broad ingestion
+or public member lookup from tests alone. Keep the public Help fallback and
+welcome Alimtalk unchanged until the owner-only live check passes.

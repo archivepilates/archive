@@ -6,7 +6,11 @@ import {tmpdir} from 'node:os';
 import {join,extname} from 'node:path';
 import {createPrivateMemberPilot} from './index.mjs';
 import {createInternalStudioMatePilot} from './internal-studiomate.mjs';
-import {ORIGIN,STUDIO_ID} from './accounts.mjs';
+import {createHostedHelpMemberService} from './hosted-pass-service.mjs';
+import {createCloudEnrollmentAuthority} from './cloud-enrollment-authority.mjs';
+import {currentPassMemberKey} from './current-pass-snapshot.mjs';
+import {createPostgresAuthStore} from './postgres-auth-store.mjs';
+import {digest,ORIGIN,STUDIO_ID} from './accounts.mjs';
 
 // Intercept every browser request. The real WebAuthn verifier sees synthetic records only.
 const {chromium}=createRequire(process.env.ARCHIVE_PLAYWRIGHT_PACKAGE??import.meta.url)('playwright');
@@ -15,16 +19,19 @@ const path=join(dir,'member.sqlite');
 const clock=Date.parse('2026-11-24T02:00:00Z'),now=()=>clock;
 let active=true,rev='b'.repeat(64),calls=0,publicGptPosts=0;
 const received=[],secret=randomBytes(32);
+const hosted=process.env.ARCHIVE_HELP_BROWSER_MODE==='hosted';
+const memberKeySecret=randomBytes(32), issuedReadSessions=new Map();
+const hostRef=randomBytes(32).toString('base64url');
 const proof=()=>({authority:'verified_member_enrollment',nativeVerified:true,signupComplete:true,
   verificationMethod:'in_person_signup',inPersonVerified:true,active,studioId:STUDIO_ID,memberId:'79417',revision:rev,checkedAt:now()});
 const identity=()=>({authority:'verified_member_identity',studioId:STUDIO_ID,memberId:'79417',revision:rev,
   name:'Synthetic Only',phone:'01000000001'});
-const pilot=()=>createInternalStudioMatePilot({enabled:true,storePath:path,now,
-  authority:{verifyEnrollment:async key=>key==='confirmed-synthetic-enrollment'?proof():null,
-    confirmBinding:async ({memberId})=>memberId==='79417'?proof():null},
-  remoteOtp:{secret,resolveRecipient:async request=>({authority:'studiomate_registered_contact',studioId:STUDIO_ID,
-    memberId:request.memberId,revision:request.revision,verified:true,checkedAt:now(),phone:identity().phone}),
-    sendCode:async ({code,mayDispatch})=>{assert(mayDispatch());received.push(code);return {accepted:true};}},
+const authority={verifyEnrollment:async key=>key==='confirmed-synthetic-enrollment'?proof():null,
+  confirmBinding:async ({memberId})=>memberId==='79417'?proof():null};
+const remoteOtp={secret,resolveRecipient:async request=>({authority:'studiomate_registered_contact',studioId:STUDIO_ID,
+  memberId:request.memberId,revision:request.revision,verified:true,checkedAt:now(),phone:identity().phone}),
+  sendCode:async ({code,mayDispatch})=>{assert(mayDispatch());received.push(code);return {accepted:true};}};
+const nativePilot=()=>createInternalStudioMatePilot({enabled:true,storePath:path,now,authority,remoteOtp,
   loadExpectedIdentity:async ({memberId,revision})=>memberId==='79417'&&revision===rev?identity():null,
   classifyTicket:t=>t.name==='Verified fixture'?{verified:true,display:true,type:'count',category:'그룹수업'}:null,
   makeAdminReader:()=>({getOverview:async who=>{
@@ -33,9 +40,54 @@ const pilot=()=>createInternalStudioMatePilot({enabled:true,storePath:path,now,
       {name:'Verified fixture',availableFromDate:'2026-11-01',expiresOn:'2026-12-10',remainingCount:5,reservableCount:3,paymentAmount:1004000}]};
   },getBookings:async (_who,range)=>({...identity(),checkedAt:new Date(now()).toISOString(),
     coverage:{kind:'native_member_booking_history',complete:true,traversalComplete:true,requestedRange:range},records:[]})})});
+const hostedPilot=()=>{
+  const cloudAuthority=createCloudEnrollmentAuthority({now,
+    loadEnrollment:async ({referenceDigest})=>referenceDigest===digest(hostRef)?{
+      authority:'approved_help_enrollment',approved:true,studioId:STUDIO_ID,memberId:'79417',revision:rev,expiresAt:now()+60_000}:null,
+    loadCurrentBinding:async ({memberId})=>memberId==='79417'?{...identity(),authority:'verified_studiomate_in_person_signup',
+      signupComplete:true,active,revoked:!active,registeredContactVerified:true,sourceObservedAt:now()-1000}:null});
+  const issuerQuery=async (sql,args)=>{
+    if(sql.includes('.revoke_read_session(')){issuedReadSessions.delete(args[0]);return;}
+    assert.match(sql,/\.issue_read_session\(/);
+    assert.equal(args[1],currentPassMemberKey(memberKeySecret,identity().memberId));
+    assert.equal(args[2],rev);
+    issuedReadSessions.set(args[0],Date.parse(args[3]));
+  };
+  const readerQuery=async (sql,args)=>{
+    assert.match(sql,/\.read_own\(/);assert.equal(args.length,1);calls++;
+    return {rows:[{result:{observedAt:new Date(now()).toISOString(),expiresAt:issuedReadSessions.get(args[0]),
+      cards:[{category:'group',type:'count',status:'active',startsOn:'2026-11-01',expiresOn:'2026-12-10',remaining:5,bookable:3}]}}]};
+  };
+  const store=createPostgresAuthStore({pool:localPool});
+  return {...createHostedHelpMemberService({enabled:true,store,authority:cloudAuthority,now,memberKeySecret,issuerQuery,readerQuery,
+    remoteOtp:{...remoteOtp,resolveRecipient:cloudAuthority.resolveRecipient}}),
+    close(){}};
+};
+const pilot=hosted?hostedPilot:nativePilot;
 const mime={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json','.png':'image/png','.svg':'image/svg+xml'};
-let service=await pilot(),browser,ctx;
+let service,browser,ctx,authDb;
+let queue=Promise.resolve();
+const localPool={async connect(){
+  const previous=queue;
+  let release;
+  queue=new Promise(resolve=>{release=resolve;});
+  await previous;
+  return {async query(sql,args){
+    if(sql.startsWith('SELECT '))return authDb.query(sql,args);
+    await authDb.exec(sql);
+    return {command:sql.split(' ')[0]};
+  },release};
+}};
 try{
+  if(hosted){
+    const dependencyFile=process.env.ARCHIVE_HELP_PGLITE_PACKAGE_JSON??
+      '/Users/archivepilates/archive-automation/operations/2026-11-20-supabase-history-pilot/package.json';
+    const {PGlite}=createRequire(dependencyFile)('@electric-sql/pglite');
+    authDb=await PGlite.create();
+    await authDb.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role');
+    await authDb.exec(readFileSync(new URL('../archivepilates-mcp/sql/help-member-auth-store.sql',import.meta.url),'utf8'));
+  }
+  service=await pilot();
   browser=await chromium.launch({headless:true});
   ctx=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:820}});
   const jar=new Map();
@@ -69,7 +121,7 @@ try{
   await cdp.send('WebAuthn.enable');
   const {authenticatorId}=await cdp.send('WebAuthn.addVirtualAuthenticator',{options:{protocol:'ctap2',transport:'internal',
     hasResidentKey:true,hasUserVerification:true,isUserVerified:true,automaticPresenceSimulation:true}});
-  const ticket=await service.issueInvite('confirmed-synthetic-enrollment');
+  const ticket=await service.issueInvite(hosted?hostRef:'confirmed-synthetic-enrollment');
   assert(ticket?.token);
   await page.goto(ORIGIN+'/#member-invite='+ticket.token);
   await page.getByRole('button',{name:'닫기',exact:true}).click();
@@ -108,10 +160,11 @@ try{
   assert.equal((await call('cards',{memberId:'79418'})).status,400);
   assert.equal((await call('history',{memberId:'79418'})).status,400);
   assert.equal((await call('history?memberId=79418')).status,404);
-  assert.equal((await call('history')).status,200);
+  assert.equal((await call('history')).status,hosted?403:200);
   await page.getByRole('button',{name:'인증 종료',exact:true}).click();
   await answer.waitFor({state:'detached'});
   assert.equal((await call('cards')).status,403);
+  assert.equal(issuedReadSessions.size,0);
   assert.equal((await call('otp-verify',{invitation:ticket.token,code:received[0]})).status,400);
   await ask('내 수강권 몇 회 남았어?');
   await page.getByRole('button',{name:'회원 인증 후 확인',exact:true}).last().click();
@@ -129,9 +182,9 @@ try{
   assert.equal(await page.getByRole('button',{name:'회원 인증 후 확인',exact:true}).count(),0);
   assert.equal(await answer.count(),0);
   assert.equal(publicGptPosts,0);
-  console.log(JSON.stringify({virtualWebAuthn:true,restartPersisted:true,lookupScopeEnforced:true,
+  console.log(JSON.stringify({backend:hosted?'hosted-snapshot':'native-pilot',virtualWebAuthn:true,restartPersisted:true,lookupScopeEnforced:true,
     separateSyntheticOtp:true,automaticResume:true,noSecondOtp:true,revokedBlocked:true,
     responsiveWidths:[320,390,768,1440],liveExternalRequests:0,publicGptPosts}));
 }finally{
-  await ctx?.close();await browser?.close();await service.close();rmSync(dir,{recursive:true,force:true});
+  await ctx?.close();await browser?.close();await service?.close();await authDb?.close();rmSync(dir,{recursive:true,force:true});
 }
