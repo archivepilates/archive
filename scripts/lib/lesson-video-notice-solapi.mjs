@@ -12,21 +12,25 @@ export function makeLessonVideoSolapiRequest({ gcloudPath = 'gcloud' } = {}) {
 export function createLessonVideoSolapiTransport({ key, apiSecret, fetcher = fetch, clock = Date.now,
   wait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   let nextReadAt = 0;
-  return async function request(resource, method = 'GET', body) {
+  return async function request(resource, method = 'GET', body, { signal, retryRead = true } = {}) {
     if (typeof resource !== 'string' || !resource.startsWith('/') || resource.startsWith('//') || !['GET', 'POST', 'PUT'].includes(method)) throw Error('Unsupported SOLAPI request');
     const url = new URL(resource, 'https://api.solapi.com');
     if (url.origin !== 'https://api.solapi.com') throw Error('Unexpected SOLAPI origin');
     let response;
     for (let attempt = 0; attempt < 2; attempt++) {
+      signal?.throwIfAborted();
       if (method === 'GET') {
         if (clock() < nextReadAt) await wait(nextReadAt - clock());
+        signal?.throwIfAborted();
         nextReadAt = clock() + 400;
       }
       const date = new Date(clock()).toISOString(), salt = randomBytes(16).toString('hex');
       const signature = createHmac('sha256', apiSecret).update(date + salt).digest('hex');
+      const deadline=AbortSignal.timeout(30000);
       response = await fetcher(url, { method, headers: { Authorization: `HMAC-SHA256 apiKey=${key}, date=${date}, salt=${salt}, signature=${signature}`,
-        'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(30000) });
-      if (method !== 'GET' || response.status !== 429 || attempt !== 0) break;
+        'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: signal ? AbortSignal.any([signal,deadline]) : deadline });
+      if (!retryRead || method !== 'GET' || response.status !== 429 || attempt !== 0) break;
       const seconds = Number(response.headers.get('x-retry-after') || response.headers.get('retry-after'));
       const delay = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds * 1000) : 5500;
       if (delay > 60000) break;

@@ -1,6 +1,7 @@
 import { reusableQuestion } from './engine.js';
 import {conversationTurn} from './conversation.js';
 import {applyNaturalReply,publicNaturalPacket,requestNaturalReply,supportsNaturalChat} from './public-natural.js';
+import {createMemberConnection} from './member-connection.js';
 
 const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
 
@@ -96,6 +97,7 @@ function showTimetable(data){
 }
 function append(role,result,follow=true){
   const row=element('article',null,'turn '+role);
+  if(result.memberPrivate)row.dataset.memberPrivate='';
   const body=element('div',null,'turn-body');
   if(role==='assistant'){
     const logo=element('img',null,'avatar');logo.src='/favicon.png';logo.alt='';logo.width=24;logo.height=24;row.append(logo);
@@ -113,6 +115,7 @@ function append(role,result,follow=true){
   const links=element('div',null,'chat-actions');
   if(result.source&&!result.timetable)links.append(link(result.sourceLabel??'안내 원문',result.source));
   if(result.appGuide)links.append(link(result.memberLookup?'회원 앱에서 확인하는 방법':'공식 앱 이용 안내',result.appGuide));
+  if(result.endMember)links.append(button('인증 종료',result.endMember));
   if(result.inquiry)links.append(link(result.inquiry==='refund'?'카카오톡으로 환불 문의':'카카오톡으로 직원 문의',staffChat));
   if(links.children.length)body.append(links);
   if(result.choices?.length){
@@ -126,7 +129,19 @@ function append(role,result,follow=true){
     if(result.timetable&&row.offsetHeight>stream.clientHeight)stream.scrollTop+=row.getBoundingClientRect().top-stream.getBoundingClientRect().top-10;
     else stream.scrollTop=stream.scrollHeight;
   }
+  return links;
 }
+const count=value=>Number.isSafeInteger(value)&&value>=0?value+'회':'확인 필요';
+function privateAnswer(scope,rows){
+  if(!rows.length)return scope==='history'?'확인된 최근 출석 기록이 없어요.':'확인된 수강권이 없어요.';
+  if(scope==='history')return ['최근 출석 기록이에요.',...rows.map(row=>[row.date,row.category,row.status].join(' · '))].join('\n');
+  return rows.map(row=>row.type==='period'?row.category+' · 이용 종료일 '+row.endsOn:
+    row.category+' · 잔여 '+count(row.remaining)+' · 예약 가능 '+count(row.bookable)+' · 만료일 '+row.expiresOn).join('\n');
+}
+const member=createMemberConnection({
+  onPrivate:(scope,rows,_checkedAt,end)=>append('assistant',{text:privateAnswer(scope,rows),memberPrivate:true,endMember:end}),
+  onClear:()=>stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove())
+});
 function greetingArt(){
   const ns='http://www.w3.org/2000/svg';
   const art=document.createElementNS(ns,'svg'), symbol=document.createElementNS(ns,'use');
@@ -145,7 +160,8 @@ function finishTurn(q,result,focusInput,userShown=false,follow=true){
   state=result.state;
   clearChoices();
   if(!userShown&&reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
-  append('assistant',result,follow);
+  const actions=append('assistant',result,follow);
+  if(result.memberLookup)void member.offer(/출석|수강\s*이력|이용\s*내역/u.test(q)?'history':'cards',actions);
   if(focusInput)input.focus({preventScroll:true});
 }
 function basicReply(q){return conversationTurn(q,state,{rules});}
@@ -198,5 +214,6 @@ get('question').addEventListener('submit',e=>{
   e.preventDefault();const q=input.value;input.value='';
   ask(q,{useAi:e.submitter!==basicSend});
 });
-get('reset-chat').addEventListener('click',()=>{welcome();input.focus({preventScroll:true});});
+get('reset-chat').addEventListener('click',()=>{member.end();welcome();input.focus({preventScroll:true});});
 welcome();
+member.openInvitation();
