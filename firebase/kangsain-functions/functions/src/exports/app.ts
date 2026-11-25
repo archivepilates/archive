@@ -1,3 +1,4 @@
+import { coreCleaningChecklistHandler } from "../callable/coreCleaningChecklist";
 import { onCall, onRequest } from "firebase-functions/v2/https";
 import { memberInquiryApiHandler, memberInquiryStaffHandler } from "../memberInquiries/handlers";
 import { createHelpPublicChatHandler, helpPublicOpenAiApiKey } from "../memberInquiries/publicChatIntent";
@@ -98,6 +99,9 @@ export const getCoreAirConditioners = onCall(climateOptions, request => climateH
 export const operatorControlCoreAirConditioner = onCall(climateOptions, request => climateHandler(request, "control"));
 export const operatorReconcileCoreAirConditioner = onCall(climateOptions, request => climateHandler(request, "reconcile"));
 
+export const coreCleaningChecklist = onCall(secretlessCallableOptions, async request => {
+  try { return await coreCleaningChecklistHandler(request); } catch (err) { throw toHttpsError(err); }
+});
 export const getCoreAccessSession = onCall(secretlessCallableOptions, async request => {
   try { return await getCoreAccessSessionHandler(request); } catch (err) { throw toHttpsError(err); }
 });

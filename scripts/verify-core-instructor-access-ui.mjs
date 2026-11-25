@@ -191,6 +191,50 @@ function firebaseModule(kind) {
     export const httpsCallable = (_, name) => async (payload) => {
       const call = record("callables", { name, month: payload?.month, path: location.pathname });
       if (!authClient.currentUser) throw denied("Synthetic session is signed out");
+      if (name === "coreCleaningChecklist") {
+        if (!state.accessResolved || fixture.mustChangePassword) throw denied("Cleaning scope unavailable");
+        state.cleaningRecords ||= [];
+        state.cleaningRevision ||= 0;
+        state.cleaningItems ||= [
+          { id: "shower-supplies", label: "샤워실 비품 보충", help: "비품 확인" },
+          { id: "coffee", label: "커피머신", help: "물받이 닦기" },
+        ];
+        if (payload.action === "catalog") {
+          if (state.session.role !== "manager" || payload.revision !== state.cleaningRevision++) throw denied("Catalog authority required");
+          if (payload.operation === "add") state.cleaningItems.push({ id: "added", label: payload.label, help: payload.help });
+          if (payload.operation === "edit") {
+            const item = state.cleaningItems.find(item => item.id === payload.itemId);
+            Object.assign(item, { label: payload.label, help: payload.help });
+          }
+          if (payload.operation === "delete") {
+            const item = state.cleaningItems.find(item => item.id === payload.itemId);
+            if (item.id === "coffee") state.cleaningRecords.unshift({ id: "older-coffee", itemId: item.id, itemLabel: item.label,
+              actorName: "다른 강사", recordedAt: Date.parse("2026-10-11T09:40:00Z"), status: "done" });
+            state.cleaningItems = state.cleaningItems.filter(item => item.id !== payload.itemId);
+          }
+          return { data: { ok: true } };
+        }
+        call.action = payload.action;
+        call.requestId = payload.requestId;
+        if (payload.action === "record") {
+          if (state.session.role !== "instructor") throw denied("Instructor only");
+          if (!state.cleaningRecords.some(row => row.id === payload.requestId)) {
+            state.cleaningRecords.unshift({ id: payload.requestId, itemId: payload.itemId,
+              itemLabel: state.cleaningItems.find(item => item.id === payload.itemId).label,
+              actorName: fixture.staffName, recordedAt: Date.parse("2026-10-11T01:15:00Z") + 60000 * state.cleaningRecords.length,
+              status: payload.status, note: payload.note });
+            if (state.cleaningRecords.length === 1) {
+              throw Object.assign(new Error("Synthetic reply lost after commit"), { code: "functions/unavailable" });
+            }
+          }
+          return { data: { ok: true } };
+        }
+        return { data: { today: "2026-10-11", date: payload.date || "2026-10-11",
+          items: state.cleaningItems, revision: state.cleaningRevision,
+          records: state.session.role === "manager" && payload.date === "2026-10-10"
+            ? [{ itemId: "coffee", itemLabel: "커피머신", actorName: "다른 강사", recordedAt: Date.parse("2026-10-10T09:40:00Z"), status: "done" }]
+            : state.cleaningRecords } };
+      }
       if (name === "getCoreAccessSession") {
         call.startedAtMs = performance.now();
         const destination = document.querySelector('[data-core-navigation-frame][hidden]');
@@ -1306,6 +1350,57 @@ async function currentRefreshDowngrade(page, base, name) {
 }
 
 async function runCase(page, base, kind, name) {
+  if (kind === "cleaning" || kind === "manager-cleaning") {
+    const manager = kind.startsWith("manager");
+    await page.getByRole("heading", { name: "청소 체크리스트", exact: true }).waitFor();
+    await page.getByText("완료 0/2", { exact: false }).waitFor();
+    const supplies = page.getByRole("article").filter({ hasText: "샤워실 비품 보충" });
+    if (manager) {
+      assert.equal(await page.getByRole("button", { name: "완료 기록", exact: true }).count(), 0);
+      await page.getByLabel("조회할 날짜").fill("2026-10-10");
+      await page.getByText(/최근 18:40 다른 강사/).waitFor();
+      await page.getByRole("button", { name: "오늘", exact: true }).click();
+      await page.getByText("완료 0/2", { exact: false }).waitFor();
+      await page.getByText("청소구역 관리", { exact: true }).click();
+      await page.getByLabel("구역 이름").fill("현관");
+      await page.getByLabel("작업 안내").fill("발매트 털기");
+      await page.getByRole("button", { name: "구역 추가", exact: true }).click();
+      await page.getByText("완료 0/3", { exact: false }).waitFor();
+      await page.locator(".cleaning-zones li").filter({ hasText: "현관" }).getByRole("button", { name: "수정", exact: true }).click();
+      await page.getByLabel("구역 이름").fill("입구");
+      await page.getByRole("button", { name: "변경 저장", exact: true }).click();
+      await page.getByRole("article").filter({ hasText: "입구" }).waitFor();
+      const zone = page.locator(".cleaning-zones li").filter({ hasText: "커피머신" });
+      await zone.getByRole("button", { name: "삭제", exact: true }).click();
+      await zone.getByRole("button", { name: "삭제 확인", exact: true }).click();
+      await page.getByText("커피머신 (삭제된 구역)", { exact: true }).waitFor();
+      await page.getByText(/최근 18:40 다른 강사/).waitFor();
+      await page.getByText("완료 0/2", { exact: false }).waitFor();
+    } else {
+      assert.equal(await page.getByText("청소구역 관리", { exact: true }).count(), 0);
+      await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
+      await supplies.getByRole("button", { name: "같은 기록 다시 확인", exact: true }).click();
+      await supplies.getByText(/최근 10:15 QA 강사.*완료 1회/).waitFor();
+      await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
+      await supplies.getByText(/최근 10:16 QA 강사.*완료 2회/).waitFor();
+      await supplies.getByText("전체 기록 2건", { exact: true }).click();
+      await supplies.getByRole("listitem").filter({ hasText: "10:15 QA 강사" }).waitFor();
+      await supplies.getByRole("button", { name: "확인 필요", exact: true }).click();
+      await supplies.getByLabel("메모").fill("바디워시 재고 없음");
+      await supplies.getByRole("button", { name: "확인 필요 저장", exact: true }).click();
+      await supplies.getByText(/최근 10:17 QA 강사.*바디워시 재고 없음/).waitFor();
+      const requests = await page.evaluate(() => window.__coreFirebaseQA.callables.filter(c => c.action === "record"));
+      assert.equal(requests.length, 4);
+      assert.equal(requests[0].requestId, requests[1].requestId);
+      assert.notEqual(requests[1].requestId, requests[2].requestId);
+    }
+    const state = await telemetry(page);
+    assert.equal(state.events[0]?.name, "getCoreAccessSession");
+    assert.deepEqual(state.reads, []);
+    assert.deepEqual(state.writes, []);
+    return state;
+  }
+
   if (kind === "climate") {
     await instructorNav(page, base);
     await page.getByRole("heading", { name: "QA 에어컨 8", exact: true }).waitFor();
@@ -1582,6 +1677,7 @@ async function runCase(page, base, kind, name) {
 }
 
 function routeFor(base, kind) {
+  if (["cleaning", "manager-cleaning"].includes(kind)) return `${base}center-management/`;
   if (kind === "manager-sequence") return `${base}sequence/`;
   if (["private", "sequence", "climate"].includes(kind)) return `${base}${kind}/`;
   if (kind === "workspace-retry") return `${base}private/`;
@@ -1733,7 +1829,7 @@ try {
   });
   origin = `http://127.0.0.1:${server.address().port}`;
   browser = await ({ chromium, webkit }[engineName]).launch({ headless: true });
-  const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence", "climate",
+  const cases = ["home", "private", "first-login", "pending-role", "access-denied", "sequence", "climate", "cleaning", "manager-cleaning",
     "blocked-business", "blocked-members/detail", "blocked-rules", "manager", "manager-sequence", "owner", "revoked-session", "access-transient",
     "logged-out", "bootstrap-failure", "navigation", "manager-navigation", "manager-slow-data-navigation", "instructor-slow-workspace-navigation"];
   for (const base of surfaces) {

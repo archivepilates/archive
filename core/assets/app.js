@@ -868,6 +868,7 @@ const NAV_ICONS = {
   rules: "book-open",
   settings: "settings-2",
   climate: "air-vent",
+  cleaning: "clipboard-check",
 };
 
 function navIcon(section) {
@@ -895,6 +896,7 @@ const NAV_LABELS = {
   rules: "운영규칙",
   settings: "설정",
   climate: "에어컨",
+  cleaning: "센터관리",
 };
 
 function setAdminNavOpen(open) {
@@ -1018,6 +1020,13 @@ function enhanceNav() {
     link.href = `${coreRootHref}climate/`;
     link.dataset.section = "climate";
     link.textContent = NAV_LABELS.climate;
+    nav.insertBefore(link, nav.querySelector('[data-section="automation"]'));
+  }
+  if (!nav.querySelector('[data-section="cleaning"]')) {
+    const link = document.createElement("a");
+    link.href = `${coreRootHref}center-management/`;
+    link.dataset.section = "cleaning";
+    link.textContent = "센터관리";
     nav.insertBefore(link, nav.querySelector('[data-section="automation"]'));
   }
   const links = [...nav.querySelectorAll("a")];
@@ -8890,6 +8899,14 @@ async function refresh() {
       return;
     }
     if (access.role === "instructor" && await renderInstructorCore(runtime, access, { onReady: publishNavigation })) return;
+    const cleaning = document.querySelector("[data-cleaning-checklist]");
+    if (cleaning) {
+      const { mountCleaningChecklist } = await import("./cleaning-checklist.js");
+      if (runtime.authClient.currentUser?.uid !== user.uid) return;
+      mountCleaningChecklist(cleaning, runtime, access);
+      await publishNavigation();
+      return;
+    }
     const referralHost = document.querySelector("[data-studiomate-referral-intake]");
     if (referralHost) {
       const { mountStudioMateReferralIntake } = await import("./studiomate-referral-intake.js");

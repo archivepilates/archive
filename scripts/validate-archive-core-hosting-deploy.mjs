@@ -7,6 +7,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
 const required = [
+  { file: "core/center-management/index.html", label: "CORE cleaning entry", markers: ["data-cleaning-checklist", "../assets/app.js", "../assets/cleaning-checklist.css"] },
+  { file: "core/assets/cleaning-checklist.js", label: "CORE cleaning records", markers: ["coreCleaningChecklist", "완료 기록", "전체 기록", "Asia/Seoul"] },
   {
     file: "core/climate/index.html",
     label: "operator LG climate control entry",

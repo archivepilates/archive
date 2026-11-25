@@ -6,6 +6,7 @@ const ROUTES = [
   ["private", `${CORE_BASE}private/`, "프라이빗", "clipboard-check"],
   ["inquiries", `${CORE_BASE}inquiries/`, "회원 문의", "messages-square"],
   ["sequence", `${CORE_BASE}sequence/`, "시퀀스 노트", "notebook-pen"],
+  ["cleaning", `${CORE_BASE}center-management/`, "센터관리", "clipboard-check"],
   ["climate", `${CORE_BASE}climate/`, "에어컨", "air-vent"],
 ];
 const STATUS_LABELS = {
@@ -571,6 +572,18 @@ export async function renderInstructorCore(runtime, session, view = {}) {
   }
   if (route === "blocked") {
     renderAccessNotice(runtime, session);
+    return true;
+  }
+  if (route === "cleaning") {
+    resetSequence();
+    resetClimate();
+    const content = renderShell(runtime, session, route);
+    root.classList.remove("core-instructor-access--sequence");
+    const { mountCleaningChecklist } = await import("./cleaning-checklist.js");
+    if (generation !== ticket || activeSession?.session !== session || !content.isConnected
+      || activeSession.uid !== runtime.authClient.currentUser?.uid) return true;
+    mountCleaningChecklist(content, runtime, session);
+    await view.onReady?.();
     return true;
   }
   if (route === "climate") {

@@ -10,7 +10,7 @@ import { addDays, todayKst } from "../utils/date";
 import { matchesPrivateChartBooking, matchesPrivateChartRecord } from "../privateLessonChart/privateLessonChartOwnership";
 import { bookingSourcePriority } from "../utils/canonicalBooking";
 
-async function sessionStaff(request: CallableRequest): Promise<CoreInstructorStaff> {
+export async function requireCoreSessionStaff(request: CallableRequest): Promise<CoreInstructorStaff> {
   if (!request.auth) throw new AppError("AUTH_REQUIRED", "로그인이 필요합니다");
   const email = String(request.auth.token.email || "").toLowerCase();
   const staff = await getStaffByUid(request.auth.uid) || (email ? await getStaffByEmail(email) : null);
@@ -22,13 +22,13 @@ async function sessionStaff(request: CallableRequest): Promise<CoreInstructorSta
 }
 
 export async function getCoreAccessSessionHandler(request: CallableRequest): Promise<unknown> {
-  const staff = await sessionStaff(request);
+  const staff = await requireCoreSessionStaff(request);
   return { role: isManagerRole(staff.role) ? "manager" : staff.role, staffId: staff.staffId, staffName: staff.name,
     mustChangePassword: staff.role === "instructor" && staff.coreMustChangePassword !== false };
 }
 
 export async function completeCoreFirstLoginHandler(request: CallableRequest): Promise<unknown> {
-  const staff = await sessionStaff(request);
+  const staff = await requireCoreSessionStaff(request);
   const password = request.data?.password;
   if (staff.role !== "instructor" || staff.coreMustChangePassword !== true || !validCorePassword(password))
     throw new AppError("INVALID_ARGUMENT", "새 비밀번호는 8~64자리로 입력하세요");

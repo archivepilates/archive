@@ -1,0 +1,8 @@
+# ARCHIVE CORE 센터관리 청소 체크리스트
+
+Deployment status: prepared and locally tested only. No production deploy, live account write, notification, or schedule change.
+
+- Both CORE roles have a 센터관리 entry; its first section is 청소 체크리스트. Active, linked, password-ready instructors see today's shared checklist for the default studio, can log multiple completions or an exception, and can see who recorded each one and when in Asia/Seoul. A manager views selected dates, sees missing/exception items first, and can maintain the current catalog.
+- The secretless app callable reuses verified CORE session access. Only the matching studio is allowed. The server fixes the actor, time, date and scope; clients cannot directly read or write the new Firestore collections. Each recording request is keyed to its actor and a unique ID. Repeating a response-uncertain request is idempotent; deliberate repeated completions receive new IDs. No daily close blocks further records.
+- The configurable list defaults to the agreed 14 entries. Only managers edit it; version checks prevent stale writes. Changes apply to the current list. The latest revision from the requested historical day and the record's original name/instructions preserve past context. Removing an item only removes it from the active list, not prior records.
+- For an approved release use the CORE release path and only the app callable/core hosting scope. Confirm the clean current main baseline and both hosted paths; verify staff and manager sign-in with authorized test identities and an isolated QA record before calling production verified. No Firestore rules change or collection backfill is required.

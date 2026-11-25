@@ -97,6 +97,7 @@
         "operatorReconcileCoreAirConditioner",
         "getInstructorHome",
         "getCoreAccessSession",
+        "coreCleaningChecklist",
         "operatorCaptureStudioMateReferral",
         "getStudioMateReferralDashboard",
         "completeCoreFirstLogin",
