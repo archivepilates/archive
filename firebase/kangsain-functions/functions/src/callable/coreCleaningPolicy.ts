@@ -30,7 +30,7 @@ export function parseCleaningRequest(data: unknown, today: string, manager: bool
     return { action: "read" as const, date };
   }
   if (value.action !== "record" || !Object.keys(value).every(key => ["action", "date", "itemId", "requestId", "status", "note", "revision"].includes(key))) throw invalid();
-  if (manager) throw new AppError("PERMISSION_DENIED", "완료 기록은 강사 화면에서 작성해 주세요.");
+  if (date !== today) throw new AppError("PERMISSION_DENIED", "오늘 청소만 기록할 수 있습니다.");
   const { itemId, requestId, status, revision } = value;
   const note = typeof value.note === "string" ? value.note.trim() : "";
   if (!validCleaningId(itemId) || !validRevision(revision) || typeof requestId !== "string"

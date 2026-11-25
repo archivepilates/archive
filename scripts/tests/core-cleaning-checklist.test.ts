@@ -9,11 +9,13 @@ test("all 14 distinct items, including individual bins and shower supplies", () 
   assert.equal(CLEANING_ITEMS.filter(([id]) => id.startsWith("trash-")).length, 7);
   assert.ok(CLEANING_ITEMS.some(([id]) => id === "shower-supplies"));
 });
-test("instructor reads and records only server today; manager reads past days only", () => {
+test("both roles write only server today; only manager reads past days", () => {
   assert.deepEqual(parseCleaningRequest({ action: "read" }, today, false), { action: "read", date: today });
   assert.equal(parseCleaningRequest({ action: "read", date: "2026-11-25" }, today, true).date, "2026-11-25");
   assert.throws(() => parseCleaningRequest({ action: "read", date: "2026-11-25" }, today, false));
-  assert.throws(() => parseCleaningRequest(base, today, true));
+  assert.equal(parseCleaningRequest(base, today, true).action, "record");
+  assert.throws(() => parseCleaningRequest({ ...base, date: "2026-11-25" }, today, true), { code: "PERMISSION_DENIED" });
+  assert.throws(() => parseCleaningRequest({ ...base, date: "2026-11-27" }, today, true));
   assert.equal(parseCleaningRequest(base, today, false).action, "record");
   assert.throws(() => parseCleaningRequest({ ...base, date: "2026-11-25" }, today, false));
   assert.throws(() => parseCleaningRequest({ action: "read", date: "2026-02-30" }, today, true));

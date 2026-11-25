@@ -95,7 +95,7 @@ export function mountCleaningChecklist(host, runtime, access) {
         make("p", latest ? `최근 ${describe(latest)} · 완료 ${count}회` : "아직 기록 없음", "cleaning-latest"));
       row.append(title);
       card.append(row);
-      if (!manager) {
+      if (!retired && model.date === model.today) {
         const actions = make("div", null, "cleaning-actions");
         const retry = pending.get(id);
         const noteForm = make("form", null, "cleaning-note");
@@ -216,7 +216,7 @@ export function mountCleaningChecklist(host, runtime, access) {
     } finally { if (alive()) setBusy(false); }
   }
   async function record(itemId, nextStatus, note) {
-    if (busy || manager || !alive() || !model) return;
+    if (busy || !alive() || !model || model.date !== model.today || !model.items.some(item => item.id === itemId)) return;
     const request = pending.get(itemId) || { action: "record", date: model.date, itemId,
       status: nextStatus, note, revision: model.revision, requestId: crypto.randomUUID() };
     pending.set(itemId, request);

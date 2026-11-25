@@ -54,7 +54,7 @@ export async function coreCleaningChecklistHandler(request: CallableRequest): Pr
   }
   const uid = request.auth!.uid;
   const actorName = staff.name?.trim();
-  if (!actorName) throw new AppError("FAILED_PRECONDITION", "강사 이름이 등록되어 있지 않습니다.");
+  if (!actorName) throw new AppError("FAILED_PRECONDITION", "사용자 이름이 등록되어 있지 않습니다.");
   const ref = records.doc(createHash("sha256").update(uid + ":" + input.requestId).digest("hex"));
   await db.runTransaction(async tx => {
     const existing = await tx.get(ref);

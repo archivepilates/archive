@@ -217,7 +217,7 @@ function firebaseModule(kind) {
         call.action = payload.action;
         call.requestId = payload.requestId;
         if (payload.action === "record") {
-          if (state.session.role !== "instructor") throw denied("Instructor only");
+          if (payload.date !== "2026-10-11" || !state.cleaningItems.some(item => item.id === payload.itemId)) throw denied("Today and active area only");
           if (!state.cleaningRecords.some(row => row.id === payload.requestId)) {
             state.cleaningRecords.unshift({ id: payload.requestId, itemId: payload.itemId,
               itemLabel: state.cleaningItems.find(item => item.id === payload.itemId).label,
@@ -1356,9 +1356,9 @@ async function runCase(page, base, kind, name) {
     await page.getByText("완료 0/2", { exact: false }).waitFor();
     const supplies = page.getByRole("article").filter({ hasText: "샤워실 비품 보충" });
     if (manager) {
-      assert.equal(await page.getByRole("button", { name: "완료 기록", exact: true }).count(), 0);
       await page.getByLabel("조회할 날짜").fill("2026-10-10");
       await page.getByText(/최근 18:40 다른 강사/).waitFor();
+      assert.equal(await page.getByRole("button", { name: "완료 기록", exact: true }).count(), 0);
       await page.getByRole("button", { name: "오늘", exact: true }).click();
       await page.getByText("완료 0/2", { exact: false }).waitFor();
       await page.getByText("청소구역 관리", { exact: true }).click();
@@ -1376,6 +1376,13 @@ async function runCase(page, base, kind, name) {
       await page.getByText("커피머신 (삭제된 구역)", { exact: true }).waitFor();
       await page.getByText(/최근 18:40 다른 강사/).waitFor();
       await page.getByText("완료 0/2", { exact: false }).waitFor();
+      const removed = page.getByRole("article").filter({ hasText: "커피머신 (삭제된 구역)" });
+      assert.equal(await removed.getByRole("button", { name: "완료 기록", exact: true }).count(), 0);
+      await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
+      await supplies.getByText(/최근 10:16 QA 관리자.*완료 1회/).waitFor();
+      await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
+      await supplies.getByText(/최근 10:17 QA 관리자.*완료 2회/).waitFor();
+      await page.getByText("완료 1/2", { exact: false }).waitFor();
     } else {
       assert.equal(await page.getByText("청소구역 관리", { exact: true }).count(), 0);
       await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
