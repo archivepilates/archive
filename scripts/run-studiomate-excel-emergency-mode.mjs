@@ -9,6 +9,7 @@ import { cleanupImportedSourceFiles } from "./lib/imported-source-retention.mjs"
 import { membershipContractDiscoveryWarning } from "./lib/studiomate-membership-contract-observer.mjs";
 import { acquireStudioMateSyncRun } from "./lib/studiomate-sync-run-lock.mjs";
 import { shouldRunClassCorrection } from "./run-class-cancellation-correction.mjs";
+import { shouldPublishHelpCurrentPasses } from "../services/archive-help-member-access/current-pass-snapshot.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -178,8 +179,15 @@ if (shouldRunClassCorrection({apply, download, scheduledRun, notificationRefresh
   steps.push(runStep("classCancellationCorrection", ["scripts/run-class-cancellation-correction.mjs", "--apply", "--scheduled-run"]));
 }
 
+const memberDownload=steps.find(step=>step.name==="download")?.stdout?.downloads?.member;
+if(shouldPublishHelpCurrentPasses({enabled:process.env.HELP_CURRENT_PASS_SNAPSHOT_ENABLED==="enabled",
+  apply,download,scheduledRun,notificationRefresh,steps,memberDownload,manualSources:Boolean(memberFile||reservationFile)})){
+  steps.push(runStep("helpCurrentPassSnapshot",["scripts/publish-help-current-passes.mjs",
+    "--scheduled-run","--source-sha256",memberDownload.sha256]));
+}
+
 // Sidecars are not evidence of member/reservation import success.
-const sidecars = new Set(["staffEmployment", "holdingSource", "classCancellationCorrection"]);
+const sidecars = new Set(["staffEmployment", "holdingSource", "classCancellationCorrection", "helpCurrentPassSnapshot"]);
 const failed = steps.filter((step) => !sidecars.has(step.name) && step.exitCode && step.exitCode !== 0);
 const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed ||
   (sidecars.has(step.name) && step.exitCode !== 0));

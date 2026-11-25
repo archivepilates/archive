@@ -132,14 +132,24 @@ function append(role,result,follow=true){
   return links;
 }
 const count=value=>Number.isSafeInteger(value)&&value>=0?value+'회':'확인 필요';
-function privateAnswer(scope,rows){
-  if(!rows.length)return scope==='history'?'확인된 최근 출석 기록이 없어요.':'확인된 수강권이 없어요.';
-  if(scope==='history')return ['최근 출석 기록이에요.',...rows.map(row=>[row.date,row.category,row.status].join(' · '))].join('\n');
-  return rows.map(row=>row.type==='period'?row.category+' · 이용 종료일 '+row.endsOn:
-    row.category+' · 잔여 '+count(row.remaining)+' · 예약 가능 '+count(row.bookable)+' · 만료일 '+row.expiresOn).join('\n');
+const cardLabels={group:'그룹 수업',private:'프라이빗 수업',duet:'듀엣 수업',triple:'트리플 수업'};
+const cardStates={held:' · 홀딩 중',future:' · 이용 예정'};
+const snapshotClock=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+function privateAnswer(scope,rows,checkedAt){
+  if(scope==='history')return rows.length?['최근 출석 기록이에요.',...rows.map(row=>[row.date,row.category,row.status].join(' · '))].join('\n'):
+    '확인된 최근 출석 기록이 없어요.';
+  const checked=Date.parse(checkedAt??'');
+  const heading=Number.isFinite(checked)?snapshotClock.format(checked)+' 확인 기준 · 실제 예약 가능 여부는 회원 앱에서 확인해 주세요.':'';
+  const lines=rows.map(row=>{
+    const category=cardLabels[row.category]??row.category, status=cardStates[row.status]??'';
+    const expiry=row.expiresOn??row.endsOn;
+    return row.type==='period'?category+status+' · 이용 종료일 '+expiry:
+      category+status+' · 잔여 '+count(row.remaining)+' · 예약 가능 '+count(row.bookable)+' · 만료일 '+expiry;
+  });
+  return [heading,...(lines.length?lines:['확인된 수강권이 없어요.'])].filter(Boolean).join('\n');
 }
 const member=createMemberConnection({
-  onPrivate:(scope,rows,_checkedAt,end)=>append('assistant',{text:privateAnswer(scope,rows),memberPrivate:true,endMember:end}),
+  onPrivate:(scope,rows,checkedAt,end)=>append('assistant',{text:privateAnswer(scope,rows,checkedAt),memberPrivate:true,endMember:end}),
   onClear:()=>stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove())
 });
 function greetingArt(){
