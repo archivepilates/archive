@@ -92,11 +92,12 @@ function phone(value) {
     ? trimmed.replace(/[ -]/g, '') : null;
 }
 
-function ticket(row, memberId) {
+function ticket(row, memberId, passInventory) {
   scope(row, memberId, true);
   const userTicketId = nativeId(row.id);
   scope(row.ticket, memberId);
-  check(nativeId(row.ticket_id) === nativeId(row.ticket.id), 'LIVE_IDENTITY_MISMATCH');
+  const productId = nativeId(row.ticket_id);
+  check(productId === nativeId(row.ticket.id), 'LIVE_IDENTITY_MISMATCH');
   check(typeof row.active === 'boolean' && typeof row.ticket_usable === 'boolean'
     && typeof row.is_holding === 'boolean' && (row.is_shared === 0 || row.is_shared === 1));
   const name = label(row.ticket.title), type = label(row.ticket.type);
@@ -112,7 +113,13 @@ function ticket(row, memberId) {
     status: row.is_holding ? '\uc815\uc9c0' : row.active && row.ticket_usable ? 'active' : 'inactive',
     availableFrom, expiresAt,
     remainingCount: type !== 'period' && Number.isSafeInteger(row.remaining_coupon)
-      && row.remaining_coupon >= 0 ? row.remaining_coupon : null };
+      && row.remaining_coupon >= 0 ? row.remaining_coupon : null,
+    ...(passInventory ? {
+      productId, sourceClass, shared: row.is_shared === 1,
+      ownerVerified: row.is_shared === 0 || own(row, 'member_id'),
+      usableCoupon: Number.isSafeInteger(row.usable_coupon) && row.usable_coupon >= 0 ? row.usable_coupon : null,
+      usableStatus: typeof row.ticket_usable_status === 'string' ? row.ticket_usable_status : null,
+    } : {}) };
 }
 
 // The browser adapter must supply UI-generated GET responses; this module performs no requests.
@@ -132,7 +139,7 @@ export function normalizeMemberPage(body, url, options) {
     check(Array.isArray(row.userTickets) && row.userTickets.length <= 100);
     const issued = new Set();
     const activeTickets = Array.from(row.userTickets, raw => {
-      const projected = ticket(raw, memberId);
+      const projected = ticket(raw, memberId, options.passInventory === true);
       check(!issued.has(projected.userTicketId), 'LIVE_IDENTITY_MISMATCH');
       issued.add(projected.userTicketId);
       return projected;
@@ -167,4 +174,22 @@ export function normalizeBookingPage(body, url, options) {
       lessonType: row.lecture.type === 'G' ? 'group' : 'private', sourceStatus: row.status };
   });
   return { records, ...meta };
+}
+
+// Only consume the response initiated by the exact member detail UI.
+export function verifyIssuedOwners(body, expectedMemberId, requestedIds) {
+  check(Array.isArray(body) && body.length <= 1000 && Array.isArray(requestedIds)
+    && requestedIds.length > 0 && requestedIds.length <= 100);
+  const expected = nativeId(expectedMemberId);
+  const requested = new Set(requestedIds.map(nativeId));
+  check(requested.size === requestedIds.length, 'LIVE_IDENTITY_MISMATCH');
+  const matched = new Set();
+  for (const row of body) {
+    if (!object(row) || !requested.has(String(row.id))) continue;
+    const id = nativeId(row.id);
+    scope(row, expected, true);
+    check(object(row.member) && nativeId(row.member.id) === expected && !matched.has(id), 'LIVE_IDENTITY_MISMATCH');
+    matched.add(id);
+  }
+  check(matched.size === requested.size, 'LIVE_IDENTITY_MISMATCH');
 }

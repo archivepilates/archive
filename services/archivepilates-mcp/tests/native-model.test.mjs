@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { OperationError } from '../src/errors.mjs';
-import { normalizeMemberPage, normalizeBookingPage } from '../src/native-model.mjs';
+import { normalizeMemberPage, normalizeBookingPage, verifyIssuedOwners } from '../src/native-model.mjs';
 import { selectExpiring } from '../src/ticket-query.mjs';
 
 const ORIGIN = 'https://api.studiomate.kr';
@@ -44,6 +44,27 @@ test('member projection has exact public fields and does not mutate the source',
       remainingCount: 3 }] }], page: 1, perPage: 50, total: 1, lastPage: 1 });
   assert.deepEqual(body, before);
   assert.equal(JSON.stringify(result).includes('PRIVATE_SENTINEL'), false);
+});
+
+test('whole pass inventory retains opt-in issued-product evidence without changing existing MCP results', () => {
+  const raw = pass({ usable_coupon: 2, ticket_usable_status: 'using', is_shared: 1 });
+  const body = memberBody([member({ userTickets: [raw] })]);
+  const fields = members(body, MEMBERS, { page: 1, passInventory: true }).profiles[0].activeTickets[0];
+  assert.deepEqual(fields, { ...members(body).profiles[0].activeTickets[0], productId: '9',
+    sourceClass: 'G', usableCoupon: 2, usableStatus: 'using', shared: true, ownerVerified: true });
+  const missing = members(memberBody(), MEMBERS, { page: 1, passInventory: true }).profiles[0].activeTickets[0];
+  assert.equal(missing.usableCoupon, null);
+  assert.equal(missing.usableStatus, null);
+});
+
+test('shared pass ownership requires exactly one card with the expected native detail member', () => {
+  const row = { id: 71, studio_id: 5330, member: { id: 123 } };
+  assert.doesNotThrow(() => verifyIssuedOwners([row], '123', ['71']));
+  for (const rows of [[],[row,row],[{...row,member:{id:124}}],[{...row,member:null}],
+    [{...row,studio_id:1}],[{...row,member_id:124}]]) {
+    rejected(() => verifyIssuedOwners(rows, '123', ['71']));
+  }
+  rejected(() => verifyIssuedOwners([row], '123', ['71','71']));
 });
 
 test('member URL permits only the exact API origin, path and complete inventory scope', () => {

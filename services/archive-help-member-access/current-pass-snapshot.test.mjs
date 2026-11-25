@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {createSupabaseCurrentPassLookup,createSupabasePassSessionIssuer,currentPassMemberKey,makeDailyPassBatch,
+import {auditCurrentPassRoster,createSupabaseCurrentPassLookup,createSupabasePassSessionIssuer,currentPassMemberKey,makeDailyPassBatch,makeVerifiedRosterPassBatch,
   shouldPublishHelpCurrentPasses} from './current-pass-snapshot.mjs';
 
 const now=Date.parse('2026-11-25T09:30:00Z');
@@ -54,6 +54,75 @@ test('identity mismatch, incomplete source, unknown ticket state or missing coun
   }
   assert.throws(()=>makeDailyPassBatch({...payload,targets:[target,target],
     observations:[observation,observation]}),/scope_unverified/);
+});
+
+test('whole roster audit reconciles complete pages and counts only operational metadata',()=>{
+  const pass={userTicketId:'71',productId:'91',sourceClass:'G',type:'T',usableStatus:'using',shared:true,ownerVerified:true,
+    remainingCount:5,usableCoupon:2,availableFrom:'2026-11-01T00:00:00+09:00',expiresAt:'2026-12-10T00:00:00+09:00'};
+  const profiles=[
+    {_id:'1234',memberId:'1234',studioId:'5330',phone:target.phone,name:target.name,activeTickets:[pass]},
+    {_id:'1235',memberId:'1235',studioId:'5330',phone:target.phone,activeTickets:[
+      {...pass,userTicketId:'72',sourceClass:'I',type:'S'},
+    ]},
+    {_id:'1236',memberId:'1236',studioId:'5330',phone:null,activeTickets:[
+      {...pass,userTicketId:'73',sourceClass:'P',usableStatus:'to_use',usableCoupon:null,shared:false},
+    ]},
+  ];
+  const coverage={kind:'native_member_pages',scope:'member_roster',ticketScope:'member_list_userTickets',
+    complete:true,traversalComplete:true,nativeTotal:3,scannedMembers:3,pageCount:2,pagesTraversed:2,pagesRechecked:2};
+  const inventory={profiles,coverage,checkedAt:observedAt};
+  const summary=auditCurrentPassRoster(inventory);
+  assert.deepEqual(summary,{
+    checkedAt:observedAt,members:3,pages:2,recheckedPages:2,membersWithIssuedRecords:3,
+    missingRegisteredPhone:1,membersSharingPhone:2,issuedRecords:3,inactiveOrUnknownState:0,
+    using:1,future:1,held:0,classPassCandidates:2,otherIssuedRecords:1,sharedClassPassCandidates:1,
+    classPassCandidateHolders:2,classPassCandidateHoldersMissingPhone:1,missingSourceCounts:1,
+    missingClassPassCandidateDates:0,missingCandidateOwnerProof:0,
+  });
+  assert.equal(JSON.stringify(summary).includes(target.phone),false);
+  assert.equal(JSON.stringify(summary).includes(target.name),false);
+  for(const patch of [{pagesRechecked:1},{nativeTotal:4},{traversalComplete:false}]) {
+    assert.throws(()=>auditCurrentPassRoster({...inventory,coverage:{...coverage,...patch}}),/roster_unverified/);
+  }
+  assert.throws(()=>auditCurrentPassRoster({...inventory,profiles:[
+    ...profiles.slice(0,2),{...profiles[2],activeTickets:[pass]},
+  ]}),/roster_unverified/);
+});
+
+test('verified whole roster publishing accepts more than five and binds only exact eligible members',()=>{
+  const pass={userTicketId:'71',productId:'91',sourceClass:'G',type:'T',status:'active',usableStatus:'using',
+    shared:false,ownerVerified:true,remainingCount:5,usableCoupon:2,
+    availableFrom:'2026-11-01T00:00:00+09:00',expiresAt:'2026-12-10T00:00:00+09:00'};
+  const active=Array.from({length:7},(_,i)=>({_id:String(1234+i),memberId:String(1234+i),studioId:'5330',
+    phone:String(1000000001+i).padStart(11,'0'),name:'Synthetic Member '+i,
+    activeTickets:[{...pass,userTicketId:String(71+i)}]}));
+  const roster=[...active,{_id:'9900',memberId:'9900',studioId:'5330',phone:null,name:'No Contact',
+    activeTickets:[{...pass,userTicketId:'99',productId:'92',sourceClass:'I',type:'S'}]}];
+  const inventory={startedAt:new Date(now-2000).toISOString(),checkedAt:observedAt,profiles:roster,
+    coverage:{kind:'native_member_pages',scope:'member_roster',ticketScope:'member_list_userTickets',
+      complete:true,traversalComplete:true,nativeTotal:8,scannedMembers:8,pageCount:2,pagesTraversed:2,pagesRechecked:2}};
+  const authority={studioId:'5330',checkedAt:observedAt,
+    bindings:active.map(({memberId,name,phone})=>({memberId,name,phone,revision:target.bindingRevision})),
+    products:[{productId:'91',sourceType:'T',sourceClass:'G',category:'group',type:'count'},
+      {productId:'92',sourceType:'S',sourceClass:'I',category:'excluded'}]};
+  const input={inventory,authority,sourceDigest,secret,now};
+  const batch=makeVerifiedRosterPassBatch(input);
+  assert.equal(batch.members.length,7);
+  assert.equal(batch.observedAt,inventory.startedAt);
+  assert.deepEqual(batch.members[0].cards,[{...basicCard,remaining:5,bookable:2}]);
+  assert.ok(!JSON.stringify(batch).includes(active[0].phone));
+  assert.ok(!JSON.stringify(batch).includes(active[0].name));
+  assert.throws(()=>makeVerifiedRosterPassBatch({...input,
+    authority:{...authority,bindings:authority.bindings.slice(1)}}),/verified_roster_authority_required/);
+  assert.throws(()=>makeVerifiedRosterPassBatch({...input,
+    authority:{...authority,products:authority.products.slice(0,1)}}),/ticket_policy_unverified/);
+  for(const invalid of [{ownerVerified:false},{shared:true,ownerVerified:false},{usableCoupon:null},{usableStatus:'unknown'}]) {
+    const profiles=[{...roster[0],activeTickets:[{...pass,...invalid}]},...roster.slice(1)];
+    assert.throws(()=>makeVerifiedRosterPassBatch({...input,inventory:{...inventory,profiles}}),/ticket_state_unverified/);
+  }
+  const outsideRoster={memberId:'9901',name:'Another Synthetic Member',phone:'01000000199',revision:target.bindingRevision};
+  assert.throws(()=>makeVerifiedRosterPassBatch({...input,
+    authority:{...authority,bindings:[...authority.bindings,outsideRoster]}}),/verified_roster_authority_required/);
 });
 
 test('hosted lookup only passes the opaque session hash, rejects stale projections and never calls a Mac adapter',async()=>{

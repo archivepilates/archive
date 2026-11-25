@@ -10,8 +10,8 @@ one exact StudioMate operator test member had both remaining and bookable counts
 and dates, but did not expose issued IDs. Do not import the member workbook or
 reuse its Firebase projection as the member-visible balance.
 
-Only explicitly enrolled test subjects can be selected by a private verified
-binding with a native ID and exact observed identity; existing native browser
+In the initial pilot, only explicitly enrolled test subjects can be selected by
+a private verified binding with a native ID and exact observed identity; existing native browser
 locking and double read-back apply. Scope is at most five verified subjects.
 Publish only a complete set for the configured scope. If a subject, card,
 catalog classification, count or freshness cannot be verified, withhold the
@@ -56,3 +56,37 @@ enabling the job. Verify readback, real owner-only login and the stale/error
 fallback before enabling public member access. No actual OTP or passkey record
 was created for this preflight. No Mac mini relay is intended between Help
 and Supabase; only source collection may depend on the Mac mini.
+
+## Whole roster rollout
+
+The expanded mode reads the StudioMate members screen through its existing
+paginated browser adapter. It compares every page on a second pass and validates
+the reported total, exact member and issued-pass IDs, and duplicate issuance.
+A shared class pass without an owner ID in the list must also match the exact
+issued ID and owner in both reads of the member detail. Unknown owner, product,
+state or count prevents publication, never generates an empty balance.
+
+The November 25 read-only audit reconciled 1,067 members on 22 pages and 523
+issued records. 203 records for 177 members used the native class-pass codes
+under review (162 in use, 34 future, seven held). The other 320 records use a
+different code and are not counted as class-pass candidates. The 46 roster
+members without a usable registered phone had no class-pass candidates. The
+list supplied distinct source fields for remaining and bookable counts. Direct
+group/private count and held card samples matched the separate bookable field
+in the UI. The detail check verified the owners of all nine shared class-pass
+candidates. SQL, projection and browser tests passed (58 tests).
+
+`--check-roster` produces counts only and never opens the database. In scheduled
+mode, writer config can select `scope: verified_roster` with a separate private
+`help-current-pass-roster-authority.json` issued by the verified enrollment
+authority. It must provide the current checked-at time, exact product ID/source
+code classifications, and matching member ID/name/registered-contact/revision
+for each member reachable by registered phone. A missing phone may be omitted
+only when no member-visible cards remain after verified catalog classification.
+Shared or unclassified cards cannot silently produce zero balances.
+
+The batch still writes only pseudonymous keys, revisions and display fields.
+It uses the existing daily atomic publication and session-bound read contract.
+Cloud enrollment and revocation, exact production catalog review, dedicated DB
+credentials and the first owner-only live verification are pending. The
+production Help fallback and schedule have not been changed.

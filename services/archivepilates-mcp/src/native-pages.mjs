@@ -34,50 +34,66 @@ async function nextPage(page, scope, pending) {
   return readResponse(await pending);
 }
 
-export async function readNativeInventory(page, { navigate, checkpoint }) {
+export async function readNativeInventory(page, { navigate, checkpoint, recheckAll = false }) {
   const startedAt = new Date().toISOString();
+  const modelOptions = { passInventory: recheckAll };
   let pending = responseFor(page, memberPath, 1);
   await navigate(page, '/users');
   let response = await pending;
-  let first = normalizeMemberPage(await readResponse(response), response.url(), { page: 1 });
+  let first = normalizeMemberPage(await readResponse(response), response.url(), { ...modelOptions, page: 1 });
   // This is a local view change only; the context's write gate remains GET/HEAD/OPTIONS only.
   if (first.total > 10 && first.perPage < 50) {
     await page.locator('.el-pagination .el-select .el-input__inner').click();
     pending = responseFor(page, memberPath, 1, url => url.searchParams.get('limit') === '50');
     await page.getByText('50/page', { exact: true }).click();
     response = await pending;
-    first = normalizeMemberPage(await readResponse(response), response.url(), { page: 1, total: first.total });
+    first = normalizeMemberPage(await readResponse(response), response.url(), { ...modelOptions, page: 1, total: first.total });
   }
   const profiles = [...first.profiles], seen = new Set(profiles.map(p => p.memberId));
+  const pages = [first.profiles];
   for (let number = 2; number <= first.lastPage; number++) {
     checkpoint(page);
     await currentPage(page, number - 1);
     pending = responseFor(page, memberPath, number);
     const body = await nextPage(page, '', pending);
     response = await pending;
-    const next = normalizeMemberPage(body, response.url(), { page: number, total: first.total, perPage: first.perPage });
+    const next = normalizeMemberPage(body, response.url(), { ...modelOptions, page: number, total: first.total, perPage: first.perPage });
+    if (recheckAll) pages.push(next.profiles);
     for (const profile of next.profiles) {
       requireValue(!seen.has(profile.memberId), 'LIVE_CHANGED', '조회 중 회원 목록의 순서·범위가 변경됐습니다. 다시 조회하세요.');
       seen.add(profile.memberId); profiles.push(profile);
     }
   }
   requireValue(profiles.length === first.total, 'LIVE_INCOMPLETE', '원본 총 회원 수와 조회 건수가 다릅니다.');
+  let pagesRechecked = 0;
   if (first.lastPage > 1) {
     await currentPage(page, first.lastPage);
     pending = responseFor(page, memberPath, 1);
     await page.locator('.el-pagination li.number').filter({ hasText: /^1$/ }).click();
-    response = await pending;
-    const repeated = normalizeMemberPage(await readResponse(response), response.url(), { page: 1, total: first.total, perPage: first.perPage });
-    requireValue(JSON.stringify(repeated.profiles) === JSON.stringify(first.profiles), 'LIVE_CHANGED',
-      '전체 조회 중 첫 페이지 원본이 바뀌었습니다. 최신 전체 명단을 확정하지 않았습니다.');
+    const lastRecheck = recheckAll ? first.lastPage : 1;
+    for (let number = 1; number <= lastRecheck; number++) {
+      checkpoint(page);
+      response = await pending;
+      const repeated = normalizeMemberPage(await readResponse(response), response.url(),
+        { ...modelOptions, page: number, total: first.total, perPage: first.perPage });
+      requireValue(JSON.stringify(repeated.profiles) === JSON.stringify(pages[number - 1]), 'LIVE_CHANGED',
+        '전체 조회 중 회원 또는 수강권 원본이 바뀌었습니다. 최신 전체 명단을 확정하지 않았습니다.');
+      pagesRechecked++;
+      if (number < lastRecheck) {
+        await currentPage(page, number);
+        pending = responseFor(page, memberPath, number + 1);
+        await nextPage(page, '', pending);
+      }
+    }
   }
   checkpoint(page);
   return { profiles, startedAt, coverage: { kind: 'native_member_pages', complete: true,
     nativeTotal: first.total, scannedMembers: profiles.length, pageCount: first.lastPage,
     atomicSnapshot: false, pointInTimeComplete: false, traversalComplete: true,
     completenessBasis: 'pagination_traversal', scope: 'member_roster',
-    pagesTraversed: first.lastPage, pagesRechecked: first.lastPage > 1 ? 1 : 0,
-    stabilityCheck: first.lastPage > 1 ? 'first_page_rechecked_only' : 'single_page_observed',
+    pagesTraversed: first.lastPage, pagesRechecked,
+    stabilityCheck: pagesRechecked === 0 ? 'single_page_observed'
+      : recheckAll ? 'all_pages_rechecked' : 'first_page_rechecked_only',
     ticketScope: 'member_list_userTickets', sourceWindowStartedAt: startedAt } };
 }
 

@@ -3,6 +3,7 @@ import { chromium } from 'playwright';
 import { acquireStudioMateBrowserLock } from '../../../scripts/lib/studiomate-browser-lock.mjs';
 import { OperationError, requireValue } from './errors.mjs';
 import { readNativeInventory, readNativeBookings } from './native-pages.mjs';
+import { verifyIssuedOwners } from './native-model.mjs';
 import { STUDIO_ORIGIN, clean, assertMemberUrl, extractSearchDom, validateSearch,
   extractOverviewDom, validateOverview, extractIdentityDom, validateIdentity } from './live-dom.mjs';
 
@@ -148,7 +149,7 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
     checkpoint(page);
     await page.waitForFunction(() => !!document.querySelector('.member-detail__header__mobile span')?.textContent?.trim());
   }
-  async function readOverview(page, expected) {
+  async function readOverview(page, expected, issuedIds = []) {
     const loaded = page.waitForResponse(response => {
       const url = new URL(response.url());
       return response.request().method() === 'GET' && url.origin === 'https://api.studiomate.kr'
@@ -162,7 +163,9 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
     await waitOverview(page);
     checkpoint(page);
     assertMemberUrl(page.url(), expected.memberId);
-    return validateOverview(await page.evaluate(extractOverviewDom), expected);
+    const overview = validateOverview(await page.evaluate(extractOverviewDom), expected);
+    if (issuedIds.length) verifyIssuedOwners(await response.json(), expected.memberId, issuedIds);
+    return overview;
   }
   async function waitOverview(page) {
     checkpoint(page);
@@ -189,7 +192,8 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
       requireValue(rows.length > 0, 'LIVE_INCOMPLETE', '알림 목록을 확인하지 못했습니다.');
       return { rows, coverage: 'latest_rendered_notifications', livePushVerified: false };
     }, signal),
-    getInventory: signal => session(page => readNativeInventory(page, { navigate, checkpoint }), signal),
+    getInventory: (signal, { recheckAll = false } = {}) =>
+      session(page => readNativeInventory(page, { navigate, checkpoint, recheckAll }), signal),
     getBookings: (expected, range, signal) => session(page => readNativeBookings(page, expected, range,
       { navigate, checkpoint, waitIdentity }), signal),
     findMembers: (query, isPhone, signal) => session(async page => {
@@ -202,11 +206,11 @@ export function createLiveReader({ launch = options => chromium.launchPersistent
         'LIVE_AMBIGUOUS', '검색 결과의 회원 ID가 중복됩니다.');
       return { members, coverage: 'visible_exact_matches' };
     }, signal),
-    getOverview: (expected, signal) => session(async page => {
+    getOverview: (expected, signal, { issuedIds = [] } = {}) => session(async page => {
       assertMemberUrl(`${STUDIO_ORIGIN}/users/detail?id=${expected.memberId}`, expected.memberId);
-      const first = await readOverview(page, expected);
+      const first = await readOverview(page, expected, issuedIds);
       // Two fresh navigations detect changing/partially rendered tickets without a cached fallback.
-      const second = await readOverview(page, expected);
+      const second = await readOverview(page, expected, issuedIds);
       requireValue(JSON.stringify(first) === JSON.stringify(second), 'LIVE_CHANGED', '조회 중 회원·수강권 정보가 바뀌었습니다. 다시 조회하세요.');
       return { memberId: expected.memberId, ...second, coverage: 'current_ticket_cards', ticketIdsAvailable: false };
     }, signal),
