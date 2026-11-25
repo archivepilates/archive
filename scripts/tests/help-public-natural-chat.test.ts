@@ -65,6 +65,37 @@ test("public facts are rendered by matching source row, never handwritten by the
   assert.equal(await generatePublicNaturalChat({...turn,question:"가격은?"},"test",provider("공개 기준이에요.","none",["price-0"]),dec),null);
 });
 
+test("rejected prose does not discard independently verified facts",async()=>{
+  const event:unknown[]=[];
+  const policy={...turn,question:"주말 자유예약은 전날 21시에 취소할 수 있나요?"};
+  for(const prose of ["주말 자유예약은 전날 저녁 9시까지예요.","예약을 완료했어요.","개인 연락처는 010 1234 5678이에요."]){
+    const result=await generatePublicNaturalChat(policy,"test",provider(prose,"none",["booking-flexible"]),nov,event.push.bind(event));
+    assert.equal(result?.officialOnly,true);
+    assert.equal(result?.answer,"확인된 공식 안내예요.");
+    assert.match(result?.details.join("")??"",/토·일·공휴일 수업은 전날 21시까지/u);
+    assert(!JSON.stringify(result).includes(prose));
+  }
+  assert.deepEqual(event,Array.from({length:3},()=>({reason:"prose_rejected",officialShown:true})));
+  const schedule={...turn,question:"화요일 시간표 보여줘"};
+  const official=await generatePublicNaturalChat(schedule,"test",provider("화요일 09:00 수업이 있어요.","schedule",["schedule-1"]),nov);
+  assert.equal(official?.officialOnly,true);
+  assert.equal(official?.scheduleDay,"화");
+  assert.equal(await generatePublicNaturalChat(schedule,"test",provider("화요일 09:00 수업이 있어요.","schedule",["schedule-0"]),nov),null);
+  assert.equal(await generatePublicNaturalChat(policy,"test",provider("전날 9시까지예요.","none",["invalid"]),nov),null);
+});
+
+test("diagnostics distinguish timeout, provider HTTP failure and unusable replies",async()=>{
+  const events:unknown[]=[];
+  const run=(fetcher:typeof fetch)=>generatePublicNaturalChat(turn,"test",fetcher,nov,events.push.bind(events));
+  assert.equal(await run(async()=>{throw new DOMException("request data","TimeoutError");}),null);
+  assert.equal(await run(async()=>Response.json({error:"request data"},{status:429})),null);
+  assert.equal(await run(async()=>new Response("request data")),null);
+  assert.equal(await run(provider("정확한 내용","none",["unknown"])),null);
+  assert.equal(await run(provider("9시예요.","none")),null);
+  assert.deepEqual(events,[{reason:"model_timeout"},{reason:"provider_http_error",providerStatus:429},
+    {reason:"provider_response_invalid"},{reason:"official_selection_invalid"},{reason:"prose_rejected",officialShown:false}]);
+});
+
 test("member details, contacts and protected turns are rejected at the API before model use",async()=>{
   for(const request of [
     {...turn,question:"김민지님 수강권은요?"},

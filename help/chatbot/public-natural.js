@@ -27,24 +27,25 @@ export function publicNaturalPacket(question,history){
   return {version:3,consent:true,question:text,history:history.slice(-4)};
 }
 export async function requestNaturalReply(packet,controller,fetcher=fetch){
-  const timeout=setTimeout(()=>controller.abort(),7400);
+  const timeout=setTimeout(()=>controller.abort(),9700);
   try{
     const response=await fetcher(endpoint,{method:'POST',credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',
       headers:{'Content-Type':'application/json'},body:JSON.stringify(packet),signal:controller.signal});
     if(!response.ok)return null;
     const reply=await response.json();
     if(reply.ok!==true||typeof reply.answer!=='string'||!reply.answer.trim()||reply.answer.length>320
+      ||(reply.officialOnly!==undefined&&reply.officialOnly!==true)
       ||!Array.isArray(reply.details)||reply.details.length>5||!reply.details.every(v=>typeof v==='string'&&v.length<=420)
       ||reply.scheduleDay!==null&&!/^[월화수목금토일]$/u.test(reply.scheduleDay)
       ||typeof reply.link!=='string'||!['none','staff'].includes(reply.link)&&!Object.hasOwn(sources,reply.link))return null;
-    return {answer:reply.answer,link:reply.link,details:reply.details,scheduleDay:reply.scheduleDay};
+    return {answer:reply.answer,link:reply.link,details:reply.details,scheduleDay:reply.scheduleDay,officialOnly:reply.officialOnly===true};
   }catch{return null;}
   finally{clearTimeout(timeout);}
 }
 export function applyNaturalReply(state,reply,now=new Date()){
   const source=Object.hasOwn(sources,reply.link)?sources[reply.link]:null;
   const timetable=reply.link==='schedule'?publishedTimetable(reply.scheduleDay?reply.scheduleDay+'요일':'시간표',now):null;
-  return {text:[reply.answer,...reply.details].join('\n\n'),state,aiAssisted:true,
+  return {text:[reply.answer,...reply.details].join('\n\n'),state,aiAssisted:!reply.officialOnly,officialOnly:reply.officialOnly,
     ...(source?{sourceLabel:source[0],source:source[1]}:{}),
     ...(timetable?{timetable}:{}),
     ...(reply.link==='staff'?{inquiry:'staff'}:{})};

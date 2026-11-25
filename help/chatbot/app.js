@@ -100,7 +100,7 @@ function append(role,result,follow=true){
   if(role==='assistant'){
     const logo=element('img',null,'avatar');logo.src='/favicon.png';logo.alt='';logo.width=24;logo.height=24;row.append(logo);
   }
-  body.append(element('span',role==='user'?'나':result.aiAssisted?'명지점 상담 · AI 답변':result.aiUnavailable?'명지점 상담 · 기본 안내':'명지점 상담','speaker'));
+  body.append(element('span',role==='user'?'나':result.aiAssisted?'명지점 상담 · AI 답변':result.officialOnly?'명지점 상담 · 공식 안내':result.aiUnavailable?'명지점 상담 · 기본 안내':'명지점 상담','speaker'));
   if(result.welcome){
     const greeting=element('div',null,'welcome-turn');
     const drawing=greetingArt();

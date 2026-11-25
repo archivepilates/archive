@@ -1,5 +1,6 @@
 import type {Request} from "firebase-functions/v2/https";
 import {defineSecret,projectID} from "firebase-functions/params";
+import {info,warn} from "firebase-functions/logger";
 import {generatePublicNaturalChat,parsePublicNaturalChat} from "./publicNaturalChat";
 
 export const helpPublicOpenAiApiKey = defineSecret("HELP_PUBLIC_OPENAI_API_KEY");
@@ -82,7 +83,10 @@ export function createHelpPublicChatHandler(deps={
       if(!natural.enabled()||!deps.enabled()){response.status(503).json({ok:false});return;}
       const key=deps.key();
       if(!key?.trim()){response.status(503).json({ok:false});return;}
-      const reply=await natural.generate(naturalTurn,key);
+      const reply=await natural.generate(naturalTurn,key,undefined,undefined,diagnostic=>{
+        const log=diagnostic.officialShown?info:warn;
+        log("Help public GPT outcome",diagnostic);
+      });
       response.status(reply?200:503).json(reply?{ok:true,...reply}:{ok:false});
     }catch{response.status(503).json({ok:false});}
   };

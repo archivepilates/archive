@@ -1,5 +1,18 @@
 # ARCHIVE PILATES Help public AI
 
+## Official-only recovery (2026-11-25)
+
+- Validate model-selected reference IDs against the public catalog, the KST
+  publication period, and the requested day before checking the model's prose.
+  If the prose is rejected, return only verified reference rows or the verified
+  timetable with a fixed lead. An invalid selection or no usable facts still
+  falls back to Basic guidance.
+- Structured function diagnostics distinguish provider timeout, HTTP errors,
+  invalid responses, invalid reference selections and rejected prose. They
+  omit prompts, output, member information and credentials. Model deadline
+  8 seconds, browser deadline 9.7 seconds, function deadline unchanged at
+  12 seconds. No retry or policy/privacy guard relaxation.
+
 ## Inline GPT send and usage controls (2026-11-25)
 
 - The first-question modal is replaced by a visible OpenAI notice next to

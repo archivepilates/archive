@@ -233,6 +233,8 @@ try{
                 const packet=route.request().postDataJSON();
                 naturalRequests.push(packet);
                 if(packet.question==='예약 취소는요?')return route.fulfill({status:503,json:{ok:false}});
+                if(packet.question==='주말 취소 마감은요?')return route.fulfill({json:{ok:true,officialOnly:true,
+                  answer:'확인된 공식 안내예요.',details:['주말 자유예약은 전날 21시까지 취소할 수 있어요.'],link:'none',scheduleDay:null}});
                 if(packet.question==='2-3번')return route.fulfill({json:{ok:true,
                   answer:'저녁 일곱 시 이후라면 주 2회와 주 3회 상품을 비교해 보세요.',
                   details:['그룹 기간권 주 2회 · 398,000원 · 10주'],link:'pricing',scheduleDay:null}});
@@ -276,6 +278,9 @@ try{
               await page.getByText('GPT 답변을 지금 받을 수 없어 기본 안내로 답해요.',{exact:false}).waitFor();
               assert(await page.getByText('명지점 상담 · 기본 안내',{exact:true}).isVisible());
               assert.deepEqual(naturalRequests.at(-1).history,[]);
+              await ask('주말 취소 마감은요?');
+              await page.getByText(/주말 자유예약은 전날 21시까지/).waitFor();
+              assert(await page.getByText('명지점 상담 · 공식 안내',{exact:true}).isVisible());
               if(width<500){
                 const visibleHeight=height-300;
                 await chat.focus();

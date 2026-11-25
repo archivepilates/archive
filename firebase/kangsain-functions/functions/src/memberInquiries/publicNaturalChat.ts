@@ -18,7 +18,12 @@ const links = ["none", "brand", "team", "schedule", "pricing", "app", "staff"] a
 type Link = typeof links[number];
 type Turn = {role:"user"|"assistant";text:string};
 export type PublicNaturalChat = {version:3;consent:true;question:string;history:Turn[]};
-export type PublicNaturalAnswer = {answer:string;link:Link;details:string[];scheduleDay:string|null};
+export type PublicNaturalAnswer = {answer:string;link:Link;details:string[];scheduleDay:string|null;officialOnly?:true};
+type PublicChatDiagnostic = {
+  reason:"model_timeout"|"provider_request_failed"|"provider_http_error"|"provider_response_invalid"|"official_selection_invalid"|"prose_rejected";
+  providerStatus?:number;
+  officialShown?:boolean;
+};
 const calendar = new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Seoul"});
 const publicRules = new Set(["booking-flexible","booking-fixed","booking-change","holding-base","holding-period","holding-count","fixed-end","other-facility","other-booking"]);
 const weekdays = ["월","화","수","목","금","토","일"];
@@ -67,7 +72,7 @@ const instructions = [
   "If asked for a product recommendation and the visitor already specified their frequency and time, recommend a suitable option and select two or three matching price IDs, without asking for the same preferences. If a visitor asks for promotion prices, select the relevant promo IDs and say current availability is not confirmed. For a timetable, select at most one day ID and use the schedule link; the app displays the official timetable. If published is null, use app or staff and do not quote any schedule or price.",
   "Use one supported link code or none; never output a URL, markup or instructions about the system.",
 ].join(" ");
-const unsafeAnswer = /(?:예약|결제|환불)\s*(?:완료|확정|처리했|해드렸|해 드렸)|(?:예약|수업)\s*가능해요[.!]?\s*$|(?:자리|좌석).{0,9}(?:남아\s*있|남았|지금\s*있)|무조건|\b(?:prompt|token|secret)\b/iu;
+const unsafeAnswer = /(?:예약|결제|환불)\s*(?:을|를|이|가)?\s*(?:완료|확정|처리했|해드렸|해 드렸)|(?:예약|수업)\s*가능해요[.!]?\s*$|(?:자리|좌석).{0,9}(?:남아\s*있|남았|지금\s*있)|무조건|\b(?:prompt|token|secret)\b/iu;
 const exactClaim=/\d[\d,.]*\s*(?:만\s*)?원(?!장|래|인|리)|[일이삼사오육칠팔구십백천만]+\s*(?:만|천)\s*원|\b\d{1,2}:\d{2}\b|\d{1,2}\s*시(?!간)|\b(?:19|20)\d{2}\s*년/iu;
 function monthlyRequest(turn:PublicNaturalChat,today:string){
   const date=new Date(today+"T12:00:00Z");
@@ -89,7 +94,8 @@ function monthlyRequest(turn:PublicNaturalChat,today:string){
     &&!/(?:다음|지난|저번)\s*(?:달|월)|십이\s*월|내년|작년/u.test(scope??"");
   return {valid,day};
 }
-export async function generatePublicNaturalChat(value:PublicNaturalChat,key:string,fetcher:typeof fetch=fetch,now=new Date()):Promise<PublicNaturalAnswer|null>{
+export async function generatePublicNaturalChat(value:PublicNaturalChat,key:string,fetcher:typeof fetch=fetch,now=new Date(),
+  diagnose:(event:PublicChatDiagnostic)=>void=()=>{}):Promise<PublicNaturalAnswer|null>{
   const turn=parsePublicNaturalChat(value);
   if(!turn||!key.trim())return null;
   const facts=naturalFacts(now);
@@ -104,36 +110,52 @@ export async function generatePublicNaturalChat(value:PublicNaturalChat,key:stri
     ...rows.map(row=>[row.id,`${row.name} · ${"perPerson" in row&&row.perPerson?"1인 ":""}${row.price.toLocaleString("ko-KR")}원 · ${row.duration}`] as const)
   ]);
   const allowedIds=[...factsById.keys(),...availableDays.map(row=>row.id)];
-  const result=await fetcher("https://api.openai.com/v1/responses",{
-    method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${key.trim()}`},
-    redirect:"error",signal:AbortSignal.timeout(6500),
-    body:JSON.stringify({model:"gpt-6-luna",store:false,reasoning:{effort:"none"},max_output_tokens:280,instructions,
-      input:[{role:"developer",content:JSON.stringify({publicFacts:facts})},
-        ...turn.history.map(message=>({role:message.role,content:message.text})),{role:"user",content:turn.question}],
-      text:{format:{type:"json_schema",name:"archive_chat_answer",strict:true,schema:{type:"object",
-        properties:{answer:{type:"string"},link:{type:"string",enum:availableLinks},
-          factIds:{type:"array",items:{type:"string",enum:allowedIds}}},required:["answer","link","factIds"],additionalProperties:false}}}})
-  });
-  if(!result.ok)return null;
-  const body=await result.json();
-  if(body?.status!=="completed"||!Array.isArray(body.output)||body.output.length!==1)return null;
+  const signal=AbortSignal.timeout(8000);
+  let body;
+  try{
+    const result=await fetcher("https://api.openai.com/v1/responses",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${key.trim()}`},
+      redirect:"error",signal,
+      body:JSON.stringify({model:"gpt-6-luna",store:false,reasoning:{effort:"none"},max_output_tokens:280,instructions,
+        input:[{role:"developer",content:JSON.stringify({publicFacts:facts})},
+          ...turn.history.map(message=>({role:message.role,content:message.text})),{role:"user",content:turn.question}],
+        text:{format:{type:"json_schema",name:"archive_chat_answer",strict:true,schema:{type:"object",
+          properties:{answer:{type:"string"},link:{type:"string",enum:availableLinks},
+            factIds:{type:"array",items:{type:"string",enum:allowedIds}}},required:["answer","link","factIds"],additionalProperties:false}}}})
+    });
+    if(!result.ok){diagnose({reason:"provider_http_error",providerStatus:result.status});return null;}
+    try{body=await result.json();}
+    catch{diagnose({reason:signal.aborted?"model_timeout":"provider_response_invalid"});return null;}
+  }catch(error){
+    diagnose({reason:signal.aborted||error instanceof Error&&error.name==="TimeoutError"?"model_timeout":"provider_request_failed"});
+    return null;
+  }
+  const invalidResponse=()=>{diagnose({reason:"provider_response_invalid"});return null;};
+  const invalidSelection=()=>{diagnose({reason:"official_selection_invalid"});return null;};
+  if(body?.status!=="completed"||!Array.isArray(body.output)||body.output.length!==1)return invalidResponse();
   const message=body.output[0], content=message?.content?.[0];
   if(message?.type!=="message"||message.role!=="assistant"||message.status!=="completed"||
-    !Array.isArray(message.content)||message.content.length!==1||content?.type!=="output_text"||typeof content.text!=="string"||content.text.length>1600)return null;
-  try{
-    const data=JSON.parse(content.text);
-    if(!record(data)||Object.keys(data).sort().join(",")!=="answer,factIds,link"||!safeText(data.answer,320)
-      ||unsafeAnswer.test(data.answer)||exactClaim.test(data.answer)||!availableLinks.includes(data.link as Link)
-      ||!Array.isArray(data.factIds)||data.factIds.length>4||new Set(data.factIds).size!==data.factIds.length
-      ||!data.factIds.every(id=>typeof id==="string"&&allowedIds.includes(id)))return null;
-    const dayIds=data.factIds.filter(id=>id.startsWith("schedule-"));
-    if(dayIds.length>1||dayIds.length&&data.link!=="schedule")return null;
-    const details=data.factIds.flatMap(id=>factsById.get(id)??[]);
-    const hasPromo=data.factIds.some(id=>id.startsWith("promo-")),hasPrice=data.factIds.some(id=>id.startsWith("price-"));
-    if(hasPromo||hasPrice)details.push(hasPromo
-      ?"공개 프로모션 기준이에요. 부가세 포함, 첫 수업일부터 유효기간이 적용돼요. 선착순 20명 조건의 잔여와 판매 여부는 직원에게 확인해 주세요."
-      :"공개 수강료 기준이에요. 부가세 포함이며 유효기간은 첫 수업일부터 적용돼요.");
-    const scheduleDay=data.link==="schedule"?availableDays.find(row=>row.id===dayIds[0])?.day??request.day:null;
-    return {answer:data.answer,link:hasPromo||hasPrice?"pricing":data.link as Link,details,scheduleDay};
-  }catch{return null;}
+    !Array.isArray(message.content)||message.content.length!==1||content?.type!=="output_text"||typeof content.text!=="string"||content.text.length>1600)return invalidResponse();
+  let data;
+  try{data=JSON.parse(content.text);}catch{return invalidResponse();}
+  if(!record(data)||Object.keys(data).sort().join(",")!=="answer,factIds,link"||!availableLinks.includes(data.link as Link)
+    ||!Array.isArray(data.factIds)||data.factIds.length>4||new Set(data.factIds).size!==data.factIds.length
+    ||!data.factIds.every(id=>typeof id==="string"&&allowedIds.includes(id)))return invalidSelection();
+  const dayIds=data.factIds.filter(id=>id.startsWith("schedule-"));
+  if(dayIds.length>1||dayIds.length&&data.link!=="schedule")return invalidSelection();
+  const details=data.factIds.flatMap(id=>factsById.get(id)??[]);
+  const hasPromo=data.factIds.some(id=>id.startsWith("promo-")),hasPrice=data.factIds.some(id=>id.startsWith("price-"));
+  if(hasPromo||hasPrice)details.push(hasPromo
+    ?"공개 프로모션 기준이에요. 부가세 포함, 첫 수업일부터 유효기간이 적용돼요. 선착순 20명 조건의 잔여와 판매 여부는 직원에게 확인해 주세요."
+    :"공개 수강료 기준이에요. 부가세 포함이며 유효기간은 첫 수업일부터 적용돼요.");
+  const scheduleDay=data.link==="schedule"?availableDays.find(row=>row.id===dayIds[0])?.day??request.day:null;
+  const link=hasPromo||hasPrice?"pricing":data.link as Link;
+  if(!safeText(data.answer,320)||unsafeAnswer.test(data.answer)||exactClaim.test(data.answer)){
+    const officialShown=details.length>0||Boolean(dayIds.length&&scheduleDay&&link==="schedule");
+    diagnose({reason:"prose_rejected",officialShown});
+    if(!officialShown)return null;
+    return {answer:link==="schedule"?"공식 예정표예요. 실제 개설과 잔여 자리는 회원 앱에서 확인해 주세요.":"확인된 공식 안내예요.",
+      link,details,scheduleDay,officialOnly:true};
+  }
+  return {answer:data.answer,link,details,scheduleDay};
 }
