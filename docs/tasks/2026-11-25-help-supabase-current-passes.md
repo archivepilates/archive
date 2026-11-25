@@ -21,12 +21,12 @@ only for display, never for dispatch, enrollment, reservation, refund or payment
 
 ## Runtime
 
-1. The existing scheduled collector, when download and canonical imports
-   succeed, invokes the optional snapshot sidecar. Manual reruns and refreshes
-   never publish. No additional scheduler exists. The sidecar is disabled
-   without `HELP_CURRENT_PASS_SNAPSHOT_ENABLED=enabled` and its private writer
-   enrollment. The writer checks today's KST manifest before opening StudioMate;
-   the database allows one atomic successful publication for that day.
+1. The snapshot sidecar is prepared for a future integration after a
+   successful scheduled download and canonical import, but is not connected
+   to the production collector in this pilot. There is no additional
+   scheduler. The writer checks today's KST manifest before opening
+   StudioMate; the database allows one atomic successful publication for
+   that day. The separate pilot tool serves one explicitly verified member.
 2. The dedicated schema keeps latest validated category, status, period and
    counts with source time, HMAC member binding, revision and aggregate receipt.
    No native IDs, names, phones, payments, raw Excel or GPT data are exported.
@@ -342,3 +342,10 @@ complete OTP flow from the member origin without a staff Google token.
   Do not use the prior local terminal OTP as evidence for live browser
   authentication. Do not broaden the audience until the production-origin
   real-phone test has passed.
+
+Hosting release `a0929f3a387d50b2` and the Seoul Firebase function were
+deployed from the pilot source. Live anonymous Chromium opened the member
+dialog without requesting Google sign-in at widths 320, 390, 768 and 1440.
+Live member availability returned 200; anonymous cards, a forged session and
+a foreign origin each returned 403. The ordinary home and staff Kakao
+redirect were unchanged. No live OTP start was made during verification.
