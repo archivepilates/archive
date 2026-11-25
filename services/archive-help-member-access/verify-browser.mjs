@@ -10,6 +10,8 @@ import {createHostedHelpMemberService} from './hosted-pass-service.mjs';
 import {createCloudEnrollmentAuthority} from './cloud-enrollment-authority.mjs';
 import {currentPassMemberKey} from './current-pass-snapshot.mjs';
 import {createPostgresAuthStore} from './postgres-auth-store.mjs';
+import {createHelpCloudServer} from './node-http.mjs';
+import {once} from 'node:events';
 import {digest,ORIGIN,STUDIO_ID} from './accounts.mjs';
 
 // Intercept every browser request. The real WebAuthn verifier sees synthetic records only.
@@ -65,7 +67,7 @@ const hostedPilot=()=>{
 };
 const pilot=hosted?hostedPilot:nativePilot;
 const mime={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json','.png':'image/png','.svg':'image/svg+xml'};
-let service,browser,ctx,authDb;
+let service,browser,ctx,authDb,gateway,localGateway;
 let queue=Promise.resolve();
 const localPool={async connect(){
   const previous=queue;
@@ -88,6 +90,11 @@ try{
     await authDb.exec(readFileSync(new URL('../archivepilates-mcp/sql/help-member-auth-store.sql',import.meta.url),'utf8'));
   }
   service=await pilot();
+  if(hosted){
+    gateway=createHelpCloudServer({ready:true,handle:request=>service.handle(request)});
+    gateway.listen(0,'127.0.0.1');await once(gateway,'listening');
+    localGateway='http://127.0.0.1:'+gateway.address().port;
+  }
   browser=await chromium.launch({headless:true});
   ctx=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:820}});
   const jar=new Map();
@@ -106,7 +113,9 @@ try{
     }
     const headers=await raw.allHeaders();
     headers.cookie=[...jar].map(([k,v])=>k+'='+v).join('; ');
-    const result=await service.handle(new Request(raw.url(),{method:raw.method(),headers,body:raw.postData()}));
+    const options={method:raw.method(),headers,body:raw.postData()};
+    const result=localGateway?await fetch(localGateway+url.pathname+url.search,options):
+      await service.handle(new Request(raw.url(),options));
     for(const h of result.headers.getSetCookie()){
       const [pair,...attributes]=h.split(';'),[k,v]=pair.split('=');
       assert(attributes.includes(' Secure')&&attributes.includes(' HttpOnly')&&attributes.includes(' SameSite=Strict')
@@ -182,9 +191,12 @@ try{
   assert.equal(await page.getByRole('button',{name:'회원 인증 후 확인',exact:true}).count(),0);
   assert.equal(await answer.count(),0);
   assert.equal(publicGptPosts,0);
-  console.log(JSON.stringify({backend:hosted?'hosted-snapshot':'native-pilot',virtualWebAuthn:true,restartPersisted:true,lookupScopeEnforced:true,
+  console.log(JSON.stringify({backend:hosted?'hosted-snapshot':'native-pilot',httpGateway:!!localGateway,
+    virtualWebAuthn:true,restartPersisted:true,lookupScopeEnforced:true,
     separateSyntheticOtp:true,automaticResume:true,noSecondOtp:true,revokedBlocked:true,
     responsiveWidths:[320,390,768,1440],liveExternalRequests:0,publicGptPosts}));
 }finally{
-  await ctx?.close();await browser?.close();await service?.close();await authDb?.close();rmSync(dir,{recursive:true,force:true});
+  await ctx?.close();await browser?.close();
+  if(gateway?.listening)await new Promise(resolve=>gateway.close(resolve));
+  await service?.close();await authDb?.close();rmSync(dir,{recursive:true,force:true});
 }

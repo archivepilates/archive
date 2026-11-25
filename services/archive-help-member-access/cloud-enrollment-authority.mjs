@@ -9,10 +9,10 @@ const identityInput=value=>value?.studioId===STUDIO_ID&&memberId(value.memberId)
 export function createCloudEnrollmentAuthority({loadEnrollment,loadCurrentBinding,now=Date.now}={}){
   if(typeof loadEnrollment!=='function'||typeof loadCurrentBinding!=='function')throw Error('Trusted enrollment loaders required');
 
-  async function binding(request){
+  async function binding(request,needContact=false){
     if(!identityInput(request)||request.signal?.aborted)return null;
     const {studioId,memberId,revision,signal}=request;
-    const value=await loadCurrentBinding({studioId,memberId,signal});
+    const value=await loadCurrentBinding({studioId,memberId,needContact,signal});
     const checkedAt=now();
     if(signal?.aborted||!identityInput(value)||value.memberId!==memberId||value.revision!==revision
       ||value.authority!=='verified_studiomate_in_person_signup'||value.signupComplete!==true
@@ -38,7 +38,7 @@ export function createCloudEnrollmentAuthority({loadEnrollment,loadCurrentBindin
     },
     confirmBinding,
     async resolveRecipient(request){
-      const checked=await binding(request);
+      const checked=await binding(request,true);
       if(!checked)return null;
       const {value,checkedAt}=checked;
       if(!/^010\d{8}$/u.test(value.phone??'')||!cloudSourceIsFresh(value.sourceObservedAt,checkedAt,60*60_000))return null;

@@ -136,3 +136,52 @@ one verified pilot snapshot, then verify the HTTPS member route with a real
 member-controlled passkey and provider delivery. Do not enable broad ingestion
 or public member lookup from tests alone. Keep the public Help fallback and
 welcome Alimtalk unchanged until the owner-only live check passes.
+
+## Single-member cloud release
+
+- Cloud Run package: `services/archive-help-member-access`. The source and
+  container copy allowlists exclude fixtures, private files and the Mac-only
+  adapter. `HELP_MEMBER_MODE=disabled` starts without member credentials.
+  `pilot` requires three verified TLS logins with independent rights, a
+  single pseudonymous member scope, and separate contact, session and OTP
+  secrets. The deployment does not accept an administrator or history login.
+- Source authority: `archive_help_enrollment` on the same Seoul Supabase pilot.
+  Migration `20261125122318` installed the private schema. Readback verified
+  three forced-RLS tables, two auth-only reads, three writer-only operations,
+  no unintended grants and zero binding, approval or snapshot rows. The
+  authority writer is not the read API. Use AEAD for registered contact, bound
+  to the exact member and revision; never give decrypted contact to chat.
+  A same-revision freshness refresh preserves the existing encrypted box.
+  A changed contact or explicit revocation requires a newly verified revision.
+- Operator approval must use the exact, completed StudioMate signup and the
+  current unique native member/contact status, not a sheet or contract status.
+  Publish the verified binding, record an expiring staff approval by digest,
+  independently read both back, and invoke the server-side `issueInvite`
+  contract privately. There is no public staff approval or invite-mint route.
+  The first snapshot must use the exact same revision and HMAC key.
+- Release target: Cloud Run `archive-help-member-access` in
+  `archive-pilates` / `asia-northeast3`, using the dedicated
+  `archive-help-member@archive-pilates.iam.gserviceaccount.com` runtime identity.
+  Do not attach the operations service account, default Compute service account
+  or another workload's identity. Allow access only to the exact Secret Manager
+  versions needed by this service. Do not create a project-wide secret grant or
+  weaken organization policy. Tenant-wide deployment remains disabled.
+- At cutover, add only the `/api/member-access/**` rewrite before the Help
+  catch-all. The public GPT endpoint and other Hosting sites are unchanged.
+  After Cloud Run readiness and first-source readback succeed, verify the exact
+  Help HTTPS origin, secure host-only session cookie, no-store and member-only
+  responses. Then verify one authorized real receipt, member-held passkey and
+  self-only lookup. Keep the existing member-app fallback if any gate fails.
+
+The local build, 69 automated tests and synthetic browser flow through the
+actual Node HTTP gateway passed. A read-only StudioMate lookup showed one exact
+live test subject with a current pass result. SOLAPI returned the exact security
+template in APPROVED status; no code was requested. This is not a deployed
+endpoint or live authentication proof.
+
+Production preflight found no dedicated Cloud Run identity, no Supabase Help
+login grants or first snapshot, and no public member API rewrite. The active
+Google operator identity can create Cloud Run services but not service accounts.
+The stored home CLI login requires interactive reauthentication. Do not create
+the service with a broader runtime identity to work around this. The site and
+scheduled collector have not been changed.

@@ -2,7 +2,14 @@
   "name": "archive-help-member-access",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.13" },
-  "dependencies": { "@simplewebauthn/server": "14.1.0" },
-  "scripts": { "test": "node --test" }
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "14.1.0",
+    "pg": "8.23.1"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
 }
