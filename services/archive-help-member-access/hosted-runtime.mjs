@@ -20,6 +20,15 @@ const preflight=`SELECT current_user::text AS name,
 export async function createHostedHelpMemberRuntime({enabled=false,pools,loadEnrollment,loadCurrentBinding,
   sendCode,otpSecret,memberKeySecret,now=Date.now}={}){
   if(enabled!==true)return createHostedHelpMemberService();
+  await assertMemberDatabasePools(pools);
+  const authority=createCloudEnrollmentAuthority({loadEnrollment,loadCurrentBinding,now});
+  return createHostedHelpMemberService({enabled:true,store:createPostgresAuthStore({pool:pools.auth}),authority,
+    remoteOtp:{resolveRecipient:authority.resolveRecipient,sendCode,secret:otpSecret},
+    issuerQuery:(sql,bindings)=>pools.issuer.query(sql,bindings),readerQuery:(sql,bindings)=>pools.reader.query(sql,bindings),
+    memberKeySecret,now});
+}
+
+export async function assertMemberDatabasePools(pools){
   const capabilities=Object.keys(roles);
   if(capabilities.some(key=>typeof pools?.[key]?.query!=='function')
     ||new Set(capabilities.map(key=>pools[key])).size!==capabilities.length
@@ -34,9 +43,4 @@ export async function createHostedHelpMemberRuntime({enabled=false,pools,loadEnr
     identities.add(row.name);
   }
 
-  const authority=createCloudEnrollmentAuthority({loadEnrollment,loadCurrentBinding,now});
-  return createHostedHelpMemberService({enabled:true,store:createPostgresAuthStore({pool:pools.auth}),authority,
-    remoteOtp:{resolveRecipient:authority.resolveRecipient,sendCode,secret:otpSecret},
-    issuerQuery:(sql,bindings)=>pools.issuer.query(sql,bindings),readerQuery:(sql,bindings)=>pools.reader.query(sql,bindings),
-    memberKeySecret,now});
 }

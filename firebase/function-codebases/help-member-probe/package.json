@@ -1,0 +1,13 @@
+{
+  "name": "archive-help-member-probe",
+  "private": true,
+  "type": "module",
+  "main": "function.js",
+  "engines": {"node": "22"},
+  "dependencies": {
+    "@google-cloud/functions-framework": "5.0.5",
+    "firebase-admin": "14.5.1",
+    "firebase-functions": "7.4.0"
+  },
+  "overrides": {"cloudevents": {"uuid": "11.1.1"}}
+}

@@ -1,0 +1,23 @@
+{
+  "functions": {
+    "source": "firebase/function-codebases/help-member-probe",
+    "codebase": "functions-help-member-probe",
+    "runtime": "nodejs22",
+    "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "preview"]
+  },
+  "hosting": {
+    "site": "archive-pilates-help",
+    "public": "firebase/function-codebases/help-member-probe/preview",
+    "headers": [{
+      "source": "**",
+      "headers": [
+        {"key": "Cache-Control", "value": "private, no-store"},
+        {"key": "X-Robots-Tag", "value": "noindex, nofollow"}
+      ]
+    }],
+    "rewrites": [{
+      "source": "/api/member-access/probe",
+      "function": {"functionId": "helpMemberAccessProbe", "region": "asia-northeast3"}
+    }]
+  }
+}

@@ -195,3 +195,79 @@ Supabase Help login grants, canonical pilot binding and first snapshot remain
 unconfigured. The Help Hosting rewrite, scheduled collector, existing
 member-facing behavior and SOLAPI delivery were not changed. Investigate the
 provider routing result before the public HTTPS passkey test.
+
+### External routing follow-up
+
+At 22:31 KST, both the home user and the existing operator service account
+had `run.routes.invoke`. A Google-issued, unexpired ID token for the exact
+member-access Cloud Run URL still returned the Google HTML 404 on
+`GET /healthz`. The new and existing Help services resolved to the same set
+of public addresses and used the same local network route with verified
+Google TLS. The existing Help API control returned its expected GET 405
+and logged that request. The member service had no matching request log
+despite its successful managed HTTP startup probe.
+
+Evidence for a provider-side routing inquiry: Seoul revision
+`archive-help-member-access-00002-88k`, 2026-11-25 13:31:23 UTC,
+caller-supplied trace `d37e906d140aeb7d02638f84c18b2034`. This trace did
+not appear in service logs. The failure is before the application handler;
+the mechanism at the Google ingress is not established. No support case
+was submitted and no network, IAM, Hosting, data or message settings changed.
+
+### Firebase OTP consultation trial
+
+The operator confirmed the alternate Firebase Hosting to Cloud Functions
+path, without the direct Cloud Run service or an on-demand Mac mini relay.
+The current Mac collector remains the snapshot refresh source. The public
+pilot uses only the registered 010 contact and a six-digit SOLAPI Alimtalk
+code. There is no passkey setup, legacy welcome-link requirement or member
+selection by ID in the new public protocol. Registering the number in
+StudioMate alone does not bypass the OTP. The live authority is pinned to
+one verified pilot subject; a roster-wide contact index was not enabled.
+
+Verification is tied to the same open consultation, via the opaque
+in-memory conversation key and scoped secure cookie. The former 20-minute
+sign-in cutoff is removed. Valid activity renews a 24-hour inactivity limit;
+closing or resetting the consultation cannot recover that key. Selecting
+another chat or logging out prevents reuse. Revoked or stale authority fails
+closed. Missing or expired snapshot data is not a zero or an OTP prompt.
+Each Supabase read has a separate two-minute, revocable capability; it does
+not define the member's session duration. Chat and GPT receive neither the
+phone nor verification code. Attendance/history remain in the member app.
+
+The inactive probe uses only `firebase.help-member-probe.json` and the
+dedicated identity. The real OTP handler has its own staged deployment
+configuration `firebase.help-member-runtime.json`. It is not in the
+default deployment or the probe and requires separately scoped Google and
+Supabase secrets plus a verified source binding and first snapshot.
+
+Local verification uses synthetic contacts and provider responses, with no
+real OTP delivery. It proves authenticated lookup at 45 minutes, rejection
+in another tab, invalidation after chat reset, and auth retention on a
+missing snapshot. Browser widths verified: 320, 390, 768 and 1440. Separate
+Functions Framework smoke checks show a disabled probe can receive the
+exact cookie and conversation header and the inactive OTP runtime does not
+read or send member data. Production Help was not changed.
+
+The Firebase CLI interactive login was expired; the existing isolated
+operator ADC profile deployed only the probe. Cloud Functions direct-from-
+source CLI attempts failed because the provider-stored archive was empty
+despite the local source allowlist. The Firebase CLI packaged the source
+and the Gen 2 function became ACTIVE. Authenticated probes returned 200
+at both generated function addresses, with the two synthetic headers
+observed and member access confirmed disabled.
+
+The one-day Hosting channel `help-otp-connect-probe` on
+`archive-pilates-help` returned 200 from the expected function when called
+by the authenticated operator, with `private, no-store`, `__session` and
+the conversation header forwarded. The anonymous call returned 403 under
+the private probe policy. This verifies the alternate Hosting rewrite
+for trusted callers, not member authentication without Google IAM.
+The public Help homepage still served its existing content. No member
+records, SOLAPI sends, public IAM changes, or live Hosting rewrites were
+made. The old direct Cloud Run service was not changed or repaired.
+
+Before any real-member launch, establish the exact secure production
+invocation path, provision dedicated database connections and secrets,
+publish and reconcile the approved single-member source, and test the
+complete OTP flow from the member origin without a staff Google token.

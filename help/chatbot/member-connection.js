@@ -1,148 +1,251 @@
 const path='/api/member-access/';
-const token=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value);
 const guide='https://archivepilates.notion.site/studiomate';
 const $=tag=>document.createElement(tag);
 const text=(tag,value)=>{const el=$(tag);el.textContent=value;return el;};
-const errorText='등록이나 인증을 마치지 못했어요. 잠시 후 다시 시도하거나 직원에게 문의해 주세요.';
+const button=(label,action)=>{const b=text('button',label);b.type='button';b.addEventListener('click',action);return b;};
+const quietHours='인증 알림톡은 오전 9시부터 밤 11시 전까지만 발송돼요.';
+const unavailable='지금은 수강권 정보를 확인할 수 없어요. 잠시 후 다시 확인하거나 회원 앱을 이용해 주세요.';
 
-export function createMemberConnection({onPrivate,onClear}){
-  let invitation='',epoch=0,dialog,status,pendingScope=null,lease=0,working=false,connected=false;
-  let capability;
-  const resetFragment=()=>{
-    const m=/^#member-invite=([A-Za-z0-9_-]{43})$/.exec(location.hash);
-    if(!m)return false;
-    invitation=m[1];history.replaceState(null,'',location.pathname+location.search);
-    return true;
-  };
-  const request=async (op,body={})=>{
-    const r=await fetch(path+op,{method:'POST',credentials:'same-origin',cache:'no-store',redirect:'error',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(45_000)});
-    if(!r.ok||!/^application\/json/i.test(r.headers.get('content-type')??''))return {ok:false};
-    return await r.json();
-  };
-  const enabled=()=>capability??=(request('availability').then(r=>r.ok===true&&r.remoteOtp===true).catch(()=>false));
-  const support=()=>typeof window.PublicKeyCredential?.parseCreationOptionsFromJSON==='function'&&
-    typeof window.PublicKeyCredential?.parseRequestOptionsFromJSON==='function';
-  const button=(label,action)=>{const b=text('button',label);b.type='button';b.addEventListener('click',action);return b;};
-  let receipt='',returnFocus=null;
-  function clear(){
-    epoch++;clearTimeout(lease);connected=false;pendingScope=null;receipt='';onClear();
+function newConversation(){
+  return btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+function normalizePhone(value){
+  return value.normalize('NFKC').replace(/[\s()-]/g,'').replace(/^\+82(?=10\d{8}$)/,'0');
+}
+
+export function createMemberConnection({onPrivate,onClear,onAuthChange}){
+  if(/^#member-invite(?:=|$)/.test(location.hash)){
+    history.replaceState(history.state,'',location.pathname+location.search);
+  }
+  let conversation=newConversation(),capability,otpUsed=false,connected=false;
+  let dialog,status,actions,returnFocus,working=false,cardRead=0,lease,dataExpiresAt=0,lastActivity=0;
+  let authQueue=Promise.resolve();
+
+  async function request(op,body={},key=conversation){
+    const response=await fetch(path+op,{method:'POST',mode:'same-origin',credentials:'same-origin',
+      cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',
+      headers:{'Content-Type':'application/json','X-Archive-Conversation':key},
+      body:JSON.stringify(body),signal:AbortSignal.timeout(45_000)});
+    const data=response.ok&&/^application\/json\b/i.test(response.headers.get('content-type')??'')?
+      await response.json():null;
+    return {status:response.status,data};
+  }
+  function enabled(){
+    return capability??=(request('availability').then(({data})=>
+      data?.ok===true&&data.remoteOtp===true&&data.method==='otp').catch(()=>false));
+  }
+  function queueAuth(task){
+    // Cookie-changing requests must finish in order, including across chat resets.
+    const next=authQueue.then(task);
+    authQueue=next.catch(()=>{});
+    return next;
+  }
+  function clearPrivate(){
+    clearTimeout(lease);
+    dataExpiresAt=0;
+    onClear();
+  }
+  function expirePrivate(){
+    clearTimeout(lease);
+    if(!dataExpiresAt)return;
+    const remaining=dataExpiresAt-Date.now();
+    if(remaining<=0)clearPrivate();
+    else lease=setTimeout(expirePrivate,Math.min(remaining,2_147_483_647));
+  }
+  function updateLookupButton(control){
+    control.textContent=connected?'수강권 다시 확인':'회원 인증 후 확인';
+    if(connected)control.removeAttribute('aria-haspopup');
+    else control.setAttribute('aria-haspopup','dialog');
+  }
+  function setConnected(value){
+    if(value===connected)return;
+    connected=value;
+    lastActivity=value?Date.now():0;
+    document.querySelectorAll('[data-member-cards]').forEach(updateLookupButton);
+    document.querySelectorAll('[data-member-status]').forEach(node=>{node.textContent='';});
+    onAuthChange(value);
   }
   function close(){
     if(dialog?.open)dialog.close();
-    returnFocus?.focus({preventScroll:true});returnFocus=null;
+    actions?.replaceChildren();
+    if(status)status.textContent='';
+    if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});
+    returnFocus=null;
   }
   function end(){
-    const shouldLogOut=connected||!!dialog?.open;
-    clear();close();
-    if(shouldLogOut)void request('logout').catch(()=>{});
+    const old=conversation;
+    if(otpUsed)void queueAuth(()=>request('logout',{},old)).catch(()=>{});
+    conversation=newConversation();
+    capability=undefined;
+    otpUsed=false;
+    working=false;
+    cardRead++;
+    clearPrivate();
+    setConnected(false);
+    close();
+  }
+  function cancel(){
+    if(working)end();
+    else close();
   }
   function panel(){
-    if(dialog)return dialog;
+    if(dialog)return;
     dialog=$('dialog');dialog.id='member-access';dialog.setAttribute('aria-labelledby','member-access-title');
-    const heading=text('h2','회원 챗봇 연결');heading.id='member-access-title';
-    status=text('p','');status.setAttribute('role','status');status.className='member-access-status';
+    const heading=text('h2','휴대전화 번호로 회원 인증');heading.id='member-access-title';
+    const hours=text('p',quietHours);hours.id='member-access-hours';
+    status=text('p','');status.id='member-access-status';status.setAttribute('role','status');
+    status.className='member-access-status';
     const docs=text('a','공식 회원 앱 이용 안내');docs.href=guide;
-    const actions=$('div');actions.className='member-access-actions';actions.dataset.section='actions';
-    dialog.append(heading,status,actions,docs);document.body.append(dialog);
-    dialog.addEventListener('cancel',event=>{event.preventDefault();if(!working)close();});
-    return dialog;
+    actions=$('div');actions.className='member-access-actions';
+    dialog.append(heading,hours,status,actions,docs);document.body.append(dialog);
+    dialog.addEventListener('cancel',event=>{event.preventDefault();cancel();});
   }
-  function show(trigger){
-    returnFocus=trigger??document.activeElement;
-    panel().querySelector('[data-section="actions"]').replaceChildren();
-    receipt='';status.textContent='';
-    const actions=dialog.querySelector('[data-section="actions"]');
-    if(support()){
-      actions.append(button('패스키로 로그인',()=>void authenticate('login')));
-      if(token(invitation))actions.append(button('인증번호 받기',()=>void otpStart(actions)));
-      else status.textContent='처음 등록하는 회원은 웰컴 알림톡의 패스키 등록 버튼을 열어 주세요.';
-    }else status.textContent='이 브라우저에서는 패스키 기능을 확인하지 못했어요. 휴대폰 기본 브라우저에서 열거나 회원 앱을 이용해 주세요.';
-    actions.append(button('닫기',()=>{if(!working)close();}));
-    if(!dialog.open)dialog.showModal();
-  }
-  function lock(value){
-    working=value;
-    if(!dialog)return;
-    for(const item of dialog.querySelectorAll('button,input'))item.disabled=value;
-  }
-  async function otpStart(actions){
-    if(working||!token(invitation))return;
-    lock(true);
-    try{
-      const r=await request('otp-start',{invitation});
-      if(!r.ok)throw Error();
-      status.textContent='등록된 번호로 받은 별도 알림톡의 숫자 6자리를 입력해 주세요. 발송은 오전 9시부터 밤 11시 전까지 가능합니다.';
-      const form=$('form');form.autocomplete='off';
-      const label=text('label','알림톡 인증번호'),input=$('input');
-      input.inputMode='numeric';input.autocomplete='one-time-code';input.pattern='[0-9]{6}';input.maxLength=6;input.required=true;
-      label.append(input);
-      const confirm=text('button','번호 확인');confirm.type='submit';form.append(label,confirm);
-      form.addEventListener('submit',event=>{event.preventDefault();void verifyCode(input);});
-      actions.replaceChildren(form,button('닫기',()=>{if(!working)close();}));
-      input.focus();
-    }catch{status.textContent=errorText;}finally{lock(false);}
-  }
-  async function verifyCode(input){
-    if(working||!/^\d{6}$/.test(input.value))return;
-    const code=input.value;input.value='';lock(true);
-    try{
-      const r=await request('otp-verify',{invitation,code});
-      if(!r.ok||!token(r.enrollmentReceipt))throw Error();
-      receipt=r.enrollmentReceipt;
-      status.textContent='번호를 확인했어요. 이 기기에서 패스키 등록을 마쳐 주세요.';
-      dialog.querySelector('[data-section="actions"]').replaceChildren(button('패스키 등록',()=>void authenticate('register')),
-        button('닫기',()=>{if(!working)close();}));
-    }catch{status.textContent=errorText;}finally{lock(false);}
-  }
-  async function authenticate(mode){
-    if(working||!support())return;
-    if(mode==='register'&&(!token(receipt)||!token(invitation)))return;
-    const snapshot=epoch;
-    lock(true);
-    try{
-      const options=await request(mode==='register'?'registration-options':'login-options',mode==='register'?
-        {invitation,enrollmentReceipt:receipt}:{});
-      if(!options.ok||snapshot!==epoch)throw Error();
-      const C=window.PublicKeyCredential;
-      const result=await (mode==='register'?navigator.credentials.create({publicKey:C.parseCreationOptionsFromJSON(options.options)}):
-        navigator.credentials.get({publicKey:C.parseRequestOptionsFromJSON(options.options)}));
-      if(!result||typeof result.toJSON!=='function'||snapshot!==epoch)throw Error();
-      const authenticated=await request(mode,{response:result.toJSON()});
-      if(!authenticated.ok||snapshot!==epoch)throw Error();
-      connected=true;receipt='';invitation='';close();
-      if(pendingScope)await reveal(pendingScope);
-    }catch{if(snapshot===epoch&&dialog?.open)status.textContent=errorText;}
-    finally{lock(false);}
-  }
-  async function reveal(scope){
-    const snapshot=epoch;
-    try{
-      const r=await request(scope);
-      if(snapshot!==epoch)return false;
-      if(!r.ok||!Array.isArray(r[scope])||!Number.isSafeInteger(r.expiresAt)||Date.now()>=r.expiresAt){
-        connected=false;clearTimeout(lease);onClear();return false;
+  function showForm(lookup,step='phone'){
+    const phoneStep=step==='phone';
+    const form=$('form');form.method='post';form.autocomplete='off';
+    const input=$('input');input.id='member-access-input';input.required=true;
+    input.type=phoneStep?'tel':'text';input.inputMode=phoneStep?'tel':'numeric';
+    input.autocomplete=phoneStep?'off':'one-time-code';
+    input.maxLength=phoneStep?24:6;
+    if(!phoneStep)input.pattern='[0-9]{6}';
+    const label=text('label',phoneStep?'등록된 휴대전화 번호':'알림톡 인증번호');label.htmlFor=input.id;
+    const hint=text('p',phoneStep?'회원 앱에 등록한 010 번호를 입력해 주세요.':'알림톡으로 받은 숫자 6자리를 입력해 주세요.');
+    hint.id='member-access-hint';
+    input.setAttribute('aria-describedby',hint.id+' member-access-hours '+status.id);
+    const submit=text('button',phoneStep?'인증번호 요청':'인증하기');submit.type='submit';
+    form.append(label,hint,input,submit);
+    const controls=[input,submit];
+    const switchPhone=phoneStep?null:button('번호 다시 입력',()=>{
+      status.textContent='';showForm(lookup);
+    });
+    if(switchPhone)controls.push(switchPhone);
+
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      if(working)return;
+      const value=phoneStep?normalizePhone(input.value):input.value;
+      if(phoneStep?!/^010\d{8}$/.test(value):!/^\d{6}$/.test(value)){
+        input.setAttribute('aria-invalid','true');
+        status.textContent=phoneStep?'010으로 시작하는 휴대전화 번호 11자리를 입력해 주세요.':'인증번호 숫자 6자리를 입력해 주세요.';
+        input.focus();
+        return;
       }
-      pendingScope=null;connected=true;clearTimeout(lease);
-      lease=setTimeout(clear,Math.min(r.expiresAt-Date.now(),20*60_000));
-      onPrivate(scope,r[scope],r.checkedAt,end);
-      return true;
-    }catch{return false;}
+      input.value='';
+      input.removeAttribute('aria-invalid');
+      const key=conversation;
+      working=true;
+      otpUsed=true;
+      for(const control of controls)control.disabled=true;
+      status.textContent=phoneStep?'인증번호를 요청하고 있어요.':'인증번호를 확인하고 있어요.';
+      try{
+        const result=await queueAuth(()=>key===conversation&&request(phoneStep?'otp-start':'otp-verify',
+          phoneStep?{phone:value}:{code:value},key));
+        if(key!==conversation)return;
+        if(result?.data?.ok!==true)throw Error();
+        if(phoneStep){
+          status.textContent='알림톡이 오지 않으면 번호와 발송 가능 시간을 확인해 주세요.';
+          showForm(lookup,'code');
+        }else{
+          setConnected(true);
+          close();
+          void reveal(lookup);
+        }
+      }catch{
+        if(key===conversation){
+          status.textContent=phoneStep?'지금은 인증번호 요청을 확인할 수 없어요. 잠시 후 다시 시도해 주세요.':
+            '인증을 완료하지 못했어요. 코드를 확인하거나 번호를 다시 입력해 주세요.';
+        }
+      }finally{
+        if(key===conversation){
+          working=false;
+          for(const control of controls)control.disabled=false;
+          if(dialog.open&&input.isConnected)input.focus({preventScroll:true});
+        }
+      }
+    });
+    input.addEventListener('input',()=>{
+      if(input.hasAttribute('aria-invalid')){input.removeAttribute('aria-invalid');status.textContent='';}
+    });
+    actions.replaceChildren(form,...(switchPhone?[switchPhone]:[]),button('닫기',cancel));
+    if(!dialog.open)dialog.showModal();
+    input.focus();
   }
-  window.addEventListener('pageshow',event=>{if(event.persisted)end();});
+  async function reveal(lookup){
+    if(lookup.control.getAttribute('aria-disabled')==='true')return;
+    const key=conversation,read=++cardRead;
+    lookup.control.setAttribute('aria-disabled','true');
+    lookup.feedback.textContent='수강권 정보를 확인하고 있어요.';
+    try{
+      const {status:code,data}=await request('cards');
+      if(key!==conversation||read!==cardRead)return;
+      if(code===403){
+        clearPrivate();
+        setConnected(false);
+        lookup.feedback.textContent='회원 인증을 확인할 수 없어요. 다시 인증하거나 회원 앱에서 확인해 주세요.';
+      }else if(data?.ok===true&&Array.isArray(data.cards)&&Number.isSafeInteger(data.dataExpiresAt)
+        &&data.dataExpiresAt>Date.now()){
+        clearPrivate();
+        lookup.feedback.textContent='';
+        dataExpiresAt=data.dataExpiresAt;
+        lastActivity=Date.now();
+        onPrivate(data.cards,data.checkedAt);
+        expirePrivate();
+      }else{
+        clearPrivate();
+        lookup.feedback.textContent=code===503?'회원 인증은 유지돼요. '+unavailable:unavailable;
+      }
+    }catch{
+      if(key===conversation&&read===cardRead){
+        clearPrivate();
+        lookup.feedback.textContent=unavailable;
+      }
+    }finally{
+      lookup.control.removeAttribute('aria-disabled');
+      if(key===conversation&&read!==cardRead)lookup.feedback.textContent='';
+    }
+  }
+  window.addEventListener('pagehide',()=>{
+    cardRead++;
+    clearPrivate();
+    const field=dialog?.querySelector('input');
+    if(field)field.value='';
+  });
+  document.addEventListener('visibilitychange',expirePrivate);
   return Object.freeze({
-    async offer(scope,container){
-      const generation=epoch;
-      if(!['cards','history'].includes(scope)||!await enabled()||generation!==epoch||!container.isConnected)return;
-      pendingScope=scope;
-      if(connected&&await reveal(scope))return;
-      if(generation!==epoch||!container.isConnected)return;
-      const b=button('회원 인증 후 확인',event=>{
-        pendingScope=scope;show(event.currentTarget);
-      });
-      container.append(b);
+    noteActivity(){
+      if(!connected||Date.now()-lastActivity<60*60_000)return;
+      const key=conversation;
+      lastActivity=Date.now();
+      void request('touch',{},key).then(({status})=>{
+        if(key!==conversation||status!==403)return;
+        clearPrivate();
+        setConnected(false);
+      }).catch(()=>{});
     },
-    openInvitation(){if(resetFragment())void enabled().then(ok=>{if(ok)show();});},
+    async offer(container){
+      const key=conversation;
+      if(!await enabled()||key!==conversation||!container.isConnected)return;
+      const feedback=text('div','');feedback.className='chat-pending';
+      feedback.setAttribute('role','status');feedback.dataset.memberStatus='';
+      const control=button('',()=>{
+        if(control.getAttribute('aria-disabled')==='true')return;
+        if(connected)void reveal(lookup);
+        else{
+          panel();
+          returnFocus=control;
+          status.textContent='';
+          showForm(lookup);
+        }
+      });
+      const lookup={control,feedback};
+      control.dataset.memberCards='';
+      updateLookupButton(control);
+      container.append(control);
+      container.after(feedback);
+      if(connected)await reveal(lookup);
+    },
     end
   });
 }

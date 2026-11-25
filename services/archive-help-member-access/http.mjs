@@ -10,7 +10,7 @@ const keySet=(obj,keys)=>Object.keys(obj).sort().join(',')===keys;
 const cookie=(step,session,age)=>COOKIE+'='+(!step&&!session?'':(step??'-')+'.'+(session??'-'))
   +'; Path=/api/member-access/; Secure; HttpOnly; SameSite=Strict; Max-Age='+age;
 
-function readCookie(req){
+export function readCookie(req){
   const prefix=COOKIE+'=';
   const matches=(req.headers.get('cookie')??'').split(';').map(row=>row.trim()).filter(row=>row.startsWith(prefix));
   if(matches.length!==1)return {};
@@ -19,13 +19,13 @@ function readCookie(req){
   const [step,session]=parts;
   return {step:isToken(step)?step:null,session:isToken(session)?session:null};
 }
-function json(status,value,cookies=[]){
+export function json(status,value,cookies=[]){
   const headers=new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store',
     'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'});
   for(const item of cookies)headers.append('Set-Cookie',item);
   return new Response(JSON.stringify(value),{status,headers});
 }
-async function payload(req){
+export async function payload(req){
   if(!/^application\/json(?:;|$)/i.test(req.headers.get('content-type')??'')||!req.body
     ||Number(req.headers.get('content-length'))>payloadLimit)return null;
   const reader=req.body.getReader(),chunks=[];

@@ -17,3 +17,8 @@
 !server.mjs
 !solapi-code.mjs
 !solapi-http.mjs
+!function.js
+!consultation-http.mjs
+!consultation-otp.mjs
+!consultation-runtime.mjs
+!firebase-bridge.mjs

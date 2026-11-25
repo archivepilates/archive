@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "source": "services/archive-help-member-access",
+    "codebase": "functions-help-member-runtime",
+    "runtime": "nodejs22",
+    "ignore": [
+      "node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log",
+      "*.test.mjs", "verify-*.mjs", "Dockerfile", "server.mjs",
+      "index.mjs", "internal-studiomate.mjs", "node-http.mjs", "studio-own.mjs", "store.mjs"
+    ]
+  }
+}

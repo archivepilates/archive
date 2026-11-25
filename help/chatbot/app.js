@@ -115,7 +115,6 @@ function append(role,result,follow=true){
   const links=element('div',null,'chat-actions');
   if(result.source&&!result.timetable)links.append(link(result.sourceLabel??'안내 원문',result.source));
   if(result.appGuide)links.append(link(result.memberLookup?'회원 앱에서 확인하는 방법':'공식 앱 이용 안내',result.appGuide));
-  if(result.endMember)links.append(button('인증 종료',result.endMember));
   if(result.inquiry)links.append(link(result.inquiry==='refund'?'카카오톡으로 환불 문의':'카카오톡으로 직원 문의',staffChat));
   if(links.children.length)body.append(links);
   if(result.choices?.length){
@@ -135,22 +134,32 @@ const count=value=>Number.isSafeInteger(value)&&value>=0?value+'회':'확인 필
 const cardLabels={group:'그룹 수업',private:'프라이빗 수업',duet:'듀엣 수업',triple:'트리플 수업'};
 const cardStates={held:' · 홀딩 중',future:' · 이용 예정'};
 const snapshotClock=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-function privateAnswer(scope,rows,checkedAt){
-  if(scope==='history')return rows.length?['최근 출석 기록이에요.',...rows.map(row=>[row.date,row.category,row.status].join(' · '))].join('\n'):
-    '확인된 최근 출석 기록이 없어요.';
-  const checked=Date.parse(checkedAt??'');
+function privateAnswer(rows,checkedAt){
+  const checked=Number.isSafeInteger(checkedAt)?checkedAt:Date.parse(checkedAt??'');
   const heading=Number.isFinite(checked)?snapshotClock.format(checked)+' 확인 기준 · 실제 예약 가능 여부는 회원 앱에서 확인해 주세요.':'';
-  const lines=rows.map(row=>{
-    const category=cardLabels[row.category]??row.category, status=cardStates[row.status]??'';
+  const lines=rows.filter(row=>row&&Object.hasOwn(cardLabels,row.category)&&['period','count'].includes(row.type)).map(row=>{
+    const category=cardLabels[row.category], status=Object.hasOwn(cardStates,row.status)?cardStates[row.status]:'';
     const expiry=row.expiresOn??row.endsOn;
-    return row.type==='period'?category+status+' · 이용 종료일 '+expiry:
-      category+status+' · 잔여 '+count(row.remaining)+' · 예약 가능 '+count(row.bookable)+' · 만료일 '+expiry;
+    const date=typeof expiry==='string'&&/^20\d{2}-\d{2}-\d{2}$/.test(expiry)?expiry:'확인 필요';
+    return row.type==='period'?category+status+' · 이용 종료일 '+date:
+      category+status+' · 잔여 '+count(row.remaining)+' · 예약 가능 '+count(row.bookable)+' · 만료일 '+date;
   });
-  return [heading,...(lines.length?lines:['확인된 수강권이 없어요.'])].filter(Boolean).join('\n');
+  const empty=rows.length?'수강권 정보를 표시할 수 없어요. 회원 앱에서 확인해 주세요.':'확인된 수강권이 없어요.';
+  return [heading,...(lines.length?lines:[empty])].filter(Boolean).join('\n');
 }
 const member=createMemberConnection({
-  onPrivate:(scope,rows,checkedAt,end)=>append('assistant',{text:privateAnswer(scope,rows,checkedAt),memberPrivate:true,endMember:end}),
-  onClear:()=>stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove())
+  onPrivate:(rows,checkedAt)=>append('assistant',{text:privateAnswer(rows,checkedAt),memberPrivate:true}),
+  onClear:()=>stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove()),
+  onAuthChange:connected=>{
+    if(connected){
+      prompts.prepend(endMember);
+      prompts.scrollLeft=0;
+    }else endMember.remove();
+  }
+});
+const endMember=button('인증 종료',()=>{
+  member.end();
+  input.focus({preventScroll:true});
 });
 function greetingArt(){
   const ns='http://www.w3.org/2000/svg';
@@ -167,11 +176,25 @@ function greetingArt(){
 }
 function clearChoices(){lastChoices?.remove();lastChoices=null;}
 function finishTurn(q,result,focusInput,userShown=false,follow=true){
+  let cards=false;
+  if(result.memberLookup){
+    const question=q.normalize('NFKC');
+    const memberView=/출석|수강\s*이력|이용\s*내역/u.test(question)?'history':
+      /(?:내|제|저의)\s*(?:시간표|예약)/u.test(question)?'booking':
+      /수강권|잔여|남(?:았|은)|회원\s*인증|로그인/u.test(question)?'cards':state.memberView??'cards';
+    const guidance={
+      history:'출석과 수강 이력은 스튜디오메이트 회원 앱에 로그인한 뒤 이용내역에서 확인해 주세요.',
+      booking:'개인 예약 일정은 스튜디오메이트 회원 앱에서 확인해 주세요.',
+      cards:'개인 수강권은 회원 앱의 내 수강권에서도 확인할 수 있어요.'
+    };
+    cards=memberView==='cards';
+    result={...result,text:guidance[memberView],state:{...result.state,memberView}};
+  }
   state=result.state;
   clearChoices();
   if(!userShown&&reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
   const actions=append('assistant',result,follow);
-  if(result.memberLookup)void member.offer(/출석|수강\s*이력|이용\s*내역/u.test(q)?'history':'cards',actions);
+  if(cards)void member.offer(actions);
   if(focusInput)input.focus({preventScroll:true});
 }
 function basicReply(q){return conversationTurn(q,state,{rules});}
@@ -185,12 +208,18 @@ function finishPending(){
 function ask(question,{focusInput=true,useAi=false}={}){
   const q=question.trim();
   if(!q)return;
+  member.noteActivity();
   finishPending();
-  const packet=publicNaturalPacket(q,naturalHistory);
+  if(/^(?:[0-9][\s-]*){6}$|인증\s*(?:번호|코드)[^0-9]{0,12}(?:[0-9][\s-]*){5}[0-9]/u.test(q.normalize('NFKC'))){
+    naturalHistory=[];
+    finishTurn(q,{text:'인증번호는 채팅이 아닌 회원 인증 창에 입력해 주세요.',state,hideInput:true},focusInput);
+    return;
+  }
+  const reply=basicReply(q);
+  const packet=reply.memberLookup||reply.hideInput?null:publicNaturalPacket(q,naturalHistory);
   const natural=useAi&&naturalEnabled?packet:null;
   if(!natural){
     naturalHistory=[];
-    const reply=basicReply(q);
     finishTurn(q,!packet?{...reply,hideInput:true}:reply,focusInput);return;
   }
   clearChoices();
@@ -208,8 +237,8 @@ function ask(question,{focusInput=true,useAi=false}={}){
       naturalHistory=[...natural.history,{role:'user',text:natural.question},
         {role:'assistant',text:answer.answer.normalize('NFKC')}].slice(-4);
     }
-    const reply=answer?applyNaturalReply(state,answer):{...basicReply(q),aiUnavailable:true};
-    finishTurn(q,reply,false,true,follow);
+    const result=answer?applyNaturalReply(state,answer):{...reply,aiUnavailable:true};
+    finishTurn(q,result,false,true,follow);
   });
 }
 function welcome(){
@@ -226,4 +255,3 @@ get('question').addEventListener('submit',e=>{
 });
 get('reset-chat').addEventListener('click',()=>{member.end();welcome();input.focus({preventScroll:true});});
 welcome();
-member.openInvitation();
