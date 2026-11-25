@@ -26,7 +26,7 @@ test('fixed callable exports are covered without inventing endpoints or exposing
   const supported = new Set(CALLABLE_ACTIONS.map(action => action.name));
   assert.equal(supported.size, CALLABLE_ACTIONS.length);
   const excludedNames = ['memberInquiryStaff', 'operatorCaptureStudioMateReferral', 'getStudioMateReferralDashboard',
-    'getCoreAccessSession', 'completeCoreFirstLogin', 'loginStaffWithPin',
+    'getCoreAccessSession', 'coreCleaningChecklist', 'completeCoreFirstLogin', 'loginStaffWithPin',
     'setupStaffPinWithTempCode', 'adminIssueStaffTempCode', 'registerFcmToken',
     'adminSyncLecturesRange', 'adminSyncManagerStaffs', 'adminPollManagerNotices'];
   const excluded = new Set(excludedNames);
