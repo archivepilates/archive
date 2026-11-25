@@ -40,7 +40,8 @@ let stage='local preflight',native;
 const pools={};
 try{
   const [mode,name,last4]=process.argv.slice(2);
-  const first=mode==='--apply-first',refresh=mode==='--refresh',applying=first||refresh;
+  const first=mode==='--apply-first',refresh=mode==='--refresh',contactOnly=mode==='--refresh-contact';
+  const applying=first||refresh||contactOnly;
   assert(applying&&process.argv.length===5&&name===name.trim()&&/^[0-9]{4}$/u.test(last4)
     ||mode==='--verify'&&process.argv.length===3);
   const directory=await lstat(root);
@@ -50,7 +51,7 @@ try{
   let config=first?null:await readPrivate(path),batch,source;
   let stamp;
   if(applying){
-    assert(!await lstat(first?path:manifest).catch(error=>{if(error.code!=='ENOENT')throw error;}));
+    if(!contactOnly)assert(!await lstat(first?path:manifest).catch(error=>{if(error.code!=='ENOENT')throw error;}));
     stage='exact native identity and current group count card';
     native=createLiveReader({budgetMs:25000});
     const signal=AbortSignal.timeout(100000);
@@ -96,7 +97,13 @@ try{
   const binding=async()=>loaders.loadCurrentBinding({studioId,memberId});
   if(applying){
     stage='daily snapshot and binding preflight';
-    assert.equal(await status(),null);
+    if(contactOnly){
+      const recorded=await readPrivate(manifest).catch(error=>{if(error.code==='ENOENT')return config;throw error;});
+      const existing=await status();
+      assert(existing?.members===1&&existing.cards===1&&existing.sourceDigest===recorded.sourceDigest
+        &&stamp.cardDigest===recorded.cardDigest);
+      stamp=recorded;
+    }else assert.equal(await status(),null);
     let box;
     if(first){
       assert.equal(await binding(),null);
@@ -117,7 +124,7 @@ try{
         await conn.query('commit');
       }catch(error){await conn.query('rollback').catch(()=>{});throw error;}
       finally{conn.release();}
-      await savePrivate(manifest,stamp);
+      if(!contactOnly)await savePrivate(manifest,stamp);
     }
     stage='exact binding publication';
     const {rows:[published]}=await pools.enrollment.query('select archive_help_enrollment.publish_binding($1,$2,$3,$4,$5) as ok',
@@ -125,10 +132,13 @@ try{
     assert.equal(published?.ok,true);
     const verified=await loaders.loadCurrentBinding({studioId,memberId,needContact:true});
     assert(verified?.phone===source.phone&&verified.revision===revision);
-    stage='one-member snapshot publication';
-    const {rows:[result]}=await pools.snapshot.query('select archive_help_pass_snapshot.publish_daily($1,$2,$3) as result',
-      [batch.observedAt,batch.sourceDigest,JSON.stringify(batch.members)]);
-    assert.equal(result?.result?.status,'published');
+    assert.equal(verified.sourceObservedAt,Date.parse(batch.observedAt));
+    if(!contactOnly){
+      stage='one-member snapshot publication';
+      const {rows:[result]}=await pools.snapshot.query('select archive_help_pass_snapshot.publish_daily($1,$2,$3) as result',
+        [batch.observedAt,batch.sourceDigest,JSON.stringify(batch.members)]);
+      assert.equal(result?.result?.status,'published');
+    }
   }
   stage='readback and session isolation';
   const stats=await status();
@@ -151,7 +161,8 @@ try{
     await Promise.all([issuer.revoke(own),issuer.revoke(other)]);
   }
   assert.equal(await lookup(own,'cards'),null);
-  console.log(JSON.stringify({ok:true,members:1,cards:1,observedAt:stats.observedAt,blockedUnknown:true,blockedOther:true,revoked:true,sent:0}));
+  console.log(JSON.stringify({ok:true,members:1,cards:1,observedAt:stats.observedAt,contactRefreshed:contactOnly,
+    blockedUnknown:true,blockedOther:true,revoked:true,sent:0}));
 }catch(error){
   const code=/^[0-9A-Z_]{4,30}$/u.test(error?.code??'')?' ('+error.code+')':'';
   console.error('Stopped at '+stage+code+'. Check the stored state before any retry. No member message was sent.');

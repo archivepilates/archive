@@ -46,6 +46,26 @@ test('window is rechecked after reading the template, and a mismatched receipt i
   assert.equal(writes,1);
 });
 
+test('a compact SOLAPI receipt uses one group readback and cannot acknowledge a different request',async()=>{
+  const good={...receipt.messageList[0],groupId,statusCode:'4000',
+    customFields:{archiveActionKey:dispatchKey,purpose:'help_member_code'}};
+  for(const [row,expected] of [[good,true],[{...good,statusCode:'3107'},false],
+    [{...good,customFields:{...good.customFields,archiveActionKey:'b'.repeat(64)}},false],
+    [{...good,to:'01000000002'},false]]){
+    const requests=[];
+    const send=createMemberCodeSender({channelId,templateId,request:async(path,method)=>{
+      requests.push([path,method]);
+      if(path==='/kakao/v2/templates/'+templateId)return template;
+      if(path==='/messages/v4/send-many/detail')return {...receipt,messageList:[{messageId,statusCode:'2000'}]};
+      return {messageList:{[messageId]:row}};
+    }});
+    const actual=await send(args);
+    assert.equal(actual.accepted,expected);
+    assert.deepEqual(requests,[['/kakao/v2/templates/'+templateId,'GET'],
+      ['/messages/v4/send-many/detail','POST'],['/messages/v4/groups/'+groupId+'/messages','GET']]);
+  }
+});
+
 test('member dispatch abort reaches the official HTTP transport and is not retried',async()=>{
   const controller=new AbortController(), methods=[];
   const request=createLessonVideoSolapiTransport({key:'test',apiSecret:'test',fetcher:async(_url,options)=>{

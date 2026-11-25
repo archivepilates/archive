@@ -4,6 +4,7 @@ import {applyNaturalReply,publicNaturalPacket,requestNaturalReply,supportsNatura
 import {createMemberConnection} from './member-connection.js';
 
 const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
+const memberPilot=new URLSearchParams(location.search).get('member-pilot')==='1';
 
 const get=id=>document.getElementById(id);
 const stream=get('conversation'), input=get('query'), prompts=get('prompts');
@@ -194,7 +195,7 @@ function finishTurn(q,result,focusInput,userShown=false,follow=true){
   clearChoices();
   if(!userShown&&reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
   const actions=append('assistant',result,follow);
-  if(cards)void member.offer(actions);
+  if(cards&&memberPilot)void member.offer(actions);
   if(focusInput)input.focus({preventScroll:true});
 }
 function basicReply(q){return conversationTurn(q,state,{rules});}

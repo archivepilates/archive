@@ -8,6 +8,7 @@ firebase/function-codebases/*/lib/
 firebase/packages/*/node_modules/
 firebase/packages/*/lib/
 firebase/kangsain-functions/functions/.env
+services/archive-help-member-access/.env*
 firebase/kangsain-functions/.firebase/
 firebase/kangsain-functions/firebase-debug.log
 firebase/kangsain-functions/firebase-debug.*.log

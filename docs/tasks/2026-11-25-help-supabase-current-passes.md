@@ -314,3 +314,31 @@ complete OTP flow from the member origin without a staff Google token.
   the member can read their own card and a separate unauthenticated or
   mismatched consultation cannot. Do not enable broad public rollout before
   that evidence, and do not present a simulated code or API health as delivery.
+
+## Production-Origin One-Member Pilot
+
+- The 2026-11-26 local test confirmed one Alimtalk device-code authentication,
+  one current pass, and no result for a different or unauthenticated
+  consultation. The production package has no overnight operator exception.
+- Only `https://help.archivepilates.com/?member-pilot=1` offers the OTP UI;
+  ordinary visitors retain the StudioMate member-app link. The query flag
+  is only UI visibility. Exact current enrollment and proof of phone
+  possession are required regardless of URL. Personal data and OTPs stay
+  out of public GPT prompts.
+- Hosting rewrites only the dedicated member path to
+  `helpMemberConsultation`. The service has three limited Supabase runtime
+  connections and an exact named-secret grant; it never uses the Mac mini
+  or an administrator browser for a member request. Open the transport only
+  for this service, with the app authorization enforced at all data routes.
+- Production uses KST 09:00 inclusive to 23:00 exclusive for OTP delivery.
+  Contact evidence must be within one hour. Before an approved test on the
+  same date, `scripts/seed-help-member-pilot.mjs --refresh-contact` rechecks
+  the exact identity, contact and unchanged card digest against StudioMate;
+  it does not overwrite the day's saved card or bypass the fresh-source
+  requirement. No ongoing member snapshot schedule is activated by the
+  pilot. Missing, stale or changed data fails closed instead of showing zero.
+- Require separate evidence for hosted transport without Google, provider
+  delivery, actual user code entry and the subsequent own-only card read.
+  Do not use the prior local terminal OTP as evidence for live browser
+  authentication. Do not broaden the audience until the production-origin
+  real-phone test has passed.
