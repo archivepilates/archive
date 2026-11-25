@@ -15,7 +15,7 @@ function normalizePhone(value){
   return value.normalize('NFKC').replace(/[\s()-]/g,'').replace(/^\+82(?=10\d{8}$)/,'0');
 }
 
-export function createMemberConnection({onPrivate,onClear,onAuthChange}){
+export function createMemberConnection({onPrivate,onClear,onAuthChange,allowPilot=false}){
   if(/^#member-invite(?:=|$)/.test(location.hash)){
     history.replaceState(history.state,'',location.pathname+location.search);
   }
@@ -34,7 +34,8 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange}){
   }
   function enabled(){
     return capability??=(request('availability').then(({data})=>
-      data?.ok===true&&data.remoteOtp===true&&data.method==='otp').catch(()=>false));
+      data?.ok===true&&data.remoteOtp===true&&data.method==='otp'
+        &&(allowPilot||data.audience==='verified-members')).catch(()=>false));
   }
   function queueAuth(task){
     // Cookie-changing requests must finish in order, including across chat resets.
@@ -118,7 +119,9 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange}){
     form.append(label,hint,input,submit);
     const controls=[input,submit];
     const switchPhone=phoneStep?null:button('번호 다시 입력',()=>{
-      status.textContent='';showForm(lookup);
+      end();
+      returnFocus=lookup;
+      showForm(lookup);
     });
     if(switchPhone)controls.push(switchPhone);
 

@@ -77,9 +77,10 @@ try{
   const ask=async()=>{const box=page.getByRole('textbox',{name:'궁금한 내용'});await box.fill('내 수강권 몇 회 남았어?');await box.press('Enter');};
   const answers=page.locator('[data-member-private]');
   const authButton=page.getByRole('button',{name:/회원 인증/});
+  const anonymousAvailability=page.waitForResponse(r=>r.url().endsWith('/api/member-access/availability'));
   await ask();
+  await anonymousAvailability;
   assert.equal(await authButton.count(),0);
-  assert.ok(!steps.includes('availability'));
   await page.goto(ORIGIN+'/?member-pilot=1');
   await ask();await authButton.last().click();
   const dialog=page.getByRole('dialog');

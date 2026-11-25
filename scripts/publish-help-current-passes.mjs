@@ -4,6 +4,7 @@ import {constants} from 'node:fs';
 import {open} from 'node:fs/promises';
 import {archiveAutomationPath} from './lib/archive-automation-paths.mjs';
 import {auditCurrentPassRoster,makeDailyPassBatch,makeVerifiedRosterPassBatch} from '../services/archive-help-member-access/current-pass-snapshot.mjs';
+import {makeHelpRosterGeneration} from '../services/archive-help-member-access/help-roster-projection.mjs';
 
 const project='vrmtkewdqgcrhpbeijhr';
 const role='archive_help_pass_writer';
@@ -57,9 +58,66 @@ async function checkRoster(){
   }finally{await native.close();}
 }
 
+async function stageGeneralRoster(sourceDigest,apply){
+  const catalogue=await readPrivateConfig('help-member-roster-catalog.json',262144);
+  const reviewedAt=Date.parse(catalogue.checkedAt??'');
+  if(catalogue.studioId!=='5330'||!Number.isFinite(reviewedAt)||reviewedAt>Date.now()
+    ||Date.now()-reviewedAt>30*24*60*60_000)throw Error('roster_catalog_unverified');
+  const {env}=await readPrivateConfig('help-member-pilot-runtime.json',16384);
+  if(!hex.test(env?.HELP_MEMBER_SNAPSHOT_KEY??'')||!hex.test(env?.HELP_MEMBER_CONTACT_KEY??''))
+    throw Error('writer_config_invalid');
+  const {createLiveReader}=await import('../services/archivepilates-mcp/src/live-browser.mjs');
+  const native=createLiveReader({budgetMs:70_000});
+  let batch;
+  try{
+    const inventory=await readRoster(native,AbortSignal.timeout(160_000));
+    batch=makeHelpRosterGeneration({inventory,products:catalogue.products,sourceDigest,
+      memberKeySecret:Buffer.from(env.HELP_MEMBER_SNAPSHOT_KEY,'hex'),contactKey:Buffer.from(env.HELP_MEMBER_CONTACT_KEY,'hex')});
+  }finally{await native.close();}
+  if(!apply)return {ok:true,status:'general_plan',...batch.summary};
+  const db=await readPrivateConfig('help-member-dedicated-logins.json',16384);
+  const writer='archive_help_snapshot_writer_app', login=db.logins?.snapshot;
+  const direct=db.host==='db.'+project+'.supabase.co';
+  if(db.project!==project||!direct&&!/^aws-[0-9]+-ap-northeast-2\.pooler\.supabase\.com$/u.test(db.host??'')
+    ||!db.ca?.startsWith('-----BEGIN CERTIFICATE-----')||login?.role!==writer
+    ||!/^[A-Za-z0-9_-]{32,128}$/u.test(login.password??''))throw Error('writer_config_invalid');
+  const {Client}=require('../services/archivepilates-mcp/node_modules/pg');
+  const client=new Client({host:db.host,port:5432,database:'postgres',user:direct?writer:writer+'.'+project,
+    password:login.password,ssl:{ca:db.ca,rejectUnauthorized:true},connectionTimeoutMillis:5000,
+    statement_timeout:9000,query_timeout:10000,application_name:'archive-help-roster-publisher'});
+  try{
+    await client.connect();
+    const {rows:[proof]}=await client.query(`SELECT current_user::text=$1 AS expected, EXISTS(
+      SELECT FROM pg_roles r WHERE r.rolname=current_user AND r.rolcanlogin
+        AND NOT (r.rolsuper OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication OR r.rolbypassrls)
+        AND pg_has_role(r.oid,'archive_help_pass_writer','USAGE')
+        AND NOT EXISTS (SELECT FROM pg_roles other WHERE other.oid<>r.oid AND other.rolname<>'archive_help_pass_writer'
+          AND pg_has_role(r.oid,other.oid,'MEMBER'))) AS restricted`,[writer]);
+    if(!proof?.expected||!proof.restricted)throw Error('writer_config_invalid');
+    let result;
+    try{
+      ({rows:[{value:result}]}=await client.query('SELECT archive_help_roster.publish($1,$2,$3) AS value',
+        [batch.observedAt,batch.sourceDigest,JSON.stringify(batch.members)]));
+    }catch{
+      // A lost acknowledgement is checked, never replayed.
+      result=null;
+    }
+    const {rows:[row]}=await client.query('SELECT archive_help_roster.status() AS value');
+    const readback=row?.value;
+    if(readback?.sourceDigest!==batch.sourceDigest||!(readback.members>=0&&readback.members<=batch.members.length)
+      ||!(readback.cards>=readback.members&&readback.cards<=batch.members.reduce((n,m)=>n+m.cards.length,0))
+      ||result&&result.sourceDigest!==readback.sourceDigest)throw Error('writer_readback_invalid');
+    return {ok:true,status:'general_published',members:readback.members,cards:readback.cards,
+      heldApproval:batch.members.length-readback.members,observedAt:readback.observedAt,...batch.summary};
+  }finally{await client.end();}
+}
+
 async function main(){
   const [mode,hashFlag,sourceDigest]=process.argv.slice(2);
   if(mode==='--check-roster'&&process.argv.length===3)return checkRoster();
+  if(mode==='--general-plan'&&process.argv.length===3)return stageGeneralRoster('0'.repeat(64),false);
+  if(mode==='--general-scheduled-run'&&process.argv.length===5&&hashFlag==='--source-sha256'
+    &&hex.test(sourceDigest)&&process.env.HELP_MEMBER_ROSTER_SYNC==='enabled')return stageGeneralRoster(sourceDigest,true);
   if(process.argv.length!==5||mode!=='--scheduled-run'||hashFlag!=='--source-sha256'||!hex.test(sourceDigest)
     ||process.env.HELP_CURRENT_PASS_SNAPSHOT_ENABLED!=='enabled')throw Error('scheduled_apply_required');
   const config=await readPrivateConfig('help-current-pass-writer.json',32768);
@@ -117,6 +175,7 @@ try{console.log(JSON.stringify(await main()));}
 catch(error){
   const known=new Set(['scheduled_apply_required','writer_config_invalid','writer_readback_invalid','approved_pilot_scope_unverified',
     'native_member_readback_unverified','native_roster_unverified','verified_roster_authority_required','ticket_policy_unverified','ticket_state_unverified','member_key_unverified',
+    'roster_catalog_unverified','roster_generation_unverified',
     'LIVE_BUSY','LIVE_CHANGED','LIVE_IDENTITY_MISMATCH','LIVE_TIMEOUT','LIVE_LOGIN_REQUIRED','LIVE_CLEANUP_REQUIRED','LIVE_UNAVAILABLE','LIVE_INCOMPLETE']);
   const note=known.has(error?.message)?error.message:known.has(error?.code)?error.code:error?.code==='ENOENT'?'writer_config_missing':'snapshot_not_verified';
   console.log(JSON.stringify({ok:false,status:'held',reason:note}));

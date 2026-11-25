@@ -24,27 +24,48 @@ export function createWebMemberConsultationOtp(options){
   return buildConsultationOtp(options,true);
 }
 
-function buildConsultationOtp({store,loadPilotBinding,sendCode,secret,now=Date.now}={},allowWebMemberHours){
-  if(typeof store?.read!=='function'||typeof store?.transaction!=='function'||typeof loadPilotBinding!=='function'
+export function createWebRosterConsultationOtp(options){
+  return buildConsultationOtp(options,true,true);
+}
+
+function buildConsultationOtp({store,loadPilotBinding,loadRosterBinding,sendCode,secret,previousPilot,canaryAllowance,now=Date.now}={},allowWebMemberHours,roster=false){
+  if(typeof store?.read!=='function'||typeof store?.transaction!=='function'
+    ||typeof (roster?loadRosterBinding:loadPilotBinding)!=='function'
     ||typeof sendCode!=='function'||typeof now!=='function'||!(secret instanceof Uint8Array)||secret.length<32){
     throw new TypeError('Trusted consultation OTP adapters and private key required');
   }
   const key=Buffer.from(secret);
   const hmac=(domain,...values)=>createHmac('sha256',key)
-    .update(['archive-help-consultation-otp:v1',domain,...values].join('\0'));
+    .update([roster?'archive-help-consultation-otp:roster:v1':'archive-help-consultation-otp:v1',domain,...values].join('\0'));
   const digest=(...values)=>hmac(...values).digest('hex');
+  const validAllowance=roster&&hexValid(previousPilot?.subject)&&Number.isSafeInteger(canaryAllowance?.from)
+    &&Number.isSafeInteger(canaryAllowance?.until)&&canaryAllowance.until>canaryAllowance.from
+    &&canaryAllowance.until-canaryAllowance.from<=HOUR;
+  const canaryMarker=validAllowance?digest('single-extra-send','help-roster-canary-20261126',previousPilot.subject):null;
+  const canUseAllowance=(subject,time)=>validAllowance&&subject===previousPilot.subject
+    &&time>=canaryAllowance.from&&time<canaryAllowance.until;
+  const budgetId=memberId=>{
+    if(!roster||memberId!==previousPilot?.subject)return digest('budget',STUDIO_ID,memberId);
+    // Preserve the earlier pilot's rolling cap at promotion instead of
+    // granting three additional sends under a new roster namespace.
+    return createHmac('sha256',key).update(['archive-help-consultation-otp:v1','budget',STUDIO_ID,
+      previousPilot.nativeId].join('\0')).digest('hex');
+  };
   const otpKey=(step,conversation)=>digest('otp',step,conversation);
   const proofFresh=(proof,time,age)=>fresh(proof.sourceObservedAt,time,age)&&fresh(proof.checkedAt,time,PROOF_MS);
 
-  // The injected loader is bound to the sole configured pilot. No caller identity is passed to it.
-  async function readPilot(needContact){
+  // New requests can supply a phone, but verification and reads only use the
+  // subject saved by the server before provider dispatch.
+  async function readBinding(needContact,{phone,memberId}={}){
     const signal=AbortSignal.timeout(7000);
-    const value=await loadPilotBinding({needContact,signal});
+    const value=roster?await loadRosterBinding({needContact,signal,...(needContact?{phone}:{memberId})}):
+      await loadPilotBinding({needContact,signal});
     const checkedAt=now();
     if(signal.aborted||value?.authority!=='verified_studiomate_in_person_signup'||value.studioId!==STUDIO_ID
-      ||typeof value.memberId!=='string'||!/^[1-9]\d{0,15}$/u.test(value.memberId)||!hexValid(value.revision)
+      ||!(roster?hexValid(value.memberId):typeof value.memberId==='string'&&/^[1-9]\d{0,15}$/u.test(value.memberId))
+      ||roster&&!needContact&&value.memberId!==memberId||!hexValid(value.revision)
       ||value.registeredContactVerified!==true||value.signupComplete!==true||value.active!==true||value.revoked!==false
-      ||!fresh(value.sourceObservedAt,checkedAt,needContact?HOUR:26*HOUR)||needContact&&!phoneValid(value.phone))return null;
+      ||!fresh(value.sourceObservedAt,checkedAt,roster||needContact?HOUR:26*HOUR)||needContact&&!phoneValid(value.phone))return null;
     return {memberId:value.memberId,revision:value.revision,sourceObservedAt:value.sourceObservedAt,checkedAt,
       ...(needContact?{phone:value.phone}:{})};
   }
@@ -75,13 +96,13 @@ function buildConsultationOtp({store,loadPilotBinding,sendCode,secret,now=Date.n
       const sessionKey=digest('session',token), conversationDigest=digest('conversation',conversation);
       const before=await store.read('session',sessionKey,now());
       if(!usableSession(before,conversationDigest,now()))return null;
-      const proof=await readPilot(false);
+      const proof=await readBinding(false,{memberId:before.memberId});
       if(!proof||!sameBinding(proof,before))return null;
       return await store.transaction(async tx=>{
         const current=await tx.read('session',sessionKey,now()), time=now();
         // A concurrent touch may extend this session. A deleted or replaced session cannot be revived.
         if(!usableSession(current,conversationDigest,time)||!sameBinding(current,before)
-          ||current.issuedAt!==before.issuedAt||!proofFresh(proof,time,26*HOUR))return null;
+          ||current.issuedAt!==before.issuedAt||!proofFresh(proof,time,roster?HOUR:26*HOUR))return null;
         const expiresAt=touch?Math.max(current.expiresAt,time+DAY):current.expiresAt;
         if(expiresAt!==current.expiresAt)await tx.put('session',sessionKey,{...current,expiresAt},expiresAt);
         const {memberId,revision}=proof;
@@ -95,14 +116,15 @@ function buildConsultationOtp({store,loadPilotBinding,sendCode,secret,now=Date.n
     async start(step,conversation,phone,source){
       if(!tokenValid(step)||!tokenValid(conversation)||!phoneValid(phone))return generic;
       const memberForm=allowWebMemberHours&&source===WEB_MEMBER_OTP_REQUEST;
+      if(roster&&!memberForm)return generic;
       const permitted=time=>Number.isSafeInteger(time)&&(memberForm||inWindow(time));
       try{
         if(!permitted(now()))return generic;
         const otp=otpKey(step,conversation), marker=digest('dispatch-marker',step,conversation);
         if(await store.read('otp',marker,now())||await store.read('otp',otp,now()))return generic;
-        const proof=await readPilot(true);
+        const proof=await readBinding(true,{phone});
         if(!proof||!samePhone(phone,proof.phone))return generic;
-        const {memberId,revision}=proof, budget=digest('budget',STUDIO_ID,memberId);
+        const {memberId,revision}=proof, budget=budgetId(memberId);
         const claim=randomBytes(32).toString('hex'), code=String(randomInt(1_000_000)).padStart(6,'0');
         const reservation=await store.transaction(async tx=>{
           const time=now(), prior=await tx.read('otp-budget',budget,time);
@@ -110,26 +132,33 @@ function buildConsultationOtp({store,loadPilotBinding,sendCode,secret,now=Date.n
           if(!Array.isArray(entries)||entries.length>MAX_SENDS||entries.some(t=>!Number.isSafeInteger(t)))return null;
           if(await tx.read('otp',marker,time)||await tx.read('otp',otp,time))return null;
           const claimedAt=now(), deadlines=entries.filter(t=>t>claimedAt);
-          if(!permitted(claimedAt)||!proofFresh(proof,claimedAt,HOUR)||deadlines.length>=MAX_SENDS
+          if(!permitted(claimedAt)||!proofFresh(proof,claimedAt,HOUR)
             ||memberForm&&deadlines.some(deadline=>claimedAt<deadline-DAY+WEB_REQUEST_COOLDOWN_MS))return null;
+          const extra=deadlines.length>=MAX_SENDS;
+          if(extra&&(!canUseAllowance(memberId,claimedAt)||await tx.read('otp',canaryMarker,claimedAt)))return null;
+          if(roster&&await tx.pinRosterBinding(memberId,revision)!==true)return null;
           const expiresAt=claimedAt+CODE_MS, dispatchBy=claimedAt+DISPATCH_MS;
           // Budget from the latest permitted transport time, not an earlier database timestamp.
-          deadlines.push(dispatchBy+DAY);
-          await tx.put('otp-budget',budget,{deadlines},Math.max(...deadlines));
+          if(extra)await tx.put('otp',canaryMarker,{claim});
+          else{
+            deadlines.push(dispatchBy+DAY);
+            await tx.put('otp-budget',budget,{deadlines},Math.max(...deadlines));
+          }
           await tx.put('otp',marker,{claim});
           await tx.put('otp',otp,{claim,memberId,revision,expiresAt,attempts:0,status:'dispatching',
             codeDigest:digest('code',claim,code)},expiresAt);
-          return {expiresAt,dispatchBy};
+          return {expiresAt,dispatchBy,extra};
         });
         if(!reservation)return generic;
 
         const {expiresAt,dispatchBy}=reservation;
         let status='blocked';
         try{
-          const current=permitted(now())&&now()<dispatchBy?await readPilot(true):null;
+          const dispatchAllowed=time=>permitted(time)&&time<dispatchBy&&(!reservation.extra||canUseAllowance(memberId,time));
+          const current=dispatchAllowed(now())?await readBinding(true,{phone}):null;
           const mayDispatch=()=>{
             const time=now();
-            return !!current&&time<dispatchBy&&permitted(time)&&proofFresh(current,time,HOUR);
+            return !!current&&dispatchAllowed(time)&&proofFresh(current,time,HOUR);
           };
           if(current&&sameBinding(current,proof)&&samePhone(current.phone,proof.phone)
             &&(await store.read('otp',otp,now()))?.claim===claim&&mayDispatch()){
@@ -148,12 +177,13 @@ function buildConsultationOtp({store,loadPilotBinding,sendCode,secret,now=Date.n
       try{
         const otp=otpKey(step,conversation), before=await store.read('otp',otp,now());
         if(!usableCode(before,now()))return denied;
-        const proof=await readPilot(false);
+        const proof=await readBinding(false,{memberId:before.memberId});
         if(!proof||!sameBinding(proof,before))return denied;
         return await store.transaction(async tx=>{
           const current=await tx.read('otp',otp,now()), time=now();
           if(!usableCode(current,time)||current.claim!==before.claim||!sameBinding(current,proof)
-            ||!proofFresh(proof,time,26*HOUR))return denied;
+            ||!proofFresh(proof,time,roster?HOUR:26*HOUR))return denied;
+          if(roster&&await tx.pinRosterBinding(proof.memberId,proof.revision)!==true)return denied;
           const matches=timingSafeEqual(Buffer.from(current.codeDigest,'hex'),Buffer.from(digest('code',current.claim,code),'hex'));
           const attempts=current.attempts+Number(!matches);
           if(attempts>=MAX_DENIES||matches){

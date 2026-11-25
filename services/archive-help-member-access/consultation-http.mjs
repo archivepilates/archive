@@ -14,7 +14,7 @@ const same=(a,b)=>!!b&&a.accountId===b.accountId&&a.memberId===b.memberId
 const SOURCE_TTL=26*60*60_000;
 const GRANT_TTL=2*60_000;
 
-export function createConsultationCardLookup({consultation,issuer,reader,now=Date.now}){
+export function createConsultationCardLookup({consultation,issuer,reader,now=Date.now,sourceTtl=SOURCE_TTL}){
   return async (token,conversation)=>{
     const before=await consultation.touch(token,conversation);
     if(!before)return {status:403};
@@ -25,7 +25,7 @@ export function createConsultationCardLookup({consultation,issuer,reader,now=Dat
       const after=await consultation.resolveSession(token,conversation);
       if(!same(before,after))return {status:403};
       if(!data)return {status:503};
-      const dataExpiresAt=Math.min(Date.parse(data.checkedAt)+SOURCE_TTL,after.expiresAt);
+      const dataExpiresAt=Math.min(Date.parse(data.checkedAt)+sourceTtl,after.expiresAt);
       if(!Number.isSafeInteger(dataExpiresAt)||dataExpiresAt<=now())return {status:503};
       return {status:200,body:{ok:true,cards:data.cards,checkedAt:data.checkedAt,dataExpiresAt}};
     }finally{
@@ -35,7 +35,7 @@ export function createConsultationCardLookup({consultation,issuer,reader,now=Dat
   };
 }
 
-export function createConsultationMemberHandler({enabled=false,memberWebOtp=false,consultation,allowRequest,lookup,stepSecret,origin=ORIGIN}={}){
+export function createConsultationMemberHandler({enabled=false,memberWebOtp=false,publicRoster=false,consultation,allowRequest,lookup,stepSecret,origin=ORIGIN}={}){
   if(enabled===true&&(!Buffer.isBuffer(stepSecret)||stepSecret.length!==32||typeof allowRequest!=='function'))
     throw Error('Private consultation HTTP configuration required');
   const forStep=conversation=>createHmac('sha256',stepSecret).update('help-otp-step:v1:'+conversation).digest('base64url');
@@ -58,7 +58,7 @@ export function createConsultationMemberHandler({enabled=false,memberWebOtp=fals
         return json(200,{ok:true},removed?[cookie(null,null,0)]:[]);
       }
       if(route==='availability'&&keySet(body,''))return json(200,{ok:true,remoteOtp:true,method:'otp',
-        ...(web?{requestHours:'24h'}:{})});
+        ...(web?{requestHours:'24h',...(publicRoster?{audience:'verified-members'}:{})}:{})});
       if(!await allowRequest(route==='otp-start'?preAuth:session??step,route))return json(429,deny);
       if(route==='otp-start'&&keySet(body,'phone')&&typeof body.phone==='string'&&/^010\d{8}$/u.test(body.phone)){
         const source=web?WEB_MEMBER_OTP_REQUEST:undefined;

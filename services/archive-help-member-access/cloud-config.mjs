@@ -14,7 +14,8 @@ const secret=value=>{
 
 export function readCloudConfig(env){
   if(!env.HELP_MEMBER_MODE||env.HELP_MEMBER_MODE==='disabled')return {enabled:false};
-  if(env.HELP_MEMBER_MODE!=='pilot')throw invalid();
+  const roster=env.HELP_MEMBER_MODE==='roster';
+  if(env.HELP_MEMBER_MODE!=='pilot'&&!roster)throw invalid();
   let blob;
   try{blob=JSON.parse(env.HELP_MEMBER_POSTGRES);}catch{throw invalid();}
   if(!exact(blob,'ca,host,logins,project')||blob.project!==project
@@ -33,8 +34,9 @@ export function readCloudConfig(env){
       query_timeout:5000,idleTimeoutMillis:10000,application_name:'archive-help-member-'+kind}];
   }));
   if(new Set(Object.values(pools).map(x=>x.password)).size!==3)throw invalid();
-  const pilotMemberKey=secret(env.HELP_MEMBER_PILOT_KEY);
-  if(keys.includes(env.HELP_MEMBER_PILOT_KEY))throw invalid();
-  return {enabled:true,pools,contactKey,memberKeySecret,otpSecret,pilotMemberKey,provider:{apiKey:env.SOLAPI_API_KEY,apiSecret:env.SOLAPI_API_SECRET,
+  const proof=roster?{roster:true,rosterPublic:env.HELP_MEMBER_ROSTER_PUBLIC==='enabled'}:
+    {pilotMemberKey:secret(env.HELP_MEMBER_PILOT_KEY)};
+  if(!roster&&keys.includes(env.HELP_MEMBER_PILOT_KEY))throw invalid();
+  return {enabled:true,pools,contactKey,memberKeySecret,otpSecret,...proof,provider:{apiKey:env.SOLAPI_API_KEY,apiSecret:env.SOLAPI_API_SECRET,
     channelId:env.SOLAPI_PFID,templateId:env.HELP_MEMBER_SOLAPI_TEMPLATE}};
 }

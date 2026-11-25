@@ -149,6 +149,7 @@ function privateAnswer(rows,checkedAt){
   return [heading,...(lines.length?lines:[empty])].filter(Boolean).join('\n');
 }
 const member=createMemberConnection({
+  allowPilot:memberPilot,
   onPrivate:(rows,checkedAt)=>append('assistant',{text:privateAnswer(rows,checkedAt),memberPrivate:true}),
   onClear:()=>stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove()),
   onAuthChange:connected=>{
@@ -195,7 +196,7 @@ function finishTurn(q,result,focusInput,userShown=false,follow=true){
   clearChoices();
   if(!userShown&&reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
   const actions=append('assistant',result,follow);
-  if(cards&&memberPilot)void member.offer(actions);
+  if(cards)void member.offer(actions);
   if(focusInput)input.focus({preventScroll:true});
 }
 function basicReply(q){return conversationTurn(q,state,{rules});}

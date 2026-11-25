@@ -56,6 +56,11 @@ export function createPostgresAuthStore({ pool } = {}) {
       return result;
     };
     const tx = Object.freeze({
+      pinRosterBinding: operation(async (subject,revision) => {
+        if (!validKey('binding',subject)||!validKey('binding',revision)) return false;
+        const {rows}=await query('SELECT archive_help_roster.pin_binding($1::text,$2::text) AS active',[subject,revision]);
+        return rows?.length===1&&rows[0].active===true;
+      }),
       read: operation(async (kind, key, now) => {
         if (!validKey(kind, key)) return null;
         if (!validTime(now)) throw new TypeError('Invalid auth store time');

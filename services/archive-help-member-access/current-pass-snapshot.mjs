@@ -196,25 +196,27 @@ export function makeVerifiedRosterPassBatch({inventory, authority, sourceDigest,
     sourceDigest:sha('archive-help-current-pass:roster-v1\0'+sourceDigest+'\0'+JSON.stringify(members)),members};
 }
 
-export function createSupabaseCurrentPassLookup({query,now=Date.now}={}){
+export function createSupabaseCurrentPassLookup({query,now=Date.now,roster=false}={}){
   if(typeof query!=='function')throw Error('dedicated_reader_query_required');
+  const schema=roster?'archive_help_roster':'archive_help_pass_snapshot', maxAge=roster?60*60_000:MAX_AGE;
   return async (session,scope)=>{
     if(scope!=='cards'||typeof session!=='string'||!/^[A-Za-z0-9_-]{43}$/u.test(session))return null;
     try{
-      const result=await query('select archive_help_pass_snapshot.read_own($1::text) as result',[sha(session)]);
+      const result=await query('select '+schema+'.read_own($1::text) as result',[sha(session)]);
       const row=result?.rows?.[0]?.result;
       const checked=Date.parse(row?.observedAt??'');
       const time=now();
-      if(!exact(row,'cards,expiresAt,observedAt')||!Number.isFinite(checked)||checked>time||time-checked>MAX_AGE
+      if(!exact(row,'cards,expiresAt,observedAt')||!Number.isFinite(checked)||checked>time||time-checked>maxAge
         ||!Number.isSafeInteger(row.expiresAt)||row.expiresAt<=time||row.expiresAt>time+20*60_000
         ||!Array.isArray(row.cards)||row.cards.length>100||!row.cards.every(validSnapshotCard))return null;
-      return {cards:row.cards,checkedAt:new Date(checked).toISOString(),expiresAt:Math.min(row.expiresAt,checked+MAX_AGE)};
+      return {cards:row.cards,checkedAt:new Date(checked).toISOString(),expiresAt:Math.min(row.expiresAt,checked+maxAge)};
     }catch{return null;}
   };
 }
 
-export function createSupabasePassSessionIssuer({query,secret,now=Date.now}={}){
-  if(typeof query!=='function'||!Buffer.isBuffer(secret)||secret.length!==32)throw Error('dedicated_session_issuer_required');
+export function createSupabasePassSessionIssuer({query,secret,now=Date.now,roster=false}={}){
+  if(typeof query!=='function'||!roster&&(!Buffer.isBuffer(secret)||secret.length!==32))throw Error('dedicated_session_issuer_required');
+  const schema=roster?'archive_help_roster':'archive_help_pass_snapshot';
   const digest=token=>{
     if(typeof token!=='string'||!/^[A-Za-z0-9_-]{43}$/u.test(token))throw Error('invalid_server_session');
     return sha(token);
@@ -223,12 +225,14 @@ export function createSupabasePassSessionIssuer({query,secret,now=Date.now}={}){
     async issue({token,binding}){
       const time=now(),expiry=binding?.expiresAt;
       if(binding?.studioId!=='5330'||!HEX.test(binding.revision??'')||!Number.isSafeInteger(expiry)
-        ||expiry<=time||expiry>time+20*60_000)throw Error('unverified_session_binding');
-      await query('select archive_help_pass_snapshot.issue_read_session($1::text,$2::text,$3::text,$4::timestamptz)',
-        [digest(token),currentPassMemberKey(secret,binding.memberId),binding.revision,new Date(expiry).toISOString()]);
+        ||expiry<=time||expiry>time+(roster?2:20)*60_000||roster&&!HEX.test(binding.memberId??''))
+        throw Error('unverified_session_binding');
+      const result=await query('select '+schema+'.issue_read_session($1::text,$2::text,$3::text,$4::timestamptz)'+(roster?' as issued':''),
+        [digest(token),roster?binding.memberId:currentPassMemberKey(secret,binding.memberId),binding.revision,new Date(expiry).toISOString()]);
+      if(roster&&result.rows?.[0]?.issued!==true)throw Error('unverified_session_binding');
     },
     async revoke(token){
-      await query('select archive_help_pass_snapshot.revoke_read_session($1::text)',[digest(token)]);
+      await query('select '+schema+'.revoke_read_session($1::text)',[digest(token)]);
     }
   });
 }
