@@ -179,9 +179,19 @@ live test subject with a current pass result. SOLAPI returned the exact security
 template in APPROVED status; no code was requested. This is not a deployed
 endpoint or live authentication proof.
 
-Production preflight found no dedicated Cloud Run identity, no Supabase Help
-login grants or first snapshot, and no public member API rewrite. The active
-Google operator identity can create Cloud Run services but not service accounts.
-The stored home CLI login requires interactive reauthentication. Do not create
-the service with a broader runtime identity to work around this. The site and
-scheduled collector have not been changed.
+### Private Cloud Run stage
+
+The home account completed the Google Cloud CLI authorization without changing
+the default operator identity. The dedicated Help runtime identity exists and
+has no user-managed service-account keys. No DB or provider secrets were added
+to it. Cloud Run built the allowlisted source at `da9086a8` and deployed the
+private disabled revision `archive-help-member-access-00002-88k` in Seoul.
+The managed startup HTTP probe succeeded on `/healthz`. A separate external
+probe to the published Run addresses received an HTML 404, including with the
+authenticated home invoker. This is not successful external routing. Do not
+weaken IAM or connect Hosting simply to make the health test pass.
+
+Supabase Help login grants, canonical pilot binding and first snapshot remain
+unconfigured. The Help Hosting rewrite, scheduled collector, existing
+member-facing behavior and SOLAPI delivery were not changed. Investigate the
+provider routing result before the public HTTPS passkey test.
