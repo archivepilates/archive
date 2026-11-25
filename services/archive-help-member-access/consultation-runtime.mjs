@@ -1,7 +1,7 @@
 import {timingSafeEqual} from 'node:crypto';
-import {createMemberAccounts} from './accounts.mjs';
+import {createMemberAccounts,ORIGIN} from './accounts.mjs';
 import {readCloudConfig} from './cloud-config.mjs';
-import {createConsultationOtp} from './consultation-otp.mjs';
+import {createConsultationOtp,createWebMemberConsultationOtp} from './consultation-otp.mjs';
 import {createConsultationCardLookup,createConsultationMemberHandler} from './consultation-http.mjs';
 import {createSupabaseCurrentPassLookup,createSupabasePassSessionIssuer,currentPassMemberKey} from './current-pass-snapshot.mjs';
 import {assertMemberDatabasePools} from './hosted-runtime.mjs';
@@ -20,7 +20,7 @@ export function readConsultationConfig(env){
   return {...cfg,pilotId};
 }
 
-export async function createFirebaseConsultationRuntime({config,makePool,now=Date.now,origin}){
+export async function createFirebaseConsultationRuntime({config,makePool,now=Date.now,origin=ORIGIN,memberWebOtp=false}){
   if(!config?.enabled)return {handle:createConsultationMemberHandler(),async close(){}};
   const pools={};
   const close=()=>Promise.allSettled(Object.values(pools).map(pool=>pool.end()));
@@ -34,11 +34,13 @@ export async function createFirebaseConsultationRuntime({config,makePool,now=Dat
     const sendCode=createMemberCodeSender({...provider,request:createHostedSolapiTransport(provider)});
     const store=createPostgresAuthStore({pool:pools.auth});
     const limits=createMemberAccounts({store,now});
-    const consultation=createConsultationOtp({store,loadPilotBinding,sendCode,secret:otpSecret,now});
+    const web=memberWebOtp===true&&origin===ORIGIN;
+    const createOtp=web?createWebMemberConsultationOtp:createConsultationOtp;
+    const consultation=createOtp({store,loadPilotBinding,sendCode,secret:otpSecret,now});
     const issuer=createSupabasePassSessionIssuer({query:(...args)=>pools.issuer.query(...args),secret:memberKeySecret,now});
     const reader=createSupabaseCurrentPassLookup({query:(...args)=>pools.reader.query(...args),now});
     const lookup=createConsultationCardLookup({consultation,issuer,reader,now});
-    return {handle:createConsultationMemberHandler({enabled:true,consultation,allowRequest:limits.allowRequest,
+    return {handle:createConsultationMemberHandler({enabled:true,memberWebOtp:web,consultation,allowRequest:limits.allowRequest,
       lookup,stepSecret:otpSecret,origin}),close};
   }catch(error){await close();throw error;}
 }

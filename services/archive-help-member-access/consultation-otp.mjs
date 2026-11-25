@@ -2,6 +2,7 @@ import {createHmac,randomBytes,randomInt,timingSafeEqual} from 'node:crypto';
 
 const STUDIO_ID='5330', HOUR=60*60_000, DAY=24*HOUR, CODE_MS=5*60_000;
 const MAX_SENDS=3, MAX_DENIES=5, DISPATCH_MS=15_000, PROOF_MS=30_000;
+const WEB_REQUEST_COOLDOWN_MS=60_000;
 const kst=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',hourCycle:'h23'});
 const inWindow=time=>{const hour=Number(kst.format(time));return hour>=9&&hour<23;};
 const tokenValid=value=>typeof value==='string'&&value.length===43&&/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/u.test(value);
@@ -13,7 +14,17 @@ const sameBinding=(left,right)=>!!left&&!!right&&left.memberId===right.memberId&
 const generic=Object.freeze({ok:true});
 const denied=Object.freeze({ok:false});
 
-export function createConsultationOtp({store,loadPilotBinding,sendCode,secret,now=Date.now}={}){
+export const WEB_MEMBER_OTP_REQUEST=Symbol('ARCHIVE PILATES Help member form request');
+
+export function createConsultationOtp(options){
+  return buildConsultationOtp(options,false);
+}
+
+export function createWebMemberConsultationOtp(options){
+  return buildConsultationOtp(options,true);
+}
+
+function buildConsultationOtp({store,loadPilotBinding,sendCode,secret,now=Date.now}={},allowWebMemberHours){
   if(typeof store?.read!=='function'||typeof store?.transaction!=='function'||typeof loadPilotBinding!=='function'
     ||typeof sendCode!=='function'||typeof now!=='function'||!(secret instanceof Uint8Array)||secret.length<32){
     throw new TypeError('Trusted consultation OTP adapters and private key required');
@@ -81,10 +92,12 @@ export function createConsultationOtp({store,loadPilotBinding,sendCode,secret,no
   }
 
   return Object.freeze({
-    async start(step,conversation,phone){
+    async start(step,conversation,phone,source){
       if(!tokenValid(step)||!tokenValid(conversation)||!phoneValid(phone))return generic;
+      const memberForm=allowWebMemberHours&&source===WEB_MEMBER_OTP_REQUEST;
+      const permitted=time=>Number.isSafeInteger(time)&&(memberForm||inWindow(time));
       try{
-        if(!inWindow(now()))return generic;
+        if(!permitted(now()))return generic;
         const otp=otpKey(step,conversation), marker=digest('dispatch-marker',step,conversation);
         if(await store.read('otp',marker,now())||await store.read('otp',otp,now()))return generic;
         const proof=await readPilot(true);
@@ -97,7 +110,8 @@ export function createConsultationOtp({store,loadPilotBinding,sendCode,secret,no
           if(!Array.isArray(entries)||entries.length>MAX_SENDS||entries.some(t=>!Number.isSafeInteger(t)))return null;
           if(await tx.read('otp',marker,time)||await tx.read('otp',otp,time))return null;
           const claimedAt=now(), deadlines=entries.filter(t=>t>claimedAt);
-          if(!inWindow(claimedAt)||!proofFresh(proof,claimedAt,HOUR)||deadlines.length>=MAX_SENDS)return null;
+          if(!permitted(claimedAt)||!proofFresh(proof,claimedAt,HOUR)||deadlines.length>=MAX_SENDS
+            ||memberForm&&deadlines.some(deadline=>claimedAt<deadline-DAY+WEB_REQUEST_COOLDOWN_MS))return null;
           const expiresAt=claimedAt+CODE_MS, dispatchBy=claimedAt+DISPATCH_MS;
           // Budget from the latest permitted transport time, not an earlier database timestamp.
           deadlines.push(dispatchBy+DAY);
@@ -112,10 +126,10 @@ export function createConsultationOtp({store,loadPilotBinding,sendCode,secret,no
         const {expiresAt,dispatchBy}=reservation;
         let status='blocked';
         try{
-          const current=inWindow(now())&&now()<dispatchBy?await readPilot(true):null;
+          const current=permitted(now())&&now()<dispatchBy?await readPilot(true):null;
           const mayDispatch=()=>{
             const time=now();
-            return !!current&&time<dispatchBy&&inWindow(time)&&proofFresh(current,time,HOUR);
+            return !!current&&time<dispatchBy&&permitted(time)&&proofFresh(current,time,HOUR);
           };
           if(current&&sameBinding(current,proof)&&samePhone(current.phone,proof.phone)
             &&(await store.read('otp',otp,now()))?.claim===claim&&mayDispatch()){

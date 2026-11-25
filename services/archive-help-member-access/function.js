@@ -14,7 +14,7 @@ let service;
 function getHandler(){
   if(process.env.HELP_MEMBER_MODE!=='pilot')return disabled;
   // Do not reuse a failed initialization. None of the credentials or request data is logged.
-  service??=createFirebaseConsultationRuntime({config:readConsultationConfig(process.env),makePool:options=>{
+  service??=createFirebaseConsultationRuntime({config:readConsultationConfig(process.env),memberWebOtp:true,makePool:options=>{
     const pool=new pg.Pool(options);
     pool.on('error',()=>console.error('Help OTP database connection unavailable'));
     return pool;

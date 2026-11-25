@@ -5,7 +5,7 @@ import {randomBytes} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {extname,join} from 'node:path';
 import {ORIGIN} from './accounts.mjs';
-import {createConsultationOtp} from './consultation-otp.mjs';
+import {createWebMemberConsultationOtp} from './consultation-otp.mjs';
 import {CONVERSATION_HEADER,createConsultationCardLookup,createConsultationMemberHandler} from './consultation-http.mjs';
 import {createFirebaseMemberBridge} from './firebase-bridge.mjs';
 import {openMemberStore} from './store.mjs';
@@ -13,7 +13,7 @@ import {openMemberStore} from './store.mjs';
 const {chromium}=createRequire(process.env.ARCHIVE_PLAYWRIGHT_PACKAGE??import.meta.url)('playwright');
 const dir=realpathSync(mkdtempSync(join(tmpdir(),'archive-help-otp-browser-')));
 let store,browser,context;
-let clock=Date.parse('2026-11-25T03:00:00Z'), snapshotAvailable=true, revoked=false;
+let clock=Date.parse('2026-11-25T17:50:00Z'), snapshotAvailable=true, revoked=false;
 const now=()=>clock, startTime=now(), phone='01000000417', received=[], steps=[], grants=new Set();
 const secret=randomBytes(32), revision='a'.repeat(64);
 const binding=()=>({authority:'verified_studiomate_in_person_signup',studioId:'5330',memberId:'417',revision,
@@ -23,7 +23,7 @@ let providerCalls=0;
 
 try{
   store=openMemberStore(join(dir,'auth.sqlite'));
-  const consultation=createConsultationOtp({store,now,secret,
+  const consultation=createWebMemberConsultationOtp({store,now,secret,
     loadPilotBinding:async ({needContact})=>({...binding(),...(needContact?{phone}:{})}),
     sendCode:async data=>{
       assert.equal(data.to,phone);assert.equal(data.mayDispatch(),true);received.push(data.code);return {accepted:true};
@@ -38,7 +38,7 @@ try{
     ]}:null;
   };
   const lookup=createConsultationCardLookup({consultation,issuer,reader,now});
-  const handler=createConsultationMemberHandler({enabled:true,consultation,lookup,stepSecret:secret,allowRequest:async()=>true});
+  const handler=createConsultationMemberHandler({enabled:true,memberWebOtp:true,consultation,lookup,stepSecret:secret,allowRequest:async()=>true});
   const bridge=createFirebaseMemberBridge({getHandler:async()=>handler});
   browser=await chromium.launch({headless:true});
   context=await browser.newContext({serviceWorkers:'block',viewport:{width:390,height:820}});
@@ -84,6 +84,7 @@ try{
   await ask();await authButton.last().click();
   const dialog=page.getByRole('dialog');
   assert.equal(await dialog.getByText(/패스키/).count(),0);
+  assert.equal(await dialog.getByText(/밤 11시/u).count(),0);
   for(const width of [320,390,768,1440]){
     await page.setViewportSize({width,height:820});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth

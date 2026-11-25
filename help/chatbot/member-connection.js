@@ -3,7 +3,7 @@ const guide='https://archivepilates.notion.site/studiomate';
 const $=tag=>document.createElement(tag);
 const text=(tag,value)=>{const el=$(tag);el.textContent=value;return el;};
 const button=(label,action)=>{const b=text('button',label);b.type='button';b.addEventListener('click',action);return b;};
-const quietHours='인증 알림톡은 오전 9시부터 밤 11시 전까지만 발송돼요.';
+const codeNotice='직접 요청한 인증번호만 등록된 휴대전화에 보내드려요.';
 const unavailable='지금은 수강권 정보를 확인할 수 없어요. 잠시 후 다시 확인하거나 회원 앱을 이용해 주세요.';
 
 function newConversation(){
@@ -94,12 +94,12 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange}){
     if(dialog)return;
     dialog=$('dialog');dialog.id='member-access';dialog.setAttribute('aria-labelledby','member-access-title');
     const heading=text('h2','휴대전화 번호로 회원 인증');heading.id='member-access-title';
-    const hours=text('p',quietHours);hours.id='member-access-hours';
+    const notice=text('p',codeNotice);notice.id='member-access-notice';
     status=text('p','');status.id='member-access-status';status.setAttribute('role','status');
     status.className='member-access-status';
     const docs=text('a','공식 회원 앱 이용 안내');docs.href=guide;
     actions=$('div');actions.className='member-access-actions';
-    dialog.append(heading,hours,status,actions,docs);document.body.append(dialog);
+    dialog.append(heading,notice,status,actions,docs);document.body.append(dialog);
     dialog.addEventListener('cancel',event=>{event.preventDefault();cancel();});
   }
   function showForm(lookup,step='phone'){
@@ -113,7 +113,7 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange}){
     const label=text('label',phoneStep?'등록된 휴대전화 번호':'알림톡 인증번호');label.htmlFor=input.id;
     const hint=text('p',phoneStep?'회원 앱에 등록한 010 번호를 입력해 주세요.':'알림톡으로 받은 숫자 6자리를 입력해 주세요.');
     hint.id='member-access-hint';
-    input.setAttribute('aria-describedby',hint.id+' member-access-hours '+status.id);
+    input.setAttribute('aria-describedby',hint.id+' member-access-notice '+status.id);
     const submit=text('button',phoneStep?'인증번호 요청':'인증하기');submit.type='submit';
     form.append(label,hint,input,submit);
     const controls=[input,submit];
@@ -145,7 +145,7 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange}){
         if(key!==conversation)return;
         if(result?.data?.ok!==true)throw Error();
         if(phoneStep){
-          status.textContent='알림톡이 오지 않으면 번호와 발송 가능 시간을 확인해 주세요.';
+          status.textContent='알림톡이 오지 않으면 회원 앱에 등록한 번호인지 확인해 주세요.';
           showForm(lookup,'code');
         }else{
           setConnected(true);

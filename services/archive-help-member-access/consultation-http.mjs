@@ -1,6 +1,7 @@
 import {createHmac,randomBytes} from 'node:crypto';
 import {isToken,ORIGIN} from './accounts.mjs';
 import {json,payload,readCookie} from './http.mjs';
+import {WEB_MEMBER_OTP_REQUEST} from './consultation-otp.mjs';
 
 export const CONVERSATION_HEADER='x-archive-conversation';
 const routes=new Set(['availability','otp-start','otp-verify','cards','touch','logout']);
@@ -34,10 +35,11 @@ export function createConsultationCardLookup({consultation,issuer,reader,now=Dat
   };
 }
 
-export function createConsultationMemberHandler({enabled=false,consultation,allowRequest,lookup,stepSecret,origin=ORIGIN}={}){
+export function createConsultationMemberHandler({enabled=false,memberWebOtp=false,consultation,allowRequest,lookup,stepSecret,origin=ORIGIN}={}){
   if(enabled===true&&(!Buffer.isBuffer(stepSecret)||stepSecret.length!==32||typeof allowRequest!=='function'))
     throw Error('Private consultation HTTP configuration required');
   const forStep=conversation=>createHmac('sha256',stepSecret).update('help-otp-step:v1:'+conversation).digest('base64url');
+  const web=memberWebOtp===true&&origin===ORIGIN;
   return async req=>{
     if(enabled!==true)return json(404,deny);
     try{
@@ -55,10 +57,12 @@ export function createConsultationMemberHandler({enabled=false,consultation,allo
         const removed=await consultation.logout(session,conversation,step===preAuth?step:null);
         return json(200,{ok:true},removed?[cookie(null,null,0)]:[]);
       }
-      if(route==='availability'&&keySet(body,''))return json(200,{ok:true,remoteOtp:true,method:'otp'});
+      if(route==='availability'&&keySet(body,''))return json(200,{ok:true,remoteOtp:true,method:'otp',
+        ...(web?{requestHours:'24h'}:{})});
       if(!await allowRequest(route==='otp-start'?preAuth:session??step,route))return json(429,deny);
       if(route==='otp-start'&&keySet(body,'phone')&&typeof body.phone==='string'&&/^010\d{8}$/u.test(body.phone)){
-        await consultation.start(preAuth,conversation,body.phone).catch(()=>{});
+        const source=web?WEB_MEMBER_OTP_REQUEST:undefined;
+        await consultation.start(preAuth,conversation,body.phone,source).catch(()=>{});
         return json(200,{ok:true},[cookie(preAuth,session,session?null:600)]);
       }
       if(route==='otp-verify'&&keySet(body,'code')&&typeof body.code==='string'&&/^\d{6}$/u.test(body.code)){

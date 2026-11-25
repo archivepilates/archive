@@ -330,8 +330,11 @@ complete OTP flow from the member origin without a staff Google token.
   connections and an exact named-secret grant; it never uses the Mac mini
   or an administrator browser for a member request. Open the transport only
   for this service, with the app authorization enforced at all data routes.
-- Production uses KST 09:00 inclusive to 23:00 exclusive for OTP delivery.
-  Contact evidence must be within one hour. Before an approved test on the
+- Effective 2026-11-26, only a user's direct production Help OTP form
+  request may send a code 24 hours. All other dispatch paths retain
+  KST 09:00 inclusive to 23:00 exclusive. Staff/CLI sends and SMS fallback
+  have no exception. The web rate limits, same-tab binding and five-minute
+  code expiry still apply. Contact evidence must be within one hour. Before an approved test on the
   same date, `scripts/seed-help-member-pilot.mjs --refresh-contact` rechecks
   the exact identity, contact and unchanged card digest against StudioMate;
   it does not overwrite the day's saved card or bypass the fresh-source

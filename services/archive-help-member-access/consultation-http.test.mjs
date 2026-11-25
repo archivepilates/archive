@@ -4,12 +4,34 @@ import test from 'node:test';
 import {ORIGIN} from './accounts.mjs';
 import {CONVERSATION_HEADER,createConsultationCardLookup,createConsultationMemberHandler} from './consultation-http.mjs';
 import {createFirebaseMemberBridge} from './firebase-bridge.mjs';
+import {WEB_MEMBER_OTP_REQUEST} from './consultation-otp.mjs';
 
 const token=()=>randomBytes(32).toString('base64url');
 const phone='01000000008', session=token(), first=token(), other=token();
 const post=(route,body={},conversation=first,cookie='')=>new Request(ORIGIN+'/api/member-access/'+route,{
   method:'POST',headers:{Origin:ORIGIN,'Content-Type':'application/json',[CONVERSATION_HEADER]:conversation,Cookie:cookie},
   body:JSON.stringify(body)
+});
+
+test('the production origin and an exact OTP form route are required for the web exception',async()=>{
+  const contexts=[];
+  const setup=(origin,memberWebOtp)=>createConsultationMemberHandler({enabled:true,memberWebOtp,origin,
+    stepSecret:randomBytes(32),allowRequest:async()=>true,
+    consultation:{async start(_step,_conversation,_phone,source){contexts.push(source);}}});
+  const live=setup(ORIGIN,true);
+  assert.equal((await(await live(post('availability'))).json()).requestHours,'24h');
+  assert.equal((await live(post('otp-start',{phone,requestHours:'24h'}))).status,400);
+  assert.equal((await live(post('otp-start',{phone}))).status,200);
+  assert.deepEqual(contexts,[WEB_MEMBER_OTP_REQUEST]);
+  const testOrigin='https://example.invalid';
+  const otherOrigin=setup(testOrigin,true);
+  const req=new Request(testOrigin+'/api/member-access/otp-start',{
+    method:'POST',headers:{Origin:testOrigin,'Content-Type':'application/json',[CONVERSATION_HEADER]:first},
+    body:JSON.stringify({phone})});
+  assert.equal((await live(req.clone())).status,404);
+  assert.equal((await otherOrigin(req)).status,200);
+  assert.equal((await setup(ORIGIN,false)(post('otp-start',{phone}))).status,200);
+  assert.deepEqual(contexts,[WEB_MEMBER_OTP_REQUEST,undefined,undefined]);
 });
 const pair=response=>response.headers.getSetCookie()[0].split(';')[0];
 test('OTP-only member routes bind the session to an opaque conversation; no WebAuthn routes',async()=>{

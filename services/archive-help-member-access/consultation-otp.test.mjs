@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {createConsultationOtp} from './consultation-otp.mjs';
+import {createConsultationOtp,createWebMemberConsultationOtp,WEB_MEMBER_OTP_REQUEST} from './consultation-otp.mjs';
 
 const MINUTE=60_000, HOUR=60*MINUTE, DAY=24*HOUR;
 const timeAt=(time='10:00:00.000')=>Date.parse(`2026-11-25T${time}+09:00`);
@@ -44,10 +44,11 @@ function memoryStore(){
   return store;
 }
 
-function fixture({time=timeAt()}={}){
+function fixture({time=timeAt(),web=false}={}){
   const store=memoryStore(), requests=[], delivered=[], authorityReads=[];
   const context={time,store,requests,delivered,authorityReads,binding:{}};
-  context.otp=createConsultationOtp({store,secret:Buffer.alloc(32,9),now:()=>context.time,
+  const factory=web?createWebMemberConsultationOtp:createConsultationOtp;
+  context.otp=factory({store,secret:Buffer.alloc(32,9),now:()=>context.time,
     async loadPilotBinding(input){
       assert.deepEqual(Object.keys(input).sort(),['needContact','signal']);
       assert.ok(input.signal instanceof AbortSignal);
@@ -98,6 +99,38 @@ test('only the configured pilot can receive a code; start is generic and does no
   const storage=JSON.stringify(store.records());
   for(const raw of [phone,step,conversation,verified.token,`"${delivered[0].code}"`])assert.ok(!storage.includes(raw));
   assert.deepEqual(authorityReads,[true,true,true,false]);
+});
+
+test('only the production web form path may request a code outside regular KST hours',async()=>{
+  for(const at of ['01:58:00.000','08:59:59.999','23:00:00.000']){
+    const time=timeAt(at), genericCaller=fixture({time}), web=fixture({time,web:true});
+    await genericCaller.otp.start(step,conversation,phone,WEB_MEMBER_OTP_REQUEST);
+    await web.otp.start(step,conversation,phone);
+    await web.otp.start(step,conversation,phone,'WEB_MEMBER_OTP_REQUEST');
+    await web.otp.start(step,conversation,'01090000001',WEB_MEMBER_OTP_REQUEST);
+    assert.equal(genericCaller.delivered.length,0);
+    assert.equal(web.delivered.length,0);
+    await web.otp.start(step,conversation,phone,WEB_MEMBER_OTP_REQUEST);
+    assert.equal(web.delivered.length,1);
+    const {code}=web.delivered[0];
+    assert.deepEqual(await web.otp.verify(step,otherTab,code),denied);
+    assert.equal((await web.otp.verify(step,conversation,code)).ok,true);
+    assert.deepEqual(await web.otp.verify(step,conversation,code),denied);
+    await web.otp.start(token(4),otherTab,phone,WEB_MEMBER_OTP_REQUEST);
+    assert.equal(web.delivered.length,1);
+    web.time+=44*1000;
+    await web.otp.start(token(4),otherTab,phone,WEB_MEMBER_OTP_REQUEST);
+    assert.equal(web.delivered.length,1);
+    web.time+=32*1000;
+    await web.otp.start(token(4),otherTab,phone,WEB_MEMBER_OTP_REQUEST);
+    assert.equal(web.delivered.length,2);
+    web.time+=76*1000;
+    await web.otp.start(token(5),token(6),phone,WEB_MEMBER_OTP_REQUEST);
+    assert.equal(web.delivered.length,3);
+    web.time+=76*1000;
+    await web.otp.start(token(7),token(8),phone,WEB_MEMBER_OTP_REQUEST);
+    assert.equal(web.delivered.length,3);
+  }
 });
 
 test('malformed or stale cloud evidence and binding changes before dispatch fail closed',async()=>{
