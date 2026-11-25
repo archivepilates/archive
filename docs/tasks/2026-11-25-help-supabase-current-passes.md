@@ -271,3 +271,46 @@ Before any real-member launch, establish the exact secure production
 invocation path, provision dedicated database connections and secrets,
 publish and reconcile the approved single-member source, and test the
 complete OTP flow from the member origin without a staff Google token.
+
+## Dedicated Pilot Connections And First Source Readback
+
+- Five restricted Help roles were staged in the Seoul pilot and activated
+  through the one-time local hidden database-password prompt. All five
+  production TLS connections and the exact role memberships were independently
+  verified. No existing credential, history grant or job schedule was changed.
+- One approved member's exact StudioMate name, full registered contact and
+  current count card were re-read, then one encrypted binding and one
+  pseudonymous current-pass snapshot were published. The independent count
+  was one member and one card. The dedicated reader matched the expected card
+  through the correct server-only grant. An unknown token, a synthetic other
+  member key and a revoked grant produced no data. Both test grants were
+  revoked. No histories, payments or refunds were copied.
+- On the isolated, disabled Firebase probe only, a no-Google Hosting request
+  returned 200 and forwarded the synthetic cookie and conversation header.
+  The probe's private invoker check was restored and anonymously returned
+  403 afterwards. This was not the member OTP endpoint. The public site was
+  unchanged. The exact SOLAPI security template is approved.
+  The actual member runtime also started locally with the restricted
+  production pools and current binding. Its HTTP contract returned 200 for
+  availability and 403 for wrong origin, anonymous cards and a forged
+  session. The local runtime check never called OTP dispatch. All 87 focused
+  service and SQL tests passed.
+- `scripts/Enroll-Help-Member-DB.command` is a one-time operator bootstrap;
+  after a saved candidate or uncertain result use the script's readback-only
+  activation verification, not another password change. No credentials
+  belong in a terminal argument, chat, Git or SQL Editor.
+- `scripts/seed-help-member-pilot.mjs --verify` compares the private source
+  digest with the one-member batch and tests scoped reads with short grants
+  which it revokes. `--refresh` takes the exact approved member name and
+  registered contact suffix, keeps the original revision, checks the current
+  full contact before updating, and can publish only a new KST-day batch.
+  It is an explicit pilot operation, not a second scheduler. A changed
+  contact, uncertain save or missing source requires review.
+- Actual device receipt and OTP entry remain unverified. Use a fresh binding
+  observed within the preceding hour and the 09:00--23:00 KST window.
+  Remaining deployment gate: bind only the dedicated Help runtime secrets
+  and test the HTTPS member endpoint from the pilot browser origin, with no
+  staff Google token, once through SOLAPI and without SMS fallback. Confirm
+  the member can read their own card and a separate unauthenticated or
+  mismatched consultation cannot. Do not enable broad public rollout before
+  that evidence, and do not present a simulated code or API health as delivery.
