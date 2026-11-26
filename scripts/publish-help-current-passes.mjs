@@ -3,6 +3,7 @@ import {createRequire} from 'node:module';
 import {constants} from 'node:fs';
 import {open} from 'node:fs/promises';
 import {archiveAutomationPath} from './lib/archive-automation-paths.mjs';
+import {helpMemberSyncEnabled} from './lib/help-member-sync-activation.mjs';
 import {auditCurrentPassRoster,makeDailyPassBatch,makeVerifiedRosterPassBatch} from '../services/archive-help-member-access/current-pass-snapshot.mjs';
 import {auditNativeHelpRegistration,makeHelpRosterGeneration} from '../services/archive-help-member-access/help-roster-projection.mjs';
 
@@ -122,7 +123,7 @@ async function main(){
   if(mode==='--check-roster'&&process.argv.length===3)return checkRoster();
   if(mode==='--general-plan'&&process.argv.length===3)return stageGeneralRoster('0'.repeat(64),false);
   if(mode==='--general-scheduled-run'&&process.argv.length===5&&hashFlag==='--source-sha256'
-    &&hex.test(sourceDigest)&&process.env.HELP_MEMBER_ROSTER_SYNC==='enabled')return stageGeneralRoster(sourceDigest,true);
+    &&hex.test(sourceDigest)&&helpMemberSyncEnabled())return stageGeneralRoster(sourceDigest,true);
   if(process.argv.length!==5||mode!=='--scheduled-run'||hashFlag!=='--source-sha256'||!hex.test(sourceDigest)
     ||process.env.HELP_CURRENT_PASS_SNAPSHOT_ENABLED!=='enabled')throw Error('scheduled_apply_required');
   const config=await readPrivateConfig('help-current-pass-writer.json',32768);

@@ -10,6 +10,7 @@ import { membershipContractDiscoveryWarning } from "./lib/studiomate-membership-
 import { acquireStudioMateSyncRun } from "./lib/studiomate-sync-run-lock.mjs";
 import { shouldRunClassCorrection } from "./run-class-cancellation-correction.mjs";
 import { shouldPublishHelpCurrentPasses } from "../services/archive-help-member-access/current-pass-snapshot.mjs";
+import { helpMemberSyncEnabled } from "./lib/help-member-sync-activation.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -182,7 +183,7 @@ if (shouldRunClassCorrection({apply, download, scheduledRun, notificationRefresh
 // Sidecars are not evidence of member/reservation import success.
 const sidecars = new Set(["staffEmployment", "holdingSource", "classCancellationCorrection"]);
 const memberDownload=steps.find(step=>step.name==="download")?.stdout?.downloads?.member;
-if (shouldPublishHelpCurrentPasses({enabled:process.env.HELP_MEMBER_ROSTER_SYNC==="enabled",
+if (shouldPublishHelpCurrentPasses({enabled:helpMemberSyncEnabled(),
   apply,download,scheduledRun,notificationRefresh,steps,memberDownload,
   manualSources:Boolean(memberFile||reservationFile||requestedStartDate||requestedEndDate)})) {
   sidecars.add("helpMemberRoster");
