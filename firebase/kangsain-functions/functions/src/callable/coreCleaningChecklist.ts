@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { FieldPath, Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import type { CallableRequest } from "firebase-functions/v2/https";
 import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { db } from "../config/firebase";
@@ -48,11 +48,11 @@ export async function coreCleaningChecklistHandler(request: CallableRequest): Pr
   const input = parseCleaningRequest(request.data, today, manager);
   const records = studio.collection("days").doc(input.date).collection("records");
   if (input.action === "read") {
-    const revisionQuery = revisions.where(FieldPath.documentId(), "<=", input.date + "~")
-      .orderBy(FieldPath.documentId(), "desc").limit(1);
+    // In the board, past records are shown under the current active areas.
+    // Each record keeps its own original label; revision snapshots are audit-only.
     const [snapshot, catalogResult] = await Promise.all([
       records.orderBy("recordedAt", "desc").limit(1001).get(),
-      input.date === today ? settings.get().then(s => s.data()) : revisionQuery.get().then(s => s.docs[0]?.data()),
+      settings.get().then(s => s.data()),
     ]);
     if (snapshot.size > 1000) throw new AppError("FAILED_PRECONDITION", "하루 기록이 많아 관리자 확인이 필요합니다.");
     const catalog = toCatalog(catalogResult);
