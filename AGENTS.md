@@ -161,6 +161,10 @@
 - Legacy internal names such as `emergency_excel`, `run-studiomate-excel-emergency-mode.mjs`, and `com.archive.studiomate-excel-emergency-mode` may remain for compatibility, but staff-facing copy and operating decisions should call it Excel sync/default sync, not temporary emergency mode.
 - API-mode work should only be a read-only investigation or a future migration plan unless the user explicitly approves a switch after ARCHIVE PILATES own-site operations are ready.
 
+## CORE UI Design
+
+- Read the repository [DESIGN.md](DESIGN.md) before editing ARCHIVE CORE UI. Apply visual rules within the requested menu; do not change data contracts, access controls, or PDF layouts as a side effect.
+
 ## Brand Writing Rules
 
 - Use `ARCHIVE PILATES OPS` as the current system/project display name. Do not mix it with a Korean suffix for the same name. ARCHIVE CORE remains the existing operator web surface.

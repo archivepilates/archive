@@ -125,21 +125,91 @@
   }
 }
 
-/* Position groups in each stage */
-.position-cta{margin-top:10px}
-.position-group{border:1px solid #d1d9d1;border-left:3px solid #778f80;border-radius:10px;padding:10px;margin-top:10px;background:#f7f9f5;min-width:0}
-.position-group.unassigned{border-left-color:#abad9b;background:#fbfaf5}
-.position-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
-.position-head h3{margin:0;font-size:15px;overflow-wrap:anywhere;min-width:0;flex:1}
-.position-index{min-width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:#e1e9df;color:#29413b;font-size:12px;font-weight:700}
-.position-tools{display:flex;gap:4px;flex-wrap:wrap}
-.position-review{font-size:13px;color:#655025;margin:8px 0}
-.position-empty{margin:8px 0}
-.position-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:12px 0 18px}
-.position-choice{border:1px solid #bccac0;border-radius:8px;background:#fff;min-height:82px;padding:6px;color:#29413b;font:inherit;font-size:13px;cursor:pointer;display:grid;justify-items:center;align-content:center}
-.position-choice svg{display:block;width:min(100%,96px);height:auto}
-.position-choice[aria-pressed="true"]{outline:2px solid #385c48;outline-offset:-2px;background:#e9f1e7;font-weight:700}
-.position-choice:focus-visible,.position-tools button:focus-visible{outline:2px solid #29413b;outline-offset:2px}
-#positionDialog form{margin:0}
-#positionDialog input{width:100%}
-@media(max-width:480px){.position-group{padding:8px}.position-tools button,.position-group .stage-add button,.position-cta button{min-height:44px}.position-head h3{flex-basis:calc(100% - 38px)}}
+/* ARCHIVE CORE DESIGN.md: C / illustrated position cards. Screen only. */
+@media screen {
+  :root {
+    --ink: #182924;
+    --accent: #234b3d;
+    --paper: #ffffff;
+    --bg: #f5f6f3;
+    --line: #d5e0d7;
+    --muted: #53635c;
+    --light: #f5f8f4;
+    --sand: #e9f1e9;
+    --deep: #1d4438;
+    --focus: #326f56;
+  }
+  body {font-family:ArchiveNote,-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',system-ui,'Malgun Gothic',sans-serif}
+  .top {background:var(--deep);color:#fff;border-color:var(--deep)}
+  .top .btn {background:white;color:var(--ink)}
+  .top .btn:hover:not(:disabled) {background:var(--sand)}
+  .top .status {flex:none;padding:4px 9px;border:1px solid #729282;border-radius:8px;color:#effaf3;line-height:1.45}
+  .top .status[data-state="pending"] {background:#f8eed5;color:#594719;border-color:#e7d6ad}
+  .top .status[data-state="saved"] {background:#e3f0e5;color:#1d4a36;border-color:#a5c6ad}
+  .top .status[data-state="error"] {background:#fae9e3;color:#783229;border-color:#e0aba0}
+  .btn, .chip {border-radius:8px}
+  .btn.main {background:var(--accent);border-color:var(--accent)}
+  .btn.main:hover:not(:disabled) {background:var(--deep)}
+  .top :focus-visible {outline-color:#c4eac9}
+  .tool-menu .tool-options :focus-visible {outline-color:var(--focus)}
+  #survey {border-radius:12px}
+  .q h2 {font-size:18px}
+  input, textarea, select, .move-body input {font-size:16px;background:#fff}
+  .chip.on {background:var(--sand);border-color:var(--focus)}
+  .bottombar {position:static;background:transparent;backdrop-filter:none;max-width:1120px;margin:0 auto}
+  .mainwrap {padding-bottom:16px}
+  .stage-links {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 0 16px}
+  .stage-links .btn {justify-content:space-between;gap:4px;white-space:normal;text-align:left;min-width:0;padding:8px 12px;background:var(--light);line-height:1.35}
+  .stage-links .btn:hover {background:var(--sand)}
+  .stage-links span,.position-count {padding:2px 8px;border-radius:99px;background:var(--sand);color:#2b4d3d;font-size:12px;white-space:nowrap}
+  .stage {margin-top:24px;padding-top:16px}
+  .stage-head {justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+  .stage-head h3 {margin:0 0 3px;font-size:17px;scroll-margin-top:12px}
+  .stage-head h3:focus {outline:2px solid var(--focus);outline-offset:3px;border-radius:3px}
+  .stage-tag,.stage-count {display:inline-block;font-size:12px;color:var(--muted)}
+  .stage-tag {margin-right:8px;font-weight:700;letter-spacing:.04em}
+  .position-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+  .position-group {border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--paper);min-width:0}
+  .position-group.unassigned {grid-column:1/-1;background:var(--light)}
+  .position-art {height:clamp(76px,11vw,108px);display:grid;place-items:center;background:#eaf1e9;border-radius:8px;overflow:hidden;margin-bottom:10px}
+  .position-art svg {width:min(94%,180px);height:100%}
+  .position-head {display:grid;gap:5px;min-width:0}
+  .position-name {display:flex;gap:7px;align-items:center;min-width:0}
+  .position-head h3 {margin:0;font-size:15px;overflow-wrap:anywhere;word-break:keep-all;min-width:0;flex:1}
+  .position-index {min-width:25px;height:25px;display:grid;place-items:center;flex:none;border-radius:50%;background:var(--sand);color:var(--accent);font-size:12px;font-weight:700}
+  .position-tools {display:flex;gap:4px;flex-wrap:wrap}
+  .position-tools .btn {min-width:44px;min-height:44px;padding:4px 8px}
+  .position-tools .btn:not(.danger) {background:var(--light)}
+  .position-review {font-size:13px;color:#655025;margin:8px 0}
+  .position-empty {margin:8px 0;color:var(--muted)}
+  .position-group .move {margin:5px 0 0;border:0;border-radius:0;border-top:1px solid var(--line);background:transparent;overflow:visible}
+  .position-group .move summary {padding:7px 4px;min-height:46px}
+  .position-group .move:not([open]) .move-summary small {display:none}
+  .position-group .move-no {background:var(--sand);color:var(--accent)}
+  .move[open] .editflag {font-size:0}
+  .move[open] .editflag::after {content:"접기";font-size:12px}
+  .position-group .move-body {padding:0 8px 10px;background:var(--light);border-top:1px solid var(--line);border-radius:8px}
+  .position-group .move-body .grid2 {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .position-group .stage-add {gap:6px}
+  .position-options {display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin:12px 0 18px}
+  .position-choice {border:1px solid #bccac0;border-radius:8px;background:#fff;min-height:82px;padding:6px;color:var(--accent);font:inherit;font-size:13px;display:grid;justify-items:center;align-content:center}
+  .position-choice svg {display:block;width:min(100%,96px);height:auto}
+  .position-choice[aria-pressed="true"] {outline:2px solid var(--focus);outline-offset:-2px;background:var(--sand);font-weight:700}
+  .position-choice:focus-visible,.position-tools button:focus-visible {outline:2px solid var(--focus);outline-offset:2px}
+  #positionDialog form {margin:0}
+  #positionDialog input {width:100%}
+  @media(max-width:680px) {
+    .position-grid {grid-template-columns:minmax(0,1fr)}
+    .position-group .move-body .grid2 {grid-template-columns:minmax(0,1fr)}
+    .position-art {height:82px}
+    .stage-links {gap:4px}
+    .stage-links .btn {font-size:13px;padding:7px 5px}
+    .stage-links span {padding:2px 4px}
+    .bottombar {flex-wrap:wrap}
+  }
+  @media(max-width:420px) {
+    .top .status {flex:1;max-width:none}
+    .position-group {padding:9px}
+    .stage-links .btn {flex-wrap:wrap;justify-content:center}
+  }
+}

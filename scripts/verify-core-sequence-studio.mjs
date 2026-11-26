@@ -470,6 +470,12 @@ async function positionGroups(width) {
     let frame = initial;
     await editSaved(frame,id);
     await frame.getByRole("tab", {name:"작성",exact:true}).click();
+    const stageLinks = frame.getByRole('navigation', {name:'동작 구성 구간 바로가기'});
+    assert.equal(await stageLinks.getByRole('button').count(),3);
+    await stageLinks.getByRole('button',{name:/메인 구간/}).click();
+    assert.equal(await frame.evaluate(()=>document.activeElement.id),'stage-heading-main');
+    await stageLinks.getByRole('button',{name:/준비 구간/}).click();
+    assert.equal(await frame.evaluate(()=>document.activeElement.id),'stage-heading-warm');
     const stage = frame.locator('.stage').first();
     const unassigned = stage.getByRole("region", {name:"포지션 미지정"});
     assert.equal(await unassigned.locator(".move strong").textContent(),"롤백");
@@ -491,6 +497,14 @@ async function positionGroups(width) {
     await dialog.getByLabel("포지션 이름").fill("페달 옆 준비");
     await dialog.getByRole("button",{name:"포지션 저장"}).click();
     const second=stage.getByRole("region",{name:"페달 옆 준비"});
+    assert.equal(await first.locator('.position-art svg').count(),1);
+    assert.equal(await second.locator('.position-art svg').count(),1);
+    assert.equal(await unassigned.locator('.position-art').count(),0);
+    assert.equal(await first.locator('.position-index').textContent(),'1');
+    assert.equal(await second.locator('.position-index').textContent(),'2');
+    const grid=stage.locator('.position-grid');
+    assert.equal(await grid.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),width<=680?1:2);
+    assert.equal(await frame.locator('.bottombar').evaluate(el=>getComputedStyle(el).position),'static');
     await second.getByRole("button",{name:"+ 동작 추가"}).click();
     await second.getByLabel("동작명",{exact:true}).fill("발목 순환");
     await unassigned.locator("summary").click();
@@ -510,6 +524,7 @@ async function positionGroups(width) {
     await stage.evaluate(el=>{el.querySelectorAll('.move[open]').forEach(row=>row.open=false);el.scrollIntoView({block:'start',behavior:'instant'});});
     await page.screenshot({path:path.join(output,`positions-editor-${width}.png`),animations:'disabled'});
     await flush(frame);
+    await frame.locator('#saveStatus[data-state="saved"]').waitFor();
     const saved=(await snapshot(frame)).state;
     assert.equal(documents.get("sequenceNotes/"+id).moveCount,3);
     assert.deepEqual(JSON.parse(documents.get("sequenceNotes/"+id).payload).positions,saved.positions);
@@ -1492,7 +1507,7 @@ try {
     return {fullConnectionRetry:true,saveReady:true,mockSDK:true};
   }));
   for (const width of [320, 390, 768, 1440]) await check(`library created dates ${width}: Timestamp/seconds/ISO/KST boundary/recovery/class date/no fallback`, () => libraryCreatedDates(width));
-  for (const width of [320, 390, 1440]) await check(`position groups ${width}: legacy/create/change/reorder/reload/preview/JSON/demotion`, () => positionGroups(width));
+  for (const width of [320, 390, 768, 1440]) await check(`position groups ${width}: cards/navigation/legacy/create/reorder/reload/preview/JSON/demotion`, () => positionGroups(width));
   for (const width of [320, 390, 768, 1440]) await check(`responsive ${width}: compact chrome/tools/focus/persistence/import/export/selectable Korean PDF/layout`, () => responsive(width));
   for (const width of [320, 390, 768, 1440]) await check(`save isolation ${width}: blank startup/New/copy/pending save/fresh backup`, () => saveIsolation(width));
   for (const width of [320, 390, 768, 1440]) await check(`library PDF ${width}: canonical saved source/MIME/filename/Korean/title/image/draft isolation/double-click guard`, () => libraryPDF(width));
