@@ -2,6 +2,16 @@ const time = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul", hourCycle: "h23", hour: "2-digit", minute: "2-digit",
 });
 const terminal = new Set(["functions/invalid-argument", "functions/permission-denied", "functions/unauthenticated"]);
+function lineIcon(path) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const line = document.createElementNS(ns, "path");
+  line.setAttribute("d", path);
+  svg.append(line);
+  return svg;
+}
 const make = (tag, value, cls) => {
   const node = document.createElement(tag);
   if (value) node.textContent = value;
@@ -22,7 +32,7 @@ export function mountCleaningChecklist(host, runtime, access) {
   const alive = () => host.isConnected && Boolean(uid) && runtime.authClient.currentUser?.uid === uid;
   const call = runtime.httpsCallable(runtime.functionsClient, "coreCleaningChecklist");
   const board = make("section", null, "cleaning-board");
-  const header = make("div", null, "cleaning-bar");
+  const header = make("header", null, "cleaning-bar cleaning-heading");
   const toolbar = make("div", null, "cleaning-toolbar");
   const date = make("input");
   date.type = "date";
@@ -31,7 +41,8 @@ export function mountCleaningChecklist(host, runtime, access) {
   const summary = make("p", null, "cleaning-summary");
   const message = make("p", null, "cleaning-status");
   message.setAttribute("role", "status");
-  const list = make("div");
+  const list = make("section", null, "cleaning-cards");
+  list.setAttribute("aria-label", "청소구역");
   const catalog = make("section", null, "cleaning-catalog");
   const pending = new Map();
   const open = new Set();
@@ -39,11 +50,15 @@ export function mountCleaningChecklist(host, runtime, access) {
   let busy = false;
   const reload = button("새로고침", () => read());
   const today = button("오늘", () => read(true));
-  toolbar.append(manager ? date : day, ...(manager ? [today] : []), reload);
-  header.append(make("h1", "센터관리"));
+  reload.className = "cleaning-refresh";
+  reload.setAttribute("aria-label", "새로고침");
+  reload.title = "새로고침";
+  reload.replaceChildren(lineIcon("M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"));
+  toolbar.append(manager ? date : day, ...(manager ? [today] : []));
+  header.append(make("h1", "센터관리"), reload);
   const checklistHeading = make("div", null, "cleaning-bar cleaning-section-heading");
   checklistHeading.append(make("h2", "청소 체크리스트"), toolbar);
-  board.append(header, checklistHeading, summary, message, catalog, list);
+  board.append(header, summary, checklistHeading, message, catalog, list);
   host.replaceChildren(board);
   date.addEventListener("change", () => { if (date.value) void read(); });
   function status(text, error = false) {
@@ -87,14 +102,20 @@ export function mountCleaningChecklist(host, runtime, access) {
       const retired = !active.has(id);
       const card = make("article", null, "cleaning-card");
       const row = make("div", null, "cleaning-row");
-      const title = make("div");
+      const title = make("div", null, "cleaning-identity");
       const count = history.filter(record => record.status === "done").length;
       const latest = history[0];
       const describe = record => `${time.format(new Date(record.recordedAt))} ${record.actorName} · ${record.status === "done" ? "완료" : "확인 필요"}${record.note ? ` (${record.note})` : ""}`;
-      title.append(make("strong", retired ? label + " (삭제된 구역)" : label), make("p", help, "cleaning-help"),
-        make("p", latest ? `최근 ${describe(latest)} · 완료 ${count}회` : "아직 기록 없음", "cleaning-latest"));
-      row.append(title);
-      card.append(row);
+      const state = retired ? "archived" : latest?.status || "unrecorded";
+      card.dataset.state = state;
+      const symbol = make("span", null, "cleaning-symbol");
+      symbol.append(lineIcon(state === "done" ? "m5 12 4 4L19 6" :
+        state === "needs-attention" ? "M12 5v9m0 4v.25" : "M8 5H5v14h14V5h-3m-8 0V3h8v2m-6 6h4"));
+      title.append(make("h3", retired ? label + " (삭제된 구역)" : label), make("p", help, "cleaning-help"));
+      const badge = make("span", state === "done" ? "완료" : state === "needs-attention" ?
+        "확인 필요" : state === "archived" ? "보관" : "미기록", "cleaning-badge");
+      row.append(symbol, title, badge);
+      card.append(row, make("p", latest ? `최근 ${describe(latest)} · 완료 ${count}회` : "아직 기록 없음", "cleaning-latest"));
       if (!retired && model.date === model.today) {
         const actions = make("div", null, "cleaning-actions");
         const retry = pending.get(id);
@@ -116,7 +137,7 @@ export function mountCleaningChecklist(host, runtime, access) {
           actions.append(button("완료 기록", () => record(id, "done", ""), true),
             button("확인 필요", () => { noteForm.hidden = !noteForm.hidden; if (!noteForm.hidden) input.focus(); }));
         }
-        row.append(actions); card.append(noteForm);
+        card.append(actions, noteForm);
       }
       if (history.length) {
         const detail = make("details");

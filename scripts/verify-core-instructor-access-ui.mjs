@@ -1355,6 +1355,16 @@ async function runCase(page, base, kind, name) {
     await page.getByRole("heading", { name: "청소 체크리스트", exact: true }).waitFor();
     await page.getByText("완료 0/2", { exact: false }).waitFor();
     const supplies = page.getByRole("article").filter({ hasText: "샤워실 비품 보충" });
+    await supplies.getByText("미기록", { exact: true }).waitFor();
+    assert.equal(await supplies.getAttribute("data-state"), "unrecorded");
+    assert.ok((await page.getByRole("button", { name: "새로고침", exact: true }).boundingBox()).height >= 44);
+    const cards = await page.locator(".cleaning-cards").evaluate(node => ({
+      width: node.clientWidth, scroll: node.scrollWidth,
+      columns: getComputedStyle(node).gridTemplateColumns.split(" ").length,
+    }));
+    assert.ok(cards.scroll <= cards.width + 1, "Cleaning cards must not overflow");
+    if (page.viewportSize().width <= 390) assert.equal(cards.columns, 1);
+    if (page.viewportSize().width >= 1440) assert.ok(cards.columns > 1);
     if (manager) {
       await page.getByLabel("조회할 날짜").fill("2026-10-10");
       await page.getByText(/최근 18:40 다른 강사/).waitFor();
@@ -1396,6 +1406,7 @@ async function runCase(page, base, kind, name) {
       await supplies.getByLabel("메모").fill("바디워시 재고 없음");
       await supplies.getByRole("button", { name: "확인 필요 저장", exact: true }).click();
       await supplies.getByText(/최근 10:17 QA 강사.*바디워시 재고 없음/).waitFor();
+      assert.equal(await supplies.getAttribute("data-state"), "needs-attention");
       const requests = await page.evaluate(() => window.__coreFirebaseQA.callables.filter(c => c.action === "record"));
       assert.equal(requests.length, 4);
       assert.equal(requests[0].requestId, requests[1].requestId);
