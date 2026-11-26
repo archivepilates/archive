@@ -32,7 +32,8 @@ let db, serial=0;
 before(async()=>{
   db=await PGlite.create();
   await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role');
-  for(const migration of ['help-current-pass','help-member-auth-store','help-member-enrollment-authority','help-member-roster'])
+  for(const migration of ['help-current-pass','help-member-auth-store','help-member-enrollment-authority','help-member-roster',
+    'help-member-roster-native-registration'])
     await db.exec(await readFile(new URL('../../services/archivepilates-mcp/sql/'+migration+'.sql',import.meta.url),'utf8'));
 });
 after(async()=>{await db?.close();});
@@ -114,4 +115,41 @@ test('two members authenticate, each gets distinct cards, and a contact change i
   assert.equal((await handle(post('cards',b,{},bCookie))).status,403);
   assert.equal((await publish(fixture())).members,0);
   assert.equal((await scalar(writer,'SELECT archive_help_roster.status() AS value')).members,0);
+});
+
+test('native registration publishing is atomic, role-scoped and never transfers an old number',async()=>{
+  const a='d'.repeat(64),b='e'.repeat(64),c='f'.repeat(64);
+  const p=rosterPhoneKey(key,'01000000111'),q=rosterPhoneKey(key,'01000000122'),r=rosterPhoneKey(key,'01000000133');
+  const aRow={memberKey:a,phoneKey:p,cards:cards(3)}, bRow={memberKey:b,phoneKey:q,cards:cards(7)};
+  const contacts=(...rows)=>rows.map(({memberKey,phoneKey})=>({memberKey,phoneKey}));
+  const sql='SELECT archive_help_roster.publish_native_registration($1,$2,$3,$4) AS value';
+  const args=async (rows,observations)=>{
+    await new Promise(resolve=>setTimeout(resolve,3));
+    return [new Date().toISOString(),createHash('sha256').update('native-'+ ++serial).digest('hex'),
+      JSON.stringify(rows),JSON.stringify(observations)];
+  };
+  const initial=await args([aRow,bRow],contacts(aRow,bRow));
+  for(const role of [writer,auth,reader,'anon'])await assert.rejects(scalar(role,sql,initial),{code:'42501'});
+  assert.equal((await scalar(approve,sql,initial)).members,2);
+  const find=k=>scalar(auth,'SELECT archive_help_roster.find_binding($1) AS value',[k]);
+  const first=await find(p),second=await find(q);
+  assert.equal(first.subject,a);
+  assert.equal(second.subject,b);
+  assert.equal((await scalar(approve,sql,initial)).members,2);
+
+  const incompatible=await args([{...bRow,cards:[]}],contacts(bRow));
+  await assert.rejects(scalar(approve,sql,incompatible),{code:'22023'});
+  assert.equal((await find(p)).revision,first.revision);
+  await assert.rejects(scalar(approve,sql,await args([aRow],contacts(bRow))),{code:'22023'});
+  await assert.rejects(scalar(approve,sql,await args([aRow],contacts(aRow,{memberKey:c,phoneKey:p}))),{code:'22023'});
+
+  const changed={...aRow,phoneKey:r}, recycle={memberKey:c,phoneKey:p,cards:cards(1)};
+  const outcome=await scalar(approve,sql,await args([changed,bRow,recycle],contacts(changed,bRow,recycle)));
+  assert.deepEqual({members:outcome.members,held:outcome.held},{members:1,held:2});
+  assert.equal(await find(p),null);
+  assert.equal(await find(r),null);
+  assert.equal((await find(q)).revision,second.revision);
+  assert.equal((await scalar(approve,sql,await args([aRow,bRow],contacts(aRow,bRow)))).members,1);
+  assert.equal(await find(p),null);
+  await assert.rejects(scalar(approve,sql,initial),{code:'22023'});
 });

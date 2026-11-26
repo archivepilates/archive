@@ -9,7 +9,7 @@ import {createPostgresAuthStore} from './postgres-auth-store.mjs';
 import {createPostgresEnrollmentLoaders} from './postgres-enrollment-loader.mjs';
 import {createMemberCodeSender} from './solapi-code.mjs';
 import {createHostedSolapiTransport} from './solapi-http.mjs';
-import {createHelpRosterBindingLoader} from './help-roster-binding.mjs';
+import {createHelpRosterBindingLoader,scopeHelpRosterBinding} from './help-roster-binding.mjs';
 
 export function readConsultationConfig(env){
   const cfg=readCloudConfig(env);
@@ -23,7 +23,10 @@ export function readConsultationConfig(env){
   const canaryAllowance=cfg.roster&&!cfg.rosterPublic?{
     from:Date.parse(env.HELP_MEMBER_CANARY_EXTRA_FROM??''),until:Date.parse(env.HELP_MEMBER_CANARY_EXTRA_UNTIL??'')
   }:undefined;
-  return {...cfg,pilotId,pilotMemberKey,...(canaryAllowance?{canaryAllowance}:{})};
+  const secondSubject=cfg.roster?env.HELP_MEMBER_CANARY_SECOND_KEY:undefined;
+  if(secondSubject!==undefined&&(!/^[a-f0-9]{64}$/u.test(secondSubject)||secondSubject===pilotMemberKey.toString('hex')))
+    throw Error('Private secondary canary identity not verified');
+  return {...cfg,pilotId,pilotMemberKey,secondSubject,...(canaryAllowance?{canaryAllowance}:{})};
 }
 
 export async function createFirebaseConsultationRuntime({config,makePool,now=Date.now,origin=ORIGIN,memberWebOtp=false}){
@@ -37,7 +40,9 @@ export async function createFirebaseConsultationRuntime({config,makePool,now=Dat
     const web=memberWebOtp===true&&origin===ORIGIN;
     if(roster&&!web)throw Error('Roster is restricted to member Help web service');
     let bindingOptions;
-    if(roster)bindingOptions={loadRosterBinding:createHelpRosterBindingLoader({pool:pools.auth,contactKey}),
+    if(roster)bindingOptions={loadRosterBinding:scopeHelpRosterBinding(
+      createHelpRosterBindingLoader({pool:pools.auth,contactKey}),
+      {publicRoster:config.rosterPublic===true,pilotSubject:pilotMemberKey.toString('hex'),secondSubject:config.secondSubject}),
       canaryAllowance:config.rosterPublic===true?undefined:config.canaryAllowance,
       previousPilot:{nativeId:pilotId,subject:pilotMemberKey.toString('hex')}};
     else{

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>아카이브 헬프 회원 조회 공개 전 점검</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: #202624; font: 1rem/1.65 system-ui, sans-serif; }
+  main { width: min(100% - 2rem, 45rem); margin: 2rem auto; }
+  header { border-bottom: 2px solid #ae3b32; padding-block-end: 1rem; }
+  h1 { font-size: 1.75rem; line-height: 1.3; margin: .3rem 0; }
+  h2 { font-size: 1.15rem; margin-block-start: 1.6rem; }
+  p { margin: .5rem 0; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: .5rem .4rem; border-bottom: 1px solid #d8dddb; text-align: left; }
+  .number { text-align: right; }
+</style>
+<main>
+  <header>
+    <p>ARCHIVE PILATES OPS · 내부 점검</p>
+    <h1>아카이브 헬프 회원 조회 공개 전 점검</h1>
+    <p><time datetime="2026-11-26">2026년 11월 26일</time> · 일반 회원 공개 보류</p>
+  </header>
+  <section aria-labelledby="source">
+    <h2 id="source">스튜디오메이트 원본</h2>
+    <p>20:14~20:16 KST에 회원 목록 22페이지를 읽고 재확인했다. 회원 1,067명 중 수강권 조회 후보는 176명, 발급권 200건이었다. 후보에서 소유자 증빙 누락, 횟수·이용일자 누락, 등록 연락처 누락은 없었다. 등록 번호가 있다는 사실은 번호 소유권 확인을 뜻하지 않는다.</p>
+    <p>21:49 KST에 센터가 확정한 등록 기준으로 22페이지를 다시 대조했다. 활성 등록 239명 중 수강권 후보 176명 전원이 원본 등록 시각과 유일한 현재 등록 연락처 조건을 충족했다. 이는 번호 소유 확인이나 운영 인증 완료 건수가 아니다.</p>
+    <table>
+      <thead><tr><th scope="col">분류 근거</th><th scope="col" class="number">상품</th><th scope="col" class="number">발급권</th></tr></thead>
+      <tbody>
+        <tr><td>원본 그룹 유형</td><td class="number">19</td><td class="number">159</td></tr>
+        <tr><td>상품명에 개인 수업 표기</td><td class="number">6</td><td class="number">12</td></tr>
+        <tr><td>상품명에 듀엣 수업 표기</td><td class="number">3</td><td class="number">8</td></tr>
+        <tr><td>공개 대상 여부 별도 확인</td><td class="number">2</td><td class="number">21</td></tr>
+      </tbody>
+    </table>
+    <p>분류 후보이며 공개용 상품 기준표로 승인하거나 저장한 상태는 아니다. 날짜·소유자 검증과 상품 분류 검토는 별개다.</p>
+  </section>
+  <section aria-labelledby="blocked">
+    <h2 id="blocked">아직 열 수 없는 이유</h2>
+    <p>센터 기준상 스튜디오메이트 회원등록 완료 자체가 현장 본인확인이다. CORE 별도 확인이나 스튜디오메이트 앱 가입은 요구하지 않는다. 등록 시각과 비활성 여부를 확인하고, 현재 등록 번호가 유일한 경우만 검토한다. 휴대폰 소유는 회원이 직접 요청한 헬프 인증번호로 별도 확인한다.</p>
+    <p>운영 연락처 승인 원장은 테스트 계정 2건만 보유한다. 정기 발행과 일반 회원 공개는 여전히 꺼져 있으며, 이 점검으로 연락처·수강권 원본이나 운영 설정을 변경하지 않았다. 회원 알림도 발송하지 않았다.</p>
+  </section>
+  <section aria-labelledby="next">
+    <h2 id="next">다음 구현 순서</h2>
+    <ol>
+      <li>원본 등록 완료와 활성 상태에 따라 조회 대상 명단을 만든다. 스튜디오메이트의 정확한 회원 ID와 현재 등록 연락처에 묶고, 연락처가 바뀌거나 공유 번호가 발견되면 자동 승인하지 않는다.</li>
+      <li>최초 개인 조회에만 회원이 헬프에서 인증 알림톡을 직접 요청한다. 기존 같은 상담 유지 방식과 본인 수강권만 볼 수 있는 서버 검증을 그대로 사용한다.</li>
+      <li>상품 분류를 확정하고 두 계정에서 교차 검증한 뒤, 기존 실행기의 첫 정기 발행과 원본 대조가 성공하면 확인이 끝난 회원부터 공개한다.</li>
+    </ol>
+  </section>
+  <section aria-labelledby="follow-up">
+    <h2 id="follow-up">11월 27일 추가 확인</h2>
+    <p>강사레슨 (2T) 20건과 그룹 체험권 1건을 조회 범위에서 제외한다. 스타터 패키지 그룹 6회권은 실제 그룹 수강권이므로 포함하며, 별도 OT는 합산하지 않는다. 적용 전 원본 대조 결과 일반 조회 대상은 157명이고 미분류 상품은 없었다.</p>
+    <p>두 실계정 수동 테스트는 요청에 따라 생략으로 기록한다. 일반 공개 전에는 서버의 지정 계정 차단, 자동 테스트, 그리고 첫 정기 동기화의 저장 결과를 확인한다. Supabase에 전용 저장 함수는 반영됐으나 일반 명단은 아직 적재하지 않았다.</p>
+  </section>
+</main>
+</html>

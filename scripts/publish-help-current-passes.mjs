@@ -4,7 +4,7 @@ import {constants} from 'node:fs';
 import {open} from 'node:fs/promises';
 import {archiveAutomationPath} from './lib/archive-automation-paths.mjs';
 import {auditCurrentPassRoster,makeDailyPassBatch,makeVerifiedRosterPassBatch} from '../services/archive-help-member-access/current-pass-snapshot.mjs';
-import {makeHelpRosterGeneration} from '../services/archive-help-member-access/help-roster-projection.mjs';
+import {auditNativeHelpRegistration,makeHelpRosterGeneration} from '../services/archive-help-member-access/help-roster-projection.mjs';
 
 const project='vrmtkewdqgcrhpbeijhr';
 const role='archive_help_pass_writer';
@@ -54,7 +54,7 @@ async function checkRoster(){
   const native=createLiveReader({budgetMs:70_000});
   try{
     const roster=await readRoster(native,AbortSignal.timeout(160_000));
-    return {ok:true,status:'checked_roster',...auditCurrentPassRoster(roster)};
+    return {ok:true,status:'checked_roster',...auditCurrentPassRoster(roster),registration:auditNativeHelpRegistration(roster)};
   }finally{await native.close();}
 }
 
@@ -62,7 +62,9 @@ async function stageGeneralRoster(sourceDigest,apply){
   const catalogue=await readPrivateConfig('help-member-roster-catalog.json',262144);
   const reviewedAt=Date.parse(catalogue.checkedAt??'');
   if(catalogue.studioId!=='5330'||!Number.isFinite(reviewedAt)||reviewedAt>Date.now()
-    ||Date.now()-reviewedAt>30*24*60*60_000)throw Error('roster_catalog_unverified');
+    ||Date.now()-reviewedAt>30*24*60*60_000||!Array.isArray(catalogue.products)
+    ||!catalogue.products.length||catalogue.products.some(row=>typeof row?.sourceTitle!=='string'||!row.sourceTitle.trim()))
+    throw Error('roster_catalog_unverified');
   const {env}=await readPrivateConfig('help-member-pilot-runtime.json',16384);
   if(!hex.test(env?.HELP_MEMBER_SNAPSHOT_KEY??'')||!hex.test(env?.HELP_MEMBER_CONTACT_KEY??''))
     throw Error('writer_config_invalid');
@@ -75,8 +77,11 @@ async function stageGeneralRoster(sourceDigest,apply){
       memberKeySecret:Buffer.from(env.HELP_MEMBER_SNAPSHOT_KEY,'hex'),contactKey:Buffer.from(env.HELP_MEMBER_CONTACT_KEY,'hex')});
   }finally{await native.close();}
   if(!apply)return {ok:true,status:'general_plan',...batch.summary};
+  if(!batch.members.length||batch.nativeContacts?.length!==batch.summary.sourceMembers
+    ||batch.summary.unreviewedProducts>0)throw Error('roster_generation_unverified');
   const db=await readPrivateConfig('help-member-dedicated-logins.json',16384);
-  const writer='archive_help_snapshot_writer_app', login=db.logins?.snapshot;
+  const writer='archive_help_enrollment_writer_app', login=db.logins?.enrollment;
+  const capability='archive_help_enrollment_writer';
   const direct=db.host==='db.'+project+'.supabase.co';
   if(db.project!==project||!direct&&!/^aws-[0-9]+-ap-northeast-2\.pooler\.supabase\.com$/u.test(db.host??'')
     ||!db.ca?.startsWith('-----BEGIN CERTIFICATE-----')||login?.role!==writer
@@ -90,14 +95,14 @@ async function stageGeneralRoster(sourceDigest,apply){
     const {rows:[proof]}=await client.query(`SELECT current_user::text=$1 AS expected, EXISTS(
       SELECT FROM pg_roles r WHERE r.rolname=current_user AND r.rolcanlogin
         AND NOT (r.rolsuper OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication OR r.rolbypassrls)
-        AND pg_has_role(r.oid,'archive_help_pass_writer','USAGE')
-        AND NOT EXISTS (SELECT FROM pg_roles other WHERE other.oid<>r.oid AND other.rolname<>'archive_help_pass_writer'
-          AND pg_has_role(r.oid,other.oid,'MEMBER'))) AS restricted`,[writer]);
+        AND pg_has_role(r.oid,$2::name,'USAGE')
+        AND NOT EXISTS (SELECT FROM pg_roles other WHERE other.oid<>r.oid AND other.rolname<>$2::name
+          AND pg_has_role(r.oid,other.oid,'MEMBER'))) AS restricted`,[writer,capability]);
     if(!proof?.expected||!proof.restricted)throw Error('writer_config_invalid');
     let result;
     try{
-      ({rows:[{value:result}]}=await client.query('SELECT archive_help_roster.publish($1,$2,$3) AS value',
-        [batch.observedAt,batch.sourceDigest,JSON.stringify(batch.members)]));
+      ({rows:[{value:result}]}=await client.query('SELECT archive_help_roster.publish_native_registration($1,$2,$3,$4) AS value',
+        [batch.observedAt,batch.sourceDigest,JSON.stringify(batch.members),JSON.stringify(batch.nativeContacts)]));
     }catch{
       // A lost acknowledgement is checked, never replayed.
       result=null;

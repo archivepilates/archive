@@ -57,6 +57,18 @@ test('whole pass inventory retains opt-in issued-product evidence without changi
   assert.equal(missing.usableStatus, null);
 });
 
+test('Help registration uses the native registration timestamp and an explicit activity flag only', () => {
+  const read = patch => members(memberBody([member(patch)]), MEMBERS,
+    { page: 1, passInventory: true }).profiles[0].helpRegistration;
+  assert.deepEqual(read({ registered_at: '2026-11-26 09:30:00', inactiveMember: false, has_user_account: false }),
+    { source: 'native_member_registration_v1', registeredAt: '2026-11-26T00:30:00.000Z', inactive: false });
+  assert.equal(read({ registered_at: '2026-11-31 09:30:00', inactiveMember: false }).registeredAt, null);
+  assert.equal(read({ created_at: '2026-11-26 09:30:00', inactiveMember: false }).registeredAt, null);
+  assert.equal(read({ inactiveMember: 'false' }).inactive, null);
+  assert.equal(read({ inactiveMember: true }).inactive, true);
+  assert.equal(members().profiles[0].helpRegistration, undefined);
+});
+
 test('shared pass ownership requires exactly one card with the expected native detail member', () => {
   const row = { id: 71, studio_id: 5330, member: { id: 123 } };
   assert.doesNotThrow(() => verifyIssuedOwners([row], '123', ['71']));

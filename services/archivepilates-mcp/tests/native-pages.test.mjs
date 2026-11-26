@@ -224,7 +224,8 @@ test('inventory selects UI 50/page after initial 10, reads every page, then rere
   assert.deepEqual((await f.events()).filter(event => !event.startsWith('render:')),
     ['open-page-size', 'select:50', 'next:2', 'next:3', 'page:1']);
   assert.deepEqual(f.navigations, ['/users']);
-  assert.equal(f.checkpoints.length, 3);
+  // Two next pages, the first-page reread, and the final publication guard.
+  assert.equal(f.checkpoints.length, 4);
 });
 
 for (const count of [0, 10]) {

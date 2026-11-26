@@ -145,7 +145,10 @@ export function normalizeMemberPage(body, url, options) {
       return projected;
     });
     return { _id: memberId, memberId, studioId: STUDIO, name: label(row.name),
-      phone: phone(row.mobile), activeTickets };
+      phone: phone(row.mobile), activeTickets, ...(options.passInventory === true ? {
+        helpRegistration: { source: 'native_member_registration_v1', registeredAt: kstTimestamp(row.registered_at),
+          inactive: typeof row.inactiveMember === 'boolean' ? row.inactiveMember : null },
+      } : {}) };
   });
   return { profiles, ...meta };
 }

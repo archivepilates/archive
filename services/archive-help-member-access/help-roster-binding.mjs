@@ -9,6 +9,17 @@ export function rosterPhoneKey(key,phone){
   return createHmac('sha256',key).update('archive-help-roster-phone:v1:5330:'+phone).digest('hex');
 }
 
+export function scopeHelpRosterBinding(load,{publicRoster,pilotSubject,secondSubject}={}){
+  if(typeof load!=='function'||!keyFormat.test(pilotSubject??'')
+    ||secondSubject!==undefined&&(!keyFormat.test(secondSubject)||secondSubject===pilotSubject))
+    throw Error('Explicit canary subjects are required');
+  return async input=>{
+    const binding=await load(input);
+    if(!keyFormat.test(binding?.memberId??''))return null;
+    return publicRoster===true||binding.memberId===pilotSubject||binding.memberId===secondSubject?binding:null;
+  };
+}
+
 export function createHelpRosterBindingLoader({pool,contactKey}={}){
   if(typeof pool?.connect!=='function'||!Buffer.isBuffer(contactKey)||contactKey.length!==32)
     throw Error('Dedicated roster authorizer required');
