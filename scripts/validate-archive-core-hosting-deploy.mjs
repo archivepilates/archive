@@ -8,7 +8,7 @@ const repoRoot = path.resolve(__dirname, "..");
 
 const required = [
   { file: "core/center-management/index.html", label: "CORE cleaning entry", markers: ["data-cleaning-checklist", "../assets/app.js", "../assets/cleaning-checklist.css"] },
-  { file: "core/assets/cleaning-checklist.js", label: "CORE cleaning records", markers: ["coreCleaningChecklist", "완료 기록", "전체 기록", "Asia/Seoul"] },
+  { file: "core/assets/cleaning-checklist.js", label: "CORE cleaning records", markers: ["coreCleaningChecklist", "완료 기록", "최근 2일", "yesterdayByItem", "Asia/Seoul"] },
   {
     file: "core/climate/index.html",
     label: "operator LG climate control entry",
@@ -22,7 +22,7 @@ const required = [
   {
     file: "core/sequence/index.html",
     label: "sequence studio CORE entry",
-    markers: ['data-section="sequence"', 'data-src="./studio.html"', "data-auth-only-dashboard", "./sequence.css", "../assets/app.js"],
+    markers: ['data-section="sequence"', 'data-sequence-studio', 'data-src="./studio.html?v=20261126-cards"', "data-auth-only-dashboard", "./sequence.css", "../assets/app.js"],
   },
   {
     file: "core/sequence/studio.html",
