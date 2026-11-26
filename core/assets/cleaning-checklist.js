@@ -1,6 +1,7 @@
 const time = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul", hourCycle: "h23", hour: "2-digit", minute: "2-digit",
+  timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hourCycle: "h23", hour: "2-digit", minute: "2-digit",
 });
+const previousDay = date => new Date(Date.parse(date + "T00:00:00Z") - 86400000).toISOString().slice(0, 10);
 const terminal = new Set(["functions/invalid-argument", "functions/permission-denied", "functions/unauthenticated"]);
 function lineIcon(path) {
   const ns = "http://www.w3.org/2000/svg";
@@ -34,9 +35,6 @@ export function mountCleaningChecklist(host, runtime, access) {
   const board = make("section", null, "cleaning-board");
   const header = make("header", null, "cleaning-bar cleaning-heading");
   const toolbar = make("div", null, "cleaning-toolbar");
-  const date = make("input");
-  date.type = "date";
-  date.setAttribute("aria-label", "조회할 날짜");
   const day = make("span");
   const summary = make("p", null, "cleaning-summary");
   const message = make("p", null, "cleaning-status");
@@ -47,20 +45,22 @@ export function mountCleaningChecklist(host, runtime, access) {
   const pending = new Map();
   const open = new Set();
   let model;
+  let currentItems = new Set();
   let busy = false;
   const reload = button("새로고침", () => read());
-  const today = button("오늘", () => read(true));
+  const today = button("오늘", () => read(false));
+  const yesterday = button("어제", () => read(true));
+  for (const control of [today, yesterday]) control.setAttribute("aria-pressed", "false");
   reload.className = "cleaning-refresh";
   reload.setAttribute("aria-label", "새로고침");
   reload.title = "새로고침";
   reload.replaceChildren(lineIcon("M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"));
-  toolbar.append(manager ? date : day, ...(manager ? [today] : []));
+  toolbar.append(...(manager ? [today, yesterday] : [day]));
   header.append(make("h1", "센터관리"), reload);
   const checklistHeading = make("div", null, "cleaning-bar cleaning-section-heading");
   checklistHeading.append(make("h2", "청소 체크리스트"), toolbar);
   board.append(header, summary, checklistHeading, message, catalog, list);
   host.replaceChildren(board);
-  date.addEventListener("change", () => { if (date.value) void read(); });
   function status(text, error = false) {
     message.textContent = text;
     message.toggleAttribute("data-error", error);
@@ -72,51 +72,40 @@ export function mountCleaningChecklist(host, runtime, access) {
   }
   function paint() {
     if (!alive() || !model) return;
-    date.value = model.date;
-    date.max = model.today;
+    today.setAttribute("aria-pressed", String(model.date === model.today));
+    yesterday.setAttribute("aria-pressed", String(model.date !== model.today));
     day.textContent = model.date.replaceAll("-", ".");
-    const active = new Map(model.items.map(item => [item.id, item]));
-    const byItem = new Map(model.items.map(item => [item.id, []]));
-    const archived = new Map();
-    for (const record of model.records) {
-      if (!byItem.has(record.itemId)) {
-        if (!manager) continue;
-        archived.set(record.itemId, { id: record.itemId, label: record.itemLabel, help: record.itemHelp });
-        byItem.set(record.itemId, []);
-      }
-      byItem.get(record.itemId).push(record);
-    }
-    const items = model.items.map(item => ({ item, history: byItem.get(item.id) }));
+    const visible = model.items.filter(item => currentItems.has(item.id));
+    const active = new Map(visible.map(item => [item.id, item]));
+    const byItem = new Map(visible.map(item => [item.id, []]));
+    for (const record of model.records) byItem.get(record.itemId)?.push(record);
+    const items = visible.map(item => ({ item, history: byItem.get(item.id) }));
     const done = items.filter(({ history }) => history[0]?.status === "done").length;
     const needs = items.filter(({ history }) => history[0]?.status === "needs-attention").length;
-    summary.textContent = manager && model.date !== model.today && !model.records.length ? "이 날짜에는 청소 기록이 없어요. · 한국시간" : `완료 ${done}/${items.length} · 기록 없음 ${items.length - done - needs} · 확인 필요 ${needs} · 한국시간`;
+    summary.textContent = manager && model.date !== model.today && !items.some(({ history }) => history.length) ? "이 날짜에는 청소 기록이 없어요. · 한국시간" : `완료 ${done}/${items.length} · 기록 없음 ${items.length - done - needs} · 확인 필요 ${needs} · 한국시간`;
     if (manager) {
       const rank = record => record?.status === "needs-attention" ? 0 : !record ? 1 : 2;
       items.sort((a, b) => rank(a.history[0]) - rank(b.history[0]));
     }
-    if (manager) {
-      paintCatalog(active);
-      for (const item of archived.values()) items.push({ item, history: byItem.get(item.id) });
-    }
+    if (manager) paintCatalog(active);
     list.replaceChildren(...items.map(({ item: { id, label, help }, history }) => {
-      const retired = !active.has(id);
       const card = make("article", null, "cleaning-card");
       const row = make("div", null, "cleaning-row");
       const title = make("div", null, "cleaning-identity");
       const count = history.filter(record => record.status === "done").length;
       const latest = history[0];
       const describe = record => `${time.format(new Date(record.recordedAt))} ${record.actorName} · ${record.status === "done" ? "완료" : "확인 필요"}${record.note ? ` (${record.note})` : ""}`;
-      const state = retired ? "archived" : latest?.status || "unrecorded";
+      const state = latest?.status || "unrecorded";
       card.dataset.state = state;
       const symbol = make("span", null, "cleaning-symbol");
       symbol.append(lineIcon(state === "done" ? "m5 12 4 4L19 6" :
         state === "needs-attention" ? "M12 5v9m0 4v.25" : "M8 5H5v14h14V5h-3m-8 0V3h8v2m-6 6h4"));
-      title.append(make("h3", retired ? label + " (삭제된 구역)" : label), make("p", help, "cleaning-help"));
+      title.append(make("h3", label), make("p", help, "cleaning-help"));
       const badge = make("span", state === "done" ? "완료" : state === "needs-attention" ?
-        "확인 필요" : state === "archived" ? "보관" : "미기록", "cleaning-badge");
+        "확인 필요" : "미기록", "cleaning-badge");
       row.append(symbol, title, badge);
       card.append(row, make("p", latest ? `최근 ${describe(latest)} · 완료 ${count}회` : "아직 기록 없음", "cleaning-latest"));
-      if (!retired && model.date === model.today) {
+      if (model.date === model.today) {
         const actions = make("div", null, "cleaning-actions");
         const retry = pending.get(id);
         const noteForm = make("form", null, "cleaning-note");
@@ -218,21 +207,28 @@ export function mountCleaningChecklist(host, runtime, access) {
   async function fetchDay(requestedDate) {
     const { data } = await call(requestedDate ? { action: "read", date: requestedDate } : { action: "read" });
     if (!alive()) return;
+    if (data.date !== data.today && data.date !== previousDay(data.today)) return fetchDay("");
     if (model?.date !== data.date) open.clear();
     for (const [itemId, request] of pending) if (request.date !== data.date) pending.delete(itemId);
+    if (data.date === data.today) currentItems = new Set(data.items.map(item => item.id));
     model = data;
     paint();
   }
-  async function read(reset = false) {
+  async function read(showYesterday = model?.date !== model?.today) {
     if (busy || !alive()) return;
     setBusy(true);
     status("기록을 불러오는 중이에요.");
     try {
-      await fetchDay(manager && !reset ? date.value : "");
+      if (manager && showYesterday && model) {
+        // Refresh the active catalog first; yesterday's snapshot may include retired areas.
+        const { data: current } = await call({ action: "read" });
+        if (!alive()) return;
+        currentItems = new Set(current.items.map(item => item.id));
+        await fetchDay(previousDay(current.today));
+      } else await fetchDay("");
       if (alive()) status("");
     } catch {
       if (!alive()) return;
-      if (model) date.value = model.date;
       status("기록을 불러오지 못했어요. 새로고침해 주세요.", true);
     } finally { if (alive()) setBusy(false); }
   }
@@ -261,5 +257,5 @@ export function mountCleaningChecklist(host, runtime, access) {
         : "저장 결과를 확인하지 못했어요. ‘같은 기록 다시 확인’을 눌러 주세요.", true);
     } finally { if (alive()) setBusy(false); }
   }
-  void read(true);
+  void read(false);
 }

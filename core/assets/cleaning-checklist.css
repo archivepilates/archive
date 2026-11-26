@@ -15,7 +15,6 @@
 .cleaning-board .cleaning-status[data-error] { color: #a62836; }
 .cleaning-board .cleaning-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; }
 .cleaning-board .cleaning-card { min-width: 0; padding: 20px; background: #fff; border: 1px solid transparent; border-radius: 8px; }
-.cleaning-board .cleaning-card[data-state="archived"] { background: #e7eaed; border-color: #cbd0d7; }
 .cleaning-board .cleaning-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .cleaning-board .cleaning-symbol { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: #eef0f4; color: #52657b; }
 .cleaning-board svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -58,3 +57,5 @@
   .cleaning-board .cleaning-row { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; }
   .cleaning-board .cleaning-symbol { width: 36px; height: 36px; }
 }
+
+.cleaning-board .cleaning-toolbar button[aria-pressed="true"] { color: #284897; background: #eef0f7; border-color: #b9c6ec; font-weight: 600; }
