@@ -304,7 +304,7 @@ test("follow-up GET timeout releases busy; pageshow later reconciles", async ({ 
 test("polling is bounded, coalesces resume requests and can resume after cap", async ({ page }) => {
   const model = await fixture(page, { report: { status: "queued" } });
   for (let index = 0; index < 90; index += 1) await tick(page, model);
-  await text(page.getByRole("status"), "자동 상태 확인을 잠시 멈췄습니다");
+  await text(page.locator("#status"), "자동 상태 확인을 잠시 멈췄습니다");
   const capped = model.gets;
   await page.clock.runFor(60_000);
   assert.equal(model.gets, capped);
@@ -378,7 +378,7 @@ test("stale GET rejection cannot overwrite newer queued approval success", async
     staleRoute = route;
     return true;
   } });
-  await page.getByRole("status").evaluate((status) => {
+  await page.locator("#status").evaluate((status) => {
     window.__statusMessages = [];
     window.__statusObserver = new MutationObserver(() => window.__statusMessages.push(status.textContent));
     window.__statusObserver.observe(status, { childList: true, characterData: true, subtree: true });
@@ -386,12 +386,12 @@ test("stale GET rejection cannot overwrite newer queued approval success", async
   await page.evaluate(() => window.dispatchEvent(new Event("pageshow")));
   await eventually(() => assert.ok(staleRoute));
   await page.getByRole("button", { name: "검토 완료 · 회원에게 발송", exact: true }).click();
-  await text(page.getByRole("status"), "검토한 리포트를 발송 대기열에 등록했습니다");
+  await text(page.locator("#status"), "검토한 리포트를 발송 대기열에 등록했습니다");
   await staleRoute.fulfill({ status: 503, json: { ok: false, error: "과거 조회 실패" } });
   await idle(page);
   await disabled(page.getByRole("button", { name: "발송 대기 중", exact: true }));
   assert.equal(await page.getByRole("alert").count(), 0);
-  await text(page.getByRole("status"), "검토한 리포트를 발송 대기열에 등록했습니다");
+  await text(page.locator("#status"), "검토한 리포트를 발송 대기열에 등록했습니다");
   assert.equal(await page.evaluate(() => window.__statusMessages.some((message) => message.includes("과거 조회 실패"))), false);
   assert.equal(model.gets, 3);
   assert.deepEqual(model.posts.map((post) => post.action), ["approveReport"]);
@@ -457,5 +457,78 @@ test("ambiguous content POST reloads again when delayed same-URL source changes,
   assert.equal(model.posts.length, 1);
   assert.equal(model.posts[0].mode, "post");
   assert.equal(model.posts[0].answers.nextDirection, "서버에서 늦게 저장되는 기록");
+  await cleanErrors(page, model);
+});
+
+test("refresh restores text and choices in the same chart without submitting", async ({ page }) => {
+  const model = await fixture(page);
+  await page.locator('textarea[name="nextDirection"]').fill("작성 중 남긴 다음 방향");
+  await page.locator('input[name="focusAreas"][value="목"]').check();
+  await page.locator('input[name="changes"][value="기타"]').check();
+  await page.locator('textarea[name="changesOther"]').fill("기타 메모 이어 쓰기");
+  await page.locator("#reportSummaryEdit").fill("저장 전 회원용 문장");
+  await text(page.locator("#draftStatus"), "이 탭에 임시저장");
+  await page.reload();
+  await value(page.locator('textarea[name="nextDirection"]'), "작성 중 남긴 다음 방향");
+  assert.equal(await page.locator('input[name="focusAreas"][value="목"]').isChecked(), true);
+  await value(page.locator('textarea[name="changesOther"]'), "기타 메모 이어 쓰기");
+  await value(page.locator("#reportSummaryEdit"), "저장 전 회원용 문장");
+  assert.equal(model.posts.length, 0);
+  const keys = await page.evaluate(() => Object.keys(sessionStorage));
+  assert.ok(keys.every(key => /^archive-private-draft:v1:[0-9a-f]{64}:(post|report)$/.test(key)));
+  await page.goto(url.replace("synthetic-token", "another-token"));
+  await value(page.locator('textarea[name="nextDirection"]'), "저장된 기록");
+  await value(page.locator("#reportSummaryEdit"), "저장된 핵심");
+  assert.equal(model.posts.length, 0);
+  await cleanErrors(page, model);
+});
+
+test("a newer server record and expired drafts are not overwritten on refresh", async ({ page }) => {
+  const model = await fixture(page);
+  await page.locator('textarea[name="nextDirection"]').fill("이전 로컬 초안");
+  await page.locator("#reportSummaryEdit").fill("만료될 문장");
+  await page.evaluate(() => {
+    const key = Object.keys(sessionStorage).find(value => value.endsWith(":report"));
+    const data = JSON.parse(sessionStorage.getItem(key));
+    data.time = Date.now() - 13 * 3600000;
+    sessionStorage.setItem(key, JSON.stringify(data));
+  });
+  model.source.existingAnswers.post.nextDirection = "새로 저장된 원본";
+  await page.reload();
+  await value(page.locator('textarea[name="nextDirection"]'), "새로 저장된 원본");
+  await value(page.locator("#reportSummaryEdit"), "저장된 핵심");
+  assert.equal(await page.evaluate(() => sessionStorage.length), 0);
+  assert.equal(model.posts.length, 0);
+  await cleanErrors(page, model);
+});
+
+test("confirmed record save removes temporary text but does not approve or send", async ({ page }) => {
+  const model = await fixture(page);
+  await page.locator('textarea[name="nextDirection"]').fill("정식 저장할 내용");
+  await text(page.locator("#draftStatus"), "이 탭에 임시저장");
+  await page.locator("#submitButton").click();
+  await idle(page);
+  assert.equal(await page.evaluate(() => sessionStorage.length), 0);
+  assert.deepEqual(model.posts.map(p => p.mode || p.action), ["post"]);
+  await cleanErrors(page, model);
+});
+
+test("save area stays below the form when a phone viewport shrinks during typing", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const model = await fixture(page);
+  const field = page.locator('textarea[name="nextDirection"]');
+  await field.fill("화면 이동 없이 입력");
+  await page.setViewportSize({ width: 390, height: 430 });
+  const layout = await page.evaluate(() => {
+    const actions = document.querySelector(".actions");
+    const rect = actions.getBoundingClientRect();
+    const sections = document.querySelector("#sections").getBoundingClientRect();
+    return { position: getComputedStyle(actions).position, actionTop: rect.top, fieldsBottom: sections.bottom,
+      focused: document.activeElement?.getAttribute("name") };
+  });
+  assert.equal(layout.position, "static");
+  assert.ok(layout.actionTop >= layout.fieldsBottom);
+  assert.equal(layout.focused, "nextDirection");
+  assert.equal(model.posts.length, 0);
   await cleanErrors(page, model);
 });
