@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyCleaningCatalogEdit, CLEANING_ITEMS, DEFAULT_CLEANING_CATALOG, parseCleaningCatalogEdit, parseCleaningRequest } from "../../firebase/kangsain-functions/functions/src/callable/coreCleaningPolicy";
+import { resolveCleaningActorColor } from "../../firebase/kangsain-functions/functions/src/callable/coreCleaningActorColor";
 const today = "2026-11-26";
 const base = { action: "record", revision: 0, itemId: "shower-supplies", status: "done", requestId: "12345678-1234-1234-1234-123456789012" };
 test("all 14 distinct items, including individual bins and shower supplies", () => {
@@ -43,4 +44,17 @@ test("area edits require current revision, preserve identity and reject duplicat
   const deleted = applyCleaningCatalogEdit(updated, edit("delete", 2, { itemId: "area-new" }), "");
   assert.equal(deleted.items.length, 14);
   assert.ok(updated.items.some(item => item.id === "area-new"));
+});
+
+
+test("cleaning colors follow the saved role, verified staff IDs and safe swatches only", () => {
+  const palette = new Map([["1", "#96d750"], ["2", "red; color: black"]]);
+  const resolve = (staffId: string, wasManager: boolean) => resolveCleaningActorColor({ staffId, wasManager }, palette, "#323c67");
+  assert.equal(resolve("1", false), "#96d750");
+  assert.equal(resolve("1", true), "#323c67");
+  assert.equal(resolve("unknown", true), "#323c67");
+  assert.equal(resolve("unknown", false), undefined);
+  assert.equal(resolve("2", false), undefined);
+  assert.equal(resolveCleaningActorColor(undefined, palette, "#323c67"), undefined);
+  assert.equal(resolveCleaningActorColor({ staffId: "1", wasManager: true }, palette, "invalid"), undefined);
 });

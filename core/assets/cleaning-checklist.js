@@ -92,11 +92,18 @@ export function mountCleaningChecklist(host, runtime, access) {
       const card = make("article", null, "cleaning-card");
       const row = make("div", null, "cleaning-row");
       const title = make("div", null, "cleaning-identity");
-      const count = history.filter(record => record.status === "done").length;
+      const completions = history.filter(record => record.status === "done");
+      const count = completions.length;
+      const lastCompleted = completions[0];
       const latest = history[0];
       const describe = record => `${time.format(new Date(record.recordedAt))} ${record.actorName} · ${record.status === "done" ? "완료" : "확인 필요"}${record.note ? ` (${record.note})` : ""}`;
       const state = latest?.status || "unrecorded";
       card.dataset.state = state;
+      const accent = lastCompleted?.actorColor;
+      if (typeof accent === "string" && /^#[0-9a-f]{6}$/i.test(accent)) {
+        card.style.setProperty("--cleaning-actor-color", accent);
+        card.dataset.hasActorColor = "";
+      }
       const symbol = make("span", null, "cleaning-symbol");
       symbol.append(lineIcon(state === "done" ? "m5 12 4 4L19 6" :
         state === "needs-attention" ? "M12 5v9m0 4v.25" : "M8 5H5v14h14V5h-3m-8 0V3h8v2m-6 6h4"));
@@ -105,6 +112,9 @@ export function mountCleaningChecklist(host, runtime, access) {
         "확인 필요" : "미기록", "cleaning-badge");
       row.append(symbol, title, badge);
       card.append(row, make("p", latest ? `최근 ${describe(latest)} · 완료 ${count}회` : "아직 기록 없음", "cleaning-latest"));
+      if (lastCompleted && lastCompleted !== latest) {
+        card.append(make("p", `최근 완료: ${time.format(new Date(lastCompleted.recordedAt))} ${lastCompleted.actorName}`, "cleaning-latest-completion"));
+      }
       if (model.date === model.today) {
         const actions = make("div", null, "cleaning-actions");
         const retry = pending.get(id);

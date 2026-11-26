@@ -15,6 +15,10 @@
 .cleaning-board .cleaning-status[data-error] { color: #a62836; }
 .cleaning-board .cleaning-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; }
 .cleaning-board .cleaning-card { min-width: 0; padding: 20px; background: #fff; border: 1px solid transparent; border-radius: 8px; }
+.cleaning-board .cleaning-card[data-has-actor-color] {
+  border-inline-start: 5px solid var(--cleaning-actor-color);
+  background: color-mix(in srgb, var(--cleaning-actor-color) 8%, #fff);
+}
 .cleaning-board .cleaning-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .cleaning-board .cleaning-symbol { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: #eef0f4; color: #52657b; }
 .cleaning-board svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -22,10 +26,15 @@
 .cleaning-board .cleaning-badge { padding: 4px 7px; border-radius: 4px; background: #eef0f4; color: #465468; font-size: .75rem; line-height: 1.4; font-weight: 600; white-space: nowrap; }
 .cleaning-board [data-state="done"] :is(.cleaning-symbol, .cleaning-badge) { background: #e4f3ef; color: #22665d; }
 .cleaning-board [data-state="needs-attention"] :is(.cleaning-symbol, .cleaning-badge) { background: #fff0d7; color: #784a12; }
+.cleaning-board [data-state="done"][data-has-actor-color] :is(.cleaning-symbol, .cleaning-badge) {
+  background: color-mix(in srgb, var(--cleaning-actor-color) 18%, #fff);
+  color: #202329;
+}
 .cleaning-board h3 { font-size: 1.0625rem; font-weight: 600; line-height: 1.45; }
 .cleaning-board .cleaning-help { margin-top: 3px; color: #535d6a; font-size: .8125rem; line-height: 1.5; }
 .cleaning-board h3, .cleaning-board .cleaning-help, .cleaning-board .cleaning-latest { word-break: keep-all; overflow-wrap: anywhere; }
 .cleaning-board .cleaning-latest { margin: 14px 0 0; font-size: .8125rem; color: #465468; line-height: 1.55; }
+.cleaning-board .cleaning-latest-completion { margin-top: 4px; font-size: .8125rem; color: #465468; line-height: 1.55; overflow-wrap: anywhere; }
 .cleaning-board .cleaning-card .cleaning-actions { margin-top: 12px; }
 .cleaning-board button, .cleaning-board input { min-height: 44px; max-width: 100%; padding: 8px 12px; border: 1px solid #cbd0d9; border-radius: 4px; background: #fff; color: #202329; font: inherit; font-size: .8125rem; line-height: 1.5; }
 .cleaning-board button { cursor: pointer; font-weight: 500; overflow-wrap: anywhere; }

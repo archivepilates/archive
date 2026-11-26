@@ -5,8 +5,17 @@ import { DEFAULT_STUDIO_ID } from "../config/constants";
 import { db } from "../config/firebase";
 import { isManagerRole } from "../security/authGuards";
 import { AppError } from "../utils/errors";
+import { resolveCleaningActorColor, type CleaningActor } from "./coreCleaningActorColor";
 import { requireCoreSessionStaff } from "./coreInstructorAccess";
 import { applyCleaningCatalogEdit, DEFAULT_CLEANING_CATALOG, parseCleaningCatalogEdit, parseCleaningRequest, type CleaningCatalog } from "./coreCleaningPolicy";
+
+// Read from the StudioMate staff-list swatches on 2026-11-26. Unknown IDs stay neutral.
+const ACTOR_PALETTE: ReadonlyMap<string, string> = new Map([
+  ["1983525", "#ff8a54"],
+  ["4817346", "#96d750"],
+  ["2222464", "#c9aaf4"],
+]);
+const MANAGER_COLOR = "#323c67"; // Kim Ki-hyo's confirmed swatch (StudioMate /staffs/me).
 
 export async function coreCleaningChecklistHandler(request: CallableRequest): Promise<unknown> {
   const staff = await requireCoreSessionStaff(request);
@@ -47,9 +56,29 @@ export async function coreCleaningChecklistHandler(request: CallableRequest): Pr
     ]);
     if (snapshot.size > 1000) throw new AppError("FAILED_PRECONDITION", "하루 기록이 많아 관리자 확인이 필요합니다.");
     const catalog = toCatalog(catalogResult);
-    return { today, date: input.date, revision: catalog.revision, items: catalog.items, records: snapshot.docs.map(doc => {
-      const { itemId, itemLabel, itemHelp, actorName, recordedAt, status, note } = doc.data();
-      return { id: doc.id, itemId, itemLabel, itemHelp, actorName, recordedAt: recordedAt.toMillis(), status, note };
+    const values = snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+    const legacyUids = new Set(values.filter(({ data }) => data.status === "done" &&
+      (typeof data.actorStaffId !== "string" || typeof data.actorWasManager !== "boolean") &&
+      typeof data.actorUid === "string").map(({ data }) => data.actorUid));
+    const legacyActors = new Map<string, CleaningActor | undefined>();
+    if (legacyUids.size && ACTOR_PALETTE.size) {
+      const legacyStaff = await db.collection("staffs").where("studioId", "==", staff.studioId).get();
+      for (const doc of legacyStaff.docs) {
+        const { uid, role, staffId } = doc.data();
+        if (!legacyUids.has(uid) || typeof staffId !== "string") continue;
+        const knownRole = role === "instructor" || isManagerRole(role);
+        // A duplicate UID never becomes a color match.
+        legacyActors.set(uid, knownRole && !legacyActors.has(uid) ?
+          { staffId, wasManager: isManagerRole(role) } : undefined);
+      }
+    }
+    return { today, date: input.date, revision: catalog.revision, items: catalog.items, records: values.map(({ id, data }) => {
+      const { itemId, itemLabel, itemHelp, actorName, recordedAt, status, note, actorStaffId, actorWasManager, actorUid } = data;
+      const actor = typeof actorStaffId === "string" && typeof actorWasManager === "boolean"
+        ? { staffId: actorStaffId, wasManager: actorWasManager } : legacyActors.get(actorUid);
+      const actorColor = status === "done" ? resolveCleaningActorColor(actor, ACTOR_PALETTE, MANAGER_COLOR) : undefined;
+      return { id, itemId, itemLabel, itemHelp, actorName, recordedAt: recordedAt.toMillis(), status, note,
+        ...(actorColor ? { actorColor } : {}) };
     }) };
   }
   const uid = request.auth!.uid;
@@ -72,7 +101,7 @@ export async function coreCleaningChecklistHandler(request: CallableRequest): Pr
     }
     tx.create(ref, {
       itemId: item.id, itemLabel: item.label, itemHelp: item.help, status: input.status, note: input.note,
-      actorUid: uid, actorName, recordedAt: Timestamp.fromMillis(now),
+      actorUid: uid, actorName, actorStaffId: staff.staffId, actorWasManager: manager, recordedAt: Timestamp.fromMillis(now),
     });
   });
   return { ok: true, id: ref.id, date: input.date };
