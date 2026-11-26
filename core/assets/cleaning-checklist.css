@@ -8,8 +8,8 @@
 .cleaning-board h2 { font-size: 1rem; line-height: 1.5; font-weight: 600; }
 .cleaning-board .cleaning-summary { color: #596676; font-size: .8125rem; line-height: 1.6; }
 .cleaning-board .cleaning-section-heading { margin: 20px 0 14px; }
-.cleaning-board .cleaning-toolbar, .cleaning-board .cleaning-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.cleaning-board .cleaning-toolbar { min-width: 0; color: #596676; font-size: .8125rem; }
+.cleaning-board .cleaning-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cleaning-board .cleaning-date { min-width: 0; color: #596676; font-size: .8125rem; }
 .cleaning-board .cleaning-status { margin: 12px 0; color: #596676; font-size: .8125rem; overflow-wrap: anywhere; }
 .cleaning-board .cleaning-status:empty { margin: 0; }
 .cleaning-board .cleaning-status[data-error] { color: #a62836; }
@@ -17,12 +17,15 @@
 .cleaning-board .cleaning-card { min-width: 0; padding: 20px; background: #fff; border: 1px solid transparent; border-radius: 8px; }
 .cleaning-board .cleaning-card[data-has-actor-color] {
   border-inline-start: 5px solid var(--cleaning-actor-color);
-  background: color-mix(in srgb, var(--cleaning-actor-color) 8%, #fff);
+  background: var(--cleaning-card-tint, #fff);
 }
+.cleaning-board .cleaning-card[data-has-actor-color] :is(.cleaning-help, .cleaning-latest, .cleaning-latest-completion, summary, .cleaning-history) {
+  color: #354053;
+}
+.cleaning-board .cleaning-card[data-has-actor-color] details { border-top-color: #708094; }
 .cleaning-board .cleaning-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
-.cleaning-board .cleaning-symbol { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: #eef0f4; color: #52657b; }
+.cleaning-board .cleaning-symbol { width: 48px; height: 48px; display: grid; font-size: 1.5rem; place-items: center; border-radius: 50%; background: #eef0f4; color: #52657b; }
 .cleaning-board svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.cleaning-board .cleaning-symbol svg { width: 26px; height: 26px; }
 .cleaning-board .cleaning-badge { padding: 4px 7px; border-radius: 4px; background: #eef0f4; color: #465468; font-size: .75rem; line-height: 1.4; font-weight: 600; white-space: nowrap; }
 .cleaning-board [data-state="done"] :is(.cleaning-symbol, .cleaning-badge) { background: #e4f3ef; color: #22665d; }
 .cleaning-board [data-state="needs-attention"] :is(.cleaning-symbol, .cleaning-badge) { background: #fff0d7; color: #784a12; }
@@ -64,7 +67,5 @@
 @media (max-width: 360px) {
   .cleaning-board .cleaning-card { padding: 16px; }
   .cleaning-board .cleaning-row { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; }
-  .cleaning-board .cleaning-symbol { width: 36px; height: 36px; }
+  .cleaning-board .cleaning-symbol { width: 36px; height: 36px; font-size: 1.25rem; }
 }
-
-.cleaning-board .cleaning-toolbar button[aria-pressed="true"] { color: #284897; background: #eef0f7; border-color: #b9c6ec; font-weight: 600; }

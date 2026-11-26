@@ -215,13 +215,15 @@ function firebaseModule(kind) {
           return { data: { ok: true } };
         }
         call.action = payload.action;
+        call.date = payload.date;
         call.requestId = payload.requestId;
         if (payload.action === "record") {
           if (payload.date !== "2026-10-11" || !state.cleaningItems.some(item => item.id === payload.itemId)) throw denied("Today and active area only");
           if (!state.cleaningRecords.some(row => row.id === payload.requestId)) {
             state.cleaningRecords.unshift({ id: payload.requestId, itemId: payload.itemId,
               itemLabel: state.cleaningItems.find(item => item.id === payload.itemId).label,
-              actorName: fixture.staffName, recordedAt: Date.parse("2026-10-11T01:15:00Z") + 60000 * state.cleaningRecords.length,
+              actorName: fixture.staffName, actorColor: payload.status !== "done" ? undefined : state.session.role === "manager" ? "#323c67" : state.cleaningRecords.length ? "#c9aaf4" : "#96d750",
+              recordedAt: Date.parse("2026-10-11T01:15:00Z") + 60000 * state.cleaningRecords.length,
               status: payload.status, note: payload.note });
             if (state.cleaningRecords.length === 1) {
               throw Object.assign(new Error("Synthetic reply lost after commit"), { code: "functions/unavailable" });
@@ -229,10 +231,15 @@ function firebaseModule(kind) {
           }
           return { data: { ok: true } };
         }
+        if (payload.date && state.qaFailYesterday) throw new Error("Synthetic unavailable history");
         return { data: { today: "2026-10-11", date: payload.date || "2026-10-11",
           items: state.cleaningItems, revision: state.cleaningRevision,
           records: state.session.role === "manager" && payload.date === "2026-10-10"
-            ? [{ itemId: "coffee", itemLabel: "커피머신", actorName: "다른 강사", recordedAt: Date.parse("2026-10-10T09:40:00Z"), status: "done" }]
+            ? [
+              { itemId: "coffee", itemLabel: "커피머신", actorName: "삭제구역 기록자", recordedAt: Date.parse("2026-10-10T09:41:00Z"), status: "done" },
+              { itemId: "shower-supplies", itemLabel: "샤워실 비품 보충", actorName: "다른 강사", actorColor: "#ff8a54", recordedAt: Date.parse("2026-10-10T09:40:00Z"), status: "done" },
+              { itemId: "shower-supplies", itemLabel: "샤워실 비품 보충", actorName: "어제 경고 기록자", recordedAt: Date.parse("2026-10-10T09:50:00Z"), status: "needs-attention" },
+            ]
             : state.cleaningRecords } };
       }
       if (name === "getCoreAccessSession") {
@@ -1357,6 +1364,11 @@ async function runCase(page, base, kind, name) {
     const supplies = page.getByRole("article").filter({ hasText: "샤워실 비품 보충" });
     await supplies.getByText("미기록", { exact: true }).waitFor();
     assert.equal(await supplies.getAttribute("data-state"), "unrecorded");
+    const tint = () => supplies.evaluate(node => getComputedStyle(node).backgroundColor);
+    assert.equal(await supplies.locator(".cleaning-symbol").textContent(), "🧴");
+    assert.equal(await page.getByRole("article").filter({hasText: "커피머신"}).locator(".cleaning-symbol").textContent(), "☕");
+    assert.equal(await page.getByRole("button", { name: "오늘", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "어제", exact: true }).count(), 0);
     assert.ok((await page.getByRole("button", { name: "새로고침", exact: true }).boundingBox()).height >= 44);
     const cards = await page.locator(".cleaning-cards").evaluate(node => ({
       width: node.clientWidth, scroll: node.scrollWidth,
@@ -1366,16 +1378,19 @@ async function runCase(page, base, kind, name) {
     if (page.viewportSize().width <= 390) assert.equal(cards.columns, 1);
     if (page.viewportSize().width >= 1440) assert.ok(cards.columns > 1);
     if (manager) {
-      await page.getByRole("button", { name: "어제", exact: true }).click();
-      await page.getByText(/최근 2026\. 10\. 10\. 18:40 다른 강사/).waitFor();
-      assert.equal(await page.getByRole("button", { name: "완료 기록", exact: true }).count(), 0);
-      await page.getByRole("button", { name: "오늘", exact: true }).click();
-      await page.getByText("완료 0/2", { exact: false }).waitFor();
+      await supplies.getByText(/최근 완료: 2026\. 10\. 10\. 18:40 다른 강사/).waitFor();
+      await supplies.getByText("완료기록 1건 · 최근 2일", { exact: true }).press("Enter");
+      await supplies.getByRole("listitem").filter({ hasText: "18:40 다른 강사" }).waitFor();
+      assert.equal(await supplies.getByText(/어제 경고 기록자/).count(), 0);
+      assert.match(await supplies.getAttribute("style"), /#ff8a54/);
+      assert.equal(await tint(), "rgb(255, 213, 193)");
+      assert.equal(await page.getByRole("button", { name: "완료 기록", exact: true }).count(), 2);
       await page.getByText("청소구역 관리", { exact: true }).click();
       await page.getByLabel("구역 이름").fill("현관");
       await page.getByLabel("작업 안내").fill("발매트 털기");
       await page.getByRole("button", { name: "구역 추가", exact: true }).click();
       await page.getByText("완료 0/3", { exact: false }).waitFor();
+      assert.equal(await page.getByRole("article").filter({hasText: "현관"}).locator(".cleaning-symbol").textContent(), "🧹");
       await page.locator(".cleaning-zones li").filter({ hasText: "현관" }).getByRole("button", { name: "수정", exact: true }).click();
       await page.getByLabel("구역 이름").fill("입구");
       await page.getByRole("button", { name: "변경 저장", exact: true }).click();
@@ -1386,34 +1401,47 @@ async function runCase(page, base, kind, name) {
       await page.getByText("완료 0/2", { exact: false }).waitFor();
       const removed = page.getByRole("article").filter({ hasText: "커피머신" });
       assert.equal(await removed.count(), 0);
-      await page.getByRole("button", { name: "어제", exact: true }).click();
-      await page.getByText(/이 날짜에는 청소 기록이 없어요/).waitFor();
-      assert.equal(await removed.count(), 0);
-      assert.equal(await page.getByRole("button", { name: "완료 기록", exact: true }).count(), 0);
-      assert.equal(await page.getByRole("button", { name: "어제", exact: true }).getAttribute("aria-pressed"), "true");
-      await page.getByRole("button", { name: "오늘", exact: true }).click();
-      await page.getByText("완료 0/2", { exact: false }).waitFor();
+      assert.equal(await page.getByText("삭제구역 기록자", { exact: false }).count(), 0);
       const requests = await page.evaluate(() => window.__coreFirebaseQA.callables.filter(c => c.action === "read"));
+      assert.ok(requests.some(c => c.date === "2026-10-10"));
       assert.ok(requests.every(c => !c.date || c.date === "2026-10-10"));
       await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
       await supplies.getByText(/최근 2026\. 10\. 11\. 10:16 QA 관리자.*완료 1회/).waitFor();
       await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
       await supplies.getByText(/최근 2026\. 10\. 11\. 10:17 QA 관리자.*완료 2회/).waitFor();
       await page.getByText("완료 1/2", { exact: false }).waitFor();
+      assert.match(await supplies.getAttribute("style"), /#323c67/);
+      assert.equal(await tint(), "rgb(181, 185, 200)");
+      await supplies.getByText("완료기록 3건 · 최근 2일", { exact: true }).waitFor();
+      const dates = await supplies.getByRole("listitem").allTextContents();
+      assert.deepEqual(dates.map(value => value.match(/10\. 1[01]\./)?.[0]), ["10. 11.", "10. 11.", "10. 10."]);
+      await page.evaluate(() => { window.__coreFirebaseQA.qaFailYesterday = true; });
+      await page.getByRole("button", { name: "새로고침", exact: true }).click();
+      await page.getByText(/어제 완료기록을 다시 확인하지 못했어요/).waitFor();
+      await supplies.getByText("완료기록 3건 · 최근 2일", { exact: true }).waitFor();
+      assert.ok(await supplies.getByRole("button", { name: "완료 기록", exact: true }).isEnabled());
     } else {
       assert.equal(await page.getByText("청소구역 관리", { exact: true }).count(), 0);
       await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
       await supplies.getByRole("button", { name: "같은 기록 다시 확인", exact: true }).click();
       await supplies.getByText(/최근 2026\. 10\. 11\. 10:15 QA 강사.*완료 1회/).waitFor();
+      assert.equal(await tint(), "rgb(217, 241, 192)");
       await supplies.getByRole("button", { name: "완료 기록", exact: true }).click();
       await supplies.getByText(/최근 2026\. 10\. 11\. 10:16 QA 강사.*완료 2회/).waitFor();
-      await supplies.getByText("전체 기록 2건", { exact: true }).click();
+      assert.match(await supplies.getAttribute("style"), /#c9aaf4/);
+      await supplies.getByText("완료기록 2건 · 오늘", { exact: true }).click();
       await supplies.getByRole("listitem").filter({ hasText: "10:15 QA 강사" }).waitFor();
       await supplies.getByRole("button", { name: "확인 필요", exact: true }).click();
       await supplies.getByLabel("메모").fill("바디워시 재고 없음");
       await supplies.getByRole("button", { name: "확인 필요 저장", exact: true }).click();
       await supplies.getByText(/최근 2026\. 10\. 11\. 10:17 QA 강사.*바디워시 재고 없음/).waitFor();
       assert.equal(await supplies.getAttribute("data-state"), "needs-attention");
+      assert.match(await supplies.getAttribute("style"), /#c9aaf4/);
+      assert.equal(await supplies.getByRole("listitem").count(), 2);
+      assert.equal(await tint(), "rgb(236, 224, 251)");
+      assert.equal(await supplies.locator(".cleaning-badge").evaluate(node => getComputedStyle(node).backgroundColor), "rgb(255, 240, 215)");
+      const reads = await page.evaluate(() => window.__coreFirebaseQA.callables.filter(c => c.action === "read"));
+      assert.ok(reads.every(c => !c.date), "Instructor never requests yesterday");
       const requests = await page.evaluate(() => window.__coreFirebaseQA.callables.filter(c => c.action === "record"));
       assert.equal(requests.length, 4);
       assert.equal(requests[0].requestId, requests[1].requestId);
