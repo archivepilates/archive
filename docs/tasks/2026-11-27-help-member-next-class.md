@@ -36,7 +36,8 @@ verified Help member roster database using the established owner migration
 workflow (not the historical analytics project). Deploy the Help member runtime,
 the public intent function and the Help Hosting site only, from reviewed main.
 Check production unauthenticated denial without requesting any OTP. Before
-setting `HELP_MEMBER_ATTENDANCE_SYNC=enabled` on the existing scheduled job only,
+enabling the scheduled-only, private mode-0600 `help-member-attendance-sync.json`
+state flag (policy `recent_attendance_v1`),
 verify the reservation response scope/pagination and catalog coverage using
 the existing authorized operator source and aggregate-only output; don't use a
 real customer's OTP for testing. Check the first naturally scheduled generation

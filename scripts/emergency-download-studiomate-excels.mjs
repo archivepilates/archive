@@ -3,7 +3,7 @@ import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { appendFile, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { collectRecentAttendance } from "../services/archive-help-member-access/recent-attendance.mjs";
@@ -17,6 +17,7 @@ const apply = args.has("--apply") || process.env.DRY_RUN === "false";
 const requestedStartDate = valueArg("--start-date");
 const requestedEndDate = valueArg("--end-date");
 const helpAttendanceOut=valueArg("--help-attendance-out");
+const attendanceCheck=kind==="help-attendance-check";
 
 const config = {
   baseUrl: env("STUDIOMATE_BASE_URL", "https://arcpilates.studiomate.kr"),
@@ -52,6 +53,7 @@ await mkdir(path.dirname(config.runLogPath), { recursive: true });
 let releaseBrowserLock = null;
 let context = null;
 let capturedAuthorization = "";
+let attendancePhase="browser";
 
 try {
   releaseBrowserLock = await acquireStudioMateBrowserLock({ owner: "studiomate-excel-emergency-mode" });
@@ -65,6 +67,25 @@ try {
     if (!request.url().includes("api.studiomate.kr")) return;
     capturedAuthorization = request.headers().authorization || capturedAuthorization;
   });
+  if(attendanceCheck){
+    if(apply&&!dryRun)throw Error("attendance_preview_read_only");
+    await page.goto(config.baseUrl,{waitUntil:"networkidle",timeout:60_000});
+    await closeNoticeDialog(page);
+    await assertLoggedIn(page);
+    await navigateReservationHistory(page);
+    attendancePhase="read";
+    const snapshot=await fetchAttendance();
+    attendancePhase="catalog";
+    const catalogue=JSON.parse(await readFile(archiveAutomationPath("secrets/supabase/help-member-roster-catalog.json"),"utf8"));
+    if(catalogue.studioId!=="5330"||!Array.isArray(catalogue.products))throw Error("attendance_catalog_unverified");
+    const category=new Map(catalogue.products.map(p=>[p.productId,p.category]));
+    result.helpAttendance={observedAt:snapshot.at,attended:snapshot.rows.length,eligible:0,excluded:0,unclassified:0,
+      distinctMembers:new Set(snapshot.rows.map(x=>x.memberId)).size};
+    for(const row of snapshot.rows){
+      const a=category.get(row.productId);
+      result.helpAttendance[a==="excluded"?"excluded":["group","private","duet","triple"].includes(a)?"eligible":"unclassified"]++;
+    }
+  }
   if (kind === "all" || kind === "member") {
     result.downloads.member = await downloadMemberExcel(page);
   }
@@ -78,15 +99,17 @@ try {
   if(result.ok&&result.downloads.reservation?.ok&&!result.dryRun&&helpAttendanceOut
     &&process.env.HELP_MEMBER_ATTENDANCE_SYNC==="enabled"){
     try{
-      const snapshot=await collectRecentAttendance({signal:AbortSignal.timeout(25_000),
-        fetchPage:(range,page,signal)=>apiJson(`/staff/booking?start_date=${range.startDate}&end_date=${range.endDate}&page=${page}&limit=100`,signal)});
+      const snapshot=await fetchAttendance();
       await writeFile(helpAttendanceOut,JSON.stringify(snapshot),{mode:0o600,flag:"wx"});
       result.helpAttendance="ready";
     }catch{result.helpAttendance="unverified";}
   }
 } catch (error) {
   result.ok = false;
-  result.error = error instanceof Error ? error.message : String(error);
+  result.error = attendanceCheck ?
+    (/^attendance_[a-z_]+$/u.test(error?.message??"")?error.message:
+      ["TimeoutError","AbortError"].includes(error?.name)?"attendance_"+attendancePhase+"_timeout":"attendance_"+attendancePhase+"_unavailable"):
+    error instanceof Error ? error.message : String(error);
   process.exitCode = 1;
 } finally {
   await cleanupStudioMateExcelDownload({
@@ -311,6 +334,11 @@ df.to_excel(target, index=False)
   const archivePath = path.join(archiveDir, `${path.parse(suggested).name}-${hash.slice(0, 12)}${path.parse(suggested).ext || ".xlsx"}`);
   await copyFile(stagingPath, archivePath);
   return { ok: true, kind: name, suggestedFilename: suggested, stagingPath, archivePath, sha256: hash, range, rows: rows.length };
+}
+
+function fetchAttendance(){
+  return collectRecentAttendance({signal:AbortSignal.timeout(25_000),
+    fetchPage:(range,page,signal)=>apiJson(`/staff/booking?start_date=${range.startDate}&end_date=${range.endDate}&page=${page}&limit=100`,signal)});
 }
 
 async function reservationRows(range) {

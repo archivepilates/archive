@@ -11,7 +11,7 @@ import { membershipContractDiscoveryWarning } from "./lib/studiomate-membership-
 import { acquireStudioMateSyncRun } from "./lib/studiomate-sync-run-lock.mjs";
 import { shouldRunClassCorrection } from "./run-class-cancellation-correction.mjs";
 import { shouldPublishHelpCurrentPasses } from "../services/archive-help-member-access/current-pass-snapshot.mjs";
-import { helpMemberSyncEnabled } from "./lib/help-member-sync-activation.mjs";
+import { helpMemberSyncEnabled, helpMemberAttendanceSyncEnabled } from "./lib/help-member-sync-activation.mjs";
 import {
   isExcludedPrivateBooking,
   isPrivateBooking,
@@ -49,10 +49,11 @@ if (syncRun && !syncRun.acquired) {
 }
 let attendanceScratch;
 try {
-const shouldCollectAttendance=process.env.HELP_MEMBER_ATTENDANCE_SYNC==="enabled"&&helpMemberSyncEnabled()
+const shouldCollectAttendance=helpMemberAttendanceSyncEnabled()&&helpMemberSyncEnabled()
   &&apply&&download&&scheduledRun&&!notificationRefresh&&!memberFile&&!reservationFile&&!requestedStartDate&&!requestedEndDate;
 let attendanceFile;
 if(shouldCollectAttendance){
+  process.env.HELP_MEMBER_ATTENDANCE_SYNC="enabled";
   try{attendanceScratch=mkdtempSync(path.join(tmpdir(),"archive-help-attendance-"));attendanceFile=path.join(attendanceScratch,"source.json");}
   catch{/* Skip optional attendance without interrupting the normal sync. */}
 }

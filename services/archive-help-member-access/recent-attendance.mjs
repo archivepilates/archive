@@ -27,14 +27,22 @@ export async function collectRecentAttendance({fetchPage,now=Date.now,signal}){
     total=native.total;pages=native.last_page;
     for(const booking of native.data){
       const key=String(booking?.id??'');
-      if(!id.test(key)||bookingIds.has(key)||String(booking.studio_id)!=='5330')throw Error('attendance_scope_unverified');
+      if(!id.test(key)||bookingIds.has(key))throw Error('attendance_scope_unverified_booking');
+      if(String(booking.studio_id)!=='5330')throw Error(booking.studio_id==null?'attendance_scope_unverified_studio_blank':'attendance_scope_unverified_studio');
       bookingIds.add(key);
       if(!['attendance','attended'].includes(booking.status))continue;
       const memberId=String(booking.member?.id??'');
       const on=String(booking.lecture?.start_on??'').slice(0,10);
-      if(!id.test(memberId)||booking.member_id!=null&&String(booking.member_id)!==memberId
-        ||String(booking.lecture?.studio_id)!=='5330'||!day(on)||on<range.startDate||on>range.endDate||booking.deleted_at)
-        throw Error('attendance_scope_unverified');
+      if(!id.test(memberId)||booking.member_id!=null&&String(booking.member_id)!==memberId)
+        throw Error('attendance_scope_unverified_member');
+      // The bulk list may omit the embedded lecture's studio ID. The parent
+      // booking is always scoped to 5330; any supplied lecture scope or ID
+      // must agree with the parent rather than silently replacing its proof.
+      if(booking.lecture?.studio_id!=null&&String(booking.lecture.studio_id)!=='5330'
+        ||booking.lecture_id!=null&&booking.lecture?.id!=null&&String(booking.lecture_id)!==String(booking.lecture.id))
+        throw Error('attendance_scope_unverified_lecture');
+      if(!day(on)||on<range.startDate||on>range.endDate)throw Error('attendance_scope_unverified_day');
+      if(booking.deleted_at)throw Error('attendance_scope_unverified_removed');
       const ticket=booking.user_ticket?.ticket;
       rows.push({memberId,on,productId:id.test(String(ticket?.id??''))?String(ticket.id):null});
     }
