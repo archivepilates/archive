@@ -84,3 +84,18 @@ test("normalizes historical test identifiers out of management numbers", () => {
     "circulation-260530",
   );
 });
+
+test("maps only the correct November #10 date and StudioMate teams", () => {
+  for (const [date, teams, wrongTeams, expected] of [
+    ["2026-11-28", ["A", "B"], ["C", "D"], "full-body-integration-261128"],
+    ["2026-11-29", ["C", "D"], ["A", "B"], "full-body-integration-261129"],
+  ] as const) {
+    for (const team of teams) {
+      assert.equal(instructorLessonManagementNumberFor({ title: `11월 강사레슨 ${team}`, lessonDate: date }), expected);
+    }
+    for (const team of wrongTeams) {
+      assert.equal(instructorLessonManagementNumberFor({ title: `11월 강사레슨 ${team}`, lessonDate: date }), "");
+    }
+    assert.equal(instructorLessonManagementNumberFor({ title: "강사레슨 Team", lessonDate: date, teamLesson: true }), `team-${date.slice(2).replace(/-/g, "")}`);
+  }
+});

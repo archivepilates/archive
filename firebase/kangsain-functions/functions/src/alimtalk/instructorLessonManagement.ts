@@ -44,6 +44,12 @@ const INSTRUCTOR_LESSON_TOPIC_SLUG_BY_DATE: Readonly<Record<string, string>> = {
   "2026-10-25": "external-feedback",
 };
 
+// The November #10 workshop uses short Korean A–D titles and the ordinary 2T pass.
+const METHOD_10_STUDIOMATE_TITLES: Readonly<Record<string, RegExp>> = {
+  "2026-11-28": /^11월\s+강사레슨\s+[AB]$/i,
+  "2026-11-29": /^11월\s+강사레슨\s+[CD]$/i,
+};
+
 export function instructorLessonManagementNumberFor(input: {
   title: string;
   lessonDate: string;
@@ -52,7 +58,8 @@ export function instructorLessonManagementNumberFor(input: {
   const lessonDate = normalizedLessonDate(input.lessonDate);
   if (!lessonDate) return "";
   // A canonical Team pass gets its own date-bound route, not a guessed METHOD topic.
-  const topicSlug = input.teamLesson
+  const method10 = !input.teamLesson && METHOD_10_STUDIOMATE_TITLES[lessonDate]?.test(input.title.trim());
+  const topicSlug = method10 ? "full-body-integration" : input.teamLesson
     ? instructorLessonTopicSlug(input.title) || "team"
     : INSTRUCTOR_LESSON_TOPIC_SLUG_BY_DATE[lessonDate] || instructorLessonTopicSlug(input.title);
   if (!topicSlug) return "";
