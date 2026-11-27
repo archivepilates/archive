@@ -1,3 +1,4 @@
+import {clarification} from './member-plan.js';
 import {healthInput,privateInput} from './privacy.js';
 import {publishedTimetable} from './timetable.js';
 
@@ -37,12 +38,13 @@ export async function requestNaturalReply(packet,controller,fetcher=fetch){
       ||(reply.officialOnly!==undefined&&reply.officialOnly!==true)
       ||!Array.isArray(reply.details)||reply.details.length>5||!reply.details.every(v=>typeof v==='string'&&v.length<=420)
       ||reply.scheduleDay!==null&&!/^[월화수목금토일]$/u.test(reply.scheduleDay)
-      ||typeof reply.link!=='string'||!['none','staff'].includes(reply.link)&&!Object.hasOwn(sources,reply.link))return null;
+      ||typeof reply.link!=='string'||!['none','staff','clarify'].includes(reply.link)&&!Object.hasOwn(sources,reply.link))return null;
     return {answer:reply.answer,link:reply.link,details:reply.details,scheduleDay:reply.scheduleDay,officialOnly:reply.officialOnly===true};
   }catch{return null;}
   finally{clearTimeout(timeout);}
 }
 export function applyNaturalReply(state,reply,now=new Date()){
+  if(reply.link==='clarify')return {...clarification,state,clarify:true};
   const source=Object.hasOwn(sources,reply.link)?sources[reply.link]:null;
   const timetable=reply.link==='schedule'?publishedTimetable(reply.scheduleDay?reply.scheduleDay+'요일':'시간표',now):null;
   return {text:[reply.answer,...reply.details].join('\n\n'),state,aiAssisted:!reply.officialOnly,officialOnly:reply.officialOnly,

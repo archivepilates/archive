@@ -2,6 +2,7 @@
 import {createRequire} from 'node:module';
 import {constants} from 'node:fs';
 import {open} from 'node:fs/promises';
+import {makeRecentAttendanceProjection} from '../services/archive-help-member-access/recent-attendance.mjs';
 import {archiveAutomationPath} from './lib/archive-automation-paths.mjs';
 import {helpMemberSyncEnabled} from './lib/help-member-sync-activation.mjs';
 import {auditCurrentPassRoster,makeDailyPassBatch,makeVerifiedRosterPassBatch} from '../services/archive-help-member-access/current-pass-snapshot.mjs';
@@ -13,7 +14,9 @@ const hex=/^[a-f0-9]{64}$/u;
 const require=createRequire(import.meta.url);
 
 async function readPrivateConfig(filename,maxBytes){
-  const path=archiveAutomationPath('secrets/supabase/'+filename);
+  return readPrivateFile(archiveAutomationPath('secrets/supabase/'+filename),maxBytes);
+}
+async function readPrivateFile(path,maxBytes){
   const fd=await open(path,constants.O_RDONLY|constants.O_NONBLOCK|constants.O_NOFOLLOW);
   try{
     const info=await fd.stat();
@@ -59,7 +62,7 @@ async function checkRoster(){
   }finally{await native.close();}
 }
 
-async function stageGeneralRoster(sourceDigest,apply){
+async function stageGeneralRoster(sourceDigest,apply,attendanceFile){
   const catalogue=await readPrivateConfig('help-member-roster-catalog.json',262144);
   const reviewedAt=Date.parse(catalogue.checkedAt??'');
   if(catalogue.studioId!=='5330'||!Number.isFinite(reviewedAt)||reviewedAt>Date.now()
@@ -80,6 +83,13 @@ async function stageGeneralRoster(sourceDigest,apply){
   if(!apply)return {ok:true,status:'general_plan',...batch.summary};
   if(!batch.members.length||batch.nativeContacts?.length!==batch.summary.sourceMembers
     ||batch.summary.unreviewedProducts>0)throw Error('roster_generation_unverified');
+  let attendance=null;
+  if(attendanceFile&&process.env.HELP_MEMBER_ATTENDANCE_SYNC==='enabled'){
+    try{
+      const snapshot=await readPrivateFile(attendanceFile,1024*1024);
+      attendance=makeRecentAttendanceProjection({snapshot,batch,products:catalogue.products,secret:Buffer.from(env.HELP_MEMBER_SNAPSHOT_KEY,'hex')});
+    }catch{/* Publish passes as usual; an unavailable attendance window is not a zero. */}
+  }
   const db=await readPrivateConfig('help-member-dedicated-logins.json',16384);
   const writer='archive_help_enrollment_writer_app', login=db.logins?.enrollment;
   const capability='archive_help_enrollment_writer';
@@ -102,28 +112,32 @@ async function stageGeneralRoster(sourceDigest,apply){
     if(!proof?.expected||!proof.restricted)throw Error('writer_config_invalid');
     let result;
     try{
-      ({rows:[{value:result}]}=await client.query('SELECT archive_help_roster.publish_native_registration($1,$2,$3,$4) AS value',
-        [batch.observedAt,batch.sourceDigest,JSON.stringify(batch.members),JSON.stringify(batch.nativeContacts)]));
+      const binds=[batch.observedAt,attendance?.sourceDigest??batch.sourceDigest,JSON.stringify(batch.members),JSON.stringify(batch.nativeContacts)];
+      ({rows:[{value:result}]}=attendance?
+        await client.query('SELECT archive_help_roster.publish_native_registration_with_attendance($1,$2,$3,$4,$5) AS value',
+          [...binds,JSON.stringify(attendance.records)]):
+        await client.query('SELECT archive_help_roster.publish_native_registration($1,$2,$3,$4) AS value',binds));
     }catch{
       // A lost acknowledgement is checked, never replayed.
       result=null;
     }
     const {rows:[row]}=await client.query('SELECT archive_help_roster.status() AS value');
     const readback=row?.value;
-    if(readback?.sourceDigest!==batch.sourceDigest||!(readback.members>=0&&readback.members<=batch.members.length)
+    if(readback?.sourceDigest!==(attendance?.sourceDigest??batch.sourceDigest)||!(readback.members>=0&&readback.members<=batch.members.length)
       ||!(readback.cards>=readback.members&&readback.cards<=batch.members.reduce((n,m)=>n+m.cards.length,0))
       ||result&&result.sourceDigest!==readback.sourceDigest)throw Error('writer_readback_invalid');
     return {ok:true,status:'general_published',members:readback.members,cards:readback.cards,
-      heldApproval:batch.members.length-readback.members,observedAt:readback.observedAt,...batch.summary};
+      heldApproval:batch.members.length-readback.members,observedAt:readback.observedAt,
+      ...(attendanceFile?{attendance:attendance?'projected':'unavailable',attendanceSummaries:attendance?.records.length??0}:{}),...batch.summary};
   }finally{await client.end();}
 }
 
 async function main(){
-  const [mode,hashFlag,sourceDigest]=process.argv.slice(2);
+  const [mode,hashFlag,sourceDigest,attendanceFlag,attendanceFile]=process.argv.slice(2);
   if(mode==='--check-roster'&&process.argv.length===3)return checkRoster();
   if(mode==='--general-plan'&&process.argv.length===3)return stageGeneralRoster('0'.repeat(64),false);
-  if(mode==='--general-scheduled-run'&&process.argv.length===5&&hashFlag==='--source-sha256'
-    &&hex.test(sourceDigest)&&helpMemberSyncEnabled())return stageGeneralRoster(sourceDigest,true);
+  if(mode==='--general-scheduled-run'&&(process.argv.length===5||process.argv.length===7&&attendanceFlag==='--attendance-file'&&attendanceFile)
+    &&hashFlag==='--source-sha256'&&hex.test(sourceDigest)&&helpMemberSyncEnabled())return stageGeneralRoster(sourceDigest,true,attendanceFile);
   if(process.argv.length!==5||mode!=='--scheduled-run'||hashFlag!=='--source-sha256'||!hex.test(sourceDigest)
     ||process.env.HELP_CURRENT_PASS_SNAPSHOT_ENABLED!=='enabled')throw Error('scheduled_apply_required');
   const config=await readPrivateConfig('help-current-pass-writer.json',32768);

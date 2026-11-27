@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { archiveAutomationPath } from "./lib/archive-automation-paths.mjs";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { recordAutomationStatus } from "./lib/archive-core-ops-logging.mjs";
@@ -46,7 +47,15 @@ if (syncRun && !syncRun.acquired) {
   console.log(JSON.stringify({ ok: true, status: 'deferred', skipped: 'excel_sync_already_running', finishedAt: new Date().toISOString() }));
   process.exit(0);
 }
+let attendanceScratch;
 try {
+const shouldCollectAttendance=process.env.HELP_MEMBER_ATTENDANCE_SYNC==="enabled"&&helpMemberSyncEnabled()
+  &&apply&&download&&scheduledRun&&!notificationRefresh&&!memberFile&&!reservationFile&&!requestedStartDate&&!requestedEndDate;
+let attendanceFile;
+if(shouldCollectAttendance){
+  try{attendanceScratch=mkdtempSync(path.join(tmpdir(),"archive-help-attendance-"));attendanceFile=path.join(attendanceScratch,"source.json");}
+  catch{/* Skip optional attendance without interrupting the normal sync. */}
+}
 let downloadedMemberFile = "";
 let downloadedReservationFile = "";
 let downloadedDeletedClassFile = "";
@@ -74,6 +83,7 @@ if (download) {
     "--end-date",
     reservationWindow.endDate,
     ...(apply ? ["--apply"] : ["--dry-run"]),
+    ...(attendanceFile?["--help-attendance-out",attendanceFile]:[]),
   ]);
   steps.push(downloadStep);
   downloadedMemberFile = downloadStep.stdout?.downloads?.member?.archivePath || downloadStep.stdout?.downloads?.member?.stagingPath || "";
@@ -188,7 +198,8 @@ if (shouldPublishHelpCurrentPasses({enabled:helpMemberSyncEnabled(),
   manualSources:Boolean(memberFile||reservationFile||requestedStartDate||requestedEndDate)})) {
   sidecars.add("helpMemberRoster");
   steps.push(runStep("helpMemberRoster",["scripts/publish-help-current-passes.mjs",
-    "--general-scheduled-run","--source-sha256",memberDownload.sha256]));
+    "--general-scheduled-run","--source-sha256",memberDownload.sha256,
+    ...(attendanceFile?["--attendance-file",attendanceFile]:[])]));
 }
 const failed = steps.filter((step) => !sidecars.has(step.name) && step.exitCode && step.exitCode !== 0);
 const warnings = steps.filter((step) => step.stdoutOk === false || step.requiredFailed ||
@@ -244,7 +255,7 @@ await recordAutomationStatus(db, {
 console.log(JSON.stringify({ ...summary, reportPath }, null, 2));
 if (failed.length) process.exitCode = 1;
 } finally {
-  await syncRun?.release();
+  try{if(attendanceScratch)rmSync(attendanceScratch,{recursive:true,force:true});}finally{await syncRun?.release();}
 }
 
 function runStep(name, command) {

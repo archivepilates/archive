@@ -69,7 +69,7 @@ test('Help keeps public GPT and Kakao links isolated without a legacy form',()=>
  assert.doesNotMatch(app,/prompts\.hidden/);
  const config=firebase.hosting.find(row=>row.site==='archive-pilates-help');
  assert.equal(config.public,'help');
- assert.deepEqual(config.rewrites.map(r=>r.source),['/api/public-chat-intent','**']);
+ assert.deepEqual(config.rewrites.map(r=>r.source),['/api/public-chat-intent','/api/member-access/**','**']);
  assert.equal(config.rewrites[0].function.functionId,'helpPublicChatIntent');
  assert.deepEqual(config.redirects.map(r=>[r.source,r.destination,r.type]),[
   ['/inquiry','https://pf.kakao.com/_KxdDWxj/chat',302],['/inquiry/**','https://pf.kakao.com/_KxdDWxj/chat',302]]);

@@ -33,7 +33,7 @@ before(async()=>{
   db=await PGlite.create();
   await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role');
   for(const migration of ['help-current-pass','help-member-auth-store','help-member-enrollment-authority','help-member-roster',
-    'help-member-roster-native-registration'])
+    'help-member-roster-native-registration','help-member-roster-recent-attendance'])
     await db.exec(await readFile(new URL('../../services/archivepilates-mcp/sql/'+migration+'.sql',import.meta.url),'utf8'));
 });
 after(async()=>{await db?.close();});
@@ -152,4 +152,40 @@ test('native registration publishing is atomic, role-scoped and never transfers 
   assert.equal((await scalar(approve,sql,await args([aRow,bRow],contacts(aRow,bRow)))).members,1);
   assert.equal(await find(p),null);
   await assert.rejects(scalar(approve,sql,initial),{code:'22023'});
+});
+
+test('recent attendance is private, follows the active roster grant, and vanishes on replacement',async()=>{
+  // Isolated subject unrelated to other test cases (same role setup as production).
+  const subject='1'.repeat(64),phoneKey='2'.repeat(64);
+  const hoursAgo=()=>new Date().toISOString();
+  await new Promise(r=>setTimeout(r,3));
+  const observed=hoursAgo(),windowThrough=format.format(Date.parse(observed));
+  const members=[{memberKey:subject,phoneKey,cards:cards(4)}],contacts=[{memberKey:subject,phoneKey}];
+  const summary={windowThrough,lastOn:windowThrough,byCategory:{group:3,private:0,duet:0,triple:0}};
+  const report=[{memberKey:subject,attendance:summary}];
+  const sql='SELECT archive_help_roster.publish_native_registration_with_attendance($1,$2,$3,$4,$5) AS value';
+  const checksum='a'.repeat(64);
+  await assert.rejects(scalar(approve,sql,[observed,checksum,JSON.stringify(members),JSON.stringify(contacts),
+    JSON.stringify([{memberKey:subject,attendance:{...summary,memberId:'411'}}])]),/Invalid attendance projection/);
+  await scalar(approve,sql,[observed,checksum,JSON.stringify(members),JSON.stringify(contacts),JSON.stringify(report)]);
+  const binding=await scalar(auth,'SELECT archive_help_roster.read_binding($1) AS value',[subject]);
+  const digest='7'.repeat(64);
+  assert.equal(await scalar(issuer,'SELECT archive_help_roster.issue_read_session($1,$2,$3,$4) AS value',
+    [digest,subject,binding.revision,new Date(Date.now()+60_000).toISOString()]),true);
+  const own='SELECT archive_help_roster.read_own_recent_attendance($1,$2) AS value';
+  assert.deepEqual(await scalar(reader,own,[digest,observed]),summary);
+  assert.equal(await scalar(reader,own,['6'.repeat(64),observed]),null);
+  assert.equal(await scalar(reader,own,[digest,new Date(Date.parse(observed)-1).toISOString()]),null);
+  await assert.rejects(scalar('anon',own,[digest,observed]),/permission denied/);
+  await assert.rejects(asRole(reader,'SELECT * FROM archive_help_roster.recent_attendance'),/permission denied/);
+  await asRole(issuer,'SELECT archive_help_roster.revoke_read_session($1)',[digest]);
+  assert.equal(await scalar(reader,own,[digest,observed]),null);
+  await new Promise(r=>setTimeout(r,3));
+  const newer=hoursAgo();
+  await scalar(approve,'SELECT archive_help_roster.publish_native_registration($1,$2,$3,$4) AS value',
+    [newer,'b'.repeat(64),JSON.stringify(members),JSON.stringify(contacts)]);
+  const freshDigest='8'.repeat(64);
+  assert.equal(await scalar(issuer,'SELECT archive_help_roster.issue_read_session($1,$2,$3,$4) AS value',
+    [freshDigest,subject,binding.revision,new Date(Date.now()+60_000).toISOString()]),true);
+  assert.equal(await scalar(reader,own,[freshDigest,newer]),null);
 });

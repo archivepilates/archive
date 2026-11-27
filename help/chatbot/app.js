@@ -2,6 +2,7 @@ import { reusableQuestion } from './engine.js';
 import {conversationTurn} from './conversation.js';
 import {applyNaturalReply,publicNaturalPacket,requestNaturalReply,supportsNaturalChat} from './public-natural.js';
 import {createMemberConnection} from './member-connection.js';
+import {memberPlanIntent,memberPlanText,clarification} from './member-plan.js';
 
 const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
 const memberPilot=new URLSearchParams(location.search).get('member-pilot')==='1';
@@ -13,15 +14,19 @@ const shell=stream.closest('.help'), viewport=window.visualViewport;
 const atLatest=()=>stream.scrollHeight-stream.clientHeight-stream.scrollTop<=32;
 let viewportFrame=0, followOnFocus=false;
 let state={},rules=null,lastChoices,pendingAi=null;
-let naturalEnabled=false,naturalHistory=[];
+let naturalEnabled=false,naturalHistory=[],preferringPlan=false;
+function updateAiControls(connected){
+  const enabled=naturalEnabled&&!connected;
+  get('chat-gpt-notice').hidden=!enabled;
+  get('chat-gpt-label').hidden=!enabled;
+  basicSend.hidden=!enabled;
+  sendButton.setAttribute('aria-label',enabled?'GPT로 보내기':'보내기');
+  sendButton.title=enabled?'GPT로 보내기':'보내기';
+}
 void supportsNaturalChat().then(enabled=>{
   if(!enabled)return;
-  get('chat-gpt-notice').hidden=false;
-  get('chat-gpt-label').hidden=false;
-  basicSend.hidden=false;
-  sendButton.setAttribute('aria-label','GPT로 보내기');
-  sendButton.title='GPT로 보내기';
   naturalEnabled=enabled;
+  updateAiControls(member.isConnected());
 });
 fetch('/assets/member-inquiry-guidance.json',{cache:'no-store',referrerPolicy:'no-referrer'})
   .then(r=>r.ok?r.json():null).then(v=>{if(Array.isArray(v?.rules)&&v?.sources)rules=v;}).catch(()=>{});
@@ -117,9 +122,12 @@ function append(role,result,follow=true){
   if(result.source&&!result.timetable)links.append(link(result.sourceLabel??'안내 원문',result.source));
   if(result.appGuide)links.append(link(result.memberLookup?'회원 앱에서 확인하는 방법':'공식 앱 이용 안내',result.appGuide));
   if(result.inquiry)links.append(link(result.inquiry==='refund'?'카카오톡으로 환불 문의':'카카오톡으로 직원 문의',staffChat));
-  if(links.children.length)body.append(links);
+  if(links.children.length||result.memberIntent||result.memberLookup)body.append(links);
   if(result.choices?.length){
+    clearChoices();
     lastChoices=element('div',null,'quick follow-up');
+    lastChoices.setAttribute('role','group');
+    lastChoices.setAttribute('aria-label','이어서 볼 질문');
     for(const choice of result.choices)lastChoices.append(button(choice,()=>ask(choice)));
     body.append(lastChoices);
   }
@@ -150,15 +158,26 @@ function privateAnswer(rows,checkedAt){
 }
 const member=createMemberConnection({
   allowPilot:memberPilot,
-  onPrivate:(rows,checkedAt)=>append('assistant',{text:privateAnswer(rows,checkedAt),memberPrivate:true}),
-  onClear:()=>stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove()),
+  onPrivate:(rows,checkedAt,attendance,intent)=>{
+    const result=intent.kind==='cards'?{text:privateAnswer(rows,checkedAt),choices:['수강 이력','수업 추천']}:
+      memberPlanText(rows,attendance,intent.kind,intent.time);
+    preferringPlan=Boolean(result.rememberPlan);
+    append('assistant',{...result,memberPrivate:true});
+  },
+  onClear:()=>{
+    preferringPlan=false;
+    stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove());
+  },
   onAuthChange:connected=>{
+    naturalHistory=[];
+    updateAiControls(connected);
     if(connected){
-      prompts.prepend(endMember);
+      prompts.prepend(endMember,ownPlan);
       prompts.scrollLeft=0;
-    }else endMember.remove();
+    }else{endMember.remove();ownPlan.remove();}
   }
 });
+const ownPlan=button('내 수업 추천',()=>ask('내 수강권으로 수업 추천',{focusInput:false}));
 const endMember=button('인증 종료',()=>{
   member.end();
   input.focus({preventScroll:true});
@@ -178,7 +197,7 @@ function greetingArt(){
 }
 function clearChoices(){lastChoices?.remove();lastChoices=null;}
 function finishTurn(q,result,focusInput,userShown=false,follow=true){
-  let cards=false;
+  let intent=result.memberIntent??null;
   if(result.memberLookup){
     const question=q.normalize('NFKC');
     const memberView=/출석|수강\s*이력|이용\s*내역/u.test(question)?'history':
@@ -189,14 +208,14 @@ function finishTurn(q,result,focusInput,userShown=false,follow=true){
       booking:'개인 예약 일정은 스튜디오메이트 회원 앱에서 확인해 주세요.',
       cards:'개인 수강권은 회원 앱의 내 수강권에서도 확인할 수 있어요.'
     };
-    cards=memberView==='cards';
+    if(memberView==='cards')intent={kind:'cards'};
     result={...result,text:guidance[memberView],state:{...result.state,memberView}};
   }
   state=result.state;
   clearChoices();
   if(!userShown&&reusableQuestion(q)&&!result.hideInput)append('user',{text:q});
   const actions=append('assistant',result,follow);
-  if(cards)void member.offer(actions);
+  if(intent)void member.offer(actions,intent);
   if(focusInput)input.focus({preventScroll:true});
 }
 function basicReply(q){return conversationTurn(q,state,{rules});}
@@ -211,6 +230,7 @@ function ask(question,{focusInput=true,useAi=false}={}){
   const q=question.trim();
   if(!q)return;
   member.noteActivity();
+  member.interrupt();
   finishPending();
   if(/^(?:[0-9][\s-]*){6}$|인증\s*(?:번호|코드)[^0-9]{0,12}(?:[0-9][\s-]*){5}[0-9]/u.test(q.normalize('NFKC'))){
     naturalHistory=[];
@@ -218,11 +238,22 @@ function ask(question,{focusInput=true,useAi=false}={}){
     return;
   }
   const reply=basicReply(q);
-  const packet=reply.memberLookup||reply.hideInput?null:publicNaturalPacket(q,naturalHistory);
-  const natural=useAi&&naturalEnabled?packet:null;
+  const connected=member.isConnected();
+  const original=q.normalize('NFKC');
+  const normalized=original==='운동 계획'?'수업 추천':original;
+  const intent=memberPlanIntent(normalized,{connected,preferring:preferringPlan});
+  if(intent&&reusableQuestion(q)&&(!reply.hideInput||reply.memberLookup)){
+    naturalHistory=[];
+    finishTurn(q,{text:connected?(intent.kind==='plan'?'수강권과 출석을 기준으로 다음 수업을 골라볼게요.':'본인의 최근 출석을 확인할게요.'):
+      '등록된 휴대전화로 회원 인증을 하면 본인의 기록을 확인할 수 있어요.',
+      state,memberIntent:intent},focusInput);
+    return;
+  }
+  const packet=reply.memberLookup||reply.hideInput||connected?null:publicNaturalPacket(q,naturalHistory);
+  const natural=useAi&&naturalEnabled&&normalized!=='시간표'&&q!=='수업 시간'&&q!=='수강료'&&q!=='운동 계획'?packet:null;
   if(!natural){
     naturalHistory=[];
-    finishTurn(q,!packet?{...reply,hideInput:true}:reply,focusInput);return;
+    finishTurn(q,!packet&&!connected?{...reply,hideInput:true}:reply,focusInput);return;
   }
   clearChoices();
   append('user',{text:q});
@@ -235,17 +266,17 @@ function ask(question,{focusInput=true,useAi=false}={}){
     if(pendingAi!==request)return;
     const follow=atLatest();
     pendingAi=null;loading.remove();
-    if(answer){
+    if(answer&&answer.link!=='clarify'){
       naturalHistory=[...natural.history,{role:'user',text:natural.question},
         {role:'assistant',text:answer.answer.normalize('NFKC')}].slice(-4);
     }
-    const result=answer?applyNaturalReply(state,answer):{...reply,aiUnavailable:true};
+    const result=answer?applyNaturalReply(state,answer):reply.clarify?{...reply,...clarification}:{...reply,aiUnavailable:true};
     finishTurn(q,result,false,true,follow);
   });
 }
 function welcome(){
   pendingAi?.controller.abort();pendingAi=null;
-  state={};naturalHistory=[];clearChoices();input.value='';prompts.scrollLeft=0;stream.replaceChildren();
+  state={};naturalHistory=[];preferringPlan=false;clearChoices();input.value='';prompts.scrollLeft=0;stream.replaceChildren();
   append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
 }
 for(const btn of prompts.querySelectorAll('[data-question]')){

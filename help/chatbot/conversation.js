@@ -1,3 +1,4 @@
+import {clarification} from './member-plan.js';
 import { regularNov, sourcePrice } from './content.js';
 import { respond, reusableQuestion } from './engine.js';
 import { publishedTimetable } from './timetable.js';
@@ -60,7 +61,8 @@ function nextPlan(previous,q,askedFrequency){
 
 export function conversationTurn(question, previous={}, {rules=null,now=new Date()}={}){
   if(!reusableQuestion(question))return {...respond(question,{rules,now}),state:previous,hideInput:true};
-  const q=question.normalize('NFKC').trim();
+  const normalized=question.normalize('NFKC').trim();
+  const q=normalized==='수업 시간'?'시간표':normalized==='운동 계획'?'수업 추천':normalized;
   if(greeting.test(q))return {text:'안녕하세요! 시간표, 수강료, 예약 등 궁금한 내용을 편하게 물어보세요.',state:previous,direct:true};
   if(thanks.test(q))return {text:'천만에요! 또 궁금한 게 있으면 편하게 물어보세요.',state:previous,direct:true};
   if(otherMember.test(q))return {text:'다른 회원의 수강권이나 이용내역은 안내하지 않아요. 본인의 기록은 회원 앱에서 확인해 주세요.',state:previous,hideInput:true,appGuide};
@@ -69,8 +71,7 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
   const state={plan,topic:'',context:''};
   const close=result=>({...result,state:{...state,topic:result.topic??'',context:result.context??''}});
   const clarify=()=>({
-    text:'제가 질문을 정확히 이해하지 못했어요. 수업 시간, 수강료, 운동 계획 중 어떤 쪽을 이어서 볼까요?',
-    choices:['시간표','수강료','수업 추천'],state:previous,clarify:true
+    ...clarification,state:previous,clarify:true
   });
   const kst=calendar.format(now);
   const november=kst>='2026-11-01'&&kst<='2026-11-30';

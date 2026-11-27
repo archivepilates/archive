@@ -118,3 +118,9 @@ test("member details, contacts and protected turns are rejected at the API befor
   assert(parsePublicNaturalChat({...turn,question:"그룹으로 2회 정도 어떨까요?"}));
   assert(parsePublicNaturalChat({...turn,question:"저는 직장인입니다. 퇴근 후에 다니고 싶어요."}));
 });
+
+test("explicit clarify response cannot carry policy facts and becomes clickable in the client",async()=>{
+  const result=await generatePublicNaturalChat(turn,"test",provider("조금 더 알려주세요","clarify"),nov);
+  assert.deepEqual(result,{answer:"제가 질문을 정확히 이해하지 못했어요.",link:"clarify",details:[],scheduleDay:null});
+  assert.equal(await generatePublicNaturalChat(turn,"test",provider("조금 더 알려주세요","clarify",["price-0"]),nov),null);
+});

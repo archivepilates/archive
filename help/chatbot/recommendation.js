@@ -23,12 +23,13 @@ const intensities={
 const has=(obj,key)=>typeof key==='string'&&Object.hasOwn(obj,key);
 const dateLabel=date=>Number(date.slice(5,7))+'월 '+Number(date.slice(-2))+'일';
 
-export function recommendClasses({time,goal,intensity}={},now=new Date()){
+export function recommendClasses({time,goal,intensity,through,limit=2}={},now=new Date()){
   if(!has(times,time)||!has(goals,goal)||!has(intensities,intensity))return null;
   const today=kst.format(now), schedule=publishedTimetable('',now);
   const advice=[goals[goal],intensities[intensity]];
   if(!schedule)return {classes:[],basis:null,advice,bookingGuide};
-  const latest=new Date(schedule.endDate+'T00:00:00Z').getTime();
+  const end=through&&through<schedule.endDate?through:schedule.endDate;
+  const latest=Date.parse(end+'T00:00:00Z');
   const start=new Date(today+'T00:00:00Z').getTime();
   const options=[];
   // Only start times still ahead in KST and inside the verified publication window.
@@ -45,7 +46,7 @@ export function recommendClasses({time,goal,intensity}={},now=new Date()){
     (goal==='routine'&&options.find(o=>o.date!==first.date&&o.startAt===first.startAt))||
     options.find(o=>o.date!==first.date)||options[1]
   );
-  const classes=[first,alternate].filter(Boolean).map((row,i)=>({
+  const classes=[first,alternate].filter(Boolean).slice(0,limit).map((row,i)=>({
     ...row,label:dateLabel(row.date)+'('+row.day+') '+row.startAt,
     reason:i===0
       ?(time==='flexible'?'공개 시간표에서 가장 가까운 일정이에요.':'선택한 '+times[time].label+'에 가장 가까운 일정이에요.')

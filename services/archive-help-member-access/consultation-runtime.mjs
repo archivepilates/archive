@@ -1,3 +1,4 @@
+import {createRecentAttendanceLookup} from './recent-attendance.mjs';
 import {timingSafeEqual} from 'node:crypto';
 import {createMemberAccounts,ORIGIN} from './accounts.mjs';
 import {readCloudConfig} from './cloud-config.mjs';
@@ -58,7 +59,8 @@ export async function createFirebaseConsultationRuntime({config,makePool,now=Dat
     const consultation=createOtp({store,...bindingOptions,sendCode,secret:otpSecret,now});
     const issuer=createSupabasePassSessionIssuer({query:(...args)=>pools.issuer.query(...args),secret:memberKeySecret,now,roster});
     const reader=createSupabaseCurrentPassLookup({query:(...args)=>pools.reader.query(...args),now,roster});
-    const lookup=createConsultationCardLookup({consultation,issuer,reader,now,...(roster?{sourceTtl:60*60_000}:{})});
+    const lookup=createConsultationCardLookup({consultation,issuer,reader,now,...(roster?{sourceTtl:60*60_000,
+      readAttendance:createRecentAttendanceLookup({query:(...args)=>pools.reader.query(...args)})}:{})});
     return {handle:createConsultationMemberHandler({enabled:true,memberWebOtp:web,publicRoster:roster&&config.rosterPublic===true,
       consultation,allowRequest:limits.allowRequest,
       lookup,stepSecret:otpSecret,origin}),close};

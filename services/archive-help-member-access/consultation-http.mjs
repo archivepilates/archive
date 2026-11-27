@@ -4,7 +4,7 @@ import {json,payload,readCookie} from './http.mjs';
 import {WEB_MEMBER_OTP_REQUEST} from './consultation-otp.mjs';
 
 export const CONVERSATION_HEADER='x-archive-conversation';
-const routes=new Set(['availability','otp-start','otp-verify','cards','touch','logout']);
+const routes=new Set(['availability','otp-start','otp-verify','cards','overview','touch','logout']);
 const keySet=(obj,keys)=>Object.keys(obj).sort().join(',')===keys;
 const deny={ok:false};
 const cookie=(step,session,age)=>'__session='+(!step&&!session?'':(step??'-')+'.'+(session??'-'))
@@ -14,20 +14,22 @@ const same=(a,b)=>!!b&&a.accountId===b.accountId&&a.memberId===b.memberId
 const SOURCE_TTL=26*60*60_000;
 const GRANT_TTL=2*60_000;
 
-export function createConsultationCardLookup({consultation,issuer,reader,now=Date.now,sourceTtl=SOURCE_TTL}){
-  return async (token,conversation)=>{
+export function createConsultationCardLookup({consultation,issuer,reader,readAttendance,now=Date.now,sourceTtl=SOURCE_TTL}){
+  return async (token,conversation,{overview=false}={})=>{
     const before=await consultation.touch(token,conversation);
     if(!before)return {status:403};
     const grant=randomBytes(32).toString('base64url');
     try{
       await issuer.issue({token:grant,binding:{...before,expiresAt:Math.min(before.expiresAt,now()+GRANT_TTL)}});
       const data=await reader(grant,'cards');
+      let attendance=null;
+      if(data&&overview&&readAttendance){try{attendance=await readAttendance(grant,data.checkedAt);}catch{/* Cards remain available. */}}
       const after=await consultation.resolveSession(token,conversation);
       if(!same(before,after))return {status:403};
       if(!data)return {status:503};
       const dataExpiresAt=Math.min(Date.parse(data.checkedAt)+sourceTtl,after.expiresAt);
       if(!Number.isSafeInteger(dataExpiresAt)||dataExpiresAt<=now())return {status:503};
-      return {status:200,body:{ok:true,cards:data.cards,checkedAt:data.checkedAt,dataExpiresAt}};
+      return {status:200,body:{ok:true,cards:data.cards,checkedAt:data.checkedAt,dataExpiresAt,...(overview?{attendance}:{})}};
     }finally{
       // The isolated one-request grant is not the browser auth session.
       try{await issuer.revoke(grant);}catch{/* Closed by its short expiry. */}
@@ -75,9 +77,9 @@ export function createConsultationMemberHandler({enabled=false,memberWebOtp=fals
       if(route==='touch'&&keySet(body,'')){
         return session&&await consultation.touch(session,conversation)?json(200,{ok:true}):json(403,deny);
       }
-      if(route==='cards'&&keySet(body,'')){
+      if(['cards','overview'].includes(route)&&keySet(body,'')){
         if(!session)return json(403,deny);
-        const result=await lookup(session,conversation);
+        const result=await lookup(session,conversation,{overview:route==='overview'});
         return json(result.status,result.body??deny);
       }
       return json(400,deny);

@@ -34,10 +34,12 @@ try{
   const reader=async token=>{
     assert.ok(grants.has(token));
     return snapshotAvailable?{checkedAt:new Date(startTime).toISOString(),cards:[
-      {category:'group',type:'count',status:'active',remaining:5,bookable:3,expiresOn:'2026-12-10'}
+      {category:'group',type:'count',status:'active',startsOn:'2026-11-01',remaining:5,bookable:3,expiresOn:'2026-12-10'}
     ]}:null;
   };
-  const lookup=createConsultationCardLookup({consultation,issuer,reader,now});
+  const readAttendance=async grant=>grants.has(grant)?{windowThrough:'2026-11-26',lastOn:'2026-11-25',
+    byCategory:{group:7,private:0,duet:0,triple:0}}:null;
+  const lookup=createConsultationCardLookup({consultation,issuer,reader,readAttendance,now});
   const handler=createConsultationMemberHandler({enabled:true,memberWebOtp:true,consultation,lookup,stepSecret:secret,allowRequest:async()=>true});
   const bridge=createFirebaseMemberBridge({getHandler:async()=>handler});
   browser=await chromium.launch({headless:true});
@@ -47,9 +49,9 @@ try{
     const raw=route.request(),url=new URL(raw.url());
     if(url.origin!==ORIGIN)return route.abort();
     if(url.pathname==='/api/public-chat-intent'){
-      if(raw.method()==='GET')return route.fulfill({json:{natural:false}});
+      if(raw.method()==='GET')return route.fulfill({json:{natural:true}});
       providerCalls++;assert.doesNotMatch(raw.postData()??'',new RegExp(phone));
-      return route.fulfill({json:{ok:false},status:503});
+      return route.fulfill({json:{ok:true,link:'clarify',answer:'질문의 의미가 분명하지 않아요.',details:[],scheduleDay:null}});
     }
     if(!url.pathname.startsWith('/api/member-access/')){
       const file=url.pathname==='/'?'index.html':url.pathname.slice(1);
@@ -74,6 +76,13 @@ try{
   const page=await context.newPage();
   await page.clock.setFixedTime(new Date(clock));
   await page.goto(ORIGIN+'/');
+  await page.locator('#chat-gpt-label').waitFor();
+  const textbox=page.getByRole('textbox',{name:'궁금한 내용'});
+  await textbox.fill('이거 그건가요');await textbox.press('Enter');
+  const clarifiers=page.getByRole('group',{name:'이어서 볼 질문'}).last();
+  await clarifiers.getByRole('button',{name:'수업 시간',exact:true}).waitFor();
+  assert.equal(await clarifiers.getByRole('button').count(),3);
+  await clarifiers.getByRole('button',{name:'수업 시간',exact:true}).press('Enter');
   const ask=async()=>{const box=page.getByRole('textbox',{name:'궁금한 내용'});await box.fill('내 수강권 몇 회 남았어?');await box.press('Enter');};
   const answers=page.locator('[data-member-private]');
   const authButton=page.getByRole('button',{name:/회원 인증/});
@@ -101,6 +110,15 @@ try{
   await dialog.getByRole('button',{name:/인증하기/u}).click();
   await answers.last().waitFor();
   assert.match(await answers.last().innerText(),/잔여 5회.*예약 가능 3회/u);
+  assert.equal(await page.locator('#chat-gpt-notice').isVisible(),false);
+  await answers.last().getByRole('button',{name:'수강 이력',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.includes('마지막 출석'));
+  await answers.last().getByRole('button',{name:'수업 추천',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.includes('만료'));
+  assert.match(await answers.last().innerText(),/그룹 7회[\s\S]*잔여 5회[\s\S]*만료/);
+  await answers.last().getByRole('button',{name:'평일 저녁',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.match(/18:30|19:00|19:30|17:30/));
+  assert.match(await answers.last().innerText(),/18:30|19:00|19:30|17:30/);
   clock+=45*60_000;await page.clock.setFixedTime(new Date(clock));
   snapshotAvailable=false;
   const noData=page.waitForResponse(r=>r.url().endsWith('/api/member-access/cards')&&r.status()===503);
@@ -118,7 +136,7 @@ try{
   assert.equal(await answers.count(),0);
   assert.equal((await fakeTab(originalConversation)).status,403);
   assert.ok(!steps.some(x=>['login','register','registration-options'].includes(x)));
-  assert.equal(providerCalls,0);assert.equal(grants.size,0);
+  assert.equal(providerCalls,1);assert.equal(grants.size,0);
   console.log(JSON.stringify({otpOnly:true,sameConsultationAfterMinutes:45,unavailableSnapshotDidNotEndSession:true,
     wrongTabBlocked:true,resetRevoked:true,checkedWidths:[320,390,768,1440],realSends:0,externalRequests:0}));
 }finally{

@@ -6,6 +6,7 @@ import { createReadStream } from "node:fs";
 import { appendFile, copyFile, mkdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { collectRecentAttendance } from "../services/archive-help-member-access/recent-attendance.mjs";
 import { acquireStudioMateBrowserLock } from "./lib/studiomate-browser-lock.mjs";
 import { ensureStudioMateLoggedIn } from "./lib/studiomate-login.mjs";
 
@@ -15,6 +16,7 @@ const dryRun = args.has("--dry-run") || process.env.DRY_RUN === "true";
 const apply = args.has("--apply") || process.env.DRY_RUN === "false";
 const requestedStartDate = valueArg("--start-date");
 const requestedEndDate = valueArg("--end-date");
+const helpAttendanceOut=valueArg("--help-attendance-out");
 
 const config = {
   baseUrl: env("STUDIOMATE_BASE_URL", "https://arcpilates.studiomate.kr"),
@@ -73,6 +75,15 @@ try {
     result.downloads.deletedClass = await downloadDeletedClassExcel(page);
   }
   result.ok = Object.values(result.downloads).every((item) => item?.ok);
+  if(result.ok&&result.downloads.reservation?.ok&&!result.dryRun&&helpAttendanceOut
+    &&process.env.HELP_MEMBER_ATTENDANCE_SYNC==="enabled"){
+    try{
+      const snapshot=await collectRecentAttendance({signal:AbortSignal.timeout(25_000),
+        fetchPage:(range,page,signal)=>apiJson(`/staff/booking?start_date=${range.startDate}&end_date=${range.endDate}&page=${page}&limit=100`,signal)});
+      await writeFile(helpAttendanceOut,JSON.stringify(snapshot),{mode:0o600,flag:"wx"});
+      result.helpAttendance="ready";
+    }catch{result.helpAttendance="unverified";}
+  }
 } catch (error) {
   result.ok = false;
   result.error = error instanceof Error ? error.message : String(error);
@@ -323,10 +334,11 @@ async function deletedClassRows(range) {
   return lectures.flatMap(deletedClassRow);
 }
 
-async function apiJson(pathname) {
+async function apiJson(pathname, signal) {
   if (!capturedAuthorization) throw new Error("StudioMate API authorization header not captured.");
   const response = await fetch(new URL(pathname, "https://api.studiomate.kr").toString(), {
     headers: { authorization: capturedAuthorization, accept: "application/json" },
+    ...(signal?{signal,redirect:"error"}:{}),
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`StudioMate API request failed: ${response.status} ${text.slice(0, 500)}`);

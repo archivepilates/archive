@@ -56,7 +56,8 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange,allowPilo
     else lease=setTimeout(expirePrivate,Math.min(remaining,2_147_483_647));
   }
   function updateLookupButton(control){
-    control.textContent=connected?'수강권 다시 확인':'회원 인증 후 확인';
+    const label=control.dataset.memberCards;
+    control.textContent=connected?(label||'수강권 다시 확인'):'회원 인증 후 확인';
     if(connected)control.removeAttribute('aria-haspopup');
     else control.setAttribute('aria-haspopup','dialog');
   }
@@ -181,7 +182,9 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange,allowPilo
     lookup.control.setAttribute('aria-disabled','true');
     lookup.feedback.textContent='수강권 정보를 확인하고 있어요.';
     try{
-      const {status:code,data}=await request('cards');
+      let response=await request(lookup.intent.kind==='cards'?'cards':'overview');
+      if(lookup.intent.kind!=='cards'&&response.status===404&&key===conversation&&read===cardRead)response=await request('cards');
+      const {status:code,data}=response;
       if(key!==conversation||read!==cardRead)return;
       if(code===403){
         clearPrivate();
@@ -193,7 +196,7 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange,allowPilo
         lookup.feedback.textContent='';
         dataExpiresAt=data.dataExpiresAt;
         lastActivity=Date.now();
-        onPrivate(data.cards,data.checkedAt);
+        onPrivate(data.cards,data.checkedAt,data.attendance??null,lookup.intent);
         expirePrivate();
       }else{
         clearPrivate();
@@ -217,6 +220,8 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange,allowPilo
   });
   document.addEventListener('visibilitychange',expirePrivate);
   return Object.freeze({
+    isConnected:()=>connected,
+    interrupt(){cardRead++;},
     noteActivity(){
       if(!connected||Date.now()-lastActivity<60*60_000)return;
       const key=conversation;
@@ -227,7 +232,7 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange,allowPilo
         setConnected(false);
       }).catch(()=>{});
     },
-    async offer(container){
+    async offer(container,intent={kind:'cards'}){
       const key=conversation;
       if(!await enabled()||key!==conversation||!container.isConnected)return;
       const feedback=text('div','');feedback.className='chat-pending';
@@ -242,8 +247,8 @@ export function createMemberConnection({onPrivate,onClear,onAuthChange,allowPilo
           showForm(lookup);
         }
       });
-      const lookup={control,feedback};
-      control.dataset.memberCards='';
+      const lookup={control,feedback,intent};
+      control.dataset.memberCards=intent.kind==='plan'?'내 기록으로 추천':intent.kind==='history'?'최근 출석 확인':'';
       updateLookupButton(control);
       container.append(control);
       container.after(feedback);
