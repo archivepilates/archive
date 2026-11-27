@@ -1,11 +1,11 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
 import {makeManifest,assertManifest} from './release-e261017-classroom.mjs';
+import {archiveAutomationPath} from './lib/archive-automation-paths.mjs';
 
 const site='archive-pilates-home', origin='https://archivepilates.com',
   api='https://firebasehosting.googleapis.com/v1beta1/',
@@ -77,9 +77,10 @@ assert(Object.hasOwn(manifest,'/assets/imweb-my-classroom-20260723a.js'));
 assert.notEqual(originals.find(x=>x.path===resource).hash,fileHash);
 const result={baselineVersion:baseline.name,commit,fileCount:originals.length,changedPaths:[resource],sourceHash};
 if(mode==='--plan'){console.log(JSON.stringify(result));process.exit(0);}
-const output=path.join(os.homedir(),'Documents','Archive-Mobile-Preview-20261127');
+const output=archiveAutomationPath('automation','reports','home-mobile-v12-20261127');
+fs.mkdirSync(output,{recursive:true,mode:0o700});
 const intent=path.join(output,'mobile-v12-release-intent.json');
-const lock=path.join(os.homedir(),'ArchiveIN','automation','locks','firebase-hosting-'+site+'.lock');
+const lock=archiveAutomationPath('automation','locks','firebase-hosting-'+site+'.lock');
 const fd=fs.openSync(lock,'wx',0o600);
 try{
   fs.writeFileSync(fd,JSON.stringify({pid:process.pid,task:'home-mobile-v12'}));
