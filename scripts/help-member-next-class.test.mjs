@@ -11,7 +11,7 @@ const pass={category:'group',type:'count',status:'active',startsOn:'2026-11-01',
 test('authenticated member intent preserves history vs recommendation, and clarifies with usable labels',()=>{
   assert.deepEqual(memberPlanIntent('내 출석 기록을 참고해서 수업 추천',{connected:true}),{kind:'plan',time:null});
   assert.deepEqual(memberPlanIntent('수강 이력'),{kind:'history'});
-  assert.deepEqual(memberPlanIntent('평일 저녁',{connected:true,preferring:true}),{kind:'plan',time:'weekdayEvening'});
+  assert.deepEqual(memberPlanIntent('평일 저녁',{connected:true,preferences:{}}),{kind:'plan',time:'weekdayEvening'});
   assert.equal(memberPlanIntent('친구 수업 이력',{connected:true}),null);
   assert.equal(memberPlanIntent('수업 추천'),null);
   assert.deepEqual(conversationTurn('이거 그건가요',{}, {now}).choices,clarification.choices);
@@ -51,4 +51,23 @@ test('native source uses exact scoped attendance; projection omits unknown owner
     [[members[0].memberKey,1],[members[2].memberKey,0]]);
   assert(!JSON.stringify(projection).includes('productId'));
   assert(!JSON.stringify(projection).includes('memberId'));
+});
+
+test('reports exact chat aliases and consumes a bare number only inside a plan',()=>{
+  for(const q of ['수업 추천해줘','수업추천','운동계획','수업 추천']){
+    assert.equal(memberPlanIntent(q,{connected:true})?.kind,'plan');
+    const first=conversationTurn(q,{}, {now});
+    assert.equal(first.state.guidedNext,'frequency');
+    assert.ok(first.choices.includes('주 2회'));
+    const next=conversationTurn('2',first.state,{now});
+    assert.match(next.text,/주 2회.*어느 요일/);
+    assert.doesNotMatch(next.text,/일주일에 몇 번|정확히 이해하지/);
+  }
+  assert.equal(conversationTurn('2',{}, {now}).clarify,true);
+  assert.equal(memberPlanIntent('2',{connected:true}),null);
+  assert.deepEqual(memberPlanIntent('２',{connected:true,preferences:{time:'weekdayEvening'}}),{kind:'plan',time:'weekdayEvening',frequency:2});
+  assert.equal(memberPlanIntent('주 2회 수강료',{connected:true,preferences:{}}),null);
+  assert.equal(memberPlanIntent('123456',{connected:true,preferences:{}}),null);
+  const card={...pass,remaining:99,bookable:99,expiresOn:'2027-03-27'};
+  assert.match(memberPlanText([card],null,'plan',null,now,2).text,/잔여 99회[\s\S]*말씀하신 주 2회/);
 });

@@ -2,7 +2,7 @@ import { reusableQuestion } from './engine.js';
 import {conversationTurn} from './conversation.js';
 import {applyNaturalReply,publicNaturalPacket,requestNaturalReply,supportsNaturalChat} from './public-natural.js';
 import {createMemberConnection} from './member-connection.js';
-import {memberPlanIntent,memberPlanText,clarification} from './member-plan.js';
+import {chatQuestion,memberPlanIntent,memberPlanText,clarification} from './member-plan.js';
 
 const staffChat='https://pf.kakao.com/_KxdDWxj/chat';
 const memberPilot=new URLSearchParams(location.search).get('member-pilot')==='1';
@@ -14,7 +14,7 @@ const shell=stream.closest('.help'), viewport=window.visualViewport;
 const atLatest=()=>stream.scrollHeight-stream.clientHeight-stream.scrollTop<=32;
 let viewportFrame=0, followOnFocus=false;
 let state={},rules=null,lastChoices,pendingAi=null;
-let naturalEnabled=false,naturalHistory=[],preferringPlan=false;
+let naturalEnabled=false,naturalHistory=[],memberPreferences=null;
 function updateAiControls(connected){
   const enabled=naturalEnabled&&!connected;
   get('chat-gpt-notice').hidden=!enabled;
@@ -160,16 +160,17 @@ const member=createMemberConnection({
   allowPilot:memberPilot,
   onPrivate:(rows,checkedAt,attendance,intent)=>{
     const result=intent.kind==='cards'?{text:privateAnswer(rows,checkedAt),choices:['수강 이력','수업 추천']}:
-      memberPlanText(rows,attendance,intent.kind,intent.time);
-    preferringPlan=Boolean(result.rememberPlan);
+      memberPlanText(rows,attendance,intent.kind,intent.time,new Date(),intent.frequency);
+    memberPreferences=result.rememberPlan?{time:intent.time,frequency:intent.frequency}:null;
     append('assistant',{...result,memberPrivate:true});
   },
   onClear:()=>{
-    preferringPlan=false;
+    memberPreferences=null;
     stream.querySelectorAll('[data-member-private]').forEach(row=>row.remove());
   },
   onAuthChange:connected=>{
     naturalHistory=[];
+    memberPreferences=null;
     updateAiControls(connected);
     if(connected){
       prompts.prepend(endMember,ownPlan);
@@ -239,18 +240,19 @@ function ask(question,{focusInput=true,useAi=false}={}){
   }
   const reply=basicReply(q);
   const connected=member.isConnected();
-  const original=q.normalize('NFKC');
-  const normalized=original==='운동 계획'?'수업 추천':original;
-  const intent=memberPlanIntent(normalized,{connected,preferring:preferringPlan});
+  const normalized=chatQuestion(q);
+  const intent=memberPlanIntent(normalized,{connected,preferences:memberPreferences});
   if(intent&&reusableQuestion(q)&&(!reply.hideInput||reply.memberLookup)){
     naturalHistory=[];
+    if(connected&&intent.kind==='plan')memberPreferences={time:intent.time,frequency:intent.frequency};
     finishTurn(q,{text:connected?(intent.kind==='plan'?'수강권과 출석을 기준으로 다음 수업을 골라볼게요.':'본인의 최근 출석을 확인할게요.'):
       '등록된 휴대전화로 회원 인증을 하면 본인의 기록을 확인할 수 있어요.',
       state,memberIntent:intent},focusInput);
     return;
   }
+  if(!reply.clarify)memberPreferences=null;
   const packet=reply.memberLookup||reply.hideInput||connected?null:publicNaturalPacket(q,naturalHistory);
-  const natural=useAi&&naturalEnabled&&normalized!=='시간표'&&q!=='수업 시간'&&q!=='수강료'&&q!=='운동 계획'?packet:null;
+  const natural=useAi&&naturalEnabled&&!reply.localPlan&&normalized!=='시간표'&&q!=='수업 시간'&&q!=='수강료'&&q!=='운동 계획'?packet:null;
   if(!natural){
     naturalHistory=[];
     finishTurn(q,!packet&&!connected?{...reply,hideInput:true}:reply,focusInput);return;
@@ -276,7 +278,7 @@ function ask(question,{focusInput=true,useAi=false}={}){
 }
 function welcome(){
   pendingAi?.controller.abort();pendingAi=null;
-  state={};naturalHistory=[];preferringPlan=false;clearChoices();input.value='';prompts.scrollLeft=0;stream.replaceChildren();
+  state={};naturalHistory=[];memberPreferences=null;clearChoices();input.value='';prompts.scrollLeft=0;stream.replaceChildren();
   append('assistant',{welcome:true,text:'안녕하세요! ARCHIVE PILATES 명지점이에요.'});
 }
 for(const btn of prompts.querySelectorAll('[data-question]')){
