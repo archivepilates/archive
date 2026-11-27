@@ -279,6 +279,7 @@ input::placeholder, textarea::placeholder { color: #7a8691; font-weight: 400; op
 .instructor-waitlist-row:has(.instructor-waitlist-promote-button) { grid-template-columns: minmax(2rem, max-content) minmax(0, 1fr) minmax(0, max-content); }
 .instructor-waitlist-promote-button { align-self: center; min-height: 44px; padding: 8px 12px; white-space: normal; }
 .instructor-waitlist-check { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.instructor-waitlist-check input { flex: none; }
 .instructor-lesson-cancellation-dialog select { min-width: 0; min-height: 44px; font: inherit; }
 .instructor-waitlist-row > div { display: grid; min-width: 0; gap: 6px; }
 .instructor-waitlist-row :is(strong,span,small) { overflow-wrap: anywhere; }

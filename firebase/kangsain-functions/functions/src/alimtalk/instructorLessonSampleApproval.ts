@@ -11,6 +11,7 @@ import { stableHash } from "../utils/hash";
 import { alimtalkDedupeKey, normalizePhone } from "./dedupe";
 import { targetEligibilityIssue as autoSendabilityIssue, targetDuplicateIssue as findCompletedDuplicateForCandidate } from "./targetValidationChecks";
 import { cancellationBlocksRegistration } from "../instructorLessonRegistration/instructorLessonCancellationPolicy";
+import { hasVerifiedPairedInstructorBooking } from "../instructorLessonRegistration/instructorLessonRegistrationState";
 import { instructorLessonManagementNumberFor, normalizeInstructorLessonManagementNumber } from "./instructorLessonManagement";
 import { isInstructorLessonBooking, isTeamInstructorLessonBooking } from "./instructorLessonBookingPolicy";
 import { sendSolapiAlimtalk } from "./processAlimtalkQueue";
@@ -155,7 +156,13 @@ export async function prepareInstructorLessonSampleApprovals(input: {
   candidates: AlimtalkCandidateDoc[];
 }): Promise<InstructorLessonSampleApprovalSummary> {
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
-  const groups = groupInstructorLessonCandidates(input.candidates);
+  const candidates: AlimtalkCandidateDoc[] = [];
+  for (const candidate of input.candidates.filter(row => row.type === "instructor_lesson_material")) {
+    const source = (await db.doc("instructorLessonRegistrations/" + instructorLessonCancellationRegistrationId(candidate)).get()).data();
+    const issue = await pairedBookingMaterialIssue(candidate, source, async path => (await db.doc(path).get()).data());
+    if (!issue) candidates.push(candidate);
+  }
+  const groups = groupInstructorLessonCandidates(candidates);
   const summary: InstructorLessonSampleApprovalSummary = {
     batches: groups.length,
     sampleSent: 0,
@@ -689,6 +696,8 @@ async function sendApprovedInstructorLessonCandidate(
     if (send.exists) return blocked("기존 발송 원장 존재: 공급자 결과 대조 필요");
     const source = await tx.get(db.doc(`instructorLessonRegistrations/${instructorLessonCancellationRegistrationId(current)}`));
     if (cancellationBlocksRegistration(source.data())) return blocked("강사레슨 취소 요청");
+    const pairIssue = await pairedBookingMaterialIssue(current, source.data(), async path => (await tx.get(db.doc(path))).data());
+    if (pairIssue) return blocked(pairIssue);
     const booking = await tx.get(refs.booking(String(current.payload?.bookingId || "")));
     const lecture = await tx.get(refs.lecture(String(current.payload?.lectureId || "")));
     const sourceIssue = instructorLessonCandidateSourceIssue(current, booking.data(), lecture.data());
@@ -927,9 +936,12 @@ async function instructorLessonGroupSourceIssue(group: InstructorLessonCandidate
   if (snapshotIssue) return snapshotIssue;
   for (const candidate of group.candidates) {
     const registrationId = instructorLessonCancellationRegistrationId(candidate);
-    if (cancellationBlocksRegistration((await db.doc(`instructorLessonRegistrations/${registrationId}`).get()).data())) {
+    const registration = (await db.doc(`instructorLessonRegistrations/${registrationId}`).get()).data();
+    if (cancellationBlocksRegistration(registration)) {
       return `${candidate.memberName}: 강사레슨 수강 취소 요청`;
     }
+    const pairIssue = await pairedBookingMaterialIssue(candidate, registration, async path => (await db.doc(path).get()).data());
+    if (pairIssue) return `${candidate.memberName}: ${pairIssue}`;
     const bookingId = String(candidate.payload?.bookingId || "");
     if (!bookingId) return `${candidate.memberName}: 예약 ID 없음`;
     const booking = (await refs.booking(bookingId).get()).data();
@@ -945,6 +957,32 @@ async function instructorLessonGroupSourceIssue(group: InstructorLessonCandidate
 export function instructorLessonCancellationRegistrationId(candidate: AlimtalkCandidateDoc): string {
   const lessonDate = String(candidate.payload?.lessonDate || candidate.payload?.lectureDate || "");
   return `ilr_${createHash("sha256").update(`${candidate.studioId}|${normalizePhone(candidate.memberPhone)}|${lessonDate}`).digest("hex").slice(0, 24)}`;
+}
+
+export async function pairedBookingMaterialIssue(candidate: AlimtalkCandidateDoc,
+  registration: Record<string, any> | undefined, read: (path: string) => Promise<Record<string, any> | undefined>): Promise<string> {
+  if (registration?.bookingAutomation !== "same_group_pair_v1") return "";
+  const error = "자동 반배정의 두 세션 예약 원본 확인 필요";
+  const proof = registration.nativeBooking;
+  if (!hasVerifiedPairedInstructorBooking(registration) || cancellationBlocksRegistration(registration)
+    || registration.studioId !== candidate.studioId || proof.memberId !== String(candidate.memberId)
+    || normalizePhone(registration.memberPhone) !== normalizePhone(candidate.memberPhone)
+    || !proof.bookingIds.includes(String(candidate.payload?.bookingId))) return error;
+  const bookedIds = new Set<string>();
+  for (const bookingId of proof.bookingIds) {
+    const booking = await read("bookings/" + bookingId);
+    if (!booking || booking.bookingId !== bookingId || booking.studioId !== registration.studioId
+      || String(booking.memberId) !== proof.memberId || normalizePhone(booking.memberPhone || "") !== normalizePhone(candidate.memberPhone)
+      || booking.lectureDate !== proof.lessonDate || booking.appStatus !== "reserved" || booking.active === false
+      || booking.supersededByBookingId || booking.sessionOrder?.supersededByBookingId || booking.archiveBooking?.isCanonical === false
+      || (booking.userTicketId != null && String(booking.userTicketId) !== proof.userTicketId)
+      || !proof.lectureIds.includes(booking.lectureId) || bookedIds.has(booking.lectureId)) return error;
+    const lecture = await read("lectures/" + booking.lectureId);
+    if (!lecture || lecture.studioId !== registration.studioId || lecture.date !== proof.lessonDate
+      || lecture.status !== "open" || !new RegExp("^(?:[1-9]|1[0-2])월 강사\\s*레슨\\s+" + proof.group + "(?:\\s*반)?$").test(lecture.title || "")) return error;
+    bookedIds.add(booking.lectureId);
+  }
+  return bookedIds.size === 2 ? "" : error;
 }
 
 export function instructorLessonCandidateSourceIssue(

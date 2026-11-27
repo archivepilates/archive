@@ -42,8 +42,9 @@ const policy = evaluate("instructorLessonRegistration/instructorLessonCancellati
   "node:crypto": crypto, "../utils/errors": { AppError },
 });
 const teamIntake = evaluate("instructorLessonRegistration/instructorLessonTeamIntake", { "../utils/errors": { AppError } });
+const waitlist = evaluate("instructorLessonRegistration/instructorLessonWaitlist", {});
 const schedule = evaluate("instructorLessonRegistration/instructorLessonSchedule", {
-  "node:crypto": crypto, "./instructorLessonTeamIntake": teamIntake,
+  "node:crypto": crypto, "./instructorLessonTeamIntake": teamIntake, "./instructorLessonWaitlist": waitlist,
 });
 
 test("Team intake writes only one canonical registration, deduplicates concurrently and rejects changed payload", async () => {
@@ -257,6 +258,8 @@ function fixture() {
       },
     },
     "./instructorLessonCancellationPolicy": policy, "./instructorLessonSchedule": schedule,
+    "./instructorLessonRegistrationState": evaluate("instructorLessonRegistration/instructorLessonRegistrationState", {}),
+    "./instructorLessonWaitlist": waitlist,
     "./instructorLessonTeamIntake": teamIntake,
   });
   const request = { auth: { uid: staff.uid }, data: { memberId: "101", lessonDate: TODAY,

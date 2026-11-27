@@ -1,7 +1,19 @@
 type StepValue = { status?: unknown; detail?: unknown } | undefined;
 
+export function hasVerifiedPairedInstructorBooking(row: Record<string, any> | null | undefined): boolean {
+  const proof = row?.nativeBooking;
+  const nativeId = (id: unknown) => typeof id === "string" && /^[1-9]\d{0,15}$/.test(id);
+  const pair = (ids: unknown) => Array.isArray(ids) && ids.length === 2 && ids.every(nativeId) && ids[0] !== ids[1];
+  return row?.bookingAutomation === "same_group_pair_v1" && row.steps?.bookings?.status === "verified"
+    && proof?.status === "verified" && /^[A-Z]$/.test(proof.group || "") && proof.lessonDate === row.lessonDate
+    && nativeId(proof.memberId) && proof.memberId === String(row.evidence?.studiomateMemberId || "")
+    && nativeId(proof.userTicketId) && proof.userTicketId === String(row.evidence?.ticketId || "")
+    && pair(proof.bookingIds) && pair(proof.lectureIds);
+}
+
 export function deriveInstructorLessonRegistrationState(input: {
   mode?: unknown;
+  bookingAutomation?: unknown;
   steps?: Record<string, StepValue> | null;
 }): { status: string; nextAction: string } {
   const mode = String(input.mode || "");
@@ -19,6 +31,10 @@ export function deriveInstructorLessonRegistrationState(input: {
   }
   if (status("member") !== "verified" || status("ticket") !== "verified") {
     return { status: "processing", nextAction: "회원·수강권 검증 중" };
+  }
+  if (input.bookingAutomation === "same_group_pair_v1" && status("bookings") !== "verified") {
+    return failed("bookings") ? { status: "action_required", nextAction: "StudioMate 예약 원본 확인" }
+      : { status: "booking_pending", nextAction: "StudioMate 두 세션 예약 대기" };
   }
   if (requiresSignup) {
     if (status("eformsign") !== "verified") {

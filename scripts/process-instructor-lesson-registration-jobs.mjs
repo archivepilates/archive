@@ -16,6 +16,7 @@ import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.m
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import { assertNewMemberForm, assertStudioMateRegistrationAvailable, observeMemberSave } from "./lib/studiomate-registration-flow.mjs";
 import { processInstructorLessonCancellations } from "./lib/instructor-lesson-cancellation-worker.mjs";
+import { bookInstructorLessonPair } from "./lib/instructor-lesson-paired-booking-browser.mjs";
 import { issuedInstructorTicketId, instructorTicketReceipt, assertExistingInstructorTicketBinding, instructorTicketResponseDiagnostics } from "./lib/instructor-ticket-issue-evidence.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
@@ -290,9 +291,26 @@ async function processStudioMateRegistration(page, ref, job) {
     ...(completedOrder ? { ticketPaymentAmount: completedOrder.assessment.paidAmount } : {}),
     detail: (activeTicket ? "기존 동일 수강일 수강권 재사용" : "강사레슨 (2T) 발급 검증 완료")
       + (job.externalOrder ? ` · 홈페이지 ${job.externalOrder.paidAmount.toLocaleString("ko-KR")}원 / 주문 ${job.externalOrder.orderNo}` : ""),
-    nextStep: "followup",
+    nextStep: job.bookingAutomation === "same_group_pair_v1" ? "bookings" : "followup",
   });
   job.nativeDispatch.attempted = false;
+  if (job.bookingAutomation === "same_group_pair_v1") {
+    const nativeBooking = await bookInstructorLessonPair(page.context(), { ...job, studiomateMemberId: memberId, ticketId }, {
+      checkpoint: async (plan) => {
+        assertMemberDispatchAllowed();
+        await startExternalEffect(ref, job.claimToken, "bookings", "StudioMate 반배정·예약",
+          { pairedBookingIntent: { userTicketId: plan.userTicketId, group: plan.group,
+            lectureIds: plan.missing.map(session => session.lectureId) } });
+        job.nativeDispatch.attempted = true;
+      },
+    });
+    ticketId = nativeBooking.userTicketId;
+    await completeStep(ref, job.claimToken, "bookings", {
+      ticketId, nativeBooking, nextStep: "followup",
+      detail: `${nativeBooking.group}반 두 세션 StudioMate 예약 확인`,
+    });
+    job.nativeDispatch.attempted = false;
+  }
   await preparePostTicketSteps(ref, job.claimToken, {
     ...job,
     mode,
@@ -555,6 +573,10 @@ async function preparePostTicketSteps(ref, claimToken, job) {
     if (isInstructorLessonWaitlist(registrationData)) throw new Error("수강대기는 가입서·안내 자동 처리 대상이 아닙니다.");
     if (registrationData.externalOrderReviewRequired) throw new Error("홈페이지 주문 변경 확인필요: 후속 처리 중단");
     const currentSteps = registrationData.steps || {};
+    const pairedBooking = currentJob.bookingAutomation === "same_group_pair_v1";
+    if (pairedBooking && (currentSteps.bookings?.status !== "verified" || registrationData.nativeBooking?.status !== "verified")) {
+      throw new Error("두 세션 예약 확인 전에는 가입서·확정 안내를 처리하지 않습니다.");
+    }
     const now = FieldValue.serverTimestamp();
     const newMember = String(job.mode || currentJob.mode || "") === "new_member";
     const eformStep = currentSteps.eformsign || {};
@@ -572,7 +594,8 @@ async function preparePostTicketSteps(ref, claimToken, job) {
           ? memoStep
           : stepValue("waiting_external", "가입서 완료 메모", "가입서 완료 뒤 자동 등록"))
         : stepValue("not_required", "가입서 완료 메모", "재수강 건"),
-      bookings: stepValue("not_required", "반배정·예약", "수업 생성 시 운영자가 StudioMate에서 직접 처리"),
+      bookings: pairedBooking ? currentSteps.bookings
+        : stepValue("not_required", "반배정·예약", "수업 생성 시 운영자가 StudioMate에서 직접 처리"),
       confirmation: confirmationStep.status && confirmationStep.status !== "pending"
         ? confirmationStep
         : stepValue("pending", "예약확정 안내", "수강권 발급 확인 후 알림톡 자동 등록"),
@@ -624,7 +647,7 @@ async function completeStudioMateRegistration(ref, claimToken, { mode, memberId,
       throw new Error("홈페이지 주문 변경·취소 확인필요: 등록 완료 중단");
     }
     const steps = registrationData.steps || {};
-    state = deriveInstructorLessonRegistrationState({ mode, steps });
+    state = deriveInstructorLessonRegistrationState({ mode, steps, bookingAutomation: registrationData.bookingAutomation });
     const now = FieldValue.serverTimestamp();
     transaction.set(ref, {
       status: "done",
@@ -656,7 +679,7 @@ async function completeStudioMateRegistration(ref, claimToken, { mode, memberId,
   return {
     status: state.status,
     detail: state.status === "completed"
-      ? "회원·수강권·안내 검증 완료 · 반배정·예약은 운영자 수동 처리"
+      ? "회원·수강권·안내 검증 완료"
       : `수강권 발급 완료 · ${state.nextAction}`,
   };
 }
@@ -709,6 +732,15 @@ async function claimJob(ref) {
     if (source.data()?.cancellation?.jobId) return null;
     if (!snapshot.exists || !["pending", "retry"].includes(String(snapshot.data()?.status || ""))) return null;
     const data = snapshot.data();
+    const r = source.data() || {};
+    if ((data.bookingAutomation === "same_group_pair_v1" || r.bookingAutomation === "same_group_pair_v1")
+      && !pairedBookingSourceMatches(data, r, ref.id)) {
+      const message = "대기 확정 접수와 자동 반배정 작업 원본이 일치하지 않습니다.";
+      transaction.update(ref, { status: "review_required", nextRunAt: null, lastError: message, updatedAt: FieldValue.serverTimestamp() });
+      if (source.exists) transaction.update(source.ref || registration(ref.id), { status: "action_required",
+        nextAction: "반배정 접수 원본 확인", lastError: message, updatedAt: FieldValue.serverTimestamp() });
+      return { ...data, blocked: true };
+    }
     if (data.nextRunAt && timestampMillis(data.nextRunAt) > Date.now()) return null;
     if (data.externalEffectStarted || data.effectStartedAt) {
       const message = "외부 작업 실행 흔적이 있어 자동 재시도를 차단했습니다.";
@@ -847,6 +879,7 @@ async function completeStep(ref, claimToken, stepName, values = {}) {
       : {}),
     ...(values.studiomateMemberId ? { studiomateMemberId: values.studiomateMemberId } : {}),
     ...(values.ticketId ? { ticketId: values.ticketId } : {}),
+    ...(values.nativeBooking ? { pairedBookingVerified: true } : {}),
     updatedAt: now,
   }, {
     status: "processing",
@@ -854,6 +887,7 @@ async function completeStep(ref, claimToken, stepName, values = {}) {
     nextAction: nextStepLabel(values.nextStep),
     [`steps.${stepName}`]: stepValue("verified", stepLabel(stepName), values.detail || "검증 완료"),
     ...Object.fromEntries(Object.entries(evidence).map(([key, value]) => [`evidence.${key}`, value])),
+    ...(values.nativeBooking ? { nativeBooking: { ...values.nativeBooking, verifiedAt: now } } : {}),
     ...(typeof values.memberCreatedByRegistration === "boolean"
       ? { "evidence.memberCreatedByRegistration": values.memberCreatedByRegistration }
       : {}),
@@ -874,6 +908,9 @@ async function commitClaimedState(ref, claimToken, jobPatch, registrationPatch) 
     const current = snapshot.data() || {};
     if (!snapshot.exists || current.status !== "processing" || current.claimToken !== claimToken) {
       throw new Error("강사레슨 작업 임대가 변경되어 외부 작업 결과 반영을 중단했습니다.");
+    }
+    if (current.bookingAutomation === "same_group_pair_v1" && !pairedBookingSourceMatches(current, registrationSnapshot.data(), ref.id)) {
+      throw new Error("자동 반배정 승인 원본이 변경되었습니다.");
     }
     transaction.set(ref, jobPatch, { merge: true });
     if (registrationPatch) transaction.update(registration(ref.id), registrationPatch);
@@ -951,6 +988,7 @@ function stepLabel(stepName) {
   return {
     member: "회원·등급 확인",
     ticket: "강사레슨 (2T) 발급",
+    bookings: "StudioMate 반배정·예약",
   }[stepName] || stepName;
 }
 
@@ -961,8 +999,20 @@ function registrationStepName(stepName) {
 function nextStepLabel(stepName) {
   return {
     ticket: "강사레슨 (2T) 수강권 확인",
+    bookings: "StudioMate 반배정·두 세션 예약 대기",
     followup: "가입서 후속 처리 준비",
   }[stepName] || "처리 중";
+}
+
+function pairedBookingSourceMatches(job, row, id) {
+  return row?.bookingAutomation === "same_group_pair_v1" && job.bookingAutomation === row.bookingAutomation
+    && row.source?.type === "archive_core_operator" && row.waitlistHistory?.conversionSource === "core_roster"
+    && row.courseKind === "standard" && !row.cancellation && !row.nativeRosterReconciliation && !job.externalOrder
+    && row.registrationId === id && job.registrationId === id && row.studioId === job.studioId
+    && row.lessonDate === job.lessonDate && row.memberName === job.memberName && row.memberPhone === job.memberPhone
+    && row.paymentMethod === job.paymentMethod && row.ticketName === job.ticketName
+    && row.bookingDailyLimitAcknowledged === job.bookingDailyLimitAcknowledged
+    && row.operatorChecks?.paymentConfirmed === true && row.operatorChecks?.seatConfirmed === true;
 }
 
 function memberNameFromSearchText(text) {

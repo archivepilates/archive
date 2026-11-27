@@ -10,7 +10,7 @@ import { instructorLessonWaitlistFields, isInstructorLessonWaitlist } from "../.
 import { buildInstructorLessonScheduleSummaries } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonSchedule";
 import { cancellationBlocksRegistration } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonCancellationPolicy";
 import { instructorLessonTicketConfirmationIssue, queueInstructorLessonConfirmationOnTicketVerifiedHandler } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonConfirmation";
-import { deriveInstructorLessonRegistrationState } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonRegistrationState";
+import { deriveInstructorLessonRegistrationState, hasVerifiedPairedInstructorBooking } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonRegistrationState";
 import { isInstructorLessonWaitlist as runtimeWaitlist, deriveInstructorLessonRegistrationState as runtimeState }
   from "../lib/instructor-lesson-registration-contract.mjs";
 import { activeIdentities } from "../lib/imweb-instructor-orders.mjs";
@@ -114,7 +114,7 @@ test("roster promotion consumes the last seat once, requires the same row and ne
   const create = (memberPhone: string) => f.call({ ...input, memberPhone });
   const [a, b] = await Promise.all([create("01000000001"), create("01000000002")]);
   const promote = (id: string, patch = {}) => f.call({ waitlistRegistrationId: id, lessonDate: input.lessonDate,
-    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true, ...patch });
+    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true, bookingDailyLimitAcknowledged: true, ...patch });
   await assert.rejects(promote(a.registrationId)); // Missing actual lesson.
   f.addLesson();
   await assert.rejects(promote(a.registrationId, { lessonDate: "2099-11-30" }));
@@ -125,6 +125,12 @@ test("roster promotion consumes the last seat once, requires the same row and ne
   assert.equal(f.rows.get(`instructorLessonRegistrations/${b.registrationId}`).status, "waitlisted");
   assert.equal((await promote(a.registrationId)).duplicate, true);
   assert.equal(f.writes.filter(key => key.startsWith("studiomateInstructorLessonJobs/")).length, 1);
+  const row = f.rows.get(`instructorLessonRegistrations/${a.registrationId}`);
+  const job = f.rows.get(`studiomateInstructorLessonJobs/${a.registrationId}`);
+  assert.equal(row.bookingAutomation, "same_group_pair_v1");
+  assert.equal(row.bookingDailyLimitAcknowledged, true);
+  assert.equal(job.bookingDailyLimitAcknowledged, true);
+  assert.equal(row.steps.bookings.status, "pending");
 });
 
 test("existing booked waiters and team lessons cannot take the standard reservation path", async () => {
@@ -182,6 +188,31 @@ test("reconciling already confirmed native bookings is not a new confirmation tr
   assert.equal((await queueInstructorLessonConfirmationOnTicketVerifiedHandler({
     registrationId: "synthetic-reconcile", after: record,
   })).skipped, "native_roster_reconciled_no_dispatch");
+});
+
+test("automatic promotion is not confirmed from pass issuance, one booking or mismatched ticket proof", async () => {
+  const base = { bookingAutomation: "same_group_pair_v1", status: "processing", mode: "returning_member", lessonDate: input.lessonDate,
+    operatorChecks: { paymentConfirmed: true, seatConfirmed: true }, ticketName: "강사레슨 (2T)",
+    evidence: { studiomateMemberId: "101", ticketId: "102" },
+    steps: { member: { status: "verified" }, ticket: { status: "verified" }, bookings: { status: "pending" },
+      confirmation: { status: "verified" } } };
+  const proof = { status: "verified", group: "B", lessonDate: input.lessonDate, memberId: "101", userTicketId: "102",
+    bookingIds: ["21", "22"], lectureIds: ["1", "2"] };
+  assert.equal(deriveInstructorLessonRegistrationState(base).status, "booking_pending");
+  assert.equal(runtimeState(base).status, "booking_pending");
+  assert.match(instructorLessonTicketConfirmationIssue(base), /두 세션/);
+  for (const nativeBooking of [{ ...proof, bookingIds: ["21"] }, { ...proof, userTicketId: "103" }, { ...proof, lectureIds: ["1", "1"] }]) {
+    const row = { ...base, nativeBooking, steps: { ...base.steps, bookings: { status: "verified" } } };
+    assert.equal(hasVerifiedPairedInstructorBooking(row), false);
+    assert.match(instructorLessonTicketConfirmationIssue(row), /두 세션/);
+    assert.equal((await queueInstructorLessonConfirmationOnTicketVerifiedHandler({ registrationId: "fake", after: row })).skipped,
+      "paired_booking_not_verified");
+  }
+  const confirmed = { ...base, nativeBooking: proof, steps: { ...base.steps, bookings: { status: "verified" } } };
+  assert.equal(hasVerifiedPairedInstructorBooking(confirmed), true);
+  assert.equal(instructorLessonTicketConfirmationIssue(confirmed), "");
+  assert.equal((await queueInstructorLessonConfirmationOnTicketVerifiedHandler({ registrationId: "fake", before: confirmed, after: confirmed })).skipped,
+    "paired_booking_already_verified");
 });
 
 for (const field of ["waitlistOnly", "courseKind", "mode", "status"]) {

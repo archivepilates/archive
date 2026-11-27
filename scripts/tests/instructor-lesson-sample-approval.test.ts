@@ -19,10 +19,33 @@ import {
   instructorLessonApprovedCandidatesIssue,
   instructorLessonCancellationRegistrationId,
   instructorLessonCandidateSourceIssue,
+  pairedBookingMaterialIssue,
   instructorLessonTargetKey,
   type InstructorLessonApprovalDoc,
   splitInstructorLessonCandidates,
 } from "../../firebase/kangsain-functions/functions/src/alimtalk/instructorLessonSampleApproval";
+
+test("D-1 for a roster promotion needs both current canonical bookings from the verified group", async () => {
+  const lessonDate = "2099-11-28", studioId = "5330", memberId = "11", memberPhone = "01000000002";
+  const c = candidate({ studioId, memberId, memberPhone, payload: { lessonDate, bookingId: "21" } });
+  const row = { studioId, memberPhone, lessonDate, bookingAutomation: "same_group_pair_v1",
+    steps: { bookings: { status: "verified" } }, evidence: { studiomateMemberId: "11", ticketId: "31" },
+    nativeBooking: { status: "verified", group: "B", lessonDate, memberId, userTicketId: "31",
+      bookingIds: ["21", "22"], lectureIds: ["41", "42"] } };
+  const docs = new Map<string, any>(["21", "22"].flatMap((bookingId, i) => {
+    const lectureId = ["41", "42"][i];
+    return [["bookings/" + bookingId, { bookingId, lectureId, studioId, memberId, memberPhone, lectureDate: lessonDate, appStatus: "reserved" }],
+      ["lectures/" + lectureId, { lectureId, studioId, date: lessonDate, status: "open", title: "11월 강사레슨 B" }]];
+  }));
+  const read = async path => docs.get(path);
+  assert.equal(await pairedBookingMaterialIssue(c, row, read), "");
+  docs.get("bookings/22").appStatus = "cancelled";
+  assert.notEqual(await pairedBookingMaterialIssue(c, row, read), "");
+  docs.get("bookings/22").appStatus = "reserved";
+  docs.get("lectures/42").title = "11월 강사레슨 A";
+  assert.notEqual(await pairedBookingMaterialIssue(c, row, read), "");
+  assert.equal(await pairedBookingMaterialIssue(c, { ...row, bookingAutomation: undefined }, read), "");
+});
 
 function candidate(
   overrides: Partial<AlimtalkCandidateDoc> = {},

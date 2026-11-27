@@ -10,6 +10,7 @@ import { parseInstructorCourseInput, sameInstructorCourse, teamIntakeFields,
 import { INSTRUCTOR_CANCELLATIONS, assertInstructorCancellationIdle, cancellationBlocksRegistration, completedInstructorLessonIssuance,
   instructorCancellationId, parseInstructorCancellation } from "./instructorLessonCancellationPolicy";
 import { isInstructorLessonWaitlist, instructorLessonWaitlistFields } from "./instructorLessonWaitlist";
+import { hasVerifiedPairedInstructorBooking } from "./instructorLessonRegistrationState";
 import {
   buildInstructorLessonRegistrationCounts,
   buildInstructorLessonScheduleSummaries,
@@ -75,6 +76,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
   const staff = await manager(request);
   const requestedWaitlistId = request.data?.waitlistRegistrationId;
   const fromRoster = requestedWaitlistId !== undefined;
+  const bookingDailyLimitAcknowledged = fromRoster && request.data?.bookingDailyLimitAcknowledged === true;
   if (fromRoster && (typeof requestedWaitlistId !== "string" || !/^ilr_[a-f0-9]{24}$/.test(requestedWaitlistId))) {
     throw new AppError("INVALID_ARGUMENT", "현재 대기 명단에서 회원을 다시 선택하세요.");
   }
@@ -201,7 +203,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
     const steps: Record<string, RegistrationStep> = {
       member: step("pending", "회원·등급 확인"),
       ticket: step("pending", `${TICKET_NAME} 발급`),
-      bookings: {
+      bookings: fromRoster ? step("pending", "StudioMate 반배정·예약") : {
         ...step("not_required", "반배정·예약(수동)"),
         detail: "수강권 발급 후 운영자가 StudioMate에서 직접 처리",
       },
@@ -209,7 +211,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       memo: step("pending", "가입서 완료 메모"),
       confirmation: {
         ...step("pending", "예약확정 안내"),
-        detail: "수강권 발급 검증 후 승인 템플릿으로 자동 1회 발송",
+        detail: fromRoster ? "StudioMate 두 세션 예약 확인 후 자동 1회 발송" : "수강권 발급 검증 후 승인 템플릿으로 자동 1회 발송",
       },
     };
     const source = {
@@ -226,6 +228,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
       lessonDate: input.lessonDate,
       paymentMethod: input.paymentMethod,
       courseKind: "standard",
+      ...(fromRoster ? { bookingAutomation: "same_group_pair_v1", bookingDailyLimitAcknowledged } : {}),
       ...waitlistHistory,
       ticketName: TICKET_NAME,
       mode: "unresolved",
@@ -257,6 +260,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
         lessonDate: input.lessonDate,
         paymentMethod: input.paymentMethod,
         ticketName: TICKET_NAME,
+        ...(fromRoster ? { bookingAutomation: "same_group_pair_v1", bookingDailyLimitAcknowledged } : {}),
         status: "pending",
         currentStep: "member",
         attempts: jobSnapshot.exists ? Number(jobSnapshot.data()?.attempts || 0) : 0,
@@ -537,6 +541,8 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
     mode: cleanText(data.mode, 40),
     status: cleanText(data.status, 40),
     nativeRosterSynchronized: (data.nativeRosterReconciliation as { status?: string } | undefined)?.status === "confirmed_existing",
+    ...(data.bookingAutomation === "same_group_pair_v1" ? { pairedBookingRequired: true,
+      pairedBookingGroup: hasVerifiedPairedInstructorBooking(data) ? (data.nativeBooking as { group: string }).group : null } : {}),
     nextAction: cleanText(data.nextAction, 160),
     lastError: cleanText(data.lastError, 300),
     steps,

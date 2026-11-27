@@ -208,6 +208,7 @@ function harness({ count = 1, approvals = true, providerError = false, duplicate
       targetDuplicateIssue: async (item, key, window) => { dedupeCalls.push({ id: item.candidateId, key, window }); return duplicate; },
     },
     "../instructorLessonRegistration/instructorLessonCancellationPolicy": cancellation,
+    "../instructorLessonRegistration/instructorLessonRegistrationState": evaluate("instructorLessonRegistration/instructorLessonRegistrationState", {}),
     "./instructorLessonManagement": management,
     "./instructorLessonBookingPolicy": bookingPolicy,
     "./templates": { INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE: TEMPLATE,

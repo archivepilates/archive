@@ -10,7 +10,7 @@ import { stableHash } from "../utils/hash";
 import { ALIMTALK_MEMBER_EXCLUSION_REASONS, ALIMTALK_TEMPLATES } from "../alimtalk/templates";
 import { hasExplicitAlimtalkTestOverride, isAlimtalkTestRecipient } from "../alimtalk/testRecipients";
 import { instructorLessonRegistrationId } from "./instructorLessonRegistration";
-import { deriveInstructorLessonRegistrationState } from "./instructorLessonRegistrationState";
+import { deriveInstructorLessonRegistrationState, hasVerifiedPairedInstructorBooking } from "./instructorLessonRegistrationState";
 import { resolveNotionLessonSchedule } from "./instructorLessonNotionSchedule";
 import { cancellationBlocksRegistration } from "./instructorLessonCancellationPolicy";
 import { isInstructorLessonWaitlist } from "./instructorLessonWaitlist";
@@ -87,10 +87,19 @@ export async function queueInstructorLessonConfirmationOnTicketVerifiedHandler(i
     return { ok: true, skipped: "native_roster_reconciled_no_dispatch" };
   }
   if (input.after?.intakeOnly === true) return { ok: true, skipped: "team_intake_only" };
-  const beforeTicketStatus = cleanText(input.before?.steps?.ticket?.status, 40);
-  const afterTicketStatus = cleanText(input.after?.steps?.ticket?.status, 40);
-  if (afterTicketStatus !== "verified") return { ok: true, skipped: "ticket_not_verified" };
-  if (beforeTicketStatus === "verified") return { ok: true, skipped: "ticket_already_verified" };
+  if (input.after?.bookingAutomation === "same_group_pair_v1") {
+    if (!hasVerifiedPairedInstructorBooking(input.after) || instructorLessonTicketConfirmationIssue(input.after)) {
+      return { ok: true, skipped: "paired_booking_not_verified" };
+    }
+    if (hasVerifiedPairedInstructorBooking(input.before) && !instructorLessonTicketConfirmationIssue(input.before!)) {
+      return { ok: true, skipped: "paired_booking_already_verified" };
+    }
+  } else {
+    const beforeTicketStatus = cleanText(input.before?.steps?.ticket?.status, 40);
+    const afterTicketStatus = cleanText(input.after?.steps?.ticket?.status, 40);
+    if (afterTicketStatus !== "verified") return { ok: true, skipped: "ticket_not_verified" };
+    if (beforeTicketStatus === "verified") return { ok: true, skipped: "ticket_already_verified" };
+  }
   try {
     return await queueInstructorLessonConfirmationForIssuedTicket(registrationId, {
       source: "ticket_verified_trigger",
@@ -274,10 +283,18 @@ async function confirmationSource(candidate: AlimtalkCandidateDoc, allocationOnl
         const linked = await transaction.get(db.doc(path));
         return linked.exists ? linked.data() || {} : null;
       });
-      if (allocationOnly && !guard.allocated && !candidate.payload?.attendeeResolutionKey) return { registration, issue: "" };
+      if (allocationOnly && !guard.allocated && !candidate.payload?.attendeeResolutionKey
+        && registration.bookingAutomation !== "same_group_pair_v1") return { registration, issue: "" };
       if (guard.issue) return { registration, issue: guard.issue };
       const ticketIssue = instructorLessonTicketConfirmationIssue(registration);
       if (ticketIssue) return { registration, issue: ticketIssue };
+      if (registration.bookingAutomation === "same_group_pair_v1" && (candidate.studioId !== registration.studioId
+        || String(candidate.memberId) !== registration.nativeBooking?.memberId
+        || normalizePhone(candidate.memberPhone) !== normalizePhone(registration.memberPhone)
+        || candidate.payload?.lessonDate !== registration.lessonDate
+        || String(candidate.payload?.ticketId) !== registration.nativeBooking?.userTicketId)) {
+        return { registration, issue: "자동 반배정 예약 원장과 발송 대상 불일치" };
+      }
       if (guard.resolutionKey || candidate.payload?.attendeeResolutionKey) {
         if (candidate.payload?.attendeeResolutionKey !== guard.resolutionKey
           || candidate.studioId !== registration.studioId || candidate.memberName !== registration.memberName
@@ -445,6 +462,9 @@ export function instructorLessonTicketConfirmationIssue(registration: Record<str
   if (registration.nativeRosterReconciliation?.status === "confirmed_existing") return "기존 StudioMate 예약 상태만 반영한 건으로 자동 확정 안내 대상 아님";
   if (registration.intakeOnly === true) return "팀레슨 접수 전용 · 일정·가입서·발급 확인 대기";
   if (cancellationBlocksRegistration(registration)) return "취소 요청·처리된 강사레슨 등록 건";
+  if (registration.bookingAutomation === "same_group_pair_v1" && !hasVerifiedPairedInstructorBooking(registration)) {
+    return "StudioMate 두 세션 예약 원본 확인 전";
+  }
   if (registration.externalOrderReviewRequired) return "홈페이지 주문 변경 확인필요";
   if (registration.operatorChecks?.paymentConfirmed !== true || registration.operatorChecks?.seatConfirmed !== true) {
     return "입금·수강 접수 운영자 확인 없음";

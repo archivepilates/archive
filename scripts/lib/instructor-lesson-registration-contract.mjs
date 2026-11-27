@@ -103,7 +103,7 @@ export function selectExactInstructorLessonTicket(tickets, ticketName = INSTRUCT
   return matches[0];
 }
 
-export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
+export function deriveInstructorLessonRegistrationState({ mode, steps = {}, bookingAutomation }) {
   if (mode === "waitlist") return { status: "waitlisted", nextAction: "결원 확인 후 운영자 확정 접수" };
   const status = (key) => String(steps?.[key]?.status || "pending");
   const normalizedMode = String(mode || "");
@@ -118,6 +118,11 @@ export function deriveInstructorLessonRegistrationState({ mode, steps = {} }) {
   }
   if (status("member") !== "verified" || status("ticket") !== "verified") {
     return { status: "processing", nextAction: "회원·수강권 검증 중" };
+  }
+  if (bookingAutomation === "same_group_pair_v1" && status("bookings") !== "verified") {
+    return ["review_required", "failed"].includes(status("bookings"))
+      ? { status: "action_required", nextAction: "StudioMate 예약 원본 확인" }
+      : { status: "booking_pending", nextAction: "StudioMate 두 세션 예약 대기" };
   }
 
   if (requiresSignup) {

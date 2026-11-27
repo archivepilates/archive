@@ -96,10 +96,12 @@ try {
       assert.equal(await promote.evaluate(el => el === document.activeElement), true);
       await promote.click();
       await promotion.getByLabel("결제수단").selectOption("wiretransfer");
-      const confirm = promotion.getByRole("button", { name: "확정 접수" });
+      const confirm = promotion.getByRole("button", { name: "반배정·예약 요청" });
       await confirm.click();
       assert.equal(await page.evaluate(() => promotionCount), 0);
-      await promotion.getByRole("checkbox").check();
+      await promotion.getByRole("checkbox", { name: /결제 내역/ }).check();
+      assert.equal(await promotion.getByRole("checkbox", { name: /횟수 초과/ }).isChecked(), false);
+      await promotion.getByRole("checkbox", { name: /횟수 초과/ }).check();
       await page.screenshot({ path: new URL(`promotion-${width}.png`, output).pathname });
       assert.ok(await page.evaluate(() => {
         const r = qs("instructorWaitlistPromotionDialog").getBoundingClientRect();
@@ -107,10 +109,11 @@ try {
         return r.left >= 0 && r.right <= innerWidth && row.scrollWidth <= row.clientWidth;
       }));
       await confirm.click();
-      await promotion.getByRole("status").filter({ hasText: "확정 접수 완료 · 반배정은 별도" }).waitFor();
+      await promotion.getByRole("status").filter({ hasText: "반배정·예약 요청 접수" }).waitFor();
       assert.equal(await page.evaluate(() => promotionCount), 1);
       assert.deepEqual(await page.evaluate(() => Object.keys(promotionPayload).sort()),
-        ["lessonDate", "paymentConfirmed", "paymentMethod", "seatConfirmed", "waitlistRegistrationId"]);
+        ["bookingDailyLimitAcknowledged", "lessonDate", "paymentConfirmed", "paymentMethod", "seatConfirmed", "waitlistRegistrationId"]);
+      assert.equal(await page.evaluate(() => promotionPayload.bookingDailyLimitAcknowledged), true);
       assert.ok(await confirm.isDisabled());
       await promotion.getByRole("button", { name: "닫기" }).click();
       assert.equal(await promote.count(), 0);

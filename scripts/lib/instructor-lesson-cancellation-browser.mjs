@@ -8,7 +8,7 @@ const date = value => String(value || "").slice(0, 10);
 const phone = value => String(value || "").replace(/\D/g, "");
 const nativeId = value => /^[1-9]\d{0,15}$/.test(String(value || ""));
 
-export function normalizeCancellationBookingResponse(body, job, userTicketId) {
+export function normalizeCancellationBookingResponse(body, job, userTicketId, includeLectureIds = false) {
   const bookings = body?.bookings;
   if (!bookings || !Array.isArray(bookings.data) || !Number.isInteger(bookings.total)
     || bookings.current_page !== 1 || bookings.last_page !== 1 || bookings.total !== bookings.data.length) {
@@ -24,7 +24,8 @@ export function normalizeCancellationBookingResponse(body, job, userTicketId) {
       throw new Error("수강권·회원·수업 예약 연결을 확인하지 못했습니다.");
     }
     const start = String(row.lecture.start_on || "");
-    return { key: String(row.id), date: date(start), startTime: start.slice(11, 16),
+    return { key: String(row.id), ...(includeLectureIds ? { lectureId: String(row.lecture_id) } : {}),
+      date: date(start), startTime: start.slice(11, 16),
       status: statuses[row.status], title: String(row.lecture.title || ""), staff: String(row.lecture.instructor?.name || "") };
   });
   if (new Set(rows.map(row => row.key)).size !== rows.length) throw new Error("중복 예약 ID 확인 필요");
@@ -32,7 +33,7 @@ export function normalizeCancellationBookingResponse(body, job, userTicketId) {
 }
 
 // Only UI-generated GET responses supply identities. The adapter never calls a private API directly.
-export function createInstructorCancellationBrowser(page) {
+export function createInstructorCancellationBrowser(page, { includeBookingEvidence = false } = {}) {
   let armed = null;
   let posted = false;
   const routeHandler = async route => {
@@ -84,7 +85,9 @@ export function createInstructorCancellationBrowser(page) {
       return { userTicketId: t.userTicketId, productId: t.productId, memberId: t.memberId, studioId: t.studioId,
         title: t.title, availabilityStartAt: t.availabilityStartAt, expireAt: t.expireAt, usable: t.usable && t.active,
         isShared: t.isShared, maxCoupon: t.maxCoupon, remainingCoupon: t.remainingCoupon,
-        paymentFingerprint: hash(raw.payments || []) };
+        paymentFingerprint: hash(raw.payments || []), ...(includeBookingEvidence ? {
+          usableCoupons: raw.usable_coupon, blocked: t.cancelled || t.refunded || raw.is_holding === true || raw.now_holding === true,
+        } : {}) };
     });
     const targets = tickets.filter(t => t.title === job.ticketName && t.availabilityStartAt === job.lessonDate && t.expireAt === job.lessonDate);
     if (targets.length !== 1) throw new Error("해당일 강사레슨 수강권이 정확히 1개여야 합니다.");
@@ -113,7 +116,7 @@ export function createInstructorCancellationBrowser(page) {
     const detailRow = rawDetail?.data || rawDetail;
     if (String(detailRow.id) !== target.userTicketId || String(detailRow.member?.id) !== job.memberId
       || String(detailRow.studio_id) !== job.studioId) throw new Error("선택된 화면의 발급 수강권 ID가 다릅니다.");
-    const normalizedBookings = normalizeCancellationBookingResponse(await body(bookings), job, target.userTicketId);
+    const normalizedBookings = normalizeCancellationBookingResponse(await body(bookings), job, target.userTicketId, includeBookingEvidence);
     const dialog = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: `${job.memberName}님의 수강권`, exact: true }) });
     await dialog.waitFor({ state: "visible" });
     await dialog.locator(".booking-history__tabs").getByRole("listitem").filter({ hasText: new RegExp(`^\\s*전체\\(${normalizedBookings.total}\\)\\s*$`) }).waitFor();

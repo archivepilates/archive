@@ -7805,12 +7805,16 @@ function renderInstructorLessonRoster(schedule) {
     const steps = registration?.steps || {};
     const intakeOnly = registration?.courseKind === "team" || registration?.intakeOnly === true || schedule.courseKind === "team";
     const teamFulfillment = intakeOnly && registration?.teamFulfillmentStarted === true;
+    const bookingLabel = registration?.pairedBookingRequired
+      ? registration.pairedBookingGroup ? `${registration.pairedBookingGroup}반 · 두 세션 예약 완료`
+        : ["review_required", "failed"].includes(steps.bookings?.status) ? "StudioMate 예약 확인필요" : "StudioMate 반배정·예약 처리 대기"
+      : "";
     const details = teamFulfillment
       ? INSTRUCTOR_TEAM_STEP_KEYS.map((key, index) => `${INSTRUCTOR_TEAM_STEP_LABELS[index]} ${INSTRUCTOR_TEAM_STEP_STATUS_LABELS[steps[key]?.status || "pending"] || "상태 확인필요"}`)
         .concat(`다음 단계: ${registration.nextAction || "다음 단계 확인필요"}`, registration.lastError || []).join(" · ")
       : intakeOnly ? "팀레슨 접수 · 수강권/가입서/안내 확인 대기"
         : registration?.nativeRosterSynchronized ? "StudioMate 예약 확인 · 기존 처리 내역 유지" : registration
-      ? [`가입서 ${instructorLessonStepStatusLabel(steps.eformsign?.status || "pending")}`, `안내 ${instructorLessonStepStatusLabel(steps.confirmation?.status || "pending")}`].join(" · ")
+      ? [bookingLabel, `가입서 ${instructorLessonStepStatusLabel(steps.eformsign?.status || "pending")}`, `안내 ${instructorLessonStepStatusLabel(steps.confirmation?.status || "pending")}`].filter(Boolean).join(" · ")
       : "가입서·안내 기록 연결 전";
     const name = member.memberId ? `<a href="${escapeHtml(coreHref(`members/detail/?id=${encodeURIComponent(member.memberId)}`))}">${escapeHtml(member.memberName)}</a>` : escapeHtml(member.memberName);
     const cancellation = member.cancellation || instructorLessonCancellationReceipts.get(instructorLessonCancellationKey(schedule.date, member));
@@ -7886,10 +7890,12 @@ async function handleInstructorWaitlistPromotionSubmit(event) {
   const close = qs("instructorWaitlistPromotionClose");
   const payment = qs("instructorWaitlistPromotionPayment");
   const paid = qs("instructorWaitlistPromotionPaid");
+  const dailyLimit = qs("instructorWaitlistDailyLimit");
   if (!target || instructorWaitlistPromotionBusy || submit.disabled || !event.currentTarget.reportValidity()) return;
   const paymentMethod = payment.value;
+  const bookingDailyLimitAcknowledged = dailyLimit.checked;
   instructorWaitlistPromotionBusy = true;
-  submit.disabled = close.disabled = payment.disabled = paid.disabled = true;
+  submit.disabled = close.disabled = payment.disabled = paid.disabled = dailyLimit.disabled = true;
   dialog.setAttribute("aria-busy", "true");
   setText("instructorWaitlistPromotionError", "");
   setText("instructorWaitlistPromotionStatus", "잔여석과 대기 상태를 확인하고 있습니다.");
@@ -7905,11 +7911,11 @@ async function handleInstructorWaitlistPromotionSubmit(event) {
     instructorWaitlistPromotionAttempts.add(target.registrationId);
     attempted = true;
     const { data } = await callable({ waitlistRegistrationId: target.registrationId, lessonDate: target.lessonDate,
-      paymentMethod, paymentConfirmed: true, seatConfirmed: true });
+      paymentMethod, paymentConfirmed: true, seatConfirmed: true, bookingDailyLimitAcknowledged });
     if (data?.ok !== true || data.registrationId !== target.registrationId || !data.status || data.status === "waitlisted") {
       throw new Error("waitlist-promotion-outcome-unknown");
     }
-    setText("instructorWaitlistPromotionStatus", "확정 접수 완료 · 반배정은 별도입니다.");
+    setText("instructorWaitlistPromotionStatus", "반배정·예약 요청 접수 · 명단에서 처리 결과를 확인하세요.");
     try {
       await refreshInstructorLessonCancellationDashboard(runtime);
     } catch {
@@ -7924,7 +7930,7 @@ async function handleInstructorWaitlistPromotionSubmit(event) {
         : "명단을 읽지 못해 확정을 요청하지 않았습니다.");
   } finally {
     instructorWaitlistPromotionBusy = false;
-    close.disabled = payment.disabled = paid.disabled = false;
+    close.disabled = payment.disabled = paid.disabled = dailyLimit.disabled = false;
     dialog.removeAttribute("aria-busy");
     if (qs("instructorWaitlistPromotionError").textContent) setText("instructorWaitlistPromotionStatus", "");
     renderInstructorLessonRegistrationDashboard();

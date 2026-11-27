@@ -201,7 +201,7 @@
           <div><dt>대기자</dt><dd id="instructorWaitlistPromotionMember"></dd></div>
           <div><dt>수강일</dt><dd id="instructorWaitlistPromotionDate"></dd></div>
         </dl>
-        <p id="instructorWaitlistPromotionScope">결제 확인 후 기존 수강권 발급·안내 절차를 시작합니다. StudioMate 반배정은 별도입니다.</p>
+        <p id="instructorWaitlistPromotionScope">결제 확인 후 StudioMate에서 같은 반의 두 세션을 예약합니다.</p>
         <label for="instructorWaitlistPromotionPayment">결제수단</label>
         <select id="instructorWaitlistPromotionPayment" required autofocus>
           <option value="">결제수단 선택</option>
@@ -210,11 +210,12 @@
           <option value="cash">현금</option>
         </select>
         <label class="instructor-waitlist-check"><input id="instructorWaitlistPromotionPaid" type="checkbox" required /> 결제 내역과 수강일을 확인했습니다.</label>
+        <label class="instructor-waitlist-check"><input id="instructorWaitlistDailyLimit" type="checkbox" /> 2회권 두 세션에 한해 StudioMate 일일 예약 횟수 초과 경고를 승인합니다.</label>
         <p id="instructorWaitlistPromotionError" class="form-status danger" role="alert"></p>
         <p id="instructorWaitlistPromotionStatus" class="form-status" role="status"></p>
         <div class="instructor-lesson-cancellation-actions">
           <button id="instructorWaitlistPromotionClose" type="button" class="secondary-action">닫기</button>
-          <button id="instructorWaitlistPromotionSubmit" type="submit" class="primary-action">확정 접수</button>
+          <button id="instructorWaitlistPromotionSubmit" type="submit" class="primary-action">반배정·예약 요청</button>
         </div>
       </form>
     </dialog>

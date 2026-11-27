@@ -185,6 +185,7 @@ function harness({ count = 2, now = OPEN, sample = false } = {}) {
       targetDuplicateIssue: async (item) => { duplicates.push(item.candidateId); return duplicateHook(item); },
     },
     "../instructorLessonRegistration/instructorLessonCancellationPolicy": cancellation,
+    "../instructorLessonRegistration/instructorLessonRegistrationState": evaluate("instructorLessonRegistration/instructorLessonRegistrationState", {}),
     "./instructorLessonManagement": management, "./instructorLessonBookingPolicy": bookingPolicy,
     "./templates": { INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE: TEMPLATE,
       alimtalkDedupePolicy: () => ({ label: "Synthetic once", windowDays: null }) },
@@ -231,7 +232,7 @@ function harness({ count = 2, now = OPEN, sample = false } = {}) {
   }
   store.seed("lectures/lecture", { studioId: "5330", lectureId: "lecture", date: LESSON_DATE, status: "open", title: "Support Movement" });
   return { ...store, runtime, policy: windowPolicy, candidates, approval, approvalPath, candidatePath, ledgerPath, sampleId,
-    registrationPath, sent, mails, routes, eligibility, duplicates, refresh,
+    registrationPath, allowedReads, sent, mails, routes, eligibility, duplicates, refresh,
     get parkingCalls() { return parkingCalls; },
     clock: (at) => { clock = at; },
     provider: (hook) => { providerHook = hook; }, parking: (hook) => { parkingHook = hook; },
@@ -335,7 +336,10 @@ test("pending sample cannot rebuild changed approved targets or replay a prior l
     const f = harness({ sample: true, now: LAST });
     f.provider(() => f.clock(CLOSED)); await f.run();
     const original = f.get(f.approvalPath);
-    if (change === "target") f.candidates[0].memberPhone = "01099999999";
+    if (change === "target") {
+      f.candidates[0].memberPhone = "01099999999";
+      f.allowedReads.add(f.registrationPath(f.candidates[0]));
+    }
     else f.seed(f.ledgerPath(f.sampleId), { status: "unknown", attempts: 1 });
     f.clock(NEXT); f.refresh(); f.provider(() => {});
     await f.run();

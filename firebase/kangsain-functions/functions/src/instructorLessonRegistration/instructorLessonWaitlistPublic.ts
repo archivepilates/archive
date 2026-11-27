@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { buildInstructorLessonScheduleSummaries } from "./instructorLessonSchedule";
+import { hasVerifiedPairedInstructorBooking } from "./instructorLessonRegistrationState";
 
 const ID = /^ilr_[a-f0-9]{24}$/;
 const ORIGINS = new Set(["https://in.archivepilates.com", "https://archive-pilates.web.app"]);
@@ -61,7 +62,8 @@ function publicState(row: Row, now: number) {
   if (!unpaidWaiter(row)) {
     if (!row.cancellation && ["queued", "processing", "waiting_signature", "memo_pending", "booking_pending", "confirmation_pending", "completed"].includes(row.status) &&
       row.waitlistHistory?.convertedAt && row.waitlistOnly === false && ["standard", "team"].includes(row.courseKind) &&
-      row.operatorChecks?.paymentConfirmed === true && row.operatorChecks?.seatConfirmed === true)
+      row.operatorChecks?.paymentConfirmed === true && row.operatorChecks?.seatConfirmed === true &&
+      (row.bookingAutomation !== "same_group_pair_v1" || hasVerifiedPairedInstructorBooking(row)))
       return { ok: true, lessonDate: row.lessonDate, status: "confirmed", position: null, canCancel: false };
     throw new WaitlistPublicError(409, "대기 상태를 확인하지 못했습니다. 센터로 문의해 주세요.");
   }
