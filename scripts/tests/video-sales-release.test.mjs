@@ -13,7 +13,9 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const read = name => fs.readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 const baseline = name => execFileSync('git', ['show', `b4f52707:${name}`], { cwd: root, encoding: 'utf8' });
 const beforeHome = baseline('official-home/index.html');
-const afterHome = fs.readFileSync(new URL('../../official-home/index.html', import.meta.url), 'utf8');
+// This release guard is intentionally byte-pinned; later homepage releases have independent guards.
+const afterHome = execFileSync('git', ['show', '0a2c6f2d:official-home/index.html'], { cwd: root, encoding: 'utf8' });
+const currentHome = fs.readFileSync(new URL('../../official-home/index.html', import.meta.url), 'utf8');
 const classroom = '/assets/imweb-my-classroom-20260723a.js';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const replacement = hash('synthetic-reviewed-home-only');
@@ -233,4 +235,13 @@ test('pure product exports expose exactly the two approved public previews and u
     assert.match(html, /40일/);
     assert.doesNotMatch(html, /Es-G6_WekWo|qdS2a3KXnmU/);
   }
+});
+
+
+test('current mobile homepage retains the published classes and product links', () => {
+  const classes = html => html.match(/<section id="classes"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(classes(afterHome));
+  assert.equal(classes(currentHome), classes(afterHome));
+  assert.match(currentHome, /class="ap12-primary" href="\/offline"/);
+  assert.match(currentHome, /id="first-visit".*aria-labelledby="guide-title"/);
 });
