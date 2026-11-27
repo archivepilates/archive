@@ -13,7 +13,12 @@
 .cleaning-board .cleaning-status { margin: 12px 0; color: #596676; font-size: .8125rem; overflow-wrap: anywhere; }
 .cleaning-board .cleaning-status:empty { margin: 0; }
 .cleaning-board .cleaning-status[data-error] { color: #a62836; }
-.cleaning-board .cleaning-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; }
+/* Match collapsed cards to the tallest natural card without truncating content. */
+.cleaning-board .cleaning-cards { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 1fr; align-items: stretch; gap: 14px; }
+/* An open history or note can grow its own row without enlarging the whole list. */
+.cleaning-board .cleaning-cards:has(> .cleaning-card > :is(details[open], .cleaning-note:not([hidden]))) {
+  grid-auto-rows: minmax(13rem, auto);
+}
 .cleaning-board .cleaning-card { min-width: 0; padding: 20px; background: #fff; border: 1px solid transparent; border-radius: 8px; }
 .cleaning-board .cleaning-card[data-has-actor-color] {
   border-inline-start: 5px solid var(--cleaning-actor-color);
