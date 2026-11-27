@@ -128,7 +128,10 @@ async function main() {
   }
   async function confirmSample(msgId: string) {
     if (!msgId) return false;
-    const result = await providerRows(new URLSearchParams({messageIds:JSON.stringify([msgId])}));
+    // The list API can return an empty page for messageIds encoded as JSON.
+    // Query the exact operator/date/type and still require this precise receipt ID.
+    const result = (await existingProviderHistory(normalizePhone(primaryAlimtalkTestRecipient().phone)))
+      .filter(row => row.messageId === msgId);
     return result.length === 1 && result[0].messageId === msgId
       && normalizePhone(result[0].to || "") === normalizePhone(primaryAlimtalkTestRecipient().phone)
       && result[0].type === "ATA" && (result[0].kakaoOptions?.templateId || result[0].templateId) === template
