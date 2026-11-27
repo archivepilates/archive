@@ -6,3 +6,9 @@
 - Saved editor readback equals the tracked block. Unauthenticated HTTP HTML contains the exact CSS, template and JavaScript contents once. Independent CLI readback confirmed the existing header, body and footer unit scripts were unchanged.
 - A local DOM contract check passed duplicate prevention, detail/offline exclusion and catalog route re-entry. Live viewport checks at 320, 390, 768 and 1440 CSS pixels confirmed the block is immediately above the grid without horizontal overflow or text/button overlap. At 320 and 390 pixels the button is 44px high. At 390 pixels a click opened the correct product and the native purchase control remained visible. No purchase was initiated.
 - Rollback: verify current native SEO Body Code and remove only the marked review block. Leave any newer unrelated content and unit scripts untouched. Reopen the live catalog and confirm the block is gone without altering the grid. Private before/after evidence is in the canonical automation `operations` directory.
+
+## Review-writing link
+
+- Added one `구매평 작성하기` link beside the point notice. It points to the site's native `/shop_mypage/?m2=order` route, not a single product or custom review form. Anonymous visitors receive the native login redirect with the exact order route as the return path.
+- Existing AB10 action, point-notice copy, routing code and native purchase/review eligibility stay unchanged. No test purchase or review was submitted.
+- Native SEO Body Code reload matched the scoped patch. Anonymous HTTP readback matched the exact tracked content once; existing unit scripts remained byte-for-byte unchanged. At 320, 390, 768 and 1440px the new CTA neither overlapped the notice nor caused horizontal overflow. At 320 and 390px it measured 44px high. Clicking at 390px opened the native order list.
