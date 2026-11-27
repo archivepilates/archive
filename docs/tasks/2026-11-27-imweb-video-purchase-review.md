@@ -12,3 +12,8 @@
 - Added one `구매평 작성하기` link beside the point notice. It points to the site's native `/shop_mypage/?m2=order` route, not a single product or custom review form. Anonymous visitors receive the native login redirect with the exact order route as the return path.
 - Existing AB10 action, point-notice copy, routing code and native purchase/review eligibility stay unchanged. No test purchase or review was submitted.
 - Native SEO Body Code reload matched the scoped patch. Anonymous HTTP readback matched the exact tracked content once; existing unit scripts remained byte-for-byte unchanged. At 320, 390, 768 and 1440px the new CTA neither overlapped the notice nor caused horizontal overflow. At 320 and 390px it measured 44px high. Clicking at 390px opened the native order list.
+
+## Class title and button contrast
+
+- Renamed the review heading to the human-readable class name. The site theme had overridden the button foreground to `#363636` over `#242424`; the scoped rule preserves white text over the default and hover backgrounds. Existing links, notice text and purchase eligibility are unchanged.
+- Verified the saved editor, the public heading and button's computed colors at 320, 390, 768 and 1440px. No horizontal overflow; both phone widths retain a 44px touch target.
