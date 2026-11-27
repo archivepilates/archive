@@ -134,6 +134,13 @@ function syntheticDb(allowedReads, allowedWrites) {
             observed.set(ref.path, version);
             return snapshot;
           },
+          getAll: async (...refs) => Promise.all(refs.map(async ref => {
+            assert.equal(staged.length, 0, "Transaction reads must precede writes");
+            const { snapshot, version } = await read(ref, true);
+            observed.set(ref.path, version);
+            return snapshot;
+          })),
+          update: (ref, value) => staged.push({ ref, value, options:{merge:true} }),
           set: (ref, value, options) => staged.push({ ref, value, options }),
         });
         if (commitHook?.({ staged, seed, get })) commitHook = undefined;
@@ -197,7 +204,7 @@ function harness({ count = 1, approvals = true, providerError = false, duplicate
       memberProfile: (id) => store.db.doc(`memberProfiles/${id}`),
     } },
     "../google/driveDocsMailer": { sendAlimtalkLogEmail: async (message) => { mails.push(clone(message)); } },
-    "../utils/date": { todayKst: () => SOURCE_DATE, nowTimestamp: () => NOW },
+    "../utils/date": { todayKst: () => SOURCE_DATE, nowTimestamp: () => NOW, addDays: (day,n) => new Date(Date.parse(day)+n*86400000).toISOString().slice(0,10) },
     "../utils/hash": hash,
     "./dedupe": { normalizePhone,
       alimtalkDedupeKey: (item) => hash.stableHash({ memberId: item.memberId, lessonDate: item.payload.lessonDate, managementNumber: item.payload.managementNumber }),
@@ -697,4 +704,44 @@ test("approval targets changed during batch claim cannot authorize the original 
   assert.equal((await f.run()).blocked, 1);
   assert.ok(f.store.conflicts > 0);
   assertNoDispatch(f);
+});
+
+
+function manualFixture() {
+  const f = harness({count:5});
+  const approval = {...f.approval,status:"sample_sent"};
+  delete approval.approvedAt;
+  f.seed(f.approvalPath,approval);
+  const proof = f.runtime.manualInstructorD1ApprovalProof(approval);
+  return {...f, approval, proof, dispatch: (overrides={}) => f.runtime.dispatchManualInstructorD1({
+    approval,proof,confirmedBy:"operator:fixture",proveDeliveredSample:async()=>true,...overrides})};
+}
+test("new manual route blocks an undelivered sample without touching approvals or recipients",async()=>{
+  const f=manualFixture();
+  await assert.rejects(f.dispatch({proveDeliveredSample:async()=>false}),/SOLAPI/);
+  assertNoDispatch(f);
+  assert.equal(f.get(f.approvalPath).status,"sample_sent");
+});
+test("manual route rejects a wrong sample proof and any prior attempt ledger",async()=>{
+  const f=manualFixture();
+  await assert.rejects(f.dispatch({proof:"wrong"}),/승인/);
+  f.seed(ledgerPath(f.approvedIds[0]),{status:"unknown"});
+  await assert.rejects(f.dispatch(),/발송 원장/);
+  assertNoDispatch(f);
+});
+test("concurrent manual approval of one exact batch claims and sends each recipient only once",async()=>{
+  const f=manualFixture();
+  const results=await Promise.allSettled([f.dispatch(),f.dispatch()]);
+  assert.equal(results.filter(r=>r.status==="fulfilled").length,1);
+  assert.equal(results.filter(r=>r.status==="rejected").length,1);
+  assert.deepEqual(f.sent.map(r=>r.candidateId).sort(),[...f.approvedIds].sort());
+  assert.equal(f.get(f.approvalPath).manualRecovery,true);
+});
+test("ordinary scheduled sender ignores manual approvals",async()=>{
+  const f=harness({count:5});
+  f.seed(f.approvalPath,{...f.approval,manualRecovery:true});
+  const result=await f.run();
+  assert.equal(result.batches,0);
+  assertNoDispatch(f);
+  assert.equal(f.get(f.approvalPath).status,"approved");
 });

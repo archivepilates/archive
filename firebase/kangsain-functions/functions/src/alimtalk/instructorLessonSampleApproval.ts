@@ -6,7 +6,7 @@ import { db } from "../config/firebase";
 import { sendAlimtalkLogEmail } from "../google/driveDocsMailer";
 import { refs } from "../firestore/refs";
 import type { AlimtalkCandidateDoc, BookingDoc, LectureDoc } from "../types/models";
-import { nowTimestamp, todayKst } from "../utils/date";
+import { addDays, nowTimestamp, todayKst } from "../utils/date";
 import { stableHash } from "../utils/hash";
 import { alimtalkDedupeKey, normalizePhone } from "./dedupe";
 import { targetEligibilityIssue as autoSendabilityIssue, targetDuplicateIssue as findCompletedDuplicateForCandidate } from "./targetValidationChecks";
@@ -73,6 +73,7 @@ export interface InstructorLessonApprovalDoc {
   supersededAt?: FirebaseFirestore.Timestamp;
   approvedAt?: FirebaseFirestore.Timestamp;
   approvedBy?: string;
+  manualRecovery?: true;
   liveSendStartedAt?: FirebaseFirestore.Timestamp;
   liveSendCompletedAt?: FirebaseFirestore.Timestamp;
   sentCount?: number;
@@ -139,6 +140,95 @@ export function instructorLessonApprovalCutoffIssue(sourceDate: string, now: Dat
   return "";
 }
 
+export function manualInstructorD1TimeIssue(sourceDate: string, lessonDate: string, now = new Date()): string {
+  if (sourceDate !== kstDate(now) || lessonDate !== addDays(sourceDate, 1)) return "오늘 D-1 회차만 수동 발송할 수 있습니다.";
+  if (!memberDispatchWindow(now).allowed || kstMinutes(now) < LIVE_SEND_HOUR_KST * 60) {
+    return "수동 복구는 D-1 오후 2시 이후, 오후 11시 전만 가능합니다.";
+  }
+  return "";
+}
+
+function manualApprovalState(approval: InstructorLessonApprovalDoc): boolean {
+  return (approval.status === "sample_sent" || approval.status === "blocked_no_approval")
+    && Boolean(approval.sampleSentAt && approval.sampleSolapiMessageId) && !approval.liveSendStartedAt
+    && !approval.liveSendCompletedAt && !approval.approvedAt && !approval.supersededByApprovalId;
+}
+
+function mayRecoverUnsentManualSample(approval: InstructorLessonApprovalDoc): boolean {
+  return approval.status === "blocked_no_approval" && !approval.sampleSolapiMessageId && !approval.sampleSentAt
+    && !approval.approvedAt && !approval.liveSendStartedAt && !approval.liveSendCompletedAt && !approval.supersededByApprovalId;
+}
+
+export function manualInstructorD1ApprovalProof(approval: InstructorLessonApprovalDoc): string {
+  return stableHash({ target: approvalTargetFingerprint(approval), sampleMessageId: approval.sampleSolapiMessageId });
+}
+
+export async function prepareManualInstructorD1Sample(input: {
+  studioId: string; sourceDate: string; lessonDate: string; managementNumber: string; candidates: AlimtalkCandidateDoc[];
+}): Promise<"sample_sent" | "awaiting_approval" | "blocked" | "deferred"> {
+  const issue = manualInstructorD1TimeIssue(input.sourceDate, input.lessonDate);
+  if (issue) throw new Error(issue);
+  const groups = groupInstructorLessonCandidates(input.candidates);
+  if (groups.length !== 1 || groups[0].lessonDate !== input.lessonDate || groups[0].managementNumber !== input.managementNumber
+    || groups[0].candidates.length !== input.candidates.length
+    || input.candidates.some(row => row.sourceDate !== input.sourceDate || row.studioId !== input.studioId)) {
+    throw new Error("정확히 한 회차의 샘플만 준비할 수 있습니다.");
+  }
+  const group = groups[0];
+  const paired = await instructorLessonGroupSourceIssue(group);
+  if (paired) throw new Error(paired);
+  const existing = (await db.collection(APPROVAL_COLLECTION).doc(instructorLessonApprovalId(input.studioId, input.sourceDate, input.managementNumber)).get()).data() as InstructorLessonApprovalDoc | undefined;
+  if (existing && manualApprovalState(existing)) {
+    const drift = instructorLessonApprovedCandidatesIssue(existing, group.candidates);
+    if (drift) throw new Error(drift);
+    return "awaiting_approval";
+  }
+  if (existing && !canRecoverBlockedInstructorLessonSample(existing) && !mayRecoverUnsentManualSample(existing)
+    && !(existing.status === "sample_pending" && !existing.sampleSentAt && !existing.sampleSolapiMessageId)) {
+    throw new Error("기존 샘플 또는 발송 상태 확인이 필요합니다. 재발송하지 않습니다.");
+  }
+  return prepareInstructorLessonSampleApproval({ studioId: input.studioId, sourceDate: input.sourceDate, group, manualRecovery: true });
+}
+
+export async function getManualInstructorD1Approval(studioId: string, sourceDate: string, managementNumber: string) {
+  const doc = await db.collection(APPROVAL_COLLECTION).doc(instructorLessonApprovalId(studioId, sourceDate, managementNumber)).get();
+  return doc.data() as InstructorLessonApprovalDoc | undefined;
+}
+
+export async function dispatchManualInstructorD1(input: {
+  approval: InstructorLessonApprovalDoc; proof: string; confirmedBy: string;
+  proveDeliveredSample: (approval: InstructorLessonApprovalDoc) => Promise<boolean>;
+}) {
+  const { approval, proof, confirmedBy } = input;
+  const timeError = () => manualInstructorD1TimeIssue(approval.sourceDate, approval.lessonDate);
+  if (timeError()) throw new Error(timeError());
+  if (!confirmedBy.trim() || !manualApprovalState(approval) || proof !== manualInstructorD1ApprovalProof(approval)) {
+    throw new Error("샘플 또는 대상이 바뀌었습니다. 확인한 샘플을 다시 승인해 주세요.");
+  }
+  const candidates = await candidatesByIds(approval.candidateIds, approval.studioId);
+  const drift = instructorLessonApprovedCandidatesIssue(approval, candidates);
+  if (drift || candidates.some(c => !["candidate", "reviewed"].includes(c.status) || c.attempts || c.sentAt)) {
+    throw new Error(drift || "이미 발송을 시도한 후보가 있습니다.");
+  }
+  const group = { lessonDate: approval.lessonDate, managementNumber: approval.managementNumber, candidates };
+  const sourceIssue = await instructorLessonGroupSourceIssue(group) || await instructorLessonRouteIssue(group.lessonDate, group.managementNumber);
+  if (sourceIssue) throw new Error(sourceIssue);
+  if (!await input.proveDeliveredSample(approval)) throw new Error("SOLAPI에서 샘플의 실제 전달을 확인하지 못했습니다.");
+  const ref = db.collection(APPROVAL_COLLECTION).doc(approval.approvalId);
+  await db.runTransaction(async tx => {
+    const current = (await tx.get(ref)).data() as InstructorLessonApprovalDoc | undefined;
+    if (timeError() || !current || !manualApprovalState(current) || proof !== manualInstructorD1ApprovalProof(current)) {
+      throw new Error("회차, 샘플 또는 승인 상태가 바뀌었습니다. 발송하지 않았습니다.");
+    }
+    const ledger = await tx.getAll(...current.candidateIds.map(id => refs.alimtalkSend(id)));
+    if (ledger.some(doc => doc.exists)) throw new Error("이미 발송 원장이 존재합니다. 재발송하지 않습니다.");
+    if (timeError()) throw new Error(timeError());
+    tx.update(ref, { manualRecovery: true, status: "approved", approvedAt: nowTimestamp(),
+      approvedBy: confirmedBy, updatedAt: nowTimestamp() });
+  });
+  return sendApprovedInstructorLessonAlimtalks({ studioId: approval.studioId, sourceDate: approval.sourceDate, manualApprovalId: approval.approvalId });
+}
+
 export function canRecoverBlockedInstructorLessonSample(input: {
   status?: string;
   sampleSolapiMessageId?: string;
@@ -186,18 +276,20 @@ async function prepareInstructorLessonSampleApproval(input: {
   studioId: string;
   sourceDate: string;
   group: InstructorLessonCandidateGroup;
+  manualRecovery?: true;
 }): Promise<"sample_sent" | "awaiting_approval" | "blocked" | "deferred"> {
-  const { studioId, sourceDate, group } = input;
-  if (!memberDispatchWindow().allowed) return "deferred";
+  const { studioId, sourceDate, group, manualRecovery } = input;
+  const manualTimeIssue = () => manualRecovery && manualInstructorD1TimeIssue(sourceDate, group.lessonDate);
+  if (!memberDispatchWindow().allowed || manualTimeIssue()) return "deferred";
   const approvalId = instructorLessonApprovalId(studioId, sourceDate, group.managementNumber);
   const ref = db.collection(APPROVAL_COLLECTION).doc(approvalId);
   const existing = (await ref.get()).data() as InstructorLessonApprovalDoc | undefined;
   let recoveringBlockedSource = false;
   if (existing) {
     if (existing.status === "sample_sending") {
-      return recoverSampleSendingApproval(ref, existing);
+      return manualRecovery ? "blocked" : recoverSampleSendingApproval(ref, existing);
     }
-    if (existing.status === "sample_sent" && !existing.approvalEmailSentAt) {
+    if (!manualRecovery && !existing.manualRecovery && existing.status === "sample_sent" && !existing.approvalEmailSentAt) {
       await trySendSampleApprovalEmail(ref, existing);
     }
     if (["sample_sent", "approved"].includes(existing.status)) return "awaiting_approval";
@@ -205,7 +297,8 @@ async function prepareInstructorLessonSampleApproval(input: {
     if (existing.status === "sample_pending") {
       if (existing.sampleSolapiMessageId || existing.sampleSentAt
         || instructorLessonApprovedCandidatesIssue(existing, group.candidates)) return "blocked";
-    } else if (!canRecoverBlockedInstructorLessonSample(existing)) return "blocked";
+    } else if (!canRecoverBlockedInstructorLessonSample(existing)
+      && !(manualRecovery && mayRecoverUnsentManualSample(existing))) return "blocked";
     const sourceIssue = await instructorLessonGroupSourceIssue(group);
     const routeIssue = await instructorLessonRouteIssue(group.lessonDate, group.managementNumber);
     if (sourceIssue || routeIssue) return "blocked";
@@ -237,7 +330,7 @@ async function prepareInstructorLessonSampleApproval(input: {
       createdAt: nowTimestamp(),
       updatedAt: nowTimestamp(),
     } satisfies InstructorLessonApprovalDoc);
-    await sendInstructorLessonAttentionEmail({
+    if (!manualRecovery) await sendInstructorLessonAttentionEmail({
       subject: `[알림톡][긴급] 강사레슨 샘플 발송 보류 ${group.lessonDate}`,
       lessonDate: group.lessonDate,
       managementNumber: group.managementNumber,
@@ -254,13 +347,14 @@ async function prepareInstructorLessonSampleApproval(input: {
     lessonStartAt: String(representative.payload?.lessonStartAt || ""),
   });
   const sample = buildSampleCandidate(representative, approvalId, testRecipient, parkingLinkId);
-  if (!memberDispatchWindow().allowed) return "deferred";
+  if (!memberDispatchWindow().allowed || manualTimeIssue()) return "deferred";
   const claimed = await db.runTransaction(async (tx) => {
-    if (!memberDispatchWindow().allowed) return null;
+    if (!memberDispatchWindow().allowed || manualTimeIssue()) return null;
     const snap = await tx.get(ref);
     const current = snap.data() as InstructorLessonApprovalDoc | undefined;
     if (snap.exists && !current) return null;
     if (current && !canRecoverBlockedInstructorLessonSample(current)
+      && !(manualRecovery && mayRecoverUnsentManualSample(current))
       && !(current.status === "sample_pending" && !current.sampleSolapiMessageId && !current.sampleSentAt
         && !instructorLessonApprovedCandidatesIssue(current, group.candidates))) return null;
     const priorSend = await tx.get(refs.alimtalkSend(sample.candidateId));
@@ -275,6 +369,7 @@ async function prepareInstructorLessonSampleApproval(input: {
       managementNumber: group.managementNumber,
       templateCode: INSTRUCTOR_LESSON_ALIMTALK_TEMPLATE_CODE,
       status: "sample_sending",
+      ...(manualRecovery ? { manualRecovery: true as const } : {}),
       candidateIds: group.candidates.map((candidate) => candidate.candidateId),
       approvedTargetKeys: group.candidates.map(instructorLessonTargetKey),
       contentFingerprint: instructorLessonContentFingerprint(group.candidates[0]),
@@ -341,7 +436,7 @@ async function prepareInstructorLessonSampleApproval(input: {
       },
       { merge: true },
     );
-    await sendInstructorLessonAttentionEmail({
+    if (!manualRecovery) await sendInstructorLessonAttentionEmail({
       subject: `[알림톡][실패] 강사레슨 샘플 발송 실패 ${group.lessonDate}`,
       lessonDate: group.lessonDate,
       managementNumber: group.managementNumber,
@@ -350,7 +445,7 @@ async function prepareInstructorLessonSampleApproval(input: {
     return "blocked";
   }
   const current = (await ref.get()).data() as InstructorLessonApprovalDoc;
-  await trySendSampleApprovalEmail(ref, current);
+  if (!manualRecovery && !current.manualRecovery) await trySendSampleApprovalEmail(ref, current);
   return "sample_sent";
 }
 
@@ -379,6 +474,10 @@ export async function approveInstructorLessonAlimtalkBatchHandler(request: Reque
   const cutoffIssue = instructorLessonApprovalCutoffIssue(approval.sourceDate);
   if (cutoffIssue) {
     response.status(409).send(`강사레슨 알림톡을 승인할 수 없습니다.\n\n${cutoffIssue}`);
+    return;
+  }
+  if (approval.manualRecovery) {
+    response.status(409).send("수동 회차는 기존 자동 발송 승인 링크를 사용할 수 없습니다.");
     return;
   }
   if (approval.status === "approved") {
@@ -417,7 +516,7 @@ export async function remindPendingInstructorLessonApprovals(
   let reminded = 0;
   let blocked = 0;
   for (const approval of approvals) {
-    if (approval.supersededByApprovalId) continue;
+    if (approval.supersededByApprovalId || approval.manualRecovery) continue;
     const ref = db.collection(APPROVAL_COLLECTION).doc(approval.approvalId);
     if (approval.status === "sample_sent") {
       if (approval.reminderSentAt) continue;
@@ -442,11 +541,18 @@ export async function sendApprovedInstructorLessonAlimtalks(
   input: {
     studioId?: string;
     sourceDate?: string;
+    manualApprovalId?: string;
   } = {},
 ): Promise<{ batches: number; sent: number; skipped: number; failed: number; blocked: number; blockedReasons?: string[] }> {
   const sourceDate = input.sourceDate || todayKst();
   const studioId = input.studioId || DEFAULT_STUDIO_ID;
-  const approvals = await approvalsForSourceDate(studioId, sourceDate);
+  const approvals = input.manualApprovalId
+    ? await db.collection(APPROVAL_COLLECTION).doc(input.manualApprovalId).get()
+      .then(snap => [snap.data() as InstructorLessonApprovalDoc | undefined]
+        .filter((row): row is InstructorLessonApprovalDoc => Boolean(row?.manualRecovery
+          && row.approvalId === input.manualApprovalId && row.studioId === studioId && row.sourceDate === sourceDate
+          && !manualInstructorD1TimeIssue(row.sourceDate, row.lessonDate))))
+    : (await approvalsForSourceDate(studioId, sourceDate)).filter(row => !row.manualRecovery);
   const summary: { batches: number; sent: number; skipped: number; failed: number; blocked: number; blockedReasons?: string[] } =
     { batches: approvals.length, sent: 0, skipped: 0, failed: 0, blocked: 0 };
   logger.info("instructor_lesson_approved_id_send started", {
@@ -491,7 +597,7 @@ export async function sendApprovedInstructorLessonAlimtalks(
       if (!memberDispatchWindow().allowed) return false;
       const snap = await tx.get(ref);
       const current = snap.data() as InstructorLessonApprovalDoc | undefined;
-      if (!current || current.status !== "approved" || approvalTargetFingerprint(current) !== approvalTargetFingerprint(approval)) return false;
+      if (!current || current.status !== "approved" || Boolean(current.manualRecovery) !== Boolean(input.manualApprovalId) || approvalTargetFingerprint(current) !== approvalTargetFingerprint(approval)) return false;
       if (!memberDispatchWindow().allowed) return false;
       tx.set(ref, {
         status: "sending", liveSendStartedAt: current.liveSendStartedAt || nowTimestamp(), lastError: null, updatedAt: nowTimestamp(),
