@@ -80,6 +80,10 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
   if (fromRoster && (typeof requestedWaitlistId !== "string" || !/^ilr_[a-f0-9]{24}$/.test(requestedWaitlistId))) {
     throw new AppError("INVALID_ARGUMENT", "현재 대기 명단에서 회원을 다시 선택하세요.");
   }
+  if (fromRoster && (request.data?.bookingPolicy !== "same_group_pair_v1"
+    || typeof request.data?.bookingDailyLimitAcknowledged !== "boolean")) {
+    throw new AppError("INVALID_ARGUMENT", "화면을 새로고침하고 StudioMate 예약 확인창에서 다시 요청하세요.");
+  }
   const rosterRegistration = fromRoster ? await db.collection(REGISTRATIONS).doc(requestedWaitlistId).get() : null;
   const rosterRow = rosterRegistration?.data();
   if (fromRoster && (rosterRow?.studioId !== staff.studioId || rosterRow?.lessonDate !== request.data?.lessonDate)) {

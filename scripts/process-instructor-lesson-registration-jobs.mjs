@@ -16,7 +16,7 @@ import { verifyInstructorPaidOrder } from "./lib/imweb-instructor-order-source.m
 import { memberDispatchWindow, assertMemberDispatchAllowed, isMemberDispatchDeferred } from "./lib/member-dispatch-window.mjs";
 import { assertNewMemberForm, assertStudioMateRegistrationAvailable, observeMemberSave } from "./lib/studiomate-registration-flow.mjs";
 import { processInstructorLessonCancellations } from "./lib/instructor-lesson-cancellation-worker.mjs";
-import { bookInstructorLessonPair } from "./lib/instructor-lesson-paired-booking-browser.mjs";
+import { bookInstructorLessonPair, recheckInstructorLessonPair } from "./lib/instructor-lesson-paired-booking-browser.mjs";
 import { issuedInstructorTicketId, instructorTicketReceipt, assertExistingInstructorTicketBinding, instructorTicketResponseDiagnostics } from "./lib/instructor-ticket-issue-evidence.mjs";
 import {
   INSTRUCTOR_LESSON_TICKET_NAME,
@@ -210,7 +210,7 @@ async function runCandidate(candidate, page) {
       summary.jobs.push(item);
       return;
     }
-    const status = staleExternalActionStatus(current);
+    const status = current.pairedBookingVerified && current.currentStep === "bookings" ? "review_required" : staleExternalActionStatus(current);
     await markFailure(candidate.ref, current, message, status);
     item.status = status;
     item.error = message;
@@ -295,7 +295,10 @@ async function processStudioMateRegistration(page, ref, job) {
   });
   job.nativeDispatch.attempted = false;
   if (job.bookingAutomation === "same_group_pair_v1") {
-    const nativeBooking = await bookInstructorLessonPair(page.context(), { ...job, studiomateMemberId: memberId, ticketId }, {
+    const bookingJob = { ...job, studiomateMemberId: memberId, ticketId };
+    const nativeBooking = job.pairedBookingVerified
+      ? await recheckInstructorLessonPair(page.context(), bookingJob)
+      : await bookInstructorLessonPair(page.context(), bookingJob, {
       checkpoint: async (plan) => {
         assertMemberDispatchAllowed();
         await startExternalEffect(ref, job.claimToken, "bookings", "StudioMate 반배정·예약",
@@ -879,7 +882,7 @@ async function completeStep(ref, claimToken, stepName, values = {}) {
       : {}),
     ...(values.studiomateMemberId ? { studiomateMemberId: values.studiomateMemberId } : {}),
     ...(values.ticketId ? { ticketId: values.ticketId } : {}),
-    ...(values.nativeBooking ? { pairedBookingVerified: true } : {}),
+    ...(values.nativeBooking ? { pairedBookingVerified: true, pairedBookingProof: values.nativeBooking } : {}),
     updatedAt: now,
   }, {
     status: "processing",

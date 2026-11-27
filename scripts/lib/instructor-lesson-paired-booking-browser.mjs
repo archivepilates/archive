@@ -70,16 +70,37 @@ function matchesCard(card, session, lessonDate) {
     && clean(card.title) === session.title && clean(card.staff) === session.staff;
 }
 
+function readExistingPair(options) {
+  const plan = planInstructorPairedBooking({ ...options, lectures: options.memberLectures
+    .filter(row => String(row.start_on).startsWith(options.lessonDate + " "))
+    .map(row => ({ ...row, staff: row.instructor })) });
+  if (plan.missing.length) throw new Error("기존 두 세션 예약 원본이 변경되었습니다. 다시 예약하지 않습니다.");
+  return verifyInstructorPairedBooking(plan, options.ticketBookings, options.memberLectures);
+}
+
+export async function recheckInstructorLessonPair(context, job) {
+  const proof = job.pairedBookingProof;
+  if (proof?.status !== "verified" || !proof.bookingIds?.length || !proof.lectureIds?.length) {
+    throw new Error("이전 예약 확인 증거가 불완전합니다. 다시 예약하지 않습니다.");
+  }
+  const identity = { ...job, memberId: String(job.studiomateMemberId || ""), ticketId: String(job.ticketId || "") };
+  const current = await readBookingEvidence(context, identity);
+  const actual = readExistingPair({ lessonDate: job.lessonDate, memberId: identity.memberId,
+    userTicketId: current.target.userTicketId, ticketBookings: current.ticketBookings, memberLectures: current.memberLectures,
+    usableCoupons: current.target.usableCoupons });
+  if (actual.group !== proof.group || actual.userTicketId !== proof.userTicketId || actual.memberId !== proof.memberId
+    || actual.lessonDate !== proof.lessonDate || ids(actual.bookingIds) !== ids(proof.bookingIds)
+    || ids(actual.lectureIds) !== ids(proof.lectureIds)) throw new Error("이전 예약 확인 원본이 변경되었습니다. 다시 예약하지 않습니다.");
+  return actual;
+}
+
 export async function bookInstructorLessonPair(context, job, { checkpoint }) {
   const identity = { ...job, memberId: String(job.studiomateMemberId || ""), ticketId: String(job.ticketId || "") };
   const initial = await readBookingEvidence(context, identity);
   const options = { lessonDate: job.lessonDate, memberId: identity.memberId, userTicketId: initial.target.userTicketId,
     ticketBookings: initial.ticketBookings, memberLectures: initial.memberLectures, usableCoupons: initial.target.usableCoupons };
   if (initial.ticketBookings.filter(row => row.status === "reserved").length === 2) {
-    const plan = planInstructorPairedBooking({ ...options, lectures: initial.memberLectures
-      .filter(row => String(row.start_on).startsWith(job.lessonDate + " "))
-      .map(row => ({ ...row, staff: row.instructor })) });
-    return verifyInstructorPairedBooking(plan, initial.ticketBookings, initial.memberLectures);
+    return readExistingPair(options);
   }
 
   const page = await context.newPage();
@@ -118,6 +139,17 @@ export async function bookInstructorLessonPair(context, job, { checkpoint }) {
     if (matched.length !== 1) throw new Error("일괄 예약 화면에서 확인된 2회권을 선택할 수 없습니다.");
     const exactTicket = choice.nth(matched[0]);
     if (!(await exactTicket.getByRole("img", { name: "check-icon", exact: true }).count())) await exactTicket.click();
+    const rangeInputs = wizard.locator(".el-range-input");
+    await rangeInputs.nth(1).waitFor();
+    if (await rangeInputs.count() !== 2) throw new Error("일괄 예약 날짜 입력란이 변경되었습니다.");
+    if ((await rangeInputs.evaluateAll(nodes => nodes.map(node => node.value))).some(value => datesIn(value)[0] !== job.lessonDate)) {
+      const [y, m, d] = job.lessonDate.split("-").map(Number);
+      const label = [y, m, d].join(". ") + ".";
+      await rangeInputs.first().fill(label);
+      await rangeInputs.last().fill(label);
+      await rangeInputs.last().press("Enter");
+      await page.keyboard.press("Escape");
+    }
     const lectures = await source;
     if (!Array.isArray(lectures)) throw new Error("선택한 수강일의 StudioMate 일정 응답을 확인하지 못했습니다.");
     plan = planInstructorPairedBooking({ ...options, lectures });
@@ -130,7 +162,7 @@ export async function bookInstructorLessonPair(context, job, { checkpoint }) {
       await columns.first().locator(".lecture-item").nth(matches[0].index).click();
     }
     const selected = await readCards(columns.nth(1));
-    const range = await wizard.locator(".el-range-input").evaluateAll(nodes => nodes.map(node => node.value));
+    const range = await rangeInputs.evaluateAll(nodes => nodes.map(node => node.value));
     if (range.length !== 2 || range.some(value => datesIn(value)[0] !== job.lessonDate)
       || selected.length !== plan.missing.length || plan.missing.some(session =>
         selected.filter(card => matchesCard(card, session, plan.lessonDate)).length !== 1)) {

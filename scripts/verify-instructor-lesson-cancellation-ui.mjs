@@ -112,7 +112,7 @@ try {
       await promotion.getByRole("status").filter({ hasText: "반배정·예약 요청 접수" }).waitFor();
       assert.equal(await page.evaluate(() => promotionCount), 1);
       assert.deepEqual(await page.evaluate(() => Object.keys(promotionPayload).sort()),
-        ["bookingDailyLimitAcknowledged", "lessonDate", "paymentConfirmed", "paymentMethod", "seatConfirmed", "waitlistRegistrationId"]);
+        ["bookingDailyLimitAcknowledged", "bookingPolicy", "lessonDate", "paymentConfirmed", "paymentMethod", "seatConfirmed", "waitlistRegistrationId"]);
       assert.equal(await page.evaluate(() => promotionPayload.bookingDailyLimitAcknowledged), true);
       assert.ok(await confirm.isDisabled());
       await promotion.getByRole("button", { name: "닫기" }).click();

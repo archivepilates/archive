@@ -114,11 +114,14 @@ test("roster promotion consumes the last seat once, requires the same row and ne
   const create = (memberPhone: string) => f.call({ ...input, memberPhone });
   const [a, b] = await Promise.all([create("01000000001"), create("01000000002")]);
   const promote = (id: string, patch = {}) => f.call({ waitlistRegistrationId: id, lessonDate: input.lessonDate,
-    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true, bookingDailyLimitAcknowledged: true, ...patch });
+    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true, bookingPolicy: "same_group_pair_v1",
+    bookingDailyLimitAcknowledged: true, ...patch });
   await assert.rejects(promote(a.registrationId)); // Missing actual lesson.
   f.addLesson();
   await assert.rejects(promote(a.registrationId, { lessonDate: "2099-11-30" }));
   await assert.rejects(promote(a.registrationId, { paymentConfirmed: false }));
+  await assert.rejects(promote(a.registrationId, { bookingDailyLimitAcknowledged: undefined }));
+  await assert.rejects(promote(a.registrationId, { bookingPolicy: "unknown" }));
   await assert.rejects(promote("ilr_" + "0".repeat(24)));
   const outcomes = await Promise.allSettled([promote(a.registrationId), promote(b.registrationId)]);
   assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
@@ -139,7 +142,8 @@ test("existing booked waiters and team lessons cannot take the standard reservat
     appStatus: "reserved", ticketName: "강사레슨 (2T)", memberPhone: input.memberPhone };
   f.rows.set("bookings/booked", row);
   const request = { waitlistRegistrationId: waiter.registrationId, lessonDate: input.lessonDate,
-    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true };
+    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true, bookingPolicy: "same_group_pair_v1",
+    bookingDailyLimitAcknowledged: false };
   await assert.rejects(f.call(request));
   f.rows.delete("bookings/booked");
   f.addLesson({ title: "Team 강사레슨", capacity: 2 });

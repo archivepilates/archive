@@ -7911,7 +7911,7 @@ async function handleInstructorWaitlistPromotionSubmit(event) {
     instructorWaitlistPromotionAttempts.add(target.registrationId);
     attempted = true;
     const { data } = await callable({ waitlistRegistrationId: target.registrationId, lessonDate: target.lessonDate,
-      paymentMethod, paymentConfirmed: true, seatConfirmed: true, bookingDailyLimitAcknowledged });
+      paymentMethod, paymentConfirmed: true, seatConfirmed: true, bookingPolicy: "same_group_pair_v1", bookingDailyLimitAcknowledged });
     if (data?.ok !== true || data.registrationId !== target.registrationId || !data.status || data.status === "waitlisted") {
       throw new Error("waitlist-promotion-outcome-unknown");
     }
