@@ -55,14 +55,24 @@
 
 ## Current evidence
 
+- 2026-11-27 production: verified the scoped Help function with public
+  access off, then enabled only the Help sidecar in the existing hourly
+  collector without resetting its timer. The first normal run completed
+  at 09:51 KST. Report and independent row/binding counts matched: 157
+  members and 179 cards, zero held approvals. The existing schedule remains
+  unchanged; a snapshot older than 60 minutes is not exposed.
+- After that result, enabled the general Help entry. The live root showed
+  the OTP form at 320, 390, 768 and 1440 px without any OTP send attempt;
+  the live anonymous card endpoint returned 403. Two live handset tests
+  were waived, and no real delivery was asserted.
+
 - On 2026-11-27, the native catalog yielded 31 product IDs. Excluded the
   instructor course and group trial; included the six-class starter group
   pass without its separate OT. The fresh read-only plan found 157 eligible
   members and no unclassified products after adopting this scope.
-- Supabase has the additive native registration routine. Its owner/execute
-  grants and the unchanged two-row canary generation were independently
-  checked. The operational reader and the hourly flag are not enabled for
-  the expanded roster. No production data was enrolled or sent by the plan.
+- Before activation, Supabase's additive native registration routine
+  preserved the two-row canary. Its owner/execute grants were independently
+  checked. No production data was enrolled or sent by the read-only plan.
 
 - At 21:49 KST, all 22 native member pages were rechecked. There were 239
   active registrations; all 176 current class-pass candidate holders met
