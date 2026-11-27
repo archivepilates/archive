@@ -12,15 +12,34 @@ export const clarification={
   choices:['수업 시간','수강료','운동 계획']
 };
 const planWord=/(?:수업|운동|루틴).{0,18}(?:추천|계획|뭘\s*들|뭐\s*들|어떻게\s*다니)|(?:추천|맞는|다음에\s*들을).{0,12}(?:수업|운동)|^어떤\s*수업/u;
+const frequencyWords={한:1,두:2,세:3,네:4,다섯:5,여섯:6,일곱:7};
+const weeklyFrequency=/(?:일주일(?:에)?|주당|주(?:에)?)\s*([1-7]|한|두|세|네|다섯|여섯|일곱)\s*(?:회|번)/u;
+const shortFrequency=/^([1-7]|한|두|세|네|다섯|여섯|일곱)\s*(?:(?:회|번)\s*)?(?:쯤|정도)?\s*(?:이요|요|이에요)?[.!?\s]*$/u;
+export function chatQuestion(value){
+  const q=value.normalize('NFKC').trim();
+  const compact=q.replace(/\s+/gu,'').replace(/[.!?~]+$/u,'');
+  return compact==='수업시간'?'시간표':compact==='운동계획'||compact==='수업추천'?'수업 추천':q;
+}
+export function planFrequency(q,allowShort=false){
+  const raw=q.match(weeklyFrequency)?.[1]??(allowShort?q.match(shortFrequency)?.[1]:undefined);
+  return raw?frequencyWords[raw]??Number(raw):null;
+}
 const blocked=/(?:친구|가족|남편|아내|배우자|타인|다른\s*(?:회원|사람))/u;
-export function memberPlanIntent(q,{connected=false,preferring=false}={}){
+export function memberPlanIntent(question,{connected=false,preferences=null}={}){
+  const q=chatQuestion(question);
   if(blocked.test(q))return null;
   const label=planOptions.find(v=>q.includes(v));
   const time=label?times[planOptions.indexOf(label)]:
     /저녁|퇴근/u.test(q)?'weekdayEvening':/오전|아침/u.test(q)?'weekdayMorning':/오후/u.test(q)?'weekdayAfternoon':null;
-  const request=planWord.test(q);
-  if((connected||/내\s*(?:수강권|이력|수업)|맞춤/u.test(q))&&request||connected&&preferring&&label)
-    return {kind:'plan',time};
+  const request=planWord.test(q), frequency=planFrequency(q,Boolean(preferences));
+  const tone=q.replace(/[.!?~]+$/u,'').trim();
+  const bareWeekly=weeklyFrequency.exec(tone)?.[0]===tone;
+  const follow=connected&&preferences&&(planOptions.includes(tone)||shortFrequency.test(tone)||bareWeekly);
+  if((connected||/내\s*(?:수강권|이력|수업)|맞춤/u.test(q))&&request||follow){
+    const base={kind:'plan',time:time??preferences?.time??null};
+    const use=frequency??preferences?.frequency;
+    return use?{...base,frequency:use}:base;
+  }
   if(/수강\s*이력|내\s*출석|수업\s*이력|이용\s*내역|출석\s*기록/u.test(q))return {kind:'history'};
   return null;
 }
@@ -37,7 +56,7 @@ export function validAttendance(value,today){
       dateMs(value.windowThrough)-dateMs(value.lastOn)<28*dayMs&&Object.values(value.byCategory).some(n=>n>0));
 }
 
-export function memberPlanText(rows,attendance,kind,time,now=new Date()){
+export function memberPlanText(rows,attendance,kind,time,now=new Date(),frequency=null){
   const today=dayFmt.format(now);
   const history=validAttendance(attendance,today)?attendance:null;
   const historyLine=history?history.lastOn?
@@ -56,12 +75,14 @@ export function memberPlanText(rows,attendance,kind,time,now=new Date()){
   const weeks=Math.max(1,Math.ceil((dateMs(pass.expiresOn)-dateMs(today)+dayMs)/(7*dayMs)));
   const habit=history?.byCategory[pass.category]??0;
   // Match the current attendance pace, not an artificial target to spend every credit.
-  const weekly=habit?Math.min(3,Math.max(1,Math.round(habit/4))):1;
+  const selected=Number.isSafeInteger(frequency)&&frequency>=1&&frequency<=7;
+  const weekly=selected?frequency:habit?Math.min(3,Math.max(1,Math.round(habit/4))):1;
   const cap=pass.type==='count'?Math.min(weekly,pass.bookable):weekly;
-  const pace='주 '+cap+'회부터 이어가 보세요.'+(pass.type==='count'&&pass.bookable>weeks*cap?
+  const pace=(selected&&cap===weekly?'말씀하신 주 '+cap+'회 기준으로 계획해 볼게요.':
+    selected?'주 '+weekly+'회를 원하시지만 추가 예약 가능 횟수가 '+cap+'회예요.':'주 '+cap+'회부터 이어가 보세요.')+(pass.type==='count'&&pass.bookable>weeks*cap?
     ' 이 속도라면 만료 전 일부 횟수가 남을 수 있어요. 무리해서 몰아 듣기보다 가능한 일정을 먼저 확인해 주세요.':'');
   const title=categories[pass.category]+counts+' · 만료 '+pass.expiresOn;
-  if(pass.category!=='group')return {text:[historyLine,title,pace+' 개인 레슨은 공개 그룹 시간표를 적용하지 않아요. 가능한 시간은 회원 앱이나 데스크에서 확인해 주세요.'].join('\n\n'),appGuide:bookingGuide};
+  if(pass.category!=='group')return {text:[historyLine,title,pace+' 개인 레슨은 공개 그룹 시간표를 적용하지 않아요. 가능한 시간은 회원 앱이나 데스크에서 확인해 주세요.'].join('\n\n'),appGuide:bookingGuide,choices:['주 1회','주 2회','주 3회'],rememberPlan:true};
   const availability=times.includes(time)?time:'flexible';
   const classes=recommendClasses({time:availability,goal:'routine',intensity:'moderate',through:pass.expiresOn,
     limit:pass.type==='count'?Math.min(2,pass.bookable):2},now);
@@ -69,5 +90,5 @@ export function memberPlanText(rows,attendance,kind,time,now=new Date()){
   return {text:[historyLine,title,pace,candidates.length?
     '공개 예정표에서 만료일까지의 후보를 골랐어요.\n'+candidates.map(x=>x.label).join(' · ')+'\n실제 개설과 남은 자리는 회원 앱에서 확인해 주세요.':
     '조건에 맞는 확인된 공개 예정표가 없어요. 개설 시간과 예약은 회원 앱에서 확인해 주세요.'].join('\n\n'),
-    appGuide:bookingGuide,choices:planOptions,rememberPlan:true};
+    appGuide:bookingGuide,choices:selected?planOptions:['주 1회','주 2회','주 3회',...planOptions],rememberPlan:true};
 }

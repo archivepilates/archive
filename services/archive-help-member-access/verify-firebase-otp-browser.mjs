@@ -113,8 +113,16 @@ try{
   assert.equal(await page.locator('#chat-gpt-notice').isVisible(),false);
   await answers.last().getByRole('button',{name:'수강 이력',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.includes('마지막 출석'));
-  await answers.last().getByRole('button',{name:'수업 추천',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.includes('만료'));
+  const type=async q=>{await textbox.fill(q);await textbox.press('Enter');};
+  await type('수업 추천해줘');
+  await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.includes('최근 4주'));
+  await type('2');
+  await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.includes('말씀하신 주 2회'));
+  for(const alias of ['수업추천','운동계획','수업 추천']){
+    const resolved=page.waitForResponse(r=>r.url().endsWith('/api/member-access/overview')&&r.ok());
+    await type(alias);await resolved;
+    await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.includes('말씀하신 주 2회'));
+  }
   assert.match(await answers.last().innerText(),/그룹 7회[\s\S]*잔여 5회[\s\S]*만료/);
   await answers.last().getByRole('button',{name:'평일 저녁',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[data-member-private]')?.textContent.match(/18:30|19:00|19:30|17:30/));

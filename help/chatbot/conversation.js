@@ -1,4 +1,4 @@
-import {clarification} from './member-plan.js';
+import {chatQuestion,clarification,planFrequency} from './member-plan.js';
 import { regularNov, sourcePrice } from './content.js';
 import { respond, reusableQuestion } from './engine.js';
 import { publishedTimetable } from './timetable.js';
@@ -10,7 +10,6 @@ const calendar=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'});
 const timing={오전:'오전',아침:'오전',오후:'오후',저녁:'저녁',퇴근:'저녁'};
 const counts={한:1,두:2,세:3,네:4,다섯:5,여섯:6,일곱:7};
 const weekly=/(?:일주일(?:에)?|주당|주(?:에)?)\s*([1-7]|한|두|세|네|다섯|여섯|일곱)\s*(?:회|번)/u;
-const shortFrequency=/^([1-7]|한|두|세|네|다섯|여섯|일곱)\s*(?:회|번)(?:쯤| 정도)?(?:이요|요|이에요)?[.!?\s]*$/u;
 const monthly=/한\s*달|4\s*주|월\s*몇\s*(?:회|번)/u;
 const hold=/홀딩|일시\s*(?:정지|중지)|(?:수강권|회원권).{0,26}(?:멈추|멈출|쉬|정지)|(?:여행|출장|휴가).{0,34}(?:멈추|멈출|쉬|정지|얼려)/u;
 const scheduleAsk=/시간표|스케줄|수업\s*일정|수업\s*목록|오늘\s*수업|빈\s*자리|실시간\s*좌석|몇\s*시.{0,7}수업|자리\s*(?:남|있)/u;
@@ -43,13 +42,13 @@ function planText(p,question){
   if(monthly.test(question)&&freq)return {text:'주 '+freq+'회라면 4주에 '+freq*4+'회예요. 달력상 한 달 횟수는 시작일과 요일에 따라 달라질 수 있어요.'};
   const questionText=!freq?'일주일에 몇 번 정도 오실 수 있으세요?':!day?'어느 요일이 가장 편하세요?':'실제 개설 시간과 남은 자리는 회원 앱에서 확인해 주세요.';
   const conditions=[where,freq?'주 '+freq+'회':''].filter(Boolean).join(' · ');
-  return {text:[first,conditions?conditions+' 기준으로 비교해 볼 수 있어요.':'',questionText].filter(Boolean).join(' '),...(day&&freq?{appGuide}:{})};
+  return {text:[first,conditions?conditions+' 기준으로 비교해 볼 수 있어요.':'',questionText].filter(Boolean).join(' '),...(day&&freq?{appGuide}:{}),...(!freq?{guidanceStep:'frequency',choices:['주 1회','주 2회','주 3회']}:{})};
 }
 function nextPlan(previous,q,askedFrequency){
   const p={...previous};
-  const match=q.match(weekly)?.[1]||(askedFrequency?q.match(shortFrequency)?.[1]:undefined);
+  const match=planFrequency(q,askedFrequency);
   const day=q.match(/([월화수목금토일])요일/u)?.[1];
-  if(match)p.frequency=counts[match]??Number(match);
+  if(match)p.frequency=match;
   if(day){
     p.day=day;p.onlyDay=/밖에|요일\s*만/u.test(q);
   }
@@ -61,15 +60,14 @@ function nextPlan(previous,q,askedFrequency){
 
 export function conversationTurn(question, previous={}, {rules=null,now=new Date()}={}){
   if(!reusableQuestion(question))return {...respond(question,{rules,now}),state:previous,hideInput:true};
-  const normalized=question.normalize('NFKC').trim();
-  const q=normalized==='수업 시간'?'시간표':normalized==='운동 계획'?'수업 추천':normalized;
+  const q=chatQuestion(question);
   if(greeting.test(q))return {text:'안녕하세요! 시간표, 수강료, 예약 등 궁금한 내용을 편하게 물어보세요.',state:previous,direct:true};
   if(thanks.test(q))return {text:'천만에요! 또 궁금한 게 있으면 편하게 물어보세요.',state:previous,direct:true};
   if(otherMember.test(q))return {text:'다른 회원의 수강권이나 이용내역은 안내하지 않아요. 본인의 기록은 회원 앱에서 확인해 주세요.',state:previous,hideInput:true,appGuide};
-  const suppliedFrequency=previous.guidedNext==='frequency'&&shortFrequency.test(q);
+  const suppliedFrequency=previous.guidedNext==='frequency'&&Boolean(planFrequency(q,true));
   const plan=nextPlan(previous.plan,q,suppliedFrequency);
   const state={plan,topic:'',context:''};
-  const close=result=>({...result,state:{...state,topic:result.topic??'',context:result.context??''}});
+  const close=result=>({...result,state:{...state,topic:result.topic??'',context:result.context??'',...(result.guidanceStep?{guidedNext:result.guidanceStep}:{})}});
   const clarify=()=>({
     ...clarification,state:previous,clarify:true
   });
@@ -148,7 +146,7 @@ export function conversationTurn(question, previous={}, {rules=null,now=new Date
     return {...result,state:{...result.state,routine:'daily'}};
   }
   if(planAsk||previous.topic==='plan'&&(monthly.test(q)||/요일|아침|오전|오후|저녁|퇴근/u.test(q)||weekly.test(q)||suppliedFrequency)){
-    return close({...planText(plan,q),topic:'plan'});
+    return close({...planText(plan,q),topic:'plan',localPlan:true});
   }
   const continuation=previous.context==='booking'&&/고정|자유|모르겠어요/u.test(q)
     ||previous.context==='fixed'&&/한\s*번|이번\s*수업|해지|종료|그만|다음\s*달부터/u.test(q)
