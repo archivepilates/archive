@@ -7,7 +7,7 @@ import { nowTimestamp, todayKst } from "../utils/date";
 import { AppError } from "../utils/errors";
 import { parseInstructorCourseInput, sameInstructorCourse, teamIntakeFields,
   type InstructorCourseInput } from "./instructorLessonTeamIntake";
-import { INSTRUCTOR_CANCELLATIONS, assertInstructorCancellationIdle, cancellationBlocksRegistration,
+import { INSTRUCTOR_CANCELLATIONS, assertInstructorCancellationIdle, cancellationBlocksRegistration, completedInstructorLessonIssuance,
   instructorCancellationId, parseInstructorCancellation } from "./instructorLessonCancellationPolicy";
 import { isInstructorLessonWaitlist, instructorLessonWaitlistFields } from "./instructorLessonWaitlist";
 import {
@@ -73,8 +73,25 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
   request: CallableRequest,
 ): Promise<Record<string, unknown>> {
   const staff = await manager(request);
-  const input = parseRegistrationInput(request.data);
+  const requestedWaitlistId = request.data?.waitlistRegistrationId;
+  const fromRoster = requestedWaitlistId !== undefined;
+  if (fromRoster && (typeof requestedWaitlistId !== "string" || !/^ilr_[a-f0-9]{24}$/.test(requestedWaitlistId))) {
+    throw new AppError("INVALID_ARGUMENT", "현재 대기 명단에서 회원을 다시 선택하세요.");
+  }
+  const rosterRegistration = fromRoster ? await db.collection(REGISTRATIONS).doc(requestedWaitlistId).get() : null;
+  const rosterRow = rosterRegistration?.data();
+  if (fromRoster && (rosterRow?.studioId !== staff.studioId || rosterRow?.lessonDate !== request.data?.lessonDate)) {
+    throw new AppError("INVALID_ARGUMENT", "현재 대기 명단에서 회원을 다시 선택하세요.");
+  }
+  const input = parseRegistrationInput(fromRoster ? {
+    memberName: rosterRow?.memberName, memberPhone: rosterRow?.memberPhone, lessonDate: rosterRow?.lessonDate,
+    paymentMethod: request.data?.paymentMethod, paymentConfirmed: request.data?.paymentConfirmed,
+    seatConfirmed: request.data?.seatConfirmed, courseKind: "standard",
+  } : request.data);
   const registrationId = instructorLessonRegistrationId(staff.studioId, input.memberPhone, input.lessonDate);
+  if (fromRoster && registrationId !== requestedWaitlistId) {
+    throw new AppError("INVALID_ARGUMENT", "대기 접수의 연결을 확인하세요.");
+  }
   const registrationRef = db.collection(REGISTRATIONS).doc(registrationId);
   const jobRef = db.collection(STUDIOMATE_JOBS).doc(registrationId);
   const now = nowTimestamp();
@@ -86,6 +103,12 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
     ]);
     const existing = registrationSnapshot.data() || {};
     const existingStatus = cleanText(existing.status, 40);
+    if (fromRoster && (!registrationSnapshot.exists || existing.studioId !== staff.studioId
+      || normalizePhone(existing.memberPhone) !== input.memberPhone
+      || cleanText(existing.memberName, 40) !== input.memberName || existing.lessonDate !== input.lessonDate
+      || (!isInstructorLessonWaitlist(existing) && existing.waitlistHistory?.conversionSource !== "core_roster"))) {
+      throw new AppError("INVALID_ARGUMENT", "대기 상태가 변경됐습니다. 현재 명단을 확인하세요.");
+    }
     if (cancellationBlocksRegistration(existing)) {
       throw new AppError("INVALID_ARGUMENT", "취소 요청·이력이 있는 접수입니다. 기존 수강권과 취소 결과를 먼저 확인하세요.");
     }
@@ -94,6 +117,29 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
     if (promotingWaitlist && (jobSnapshot.exists || normalizePhone(existing.memberPhone) !== input.memberPhone
       || cleanText(existing.memberName, 40) !== input.memberName || existing.lessonDate !== input.lessonDate)) {
       throw new AppError("INVALID_ARGUMENT", "기존 대기자 신원·자동 처리 이력을 먼저 확인하세요.");
+    }
+    if (promotingWaitlist && input.courseKind === "standard") {
+      const { lessonDate } = input;
+      // Read the other same-date waitlist rows so two promotions cannot take the same last seat.
+      const [dayLectures, dayBookings, holders, dayRegistrations] = await Promise.all([
+        transaction.get(db.collection("lectures").where("studioId", "==", staff.studioId).where("date", "==", lessonDate)),
+        transaction.get(db.collection("bookings").where("studioId", "==", staff.studioId).where("lectureDate", "==", lessonDate)
+          .where("ticketName", "in", [TICKET_NAME, "Team 강사레슨"])),
+        transaction.get(db.collection("memberProfiles").where("studioId", "==", staff.studioId)
+          .where("activeTicketNames", "array-contains", TICKET_NAME)),
+        transaction.get(db.collection(REGISTRATIONS).where("lessonDate", "==", lessonDate)),
+      ]);
+      const rows = (snapshot: typeof dayLectures) => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const [schedule] = buildInstructorLessonScheduleSummaries({
+        startDate: lessonDate, endDate: lessonDate, lectures: rows(dayLectures), bookings: rows(dayBookings),
+        ticketHolders: rows(holders), registrations: rows(dayRegistrations)
+          .filter(row => (row as Record<string, unknown>).studioId === staff.studioId),
+      });
+      const waitlist = schedule?.waitlist.filter(row => row.registrationId === registrationId);
+      if (!schedule?.startAt || Date.parse(schedule.startAt) <= Date.now() || schedule.waitlistPromotionCapacity < 1
+        || waitlist?.length !== 1 || waitlist[0].alreadyOnRoster) {
+        throw new AppError("INVALID_ARGUMENT", "시작 전 정규 레슨의 잔여석과 기존 수강권·예약을 확인하세요. 대기 상태는 그대로입니다.");
+      }
     }
     if (registrationSnapshot.exists && existingStatus !== "cancelled" && !promotingWaitlist) {
       assertSameRegistration(existing, input);
@@ -120,7 +166,7 @@ export async function operatorCreateInstructorLessonRegistrationHandler(
     }
     const waitlistHistory = promotingWaitlist ? { waitlistOnly: false,
       waitlistHistory: { registeredAt: existing.waitlistedAt || existing.createdAt, convertedAt: now,
-        convertedByStaffId: staff.staffId } } : {};
+      convertedByStaffId: staff.staffId, ...(fromRoster ? { conversionSource: "core_roster" } : {}) } } : {};
 
     if (input.courseKind === "team") {
       if (jobSnapshot.exists) throw new AppError("INVALID_ARGUMENT", "기존 발급 작업을 먼저 확인하세요.");
@@ -297,7 +343,7 @@ async function loadInstructorLessonSchedule(studioId: string): Promise<Record<st
   }).map((item) => ({ ...item, roster: item.roster?.map((row) => {
     const registration = registrationRows.find((r) => row.registrationId === r.id);
     const cancellation = registration?.cancellation;
-    return { ...row, canCancel: /^[1-9]\d{0,15}$/.test(row.memberId || "")
+    return { ...row, canCancel: item.courseKind !== "team" && /^[1-9]\d{0,15}$/.test(row.memberId || "")
       && row.issuedTicketVerified === true
       && !cancellation && !cancellationBlocksRegistration(registration),
       ...(cancellation ? { cancellation: { jobId: cancellation.jobId, status: cancellation.status,
@@ -372,6 +418,12 @@ export async function operatorQueueInstructorLessonCancellationHandler(request: 
       throw new AppError("INVALID_ARGUMENT", "해당일 강사레슨 안내가 발송 중입니다. 결과 확인 후 취소하세요.");
     }
     assertInstructorCancellationIdle(r, job.data(), candidate?.data());
+    const finishedIssue = completedInstructorLessonIssuance(job.data(), r) ? job.data() : null;
+    if (finishedIssue && (finishedIssue.registrationId !== registrationId || finishedIssue.studioId !== staff.studioId
+      || String(finishedIssue.studiomateMemberId) !== input.memberId || finishedIssue.lessonDate !== input.lessonDate
+      || (r.evidence?.ticketId && finishedIssue.ticketId && String(r.evidence.ticketId) !== String(finishedIssue.ticketId)))) {
+      throw new AppError("INVALID_ARGUMENT", "완료된 수강권 발급 이력이 현재 회원과 일치하지 않습니다.");
+    }
     if (["processing", "sending", "checking_completion"].includes(String(eform.data()?.status || ""))) {
       throw new AppError("INVALID_ARGUMENT", "가입서 발송이 실행 중입니다. 결과 확인 후 취소하세요.");
     }
@@ -385,7 +437,8 @@ export async function operatorQueueInstructorLessonCancellationHandler(request: 
     const now = nowTimestamp();
     tx.create(cancellationRef, { schemaVersion: 1, jobId, registrationId, studioId: staff.studioId,
       memberId: input.memberId, memberName: name, memberPhone: phone, profilePath: profileRef.path,
-      lessonDate: input.lessonDate, ticketName: TICKET_NAME, expectedTicketId: cleanText(r.evidence?.ticketId, 80) || null,
+      lessonDate: input.lessonDate, ticketName: TICKET_NAME,
+      expectedTicketId: cleanText(r.evidence?.ticketId || finishedIssue?.ticketId, 80) || null,
       reason: input.reason, status: "pending", externalEffectStarted: false,
       requestedBy: { staffId: staff.staffId, uid: staff.uid || "", name: staff.name },
       paymentRefundAllowed: false, createdAt: now, updatedAt: now });
@@ -393,7 +446,7 @@ export async function operatorQueueInstructorLessonCancellationHandler(request: 
       lessonDate: input.lessonDate, ticketName: TICKET_NAME, status: "cancellation_pending",
       cancellation: { jobId, status: "pending", reason: input.reason, memberId: input.memberId }, nextAction: "StudioMate 수강권·예약 취소 확인 대기",
       updatedAt: now, ...(registration.exists ? {} : { createdAt: now, source: { type: "archive_core_cancellation", sourceId: jobId } }) }, { merge: true });
-    if (job.exists) tx.update(registrationJobRef, { status: "cancelled", cancellationJobId: jobId, updatedAt: now });
+    if (job.exists && !finishedIssue) tx.update(registrationJobRef, { status: "cancelled", cancellationJobId: jobId, updatedAt: now });
     if (eform.exists && ["pending", "retry"].includes(String(eform.data()?.status || ""))) {
       tx.update(eformRef, { status: "cancelled", cancellationJobId: jobId, updatedAt: now });
     }
@@ -483,6 +536,7 @@ function safeRegistration(id: string, data: Record<string, unknown>): Record<str
       paymentAmount: data.paymentAmount } : {}),
     mode: cleanText(data.mode, 40),
     status: cleanText(data.status, 40),
+    nativeRosterSynchronized: (data.nativeRosterReconciliation as { status?: string } | undefined)?.status === "confirmed_existing",
     nextAction: cleanText(data.nextAction, 160),
     lastError: cleanText(data.lastError, 300),
     steps,

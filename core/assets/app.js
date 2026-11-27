@@ -155,6 +155,9 @@ let selectedInstructorLessonDate = "";
 let instructorLessonCancellationTarget = null;
 let instructorLessonCancellationBusy = false;
 const instructorLessonCancellationReceipts = new Map();
+let instructorWaitlistPromotionTarget = null;
+let instructorWaitlistPromotionBusy = false;
+const instructorWaitlistPromotionAttempts = new Set();
 let refundFlow = { candidates: [], member: null, tickets: [], selectedTicket: null, preview: null };
 
 const MEMBER_PAGE_SIZE = 20;
@@ -7805,7 +7808,8 @@ function renderInstructorLessonRoster(schedule) {
     const details = teamFulfillment
       ? INSTRUCTOR_TEAM_STEP_KEYS.map((key, index) => `${INSTRUCTOR_TEAM_STEP_LABELS[index]} ${INSTRUCTOR_TEAM_STEP_STATUS_LABELS[steps[key]?.status || "pending"] || "상태 확인필요"}`)
         .concat(`다음 단계: ${registration.nextAction || "다음 단계 확인필요"}`, registration.lastError || []).join(" · ")
-      : intakeOnly ? "팀레슨 접수 · 수강권/가입서/안내 확인 대기" : registration
+      : intakeOnly ? "팀레슨 접수 · 수강권/가입서/안내 확인 대기"
+        : registration?.nativeRosterSynchronized ? "StudioMate 예약 확인 · 기존 처리 내역 유지" : registration
       ? [`가입서 ${instructorLessonStepStatusLabel(steps.eformsign?.status || "pending")}`, `안내 ${instructorLessonStepStatusLabel(steps.confirmation?.status || "pending")}`].join(" · ")
       : "가입서·안내 기록 연결 전";
     const name = member.memberId ? `<a href="${escapeHtml(coreHref(`members/detail/?id=${encodeURIComponent(member.memberId)}`))}">${escapeHtml(member.memberName)}</a>` : escapeHtml(member.memberName);
@@ -7813,7 +7817,7 @@ function renderInstructorLessonRoster(schedule) {
     const cancellationLabel = instructorLessonCancellationStatusLabel(cancellation?.status);
     const statusId = `instructorLessonCancellationRowStatus-${index}`;
     const action = !intakeOnly && canCancelInstructorLesson(schedule.date, member)
-      ? `<button type="button" class="secondary-action instructor-lesson-cancel-button" data-instructor-cancel-key="${escapeHtml(member.memberKey)}" data-instructor-cancel-date="${escapeHtml(schedule.date)}" aria-label="${escapeHtml(member.memberName)} · ${escapeHtml(schedule.date)} 수강 취소" aria-describedby="${statusId}"${instructorLessonCancellationBusy ? " disabled" : ""}>수강 취소</button>`
+      ? `<button type="button" class="secondary-action instructor-lesson-cancel-button" data-instructor-cancel-key="${escapeHtml(member.memberKey)}" data-instructor-cancel-date="${escapeHtml(schedule.date)}" aria-label="${escapeHtml(member.memberName)} · ${escapeHtml(schedule.date)} 예약 취소" aria-describedby="${statusId}"${instructorLessonCancellationBusy ? " disabled" : ""}>예약 취소</button>`
       : "";
     return `<div class="status-row instructor-lesson-roster-row"><div><strong>${name}</strong><p>${escapeHtml(details)}</p><p id="${statusId}" class="instructor-lesson-cancellation-status" role="status" aria-label="${escapeHtml(member.memberName)} 취소 상태">${escapeHtml(cancellationLabel)}${cancellation?.lastError ? ` · ${escapeHtml(cancellation.lastError)}` : ""}</p></div><div class="instructor-lesson-roster-actions"><span class="pill">${escapeHtml(instructorLessonScheduleSourceLabel(schedule.countSource, schedule.confirmedPendingRegistrationCount))}</span>${action}</div></div>`;
   }).join("");
@@ -7825,8 +7829,107 @@ function renderInstructorLessonRoster(schedule) {
     + (waitlist.length ? `<ol class="instructor-waitlist-list">${waitlist.map((member) => {
       const phone = document.documentElement.dataset.coreAccess === "manager" && member.memberPhone
         ? member.memberPhone : `***-****-${member.phoneLast4 || "----"}`;
-      return `<li class="instructor-waitlist-row"><span>${escapeHtml(member.position)}번</span><div><strong>${escapeHtml(member.memberName || "이름 확인 필요")}</strong><span>${escapeHtml(phone)}</span><small>접수 ${escapeHtml(compactDateTime(member.waitlistedAt))}</small></div></li>`;
+      const action = canPromoteInstructorWaitlist(schedule, member)
+        ? `<button type="button" class="secondary-action instructor-waitlist-promote-button" data-instructor-promote-id="${escapeHtml(member.registrationId)}" data-instructor-promote-date="${escapeHtml(schedule.date)}" aria-label="${escapeHtml(member.memberName)} · ${escapeHtml(schedule.date)} 예약 확정">예약 확정</button>`
+        : "";
+      return `<li class="instructor-waitlist-row"><span>${escapeHtml(member.position)}번</span><div><strong>${escapeHtml(member.memberName || "이름 확인 필요")}</strong><span>${escapeHtml(phone)}</span><small>접수 ${escapeHtml(compactDateTime(member.waitlistedAt))}</small></div>${action}</li>`;
     }).join("")}</ol>` : '<p class="instructor-waitlist-empty">대기자 없음</p>') + "</section>";
+}
+
+function canPromoteInstructorWaitlist(schedule, member) {
+  return document.documentElement.dataset.coreAccess === "manager"
+    && !!schedule && !instructorLessonSchedulePresentation(schedule).isTeam && Number(schedule.waitlistPromotionCapacity) > 0
+    && Date.parse(schedule.startAt) > Date.now() && member?.alreadyOnRoster === false
+    && /^ilr_[a-f0-9]{24}$/.test(member.registrationId) && !!member.memberName
+    && !instructorWaitlistPromotionAttempts.has(member.registrationId);
+}
+
+function findInstructorWaitlistPromotion({ lessonDate, registrationId }) {
+  const schedule = state.instructorLessonRegistrationDashboard?.schedule?.items?.find((item) => item.date === lessonDate);
+  const matches = schedule?.waitlist?.filter((row) => row.registrationId === registrationId);
+  const member = matches?.length === 1 ? matches[0] : null;
+  return canPromoteInstructorWaitlist(schedule, member) ? member : null;
+}
+
+function handleInstructorWaitlistPromotionOpen(event) {
+  const button = event.target.closest?.("[data-instructor-promote-id]");
+  const dialog = qs("instructorWaitlistPromotionDialog");
+  if (!button || button.disabled || instructorWaitlistPromotionBusy || !dialog?.showModal || dialog.open) return;
+  const target = { lessonDate: button.dataset.instructorPromoteDate, registrationId: button.dataset.instructorPromoteId };
+  const member = findInstructorWaitlistPromotion(target);
+  if (!member) return;
+  instructorWaitlistPromotionTarget = { ...target, memberName: member.memberName };
+  qs("instructorWaitlistPromotionForm").reset();
+  qs("instructorWaitlistPromotionSubmit").disabled = false;
+  setText("instructorWaitlistPromotionMember", member.memberName);
+  setText("instructorWaitlistPromotionDate", instructorLessonScheduleDateLabel(target.lessonDate));
+  setText("instructorWaitlistPromotionError", "");
+  setText("instructorWaitlistPromotionStatus", "");
+  dialog.showModal();
+}
+
+function handleInstructorWaitlistPromotionClose() {
+  const target = instructorWaitlistPromotionTarget;
+  instructorWaitlistPromotionTarget = null;
+  const button = [...document.querySelectorAll("[data-instructor-promote-id]")].find((item) =>
+    item.dataset.instructorPromoteId === target?.registrationId && item.dataset.instructorPromoteDate === target?.lessonDate);
+  const dateButton = [...document.querySelectorAll("[data-instructor-schedule-date]")].find((item) =>
+    item.dataset.instructorScheduleDate === target?.lessonDate);
+  (button || dateButton || qs("refreshButton"))?.focus();
+}
+
+async function handleInstructorWaitlistPromotionSubmit(event) {
+  event.preventDefault();
+  const target = instructorWaitlistPromotionTarget;
+  const dialog = qs("instructorWaitlistPromotionDialog");
+  const submit = qs("instructorWaitlistPromotionSubmit");
+  const close = qs("instructorWaitlistPromotionClose");
+  const payment = qs("instructorWaitlistPromotionPayment");
+  const paid = qs("instructorWaitlistPromotionPaid");
+  if (!target || instructorWaitlistPromotionBusy || submit.disabled || !event.currentTarget.reportValidity()) return;
+  const paymentMethod = payment.value;
+  instructorWaitlistPromotionBusy = true;
+  submit.disabled = close.disabled = payment.disabled = paid.disabled = true;
+  dialog.setAttribute("aria-busy", "true");
+  setText("instructorWaitlistPromotionError", "");
+  setText("instructorWaitlistPromotionStatus", "잔여석과 대기 상태를 확인하고 있습니다.");
+  let attempted = false;
+  try {
+    const runtime = await initFirebase();
+    await refreshInstructorLessonCancellationDashboard(runtime);
+    if (findInstructorWaitlistPromotion(target)?.memberName !== target.memberName) {
+      setText("instructorWaitlistPromotionError", "잔여석 또는 대기자 상태가 변경됐습니다. 현재 명단을 확인하세요.");
+      return;
+    }
+    const callable = runtime.httpsCallable(runtime.functionsClient, "operatorCreateInstructorLessonRegistration");
+    instructorWaitlistPromotionAttempts.add(target.registrationId);
+    attempted = true;
+    const { data } = await callable({ waitlistRegistrationId: target.registrationId, lessonDate: target.lessonDate,
+      paymentMethod, paymentConfirmed: true, seatConfirmed: true });
+    if (data?.ok !== true || data.registrationId !== target.registrationId || !data.status || data.status === "waitlisted") {
+      throw new Error("waitlist-promotion-outcome-unknown");
+    }
+    setText("instructorWaitlistPromotionStatus", "확정 접수 완료 · 반배정은 별도입니다.");
+    try {
+      await refreshInstructorLessonCancellationDashboard(runtime);
+    } catch {
+      setText("instructorWaitlistPromotionError", "접수는 됐지만 명단을 새로 읽지 못했습니다. 다시 요청하지 말고 새로고침해 주세요.");
+    }
+  } catch (error) {
+    const rejected = error?.code === "functions/invalid-argument";
+    if (rejected) instructorWaitlistPromotionAttempts.delete(target.registrationId);
+    setText("instructorWaitlistPromotionError", rejected
+      ? "서버에서 확정을 차단했습니다. 현재 잔여석과 결제·대기 상태를 다시 확인하세요."
+      : attempted ? "확정 결과를 받지 못했습니다. 다시 요청하지 말고 현재 명단을 확인하세요."
+        : "명단을 읽지 못해 확정을 요청하지 않았습니다.");
+  } finally {
+    instructorWaitlistPromotionBusy = false;
+    close.disabled = payment.disabled = paid.disabled = false;
+    dialog.removeAttribute("aria-busy");
+    if (qs("instructorWaitlistPromotionError").textContent) setText("instructorWaitlistPromotionStatus", "");
+    renderInstructorLessonRegistrationDashboard();
+    close.focus();
+  }
 }
 
 function instructorLessonCancellationKey(lessonDate, member) {
@@ -9347,6 +9450,13 @@ if (qs("instructorLessonCourseKind")) handleInstructorLessonCourseKindChange();
 qs("instructorLessonRegistrationFilters")?.addEventListener("click", handleInstructorLessonRegistrationFilter);
 qs("instructorLessonRegistrationList")?.addEventListener("click", handleInstructorLessonConfirmation);
 qs("instructorLessonScheduleDetail")?.addEventListener("click", handleInstructorLessonCancellationOpen);
+qs("instructorLessonScheduleDetail")?.addEventListener("click", handleInstructorWaitlistPromotionOpen);
+qs("instructorWaitlistPromotionForm")?.addEventListener("submit", handleInstructorWaitlistPromotionSubmit);
+qs("instructorWaitlistPromotionClose")?.addEventListener("click", () => qs("instructorWaitlistPromotionDialog")?.close());
+qs("instructorWaitlistPromotionDialog")?.addEventListener("close", handleInstructorWaitlistPromotionClose);
+qs("instructorWaitlistPromotionDialog")?.addEventListener("cancel", (event) => {
+  if (instructorWaitlistPromotionBusy) event.preventDefault();
+});
 qs("instructorLessonCancellationForm")?.addEventListener("submit", handleInstructorLessonCancellationSubmit);
 qs("instructorLessonCancellationClose")?.addEventListener("click", closeInstructorLessonCancellation);
 qs("instructorLessonCancellationDialog")?.addEventListener("close", handleInstructorLessonCancellationClose);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildInstructorLessonScheduleSummaries as summarize } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonSchedule";
+import { assertInstructorCancellationIdle } from "../../firebase/kangsain-functions/functions/src/instructorLessonRegistration/instructorLessonCancellationPolicy";
 const date = "2026-10-24";
 const registration = { id: "r1", lessonDate: date, memberName: "Synthetic", memberPhone: "01000000000", status: "cancelled",
   cancellation: { memberId: "101", status: "completed", nativeVerified: true } };
@@ -24,4 +25,15 @@ test("same-phone different native member and other lesson dates remain occupied"
   const result = summarize({ startDate: date, endDate: "2026-10-25", registrations: [registration],
     ticketHolders: [{ ...holder, id: "102", memberId: "102" }, { ...holder, activeTickets: [{ name: "강사레슨 (2T)", availableFrom: "2026-10-25" }] }] });
   assert.equal(result.length, 2); assert.deepEqual(result.map(item => item.occupiedCount), [1, 1]);
+});
+
+test("completed issuance is not an in-flight effect, but ambiguous or mismatched jobs still block", () => {
+  const registration = { evidence: { studiomateMemberId: "101" }, steps: { ticket: { status: "verified" } } };
+  const job = { status: "done", currentStep: "complete", completedAt: "2099-10-01", externalEffectStarted: true,
+    studiomateMemberId: "101", ticketId: "" };
+  assert.doesNotThrow(() => assertInstructorCancellationIdle(registration, job, { status: "sent" }));
+  for (const patch of [{ status: "processing" }, { currentStep: "ticket" }, { completedAt: null }, { studiomateMemberId: "102" }]) {
+    assert.throws(() => assertInstructorCancellationIdle(registration, { ...job, ...patch }, null));
+  }
+  assert.throws(() => assertInstructorCancellationIdle(registration, job, { status: "processing" }));
 });

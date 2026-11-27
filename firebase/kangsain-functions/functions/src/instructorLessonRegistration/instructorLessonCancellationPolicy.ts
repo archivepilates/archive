@@ -25,10 +25,18 @@ export function instructorCancellationId(studioId: string, memberId: string, les
 }
 
 export function assertInstructorCancellationIdle(registration: any, job: any, candidate: any) {
-  if (job?.status === "processing" || job?.externalEffectStarted === true || job?.effectStartedAt
+  if (job?.status === "processing" || (!completedInstructorLessonIssuance(job, registration) && (job?.externalEffectStarted === true || job?.effectStartedAt))
     || registration?.externalEffectStarted === true || candidate?.status === "processing") {
     throw new AppError("INVALID_ARGUMENT", "등록·발송 작업이 실행 중입니다. 결과를 확인한 뒤 취소하세요.");
   }
+}
+
+export function completedInstructorLessonIssuance(job: any, registration: any): boolean {
+  return job?.status === "done" && job?.currentStep === "complete" && Boolean(job?.completedAt)
+    && registration?.steps?.ticket?.status === "verified"
+    && /^[1-9]\d{0,15}$/.test(String(job?.studiomateMemberId || ""))
+    && String(job.studiomateMemberId) === String(registration.evidence?.studiomateMemberId || "")
+    && (!job.ticketId || /^[1-9]\d{0,15}$/.test(String(job.ticketId)));
 }
 
 export function cancellationBlocksRegistration(value: any): boolean {

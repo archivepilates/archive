@@ -18,7 +18,7 @@ const names = [
   "instructorLessonModeLabel", "instructorLessonPaymentLabel", "instructorLessonStepClass",
   "instructorLessonStepStatusLabel", "instructorLessonRegistrationMatchesFilter", "instructorLessonConfirmationAction",
   "instructorLessonCancellationKey", "instructorLessonCancellationStatusLabel", "canCancelInstructorLesson",
-  "renderInstructorLessonSchedule", "renderInstructorLessonRoster", "renderInstructorLessonRegistrationDashboard",
+  "renderInstructorLessonSchedule", "renderInstructorLessonRoster", "renderInstructorLessonRegistrationDashboard", "canPromoteInstructorWaitlist",
   "setInstructorLessonRegistrationStatus", "loadInstructorLessonRegistrationDashboard",
   "handleInstructorLessonCourseKindChange", "handleInstructorLessonRegistrationSubmit",
   "handleInstructorLessonRegistrationFilter", "handleInstructorLessonConfirmation",
@@ -56,6 +56,7 @@ function bootstrap(data = fixture()) {
     let selectedInstructorLessonDate = ${JSON.stringify(date)}, instructorLessonRegistrationFilter = "waitlisted";
     let instructorLessonCancellationBusy = false;
     const instructorLessonCancellationReceipts = new Map();
+    const instructorWaitlistPromotionAttempts = new Set();
     let unavailable = false, response = { waitlistOnly: true, status: "waitlisted" }, transportError = false, refreshError = false;
     let releaseCreate, holdCreate = false;
     const calls = [], forbidden = [];

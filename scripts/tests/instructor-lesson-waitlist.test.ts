@@ -32,15 +32,21 @@ const paid = { ...input, courseKind: "standard", paymentMethod: "card", paymentC
 function fixture() {
   const rows = new Map<string, any>(), writes: string[] = [];
   let chain = Promise.resolve();
+  const snapshot = (key: string) => ({ exists: rows.has(key), data: () => rows.has(key) ? structuredClone(rows.get(key)) : undefined });
+  const query = (name: string, filters: any[] = []): any => ({ collection: name, filters,
+    where: (...filter: any[]) => query(name, [...filters, filter]) });
   const db = {
-    collection: (name: string) => ({ doc: (id: string) => ({ path: `${name}/${id}` }),
-      where: () => ({ where: () => ({ collection: name }) }) }),
+    collection: (name: string) => ({ ...query(name), doc: (id: string) => ({ path: `${name}/${id}`,
+      get: async () => snapshot(`${name}/${id}`) }) }),
     runTransaction: (fn: any) => {
       const run = chain.then(async () => {
         const staged = new Map<string, any>();
         const result = await fn({ get: async (r: any) => r.path
-          ? { exists: rows.has(r.path), data: () => rows.get(r.path) ? structuredClone(rows.get(r.path)) : undefined }
-          : { docs: [...rows].filter(([key]) => key.startsWith(`${r.collection}/`)).map(([id, data]) => ({ id, data: () => structuredClone(data) })) },
+          ? snapshot(r.path)
+          : { docs: [...rows].filter(([key, data]) => key.startsWith(`${r.collection}/`)
+            && r.filters.every(([field, op, value]: any[]) => op === "==" ? data[field] === value
+              : op === "in" ? value.includes(data[field]) : data[field]?.includes(value)))
+            .map(([key, data]) => ({ id: key.split("/").pop(), data: () => structuredClone(data) })) },
         set: (r: any, value: any) => staged.set(r.path, structuredClone(value)) });
         for (const [key, value] of staged) { rows.set(key, value); writes.push(key); }
         return result;
@@ -52,6 +58,7 @@ function fixture() {
   const handler = vm.runInNewContext(`${compiled}\noperatorCreateInstructorLessonRegistrationHandler`, {
     exports: {}, db, parseRegistrationInput, instructorLessonRegistrationId, sameInstructorCourse, teamIntakeFields,
     instructorLessonWaitlistFields, isInstructorLessonWaitlist, cancellationBlocksRegistration,
+    buildInstructorLessonScheduleSummaries,
     manager: async (r: any) => { if (r.role !== "manager") throw Error("fake permission denied");
       return { studioId: "5330", staffId: "fake-manager", name: "Fake Manager" }; },
     nowTimestamp: () => "2099-10-01T00:00:00.000Z", AppError: FakeError,
@@ -59,7 +66,9 @@ function fixture() {
     TICKET_NAME: "강사레슨 (2T)", isInstructorLesson: () => false,
   });
   const call = (data: any, role = "manager") => handler({ data, role });
-  return { rows, writes, call };
+  const addLesson = (patch = {}) => rows.set("lectures/lesson-a", { studioId: "5330", date: input.lessonDate,
+    title: "강사레슨", startAt: `${input.lessonDate}T13:00:00+09:00`, capacity: 1, ...patch });
+  return { rows, writes, call, addLesson };
 }
 
 test("waitlist parse requires no payment and retains false checks", () => {
@@ -91,12 +100,45 @@ test("concurrent normalized-phone duplicates do not change the original position
 test("only an explicit paid intake converts a waitlist; no automatic promotion", async () => {
   const f = fixture(); await f.call(input);
   await assert.rejects(f.call({ ...paid, paymentConfirmed: false })); assert.equal(f.rows.size, 1);
-  const result = await f.call(paid); assert.equal(result.status, "queued"); assert.equal(f.rows.size, 2);
+  f.addLesson();
+  const result = await f.call(paid); assert.equal(result.status, "queued"); assert.equal(f.rows.size, 3);
   const row = f.rows.get(`instructorLessonRegistrations/${result.registrationId}`);
   assert.equal(row.waitlistOnly, false); assert.equal(row.courseKind, "standard");
   assert.equal(row.waitlistHistory.registeredAt, "2099-10-01T00:00:00.000Z");
-  const duplicate = await f.call(paid); assert.equal(duplicate.duplicate, true); assert.equal(f.rows.size, 2);
+  const duplicate = await f.call(paid); assert.equal(duplicate.duplicate, true); assert.equal(f.rows.size, 3);
   await assert.rejects(f.call(input)); assert.equal(row.status, "queued");
+});
+
+test("roster promotion consumes the last seat once, requires the same row and never creates a fresh intake", async () => {
+  const f = fixture();
+  const create = (memberPhone: string) => f.call({ ...input, memberPhone });
+  const [a, b] = await Promise.all([create("01000000001"), create("01000000002")]);
+  const promote = (id: string, patch = {}) => f.call({ waitlistRegistrationId: id, lessonDate: input.lessonDate,
+    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true, ...patch });
+  await assert.rejects(promote(a.registrationId)); // Missing actual lesson.
+  f.addLesson();
+  await assert.rejects(promote(a.registrationId, { lessonDate: "2099-11-30" }));
+  await assert.rejects(promote(a.registrationId, { paymentConfirmed: false }));
+  await assert.rejects(promote("ilr_" + "0".repeat(24)));
+  const outcomes = await Promise.allSettled([promote(a.registrationId), promote(b.registrationId)]);
+  assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(f.rows.get(`instructorLessonRegistrations/${b.registrationId}`).status, "waitlisted");
+  assert.equal((await promote(a.registrationId)).duplicate, true);
+  assert.equal(f.writes.filter(key => key.startsWith("studiomateInstructorLessonJobs/")).length, 1);
+});
+
+test("existing booked waiters and team lessons cannot take the standard reservation path", async () => {
+  const f = fixture(); const waiter = await f.call(input); f.addLesson({ capacity: null });
+  const row = { studioId: "5330", lectureDate: input.lessonDate, lectureId: "lesson-a", startTime: "13:00",
+    appStatus: "reserved", ticketName: "강사레슨 (2T)", memberPhone: input.memberPhone };
+  f.rows.set("bookings/booked", row);
+  const request = { waitlistRegistrationId: waiter.registrationId, lessonDate: input.lessonDate,
+    paymentMethod: "cash", paymentConfirmed: true, seatConfirmed: true };
+  await assert.rejects(f.call(request));
+  f.rows.delete("bookings/booked");
+  f.addLesson({ title: "Team 강사레슨", capacity: 2 });
+  await assert.rejects(f.call(request));
+  assert.equal(f.writes.length, 1);
 });
 
 test("a stray issuance job or insufficient permission blocks waitlist writes", async () => {
@@ -131,6 +173,15 @@ test("waitlist cannot trigger confirmation or completion even with forged verifi
   assert.match(instructorLessonTicketConfirmationIssue(record), /수강대기/);
   assert.equal((await queueInstructorLessonConfirmationOnTicketVerifiedHandler({ registrationId: "fake", after: record })).skipped, "waitlist_only");
   assert.equal(deriveInstructorLessonRegistrationState(record).status, "waitlisted");
+});
+
+test("reconciling already confirmed native bookings is not a new confirmation trigger", async () => {
+  const record = { nativeRosterReconciliation: { status: "confirmed_existing" },
+    steps: { ticket: { status: "verified" }, member: { status: "verified" } } };
+  assert.match(instructorLessonTicketConfirmationIssue(record), /자동 확정 안내 대상 아님/);
+  assert.equal((await queueInstructorLessonConfirmationOnTicketVerifiedHandler({
+    registrationId: "synthetic-reconcile", after: record,
+  })).skipped, "native_roster_reconciled_no_dispatch");
 });
 
 for (const field of ["waitlistOnly", "courseKind", "mode", "status"]) {

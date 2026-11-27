@@ -34,8 +34,9 @@ export type InstructorLessonScheduleSummary = {
   confirmedPendingRegistrationCount: number;
   roster?: InstructorLessonScheduleRosterRow[];
   waitlistCount: number;
+  waitlistPromotionCapacity: number;
   waitlist: { registrationId: string; memberName: string; memberPhone: string; phoneLast4: string;
-    waitlistedAt: string | null; position: number }[];
+    waitlistedAt: string | null; position: number; alreadyOnRoster: boolean }[];
   courseKind?: string;
   lessonTime?: string;
   lessonTopic?: string;
@@ -185,6 +186,8 @@ export function buildInstructorLessonScheduleSummaries(input: {
       confirmedPendingMembers.get(date),
     );
     const occupiedCount = occupiedMembers?.size || 0;
+    const promotionMembers = mergeScheduleMembers(bookingMembers.get(date), effectiveTicketMembers,
+      confirmedPendingMembers.get(date));
     const waitlist = [...(waitingMembers.get(date)?.entries() || [])]
       .map(([, rows]) => [...rows].sort((a, b) => millis(a.waitlistedAt || a.createdAt) - millis(b.waitlistedAt || b.createdAt)
         || cleanText(a.registrationId || a.id).localeCompare(cleanText(b.registrationId || b.id)))[0])
@@ -195,7 +198,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
         const stamp = millis(row.waitlistedAt || row.createdAt);
         return { registrationId: cleanText(row.registrationId || row.id), memberName: cleanText(row.memberName),
           memberPhone: phone, phoneLast4: phone.slice(-4), waitlistedAt: stamp ? new Date(stamp).toISOString() : null,
-          position: index + 1 };
+          position: index + 1, alreadyOnRoster: promotionMembers.has(memberIdentity(row)) };
       });
     const roster = [...(occupiedMembers || [])].map(([memberKey, members]) => {
       const sources =
@@ -250,6 +253,7 @@ export function buildInstructorLessonScheduleSummaries(input: {
     return {
       date,
       ...metadata,
+      ...(isTeam ? { courseKind: "team" } : {}),
       startAt: metadata.metadataSource === "conflict" ? null : starts.length ? new Date(Math.min(...starts)).toISOString() : intakeStart,
       endAt: metadata.metadataSource === "conflict" ? null : ends.length
         ? new Date(Math.max(...ends)).toISOString()
@@ -270,6 +274,8 @@ export function buildInstructorLessonScheduleSummaries(input: {
       confirmedPendingRegistrationCount,
       roster,
       waitlistCount: waitlist.length,
+      waitlistPromotionCapacity: !isTeam && metadata.metadataSource !== "conflict"
+        ? Math.max(0, standardPromotionCapacity(dateLectures, defaultCapacity) - promotionMembers.size) : 0,
       waitlist,
     } satisfies InstructorLessonScheduleSummary;
   });
@@ -344,7 +350,14 @@ function validTeamSequence(lectures: SourceRecord[], expectedStart: number): boo
   return ordered.every(([start], index) => index === 0 || start >= ordered[index - 1][1]);
 }
 
-function concurrentLectureCapacity(lectures: SourceRecord[], team = false): number {
+function standardPromotionCapacity(lectures: SourceRecord[], defaultCapacity: number): number {
+  if (!lectures.length || lectures.some(lecture => !millis(lecture.startAt))) return 0;
+  // Excel-only standard rounds use the CORE default; partial native evidence must not override it.
+  if (lectures.every(lecture => !verifiedLectureCapacity(lecture, true))) return defaultCapacity;
+  return concurrentLectureCapacity(lectures, true);
+}
+
+function concurrentLectureCapacity(lectures: SourceRecord[], requireEverySlot = false): number {
   const slots = new Map<string, SourceRecord[]>();
   for (const lecture of lectures) {
     const start = millis(lecture.startAt);
@@ -355,10 +368,10 @@ function concurrentLectureCapacity(lectures: SourceRecord[], team = false): numb
     slots.set(key, rows);
   }
   const capacities = [...slots.values()]
-    .filter((rows) => rows.length > 0 && rows.every((row) => verifiedLectureCapacity(row, team) > 0))
-    .map((rows) => rows.reduce((sum, row) => sum + verifiedLectureCapacity(row, team), 0));
-  if (team && capacities.length !== slots.size) return 0;
-  return capacities.length ? (team ? Math.min(...capacities) : Math.max(...capacities)) : 0;
+    .filter((rows) => rows.length > 0 && rows.every((row) => verifiedLectureCapacity(row, requireEverySlot) > 0))
+    .map((rows) => rows.reduce((sum, row) => sum + verifiedLectureCapacity(row, requireEverySlot), 0));
+  if (requireEverySlot && capacities.length !== slots.size) return 0;
+  return capacities.length ? (requireEverySlot ? Math.min(...capacities) : Math.max(...capacities)) : 0;
 }
 
 function verifiedLectureCapacity(lecture: SourceRecord, strict = false): number {
